@@ -1,0 +1,26 @@
+[
+  {
+    "id": "star-office",
+    "name": "Star Office",
+    "entryPoint": "settings/star-office.html",
+    "icon": "assets/star-office-icon.svg",
+    "position": { "anchor": "display", "placement": "after" },
+    "order": 70
+  },
+  {
+    "id": "1one-claudecode-home",
+    "name": "1ONE ClaudeCode Home",
+    "entryPoint": "https://1one-claudecode.com/",
+    "icon": "assets/star-office-icon.svg",
+    "position": { "anchor": "display", "placement": "after" },
+    "order": 80
+  },
+  {
+    "id": "1one-claudecode-issues",
+    "name": "1ONE ClaudeCode Issues",
+    "entryPoint": "https://github.com/1ONE ClaudeCode/1ONE ClaudeCode/issues",
+    "icon": "assets/star-office-icon.svg",
+    "position": { "anchor": "display", "placement": "after" },
+    "order": 81
+  }
+]

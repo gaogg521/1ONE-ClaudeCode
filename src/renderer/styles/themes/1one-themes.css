@@ -1,0 +1,517 @@
+/**
+ * 1ONE ClaudeCode — 6套专属 UI 主题
+ * 核心设计理念：每套主题的背景、文字、边框严格遵循冷暖色调统一原则
+ *
+ * 冷色主题（赛博蓝、极光紫）：文字带蓝/紫色调，避免暖色污染
+ * 暖色主题（熔岩橙）：文字带琥珀/奶油色调，避免冷色污染
+ * 中性冷主题（深林绿）：文字带绿色调，翡翠感
+ * 亮色主题（月光银）：清爽蓝灰，高对比
+ */
+
+/* ═══════════════════════════════════════════════════════
+   主题 1: 赛博蓝 (Cyber Blue) — 冷色系
+   深海午夜蓝 + 青色霓虹 + 冷白文字
+   ═══════════════════════════════════════════════════════ */
+[data-color-scheme='1one-cyber'][data-theme='dark'] {
+
+  /* ── 背景色阶（深蓝海洋渐变）── */
+  --bg-base: #050f22;
+  --bg-1:    #081830;
+  --bg-2:    #0c2040;
+  --bg-3:    #122e58;
+  --bg-4:    #1a3e78;
+  --bg-5:    #224e96;
+  --bg-6:    #2d63b8;
+  --bg-8:    #5b93d8;
+  --bg-9:    #93c5fd;
+  --bg-10:   #dbeafe;
+  --bg-hover:  #0a1e3f;
+  --bg-active: #122850;
+
+  /* ── 文字色阶（冷白 → 冰蓝，严格冷色调）── */
+  --text-primary:   #e8f4ff;  /* 带蓝调的冷白，非纯白 */
+  --text-secondary: #93c5fd;  /* 中蓝，高可读性 */
+  --text-disabled:  #3d6a9e;  /* 暗蓝，不干扰 */
+  /* UnoCSS text-t-* 映射 */
+  --text-t-primary:   #e8f4ff;
+  --text-t-secondary: #7eb8f5;
+  --text-t-tertiary:  #4a7cb5;
+
+  --primary:   #22d3ee;  /* 青色霓虹 */
+  --success:   #34d399;
+  --warning:   #60a5fa;  /* 冷蓝警告，不用暖橙 */
+  --danger:    #f87171;
+  --info:      #22d3ee;
+
+  --border-base:  #1a4a96;
+  --border-light: #122e58;
+  --brand:        #22d3ee;
+  --brand-light:  #0b1d3a;
+  --brand-hover:  #67e8f9;
+
+  --message-user-bg:  #0a1e40;
+  --message-tips-bg:  #070f28;
+  --workspace-btn-bg: #0c2040;
+  --fill:             #081830;
+  --inverse:          #ffffff;
+  --dialog-fill-0:    #0c2040;
+  --text-0:           #e8f4ff;
+  --text-white:       #ffffff;
+  --fill-0:           rgba(34, 211, 238, 0.07);
+  --fill-white-to-black: #000000;
+  --border-special:   #22d3ee;
+  --color-guid-agent-bar: #0c2040;
+
+  --aou-1: #050f22; --aou-2: #0c2040; --aou-3: #122e58;
+  --aou-4: #1a3e78; --aou-5: #2a5fa0; --aou-6: #3d7ec4;
+  --aou-7: #5b93d8; --aou-8: #93c5fd; --aou-9: #bfdbfe; --aou-10: #e8f4ff;
+
+  /* ── Arco Design 组件变量（冷色系）── */
+  --color-bg-1: #050f22;
+  --color-bg-2: #0a1830;
+  --color-bg-3: #0c2040;
+  --color-bg-4: #122e58;
+  --color-bg-5: #1a3e78;
+  --color-bg-white: #050f22;
+
+  --color-fill-1: rgba(34, 211, 238, 0.04);
+  --color-fill-2: rgba(34, 211, 238, 0.09);
+  --color-fill-3: rgba(34, 211, 238, 0.14);
+  --color-fill-4: rgba(34, 211, 238, 0.20);
+
+  --color-border:   #1a4a96;
+  --color-border-2: #122e58;
+
+  /* 文字变量统一冷蓝色调 */
+  --color-text-1: #e8f4ff;
+  --color-text-2: #93c5fd;
+  --color-text-3: #5b93d8;
+  --color-text-4: #3d6a9e;
+
+  --primary-1: #05162a; --primary-2: #0a2a50; --primary-3: #103d72;
+  --primary-4: #0e8faa; --primary-5: #14b8d4; --primary-6: #22d3ee;
+  --primary-7: #67e8f9;
+
+  --color-primary-1: #05162a; --color-primary-2: #0a2a50; --color-primary-3: #103d72;
+  --color-primary-4: #0e8faa; --color-primary-5: #14b8d4; --color-primary-6: #22d3ee;
+  --color-primary-7: #67e8f9;
+
+  --color-success-1: #052e16; --color-success-6: #34d399; --color-success-7: #6ee7b7;
+  --color-danger-6: #f87171;
+  --color-warning-6: #60a5fa;
+  --color-link-6: #22d3ee;
+}
+
+[data-color-scheme='1one-cyber'][data-theme='dark'] body {
+  color: #e8f4ff;
+  background:
+    radial-gradient(circle at 10% 6%, rgba(34, 211, 238, 0.18) 0, transparent 36%),
+    radial-gradient(circle at 88% 10%, rgba(96, 165, 250, 0.14) 0, transparent 40%),
+    radial-gradient(circle at 50% 95%, rgba(34, 211, 238, 0.07) 0, transparent 50%),
+    #050f22;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   主题 2: 熔岩橙 (Volcanic Orange) — 暖色系
+   火山岩浆背景 + 琥珀橙焰 + 奶油暖白文字
+   ═══════════════════════════════════════════════════════ */
+[data-color-scheme='1one-volcanic'][data-theme='dark'] {
+
+  /* ── 背景色阶（深棕暖橙渐变）── */
+  --bg-base: #130b05;
+  --bg-1:    #1e1008;
+  --bg-2:    #2a180f;
+  --bg-3:    #3d2214;
+  --bg-4:    #55301a;
+  --bg-5:    #6d3f21;
+  --bg-6:    #8a502b;
+  --bg-8:    #c07840;
+  --bg-9:    #e0a870;
+  --bg-10:   #fde8c8;
+  --bg-hover:  #201208;
+  --bg-active: #2e1a0c;
+
+  /* ── 文字色阶（奶油暖白 → 琥珀橙，严格暖色调）── */
+  --text-primary:   #fff3e0;  /* 奶油暖白，带橙调 */
+  --text-secondary: #fbc88a;  /* 琥珀橙，可读性强 */
+  --text-disabled:  #8a5a30;  /* 暗棕，不冷不蓝 */
+  --text-t-primary:   #fff3e0;
+  --text-t-secondary: #f5b870;
+  --text-t-tertiary:  #9a6838;
+
+  --primary:  #fb923c;  /* 橙焰主色 */
+  --success:  #86efac;  /* 暖绿，不用冷绿 */
+  --warning:  #fcd34d;  /* 暖黄，琥珀色 */
+  --danger:   #fca5a5;  /* 暖红，偏粉 */
+  --info:     #fb923c;
+
+  --border-base:  #7c4820;
+  --border-light: #3d2214;
+  --brand:        #fb923c;
+  --brand-light:  #2a180f;
+  --brand-hover:  #fdba74;
+
+  --message-user-bg:  #281407;
+  --message-tips-bg:  #1c0e05;
+  --workspace-btn-bg: #2a180f;
+  --fill:             #1e1008;
+  --inverse:          #fff3e0;
+  --dialog-fill-0:    #2a180f;
+  --text-0:           #fff3e0;
+  --text-white:       #fff3e0;
+  --fill-0:           rgba(251, 146, 60, 0.08);
+  --fill-white-to-black: #130b05;
+  --border-special:   #fb923c;
+  --color-guid-agent-bar: #2a180f;
+
+  --aou-1: #130b05; --aou-2: #2a180f; --aou-3: #3d2214;
+  --aou-4: #55301a; --aou-5: #8a502b; --aou-6: #c07840;
+  --aou-7: #e0a870; --aou-8: #fbc88a; --aou-9: #fde8c8; --aou-10: #fff3e0;
+
+  /* ── Arco Design 组件变量（暖色系）── */
+  --color-bg-1: #130b05;
+  --color-bg-2: #1e1008;
+  --color-bg-3: #2a180f;
+  --color-bg-4: #3d2214;
+  --color-bg-5: #55301a;
+  --color-bg-white: #130b05;
+
+  --color-fill-1: rgba(251, 146, 60, 0.05);
+  --color-fill-2: rgba(251, 146, 60, 0.10);
+  --color-fill-3: rgba(251, 146, 60, 0.16);
+  --color-fill-4: rgba(251, 146, 60, 0.22);
+
+  --color-border:   #7c4820;
+  --color-border-2: #3d2214;
+
+  /* 文字变量统一暖琥珀色调，完全不含冷蓝 */
+  --color-text-1: #fff3e0;
+  --color-text-2: #fbc88a;
+  --color-text-3: #e0a870;
+  --color-text-4: #8a5a30;
+
+  --primary-1: #280f00; --primary-2: #481c00; --primary-3: #6a2c00;
+  --primary-4: #c46018; --primary-5: #f07825; --primary-6: #fb923c;
+  --primary-7: #fdba74;
+
+  --color-primary-1: #280f00; --color-primary-2: #481c00; --color-primary-3: #6a2c00;
+  --color-primary-4: #c46018; --color-primary-5: #f07825; --color-primary-6: #fb923c;
+  --color-primary-7: #fdba74;
+
+  --color-success-6: #86efac;
+  --color-danger-6:  #fca5a5;
+  --color-warning-6: #fcd34d;
+  --color-link-6:    #fb923c;
+}
+
+[data-color-scheme='1one-volcanic'][data-theme='dark'] body {
+  color: #fff3e0;
+  background:
+    radial-gradient(circle at 15% 8%, rgba(251, 146, 60, 0.20) 0, transparent 35%),
+    radial-gradient(circle at 85% 15%, rgba(245, 158, 11, 0.16) 0, transparent 42%),
+    radial-gradient(circle at 50% 100%, rgba(251, 146, 60, 0.08) 0, transparent 55%),
+    #130b05;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   主题 3: 深林绿 (Deep Forest) — 中性冷绿系
+   暗夜丛林背景 + 翡翠生命光 + 薄荷冷白文字
+   ═══════════════════════════════════════════════════════ */
+[data-color-scheme='1one-forest'][data-theme='dark'] {
+
+  --bg-base: #061710;
+  --bg-1:    #0b1e16;
+  --bg-2:    #102a20;
+  --bg-3:    #163c2e;
+  --bg-4:    #1e503e;
+  --bg-5:    #266650;
+  --bg-6:    #2e7d62;
+  --bg-8:    #4db896;
+  --bg-9:    #86d9ba;
+  --bg-10:   #c8f0e0;
+  --bg-hover:  #0d2419;
+  --bg-active: #143020;
+
+  /* ── 文字色阶（薄荷冷白 → 翡翠绿，带绿调不带黄）── */
+  --text-primary:   #e6faf2;  /* 薄荷冷白，带绿调 */
+  --text-secondary: #86d9ba;  /* 翡翠中绿，清晰 */
+  --text-disabled:  #3a7a5a;  /* 暗绿，低调 */
+  --text-t-primary:   #e6faf2;
+  --text-t-secondary: #6ecfa8;
+  --text-t-tertiary:  #3a7a5a;
+
+  --primary:  #34d399;
+  --success:  #4ade80;
+  --warning:  #86efac;  /* 偏绿的暖色，不用纯黄 */
+  --danger:   #f87171;
+  --info:     #34d399;
+
+  --border-base:  #1a6848;
+  --border-light: #163c2e;
+  --brand:        #34d399;
+  --brand-light:  #102a20;
+  --brand-hover:  #6ee7b7;
+
+  --message-user-bg:  #0c281c;
+  --message-tips-bg:  #081c14;
+  --workspace-btn-bg: #102a20;
+  --fill:             #0b1e16;
+  --inverse:          #e6faf2;
+  --dialog-fill-0:    #102a20;
+  --text-0:           #e6faf2;
+  --text-white:       #e6faf2;
+  --fill-0:           rgba(52, 211, 153, 0.07);
+  --fill-white-to-black: #061710;
+  --border-special:   #34d399;
+  --color-guid-agent-bar: #102a20;
+
+  --aou-1: #061710; --aou-2: #102a20; --aou-3: #163c2e;
+  --aou-4: #1e503e; --aou-5: #2e7d62; --aou-6: #3fa87c;
+  --aou-7: #4db896; --aou-8: #86d9ba; --aou-9: #c8f0e0; --aou-10: #e6faf2;
+
+  --color-bg-1: #061710;
+  --color-bg-2: #0b1e16;
+  --color-bg-3: #102a20;
+  --color-bg-4: #163c2e;
+  --color-bg-5: #1e503e;
+  --color-bg-white: #061710;
+
+  --color-fill-1: rgba(52, 211, 153, 0.05);
+  --color-fill-2: rgba(52, 211, 153, 0.10);
+  --color-fill-3: rgba(52, 211, 153, 0.15);
+  --color-fill-4: rgba(52, 211, 153, 0.22);
+
+  --color-border:   #1a6848;
+  --color-border-2: #163c2e;
+
+  /* 文字统一翡翠绿色调 */
+  --color-text-1: #e6faf2;
+  --color-text-2: #86d9ba;
+  --color-text-3: #4db896;
+  --color-text-4: #3a7a5a;
+
+  --primary-1: #041e0e; --primary-2: #083618; --primary-3: #0c5028;
+  --primary-4: #1a9c68; --primary-5: #28c082; --primary-6: #34d399;
+  --primary-7: #6ee7b7;
+
+  --color-primary-1: #041e0e; --color-primary-2: #083618; --color-primary-3: #0c5028;
+  --color-primary-4: #1a9c68; --color-primary-5: #28c082; --color-primary-6: #34d399;
+  --color-primary-7: #6ee7b7;
+
+  --color-success-6: #4ade80;
+  --color-danger-6:  #f87171;
+  --color-warning-6: #86efac;
+  --color-link-6:    #34d399;
+}
+
+[data-color-scheme='1one-forest'][data-theme='dark'] body {
+  color: #e6faf2;
+  background:
+    radial-gradient(circle at 8% 8%, rgba(52, 211, 153, 0.18) 0, transparent 38%),
+    radial-gradient(circle at 88% 12%, rgba(34, 197, 94, 0.13) 0, transparent 44%),
+    radial-gradient(circle at 45% 96%, rgba(52, 211, 153, 0.07) 0, transparent 52%),
+    #061710;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   主题 4: 极光紫 (Aurora Purple) — 冷紫系
+   深空宇宙背景 + 极光紫罗兰 + 薰衣草文字
+   ═══════════════════════════════════════════════════════ */
+[data-color-scheme='1one-aurora'][data-theme='dark'] {
+
+  --bg-base: #070515;
+  --bg-1:    #0d0b22;
+  --bg-2:    #150e32;
+  --bg-3:    #1e1344;
+  --bg-4:    #291a5c;
+  --bg-5:    #362278;
+  --bg-6:    #472d96;
+  --bg-8:    #7a60c0;
+  --bg-9:    #b8a4e0;
+  --bg-10:   #ede9fe;
+  --bg-hover:  #100d28;
+  --bg-active: #191338;
+
+  /* ── 文字色阶（薰衣草白 → 紫罗兰，冷紫色调）── */
+  --text-primary:   #f0ecff;  /* 薰衣草白，带紫调 */
+  --text-secondary: #c4b5fd;  /* 柔和紫罗兰 */
+  --text-disabled:  #6b52a8;  /* 暗紫，低调 */
+  --text-t-primary:   #f0ecff;
+  --text-t-secondary: #b8a4f8;
+  --text-t-tertiary:  #7c64c8;
+
+  --primary:  #a78bfa;
+  --success:  #a5f3d0;  /* 偏紫的薄荷绿 */
+  --warning:  #ddd6fe;  /* 浅紫色警告，不用暖黄 */
+  --danger:   #fca5c0;  /* 偏粉紫的危险色 */
+  --info:     #e879f9;
+
+  --border-base:  #523b9e;
+  --border-light: #1e1344;
+  --brand:        #a78bfa;
+  --brand-light:  #150e32;
+  --brand-hover:  #c4b5fd;
+
+  --message-user-bg:  #140e36;
+  --message-tips-bg:  #0d0b26;
+  --workspace-btn-bg: #150e32;
+  --fill:             #0d0b22;
+  --inverse:          #f0ecff;
+  --dialog-fill-0:    #1e1344;
+  --text-0:           #f0ecff;
+  --text-white:       #f0ecff;
+  --fill-0:           rgba(167, 139, 250, 0.07);
+  --fill-white-to-black: #070515;
+  --border-special:   #a78bfa;
+  --color-guid-agent-bar: #150e32;
+
+  --aou-1: #070515; --aou-2: #150e32; --aou-3: #1e1344;
+  --aou-4: #291a5c; --aou-5: #472d96; --aou-6: #6b4dc0;
+  --aou-7: #a78bfa; --aou-8: #c4b5fd; --aou-9: #ddd6fe; --aou-10: #f0ecff;
+
+  --color-bg-1: #070515;
+  --color-bg-2: #0d0b22;
+  --color-bg-3: #150e32;
+  --color-bg-4: #1e1344;
+  --color-bg-5: #291a5c;
+  --color-bg-white: #070515;
+
+  --color-fill-1: rgba(167, 139, 250, 0.05);
+  --color-fill-2: rgba(167, 139, 250, 0.10);
+  --color-fill-3: rgba(167, 139, 250, 0.16);
+  --color-fill-4: rgba(167, 139, 250, 0.23);
+
+  --color-border:   #523b9e;
+  --color-border-2: #1e1344;
+
+  /* 文字统一冷紫薰衣草色调 */
+  --color-text-1: #f0ecff;
+  --color-text-2: #c4b5fd;
+  --color-text-3: #a78bfa;
+  --color-text-4: #6b52a8;
+
+  --primary-1: #180840; --primary-2: #2a1068; --primary-3: #3c1890;
+  --primary-4: #7040d8; --primary-5: #8a62ef; --primary-6: #a78bfa;
+  --primary-7: #c4b5fd;
+
+  --color-primary-1: #180840; --color-primary-2: #2a1068; --color-primary-3: #3c1890;
+  --color-primary-4: #7040d8; --color-primary-5: #8a62ef; --color-primary-6: #a78bfa;
+  --color-primary-7: #c4b5fd;
+
+  --color-success-6: #a5f3d0;
+  --color-danger-6:  #fca5c0;
+  --color-warning-6: #ddd6fe;
+  --color-link-6:    #a78bfa;
+}
+
+[data-color-scheme='1one-aurora'][data-theme='dark'] body {
+  color: #f0ecff;
+  background:
+    radial-gradient(ellipse at 10% 5%, rgba(167, 139, 250, 0.26) 0, transparent 40%),
+    radial-gradient(ellipse at 90% 8%, rgba(232, 121, 249, 0.16) 0, transparent 45%),
+    radial-gradient(ellipse at 50% 100%, rgba(99, 102, 241, 0.12) 0, transparent 55%),
+    radial-gradient(ellipse at 30% 60%, rgba(167, 139, 250, 0.05) 0, transparent 35%),
+    #070515;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   主题 5: 月光银 (Moonlight) — 冷蓝灰亮色系
+   极简亮色 + 钢蓝专业感 + 深蓝近黑文字
+   ═══════════════════════════════════════════════════════ */
+[data-theme='light'],
+[data-color-scheme='1one-moonlight'][data-theme='light'],
+[data-color-scheme='1one-moonlight'] {
+
+  --bg-base: #f0f4fb;
+  --bg-1:    #eaeff8;
+  --bg-2:    #e0e8f4;
+  --bg-3:    #d0d9ec;
+  --bg-4:    #b8c4de;
+  --bg-5:    #9caec8;
+  --bg-6:    #7a94b8;
+  --bg-8:    #466ea0;
+  --bg-9:    #1c4480;
+  --bg-10:   #0a2255;
+  --bg-hover:  #e4eaf5;
+  --bg-active: #d4dcee;
+
+  /* ── 文字色阶（深蓝近黑 → 钢蓝，冷调高对比）── */
+  --text-primary:   #0d1a2e;  /* 深蓝近黑，高对比 */
+  --text-secondary: #2e4e80;  /* 钢蓝，专业感 */
+  --text-disabled:  #9caec8;  /* 浅蓝灰，低干扰 */
+  --text-t-primary:   #0d1a2e;
+  --text-t-secondary: #2e4e80;
+  --text-t-tertiary:  #7a94b8;
+
+  --primary:  #1d6fa8;
+  --success:  #16803d;
+  --warning:  #b45309;
+  --danger:   #c0191e;
+  --info:     #1d6fa8;
+
+  --border-base:  #b8c8e8;
+  --border-light: #e0e8f4;
+  --brand:        #1d6fa8;
+  --brand-light:  #dbeefb;
+  --brand-hover:  #1a85c5;
+
+  --message-user-bg:  #ddeeff;
+  --message-tips-bg:  #eaf4ff;
+  --workspace-btn-bg: #e0e8f4;
+  --fill:             #f0f4fb;
+  --inverse:          #0d1a2e;
+  --dialog-fill-0:    #ffffff;
+  --text-0:           #0d1a2e;
+  --text-white:       #ffffff;
+  --fill-0:           rgba(29, 111, 168, 0.06);
+  --fill-white-to-black: #ffffff;
+  --border-special:   #b8c8e8;
+  --color-guid-agent-bar: #e0e8f4;
+
+  --aou-1: #f0f4fb; --aou-2: #e0e8f4; --aou-3: #d0d9ec;
+  --aou-4: #b8c4de; --aou-5: #9caec8; --aou-6: #7a94b8;
+  --aou-7: #466ea0; --aou-8: #2c4e88; --aou-9: #1a3470; --aou-10: #0d1a2e;
+
+  --color-bg-1: #f0f4fb;
+  --color-bg-2: #eaeff8;
+  --color-bg-3: #e0e8f4;
+  --color-bg-4: #d0d9ec;
+  --color-bg-5: #b8c4de;
+  --color-bg-white: #ffffff;
+
+  --color-fill-1: rgba(29, 111, 168, 0.05);
+  --color-fill-2: rgba(29, 111, 168, 0.10);
+  --color-fill-3: rgba(29, 111, 168, 0.15);
+  --color-fill-4: rgba(29, 111, 168, 0.22);
+
+  --color-border:   #b8c8e8;
+  --color-border-2: #d0d9ec;
+
+  --color-text-1: #0d1a2e;
+  --color-text-2: #2e4e80;
+  --color-text-3: #7a94b8;
+  --color-text-4: #9caec8;
+
+  --primary-1: #dff0fb; --primary-2: #b8dff5; --primary-3: #7ec2e8;
+  --primary-4: #1a85c5; --primary-5: #1d6fa8; --primary-6: #1d6fa8;
+  --primary-7: #145080;
+
+  --color-primary-1: #dff0fb; --color-primary-2: #b8dff5; --color-primary-3: #7ec2e8;
+  --color-primary-4: #1a85c5; --color-primary-5: #1d6fa8; --color-primary-6: #1d6fa8;
+  --color-primary-7: #145080;
+
+  --color-success-6: #16803d;
+  --color-danger-6:  #c0191e;
+  --color-warning-6: #b45309;
+  --color-link-6:    #1d6fa8;
+}
+
+[data-theme='light'] body,
+[data-color-scheme='1one-moonlight'] body {
+  color: #0d1a2e;
+  background: #f0f4fb;
+}

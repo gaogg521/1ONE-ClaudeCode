@@ -1,0 +1,9 @@
+{
+  "displayName": "Star Office Extension",
+  "description": "Star Office style activity visualization tab for all agents.",
+  "settingsTabs": {
+    "star-office": { "name": "Star Office" },
+    "1one-claudecode-home": { "name": "1ONE ClaudeCode Home" },
+    "1one-claudecode-issues": { "name": "1ONE ClaudeCode Issues" }
+  }
+}

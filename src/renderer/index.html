@@ -1,0 +1,77 @@
+<!doctype html>
+<html data-theme="dark" data-color-scheme="default">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="application-name" content="1ONE ClaudeCode" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="1ONE ClaudeCode" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#4E5969" />
+    <link rel="icon" type="image/png" href="./pwa/icon-192.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./pwa/icon-180.png" />
+    <title>1ONE ClaudeCode</title>
+    <script>
+      // 同步恢复主题，防止页面闪烁
+      (function () {
+        try {
+          var theme = localStorage.getItem('__1one_theme');
+          var colorScheme = localStorage.getItem('__1one_colorScheme');
+          // 兼容旧版 key（一次性迁移）
+          if (!theme) {
+            theme = localStorage.getItem('__aionui_theme');
+            if (theme) {
+              localStorage.setItem('__1one_theme', theme);
+              localStorage.removeItem('__aionui_theme');
+            }
+          }
+          if (!colorScheme) {
+            colorScheme = localStorage.getItem('__aionui_colorScheme');
+            if (colorScheme) {
+              localStorage.setItem('__1one_colorScheme', colorScheme);
+              localStorage.removeItem('__aionui_colorScheme');
+            }
+          }
+          if (theme) document.documentElement.setAttribute('data-theme', theme);
+          if (colorScheme) document.documentElement.setAttribute('data-color-scheme', colorScheme);
+        } catch (e) {}
+      })();
+    </script>
+    <style>
+      html, body, #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      // 同步设置 arco-theme 和 body 背景，防止白屏闪烁
+      try {
+        var t = localStorage.getItem('__1one_theme');
+        var cs = localStorage.getItem('__1one_colorScheme');
+        if (t) document.body.setAttribute('arco-theme', t);
+        var BG_MAP = {
+          'default':        '#0e0e0e',
+          '1one-cyber':     '#050f22',
+          '1one-volcanic':  '#130b05',
+          '1one-forest':    '#061710',
+          '1one-aurora':    '#070515',
+          '1one-moonlight': '#f0f4fb',
+        };
+        if (cs && BG_MAP[cs]) {
+          document.body.style.background = BG_MAP[cs];
+        } else if (t === 'dark' || !t) {
+          document.body.style.background = '#0e0e0e';
+        }
+      } catch (e) {}
+    </script>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

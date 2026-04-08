@@ -1,0 +1,9 @@
+{
+  "displayName": "Star Office 拡張",
+  "description": "すべてのエージェントのアクティビティを可視化するStar Officeスタイルのタブ。",
+  "settingsTabs": {
+    "star-office": { "name": "Star Office" },
+    "1one-claudecode-home": { "name": "1ONE ClaudeCode ホーム" },
+    "1one-claudecode-issues": { "name": "1ONE ClaudeCode 課題" }
+  }
+}
