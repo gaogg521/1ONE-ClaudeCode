@@ -50,9 +50,11 @@
   - [会话中心](#11-会话中心--全量历史可视化保存)
   - [团队协作模式](#12-团队协作模式--多-agent-并行作战)
   - [远程访问 WebUI](#13-远程访问-webui--随时随地掌控)
+  - [通讯渠道控制](#14-通讯渠道控制--im-直连-agent)
 - [🚀 快速开始](#-快速开始)
 - [🛠️ 技术栈](#️-技术栈)
 - [🤝 参与贡献](#-参与贡献)
+- [📬 联系作者](#-联系作者)
 
 ---
 
@@ -72,6 +74,7 @@
 | 💬 **会话中心** | 所有历史会话完整保存，跨项目检索回溯 |
 | 👥 **团队协作模式** | 多 Agent 并行分工，突破单会话上限处理大型复杂任务 |
 | 🌐 **远程 WebUI 访问** | 局域网/内网穿透远程访问，手机扫码直接使用 |
+| 💬 **通讯渠道控制** | Telegram、飞书、钉钉、微信直连 Agent，扫码配对即用 |
 | 🎨 **6套主题** | 赛博蓝/熔岩橙/深林绿/极光紫/月光银/暗夜默认，冷暖协调 |
 
 ---
@@ -212,6 +215,16 @@
 
 ---
 
+### 14. 通讯渠道控制 · IM 直连 Agent
+
+> 支持将 **Telegram、Lark（飞书）、钉钉、微信**等主流 IM 工具直接与 AI Agent 打通。扫码完成设备配对后，无需打开桌面客户端，直接在聊天软件里向 Agent 下达指令、接收任务结果，真正实现随时随地的 AI 协作。
+
+<p align="center">
+  <img src="./resources/通讯渠道控制.png" alt="通讯渠道控制" width="90%">
+</p>
+
+---
+
 ## 🚀 快速开始
 
 ### 方式一：下载安装包（推荐）
@@ -273,6 +286,30 @@ npm run restart
 - 🐛 **Bug 反馈**：[提交 Issue](https://github.com/gaogg521/gaogg521-openclaw-Visual-Control-Panel/issues)
 - 💡 **功能建议**：[发起讨论](https://github.com/gaogg521/gaogg521-openclaw-Visual-Control-Panel/issues)
 - 📖 **文档完善**：[查看文档仓库](https://github.com/gaogg521/gaogg521-openclaw-Visual-Control-Panel)
+
+---
+
+## 📬 联系作者
+
+有问题、想交流、或者想一起共建？欢迎通过以下方式联系：
+
+<table align="center">
+  <tr>
+    <td align="center" width="300">
+      <strong>💬 QQ 技术交流群</strong><br>
+      <sub>oneclaw技术交流群 · 群号：2159069958</sub><br><br>
+      <img src="./resources/QQ.png" alt="QQ群二维码" width="220">
+      <br><sub>扫码加入，与开发者和用户直接交流</sub>
+    </td>
+    <td align="center" width="50"></td>
+    <td align="center" width="300">
+      <strong>💚 微信</strong><br>
+      <sub>Allen.赵 · 上海浦东</sub><br><br>
+      <img src="./resources/微信.png" alt="微信二维码" width="220">
+      <br><sub>扫码添加微信，问题反馈 / 交流合作</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
