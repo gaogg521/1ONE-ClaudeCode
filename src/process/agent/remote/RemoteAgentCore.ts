@@ -37,6 +37,7 @@ export class RemoteAgentCore {
   private readonly id: string;
   private readonly remoteConfig: RemoteAgentConfig;
   private connection: OpenClawGatewayConnection | null = null;
+  private startPromise: Promise<void> | null = null;
   private adapter: AcpAdapter;
   private approvalStore = new AcpApprovalStore();
   private pendingPermissions = new Map<
@@ -68,10 +69,27 @@ export class RemoteAgentCore {
   }
 
   async start(): Promise<void> {
+    if (this.startPromise) {
+      return this.startPromise;
+    }
+    this.startPromise = this.runStart();
+    try {
+      await this.startPromise;
+    } finally {
+      this.startPromise = null;
+    }
+  }
+
+  private async runStart(): Promise<void> {
     try {
       this.emitStatusMessage('connecting');
 
       const { url, authType, authToken } = this.remoteConfig;
+
+      if (this.connection) {
+        this.connection.stop();
+        this.connection = null;
+      }
 
       this.connection = new OpenClawGatewayConnection({
         url,

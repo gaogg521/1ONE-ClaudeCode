@@ -22,14 +22,14 @@ interface ExternalSource {
 }
 
 const getAvatarColorClass = (name: string) => {
-  if (!name) return 'bg-[#165DFF] text-white';
+  if (!name) return 'bg-[var(--primary)] text-[var(--color-white)]';
   const colors = [
-    'bg-[#165DFF] text-white', // Blue
-    'bg-[#00B42A] text-white', // Green
-    'bg-[#722ED1] text-white', // Purple
-    'bg-[#F5319D] text-white', // Pink
-    'bg-[#F77234] text-white', // Orange
-    'bg-[#14C9C9] text-white', // Cyan
+    'bg-[var(--primary)] text-[var(--color-white)]',
+    'bg-[var(--success)] text-[var(--color-white)]',
+    'bg-[var(--brand)] text-[var(--color-white)]',
+    'bg-[var(--info)] text-[var(--color-white)]',
+    'bg-[var(--warning)] text-[var(--color-white)]',
+    'bg-[var(--danger)] text-[var(--color-white)]',
   ];
   let hash = 0;
   for (let i = 0; i < name.length; i++) {

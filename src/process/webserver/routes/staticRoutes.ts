@@ -156,6 +156,18 @@ function registerProductionStaticRoutes(expressApp: Express, staticRoot: string,
  * In development: proxy to Vite dev server (localhost:5173)
  */
 export function registerStaticRoutes(expressApp: Express): void {
+  // In dev, prefer proxying to Vite even if out/renderer exists.
+  // Otherwise WebUI may serve stale built assets and appear “not synced”.
+  const isProduction = process.env.NODE_ENV === 'production';
+  const hasViteDevServer = typeof process.env['ELECTRON_RENDERER_URL'] === 'string' && !!process.env['ELECTRON_RENDERER_URL'];
+  const forceStatic = process.env.ONE_WEBUI_FORCE_STATIC === '1';
+  if (!isProduction && hasViteDevServer && !forceStatic) {
+    console.log(`[WebUI] Dev mode: proxying to Vite dev server at http://localhost:${VITE_DEV_PORT}`);
+    const proxy = createViteDevProxy();
+    expressApp.use(proxy);
+    return;
+  }
+
   const resolved = resolveRendererPath();
 
   if (resolved) {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type SpeechToTextProvider = 'openai' | 'deepgram';
+export type SpeechToTextProvider = 'openai' | 'deepgram' | 'custom';
 
 export type OpenAISpeechToTextConfig = {
   apiKey: string;
@@ -25,12 +25,21 @@ export type DeepgramSpeechToTextConfig = {
   smartFormat?: boolean;
 };
 
+export type CustomSpeechToTextConfig = {
+  providerName?: string;
+  apiKey: string;
+  baseUrl?: string;
+  model: string;
+  language?: string;
+};
+
 export type SpeechToTextConfig = {
   autoSend?: boolean;
   enabled: boolean;
   provider: SpeechToTextProvider;
   deepgram?: DeepgramSpeechToTextConfig;
   openai?: OpenAISpeechToTextConfig;
+  custom?: CustomSpeechToTextConfig;
 };
 
 export type SpeechToTextAudioBuffer = Uint8Array | number[] | Record<string, number>;

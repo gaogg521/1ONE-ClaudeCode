@@ -258,7 +258,10 @@ export async function startWebServerWithInstance(port: number, allowRemote = fal
   // 创建 Express 应用和服务器 / Create Express app and server
   const app = express();
   const server = createServer(app);
-  const wss = new WebSocketServer({ server });
+  // Only handle our own bridge WebSocket on a dedicated path.
+  // This avoids interfering with other potential websocket clients (e.g. Vite HMR in dev)
+  // that may connect to the same origin but different paths.
+  const wss = new WebSocketServer({ server, path: '/ws' });
 
   // 初始化默认管理员账户 / Initialize default admin account
   const initialCredentials = await initializeDefaultAdmin();

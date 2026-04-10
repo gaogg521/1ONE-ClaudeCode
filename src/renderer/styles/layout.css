@@ -35,6 +35,16 @@
   transform-origin: left center;
 }
 
+/* Conversation list text color must follow theme tokens.
+   Avoid relying on utility class mappings which may differ across color schemes. */
+.chat-history__item-name {
+  color: var(--color-text-1);
+}
+
+.chat-history__item-editor {
+  color: var(--color-text-3);
+}
+
 .chat-history__item-name {
   overflow: hidden;
   text-overflow: ellipsis;

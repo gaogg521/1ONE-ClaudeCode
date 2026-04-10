@@ -15,22 +15,22 @@
  */
 export const STORAGE_KEYS = {
   /** Workspace tree collapse state / 工作空间目录树折叠状态 */
-  WORKSPACE_TREE_COLLAPSE: '1one_workspace_collapse_state',
+  WORKSPACE_TREE_COLLAPSE: '1one-claudecode_workspace_collapse_state',
 
   /** Workspace panel collapse state / 工作空间面板折叠状态 */
-  WORKSPACE_PANEL_COLLAPSE: '1one_workspace_panel_collapsed',
+  WORKSPACE_PANEL_COLLAPSE: '1one-claudecode_workspace_panel_collapsed',
 
   /** Conversation tabs state / 会话 tabs 状态 */
-  CONVERSATION_TABS: '1one_conversation_tabs',
+  CONVERSATION_TABS: '1one-claudecode_conversation_tabs',
 
   /** Sidebar collapse state / 侧边栏折叠状态 */
-  SIDEBAR_COLLAPSE: '1one_sider_collapsed',
+  SIDEBAR_COLLAPSE: '1one-claudecode_sider_collapsed',
 
   /** Theme preference / 主题偏好 */
-  THEME: '1one_theme',
+  THEME: '1one-claudecode_theme',
 
   /** Language preference / 语言偏好 */
-  LANGUAGE: '1one_language',
+  LANGUAGE: '1one-claudecode_language',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

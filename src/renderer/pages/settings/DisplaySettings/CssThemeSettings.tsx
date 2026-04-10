@@ -542,7 +542,7 @@ const CssThemeSettings: React.FC = () => {
                     className='p-4px rounded-6px bg-white/20 cursor-pointer hover:bg-white/40 transition-colors ml-8px'
                     onClick={(e) => handleEditTheme(theme, e)}
                   >
-                    <EditTwo theme='outline' size='16' fill='#fff' />
+                    <EditTwo theme='outline' size='16' fill='var(--color-white)' />
                   </div>
                 )}
               </div>

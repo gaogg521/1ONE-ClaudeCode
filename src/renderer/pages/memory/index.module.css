@@ -1,0 +1,8 @@
+.page {
+}
+
+.scopeSelect :global(.arco-select-view-value) {
+  color: rgb(var(--success-6));
+  font-weight: 600;
+}
+

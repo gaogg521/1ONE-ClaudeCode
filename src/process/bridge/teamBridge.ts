@@ -102,7 +102,26 @@ export function initTeamBridge(teamSessionService: TeamSessionService): void {
 
   ipcBridge.team.ensureSession.provider(
     safeProvider(async ({ teamId }) => {
-      await teamSessionService.getOrStartSession(teamId);
+      try {
+        await teamSessionService.getOrStartSession(teamId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('[teamBridge] ensureSession failed:', message, error);
+        try {
+          const team = await teamSessionService.getTeam(teamId);
+          for (const agent of team.agents) {
+            ipcBridge.team.agentStatusChanged.emit({
+              teamId,
+              slotId: agent.slotId,
+              status: 'failed',
+              lastMessage: message,
+            });
+          }
+        } catch (emitErr) {
+          console.error('[teamBridge] ensureSession failed (also failed to emit status):', emitErr);
+        }
+        throw error;
+      }
     })
   );
 }

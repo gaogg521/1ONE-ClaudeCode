@@ -162,6 +162,10 @@ export const application = {
   setStartOnBoot: bridge.buildProvider<IBridgeResponse<IStartOnBootStatus>, { enabled: boolean }>(
     'app.set-start-on-boot'
   ), // 设置开机启动
+  /** Clear hidden builtin assistant IDs and re-merge presets into `acp.customAgents` (main process). */
+  restoreHiddenBuiltinAssistants: bridge.buildProvider<IBridgeResponse<{ restoredCount: number }>, void>(
+    'app.restore-hidden-builtin-assistants'
+  ),
   // Bridge Main Process logs to Renderer F12 Console
   logStream: bridge.buildEmitter<{ level: 'log' | 'warn' | 'error'; tag: string; message: string; data?: unknown }>(
     'app.log-stream'
@@ -554,6 +558,16 @@ export const codexConversation = {
 export const openclawConversation = {
   sendMessage: conversation.sendMessage,
   responseStream: bridge.buildEmitter<IResponseMessage>('openclaw.response.stream'),
+  getModels: bridge.buildProvider<
+    IBridgeResponse<
+      Array<{
+        id: string;
+        name?: string;
+        provider?: string;
+      }>
+    >,
+    void
+  >('openclaw.get-models'),
   getRuntime: bridge.buildProvider<
     IBridgeResponse<{
       conversationId: string;
@@ -1280,4 +1294,59 @@ export const team = {
   agentSpawned: bridge.buildEmitter<import('@/common/types/teamTypes').ITeamAgentSpawnedEvent>('team.agent.spawned'),
   agentRemoved: bridge.buildEmitter<import('@/common/types/teamTypes').ITeamAgentRemovedEvent>('team.agent.removed'),
   agentRenamed: bridge.buildEmitter<import('@/common/types/teamTypes').ITeamAgentRenamedEvent>('team.agent.renamed'),
+};
+
+// ─── Hooks Bridge ─────────────────────────────────────────────────────────────
+
+export type HookEntry = {
+  id: string;
+  event: string;
+  matcher?: string;
+  command: string;
+  scope: 'user' | 'project';
+  enabled: boolean;
+};
+
+export const hooks = {
+  list: bridge.buildProvider<HookEntry[]>('hooks.list'),
+  save: bridge.buildProvider<void, { entries: HookEntry[] }>('hooks.save'),
+};
+
+// ─── Memory Bridge ────────────────────────────────────────────────────────────
+
+export type MemoryFileEntry = {
+  name: string;
+  filename: string;
+  path: string;
+  content: string;
+  updatedAt: number;
+};
+
+export type ProjectClaudeInfo = { exists: boolean; content: string; path: string };
+
+/** Resolved paths for Claude Code–style memory tied to a single project root */
+export type MemoryScopeInfo = {
+  /** Directory used for ~/.claude/projects/{sanitized}/memory and project CLAUDE.md */
+  effectiveRoot: string;
+  /** User override from Settings (memory.claudeProjectRoot), or null when using workDir only */
+  configuredRoot: string | null;
+  absoluteMemoryDir: string;
+  projectClaudePath: string;
+  projectClaudeExists: boolean;
+  globalClaudePath: string;
+  /** getSystemDir().workDir (app “工作目录”) */
+  appWorkDir: string;
+};
+
+export const memory = {
+  list: bridge.buildProvider<MemoryFileEntry[]>('memory.list'),
+  read: bridge.buildProvider<string, { filename: string }>('memory.read'),
+  write: bridge.buildProvider<void, { filename: string; content: string }>('memory.write'),
+  delete: bridge.buildProvider<void, { filename: string }>('memory.delete'),
+  openInEditor: bridge.buildProvider<void, { filename: string }>('memory.openInEditor'),
+  projectClaude: bridge.buildProvider<ProjectClaudeInfo>('memory.projectClaude'),
+  writeProjectClaude: bridge.buildProvider<void, { content: string }>('memory.writeProjectClaude'),
+  getScope: bridge.buildProvider<MemoryScopeInfo>('memory.getScope'),
+  setClaudeProjectRoot: bridge.buildProvider<void, { path: string | null }>('memory.setClaudeProjectRoot'),
+  suggestRoots: bridge.buildProvider<string[]>('memory.suggestRoots'),
 };

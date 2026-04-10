@@ -1,49 +1,18 @@
 /**
- * Memory — Claude Code 记忆管理
- * 可视化管理 CLAUDE.md 和 MEMORY.md，查看/编辑记忆条目
+ * Memory — Claude Code 记忆管理（项目范围可显式绑定仓库根目录）
  */
-import React, { useState } from 'react';
-import { Button, Tabs, Table, Tag, Modal } from '@arco-design/web-react';
-import { Add, Edit, Delete, FileText } from '@icon-park/react';
-
-interface MemoryFile {
-  name: string;
-  type: 'user' | 'feedback' | 'project' | 'reference';
-  description: string;
-  path: string;
-  updatedAt: string;
-}
-
-const MOCK_MEMORIES: MemoryFile[] = [
-  {
-    name: '1ONE 用户角色',
-    type: 'user',
-    description: '用户是 1ONE，OpenClaw CEO，负责战略调度',
-    path: 'memory/user_role.md',
-    updatedAt: '2026-04-07',
-  },
-  {
-    name: '测试规范反馈',
-    type: 'feedback',
-    description: '集成测试必须连接真实数据库，不能使用 mock',
-    path: 'memory/feedback_testing.md',
-    updatedAt: '2026-04-07',
-  },
-  {
-    name: 'OpenClaw 战队',
-    type: 'project',
-    description: 'OpenClaw 10 人专家战队结构与飞书集成',
-    path: 'memory/project_openclaw.md',
-    updatedAt: '2026-04-07',
-  },
-  {
-    name: '1ONE ClaudeCode 项目',
-    type: 'project',
-    description: '桌面应用架构方案，Electron+React，8个核心模块',
-    path: 'memory/project_ONE_command.md',
-    updatedAt: '2026-04-07',
-  },
-];
+import React, { useState, useEffect, useCallback } from 'react';
+import { Button, Card, Divider, Input, Message, Modal, Select, Space, Spin, Table, Tabs, Tag, Typography } from '@arco-design/web-react';
+import { Add, Edit, Delete, FileText, FolderOpen, Refresh, FileAddition } from '@icon-park/react';
+import { useTranslation } from 'react-i18next';
+import {
+  dialog,
+  memory as memoryIpc,
+  type MemoryFileEntry,
+  type MemoryScopeInfo,
+  type ProjectClaudeInfo,
+} from '@/common/adapter/ipcBridge';
+import styles from './index.module.css';
 
 const TYPE_COLOR: Record<string, string> = {
   user: 'arcoblue',
@@ -52,24 +21,281 @@ const TYPE_COLOR: Record<string, string> = {
   reference: 'purple',
 };
 
-const TYPE_LABEL: Record<string, string> = {
-  user: '用户',
-  feedback: '反馈',
-  project: '项目',
-  reference: '参考',
-};
+function getType(content: string): string {
+  const m = content.match(/^type:\s*(\w+)/m);
+  return m ? m[1] : 'reference';
+}
+
+function getDesc(content: string): string {
+  const m = content.match(/^description:\s*(.+?)$/m);
+  if (m) return m[1].trim();
+  return (
+    content
+      .replace(/^---[\s\S]*?---\n?/m, '')
+      .trim()
+      .split('\n')
+      .find((l) => l.trim())
+      ?.trim()
+      .slice(0, 80) ?? ''
+  );
+}
 
 const MemoryPage: React.FC = () => {
-  const [memories] = useState<MemoryFile[]>(MOCK_MEMORIES);
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('auto');
+  const [scope, setScope] = useState<MemoryScopeInfo | null>(null);
+  const [pathInput, setPathInput] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [entries, setEntries] = useState<MemoryFileEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [scopeLoading, setScopeLoading] = useState(true);
+  const [globalContent, setGlobalContent] = useState('');
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [projectInfo, setProjectInfo] = useState<ProjectClaudeInfo | null>(null);
+  const [projectContent, setProjectContent] = useState('');
+  const [projectLoading, setProjectLoading] = useState(false);
   const [editVisible, setEditVisible] = useState(false);
-  const [selectedMemory, setSelectedMemory] = useState<MemoryFile | null>(null);
+  const [editEntry, setEditEntry] = useState<MemoryFileEntry | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [newVisible, setNewVisible] = useState(false);
+  const [newFilename, setNewFilename] = useState('');
+  const [newContent, setNewContent] = useState('---\nname: \ndescription: \ntype: user\n---\n\n');
+  const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const typeLabel = useCallback(
+    (key: string) =>
+      ({
+        user: t('memory.typeUser'),
+        feedback: t('memory.typeFeedback'),
+        project: t('memory.typeProject'),
+        reference: t('memory.typeReference'),
+      })[key] ?? key,
+    [t]
+  );
+
+  const loadScope = useCallback(async () => {
+    setScopeLoading(true);
+    try {
+      const s = await memoryIpc.getScope.invoke();
+      setScope(s);
+      setPathInput(s.effectiveRoot);
+    } catch {
+      Message.error(t('memory.loadScopeFailed'));
+    } finally {
+      setScopeLoading(false);
+    }
+  }, [t]);
+
+  const loadSuggestions = useCallback(async () => {
+    try {
+      const roots = await memoryIpc.suggestRoots.invoke();
+      setSuggestions(roots ?? []);
+    } catch {
+      setSuggestions([]);
+    }
+  }, []);
+
+  const loadEntries = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = (await memoryIpc.list.invoke()) ?? [];
+      setEntries(data);
+    } catch {
+      Message.error(t('memory.readFailed'));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  const loadGlobal = useCallback(async () => {
+    setGlobalLoading(true);
+    try {
+      setGlobalContent(await memoryIpc.read.invoke({ filename: 'global-claude' }));
+    } catch {
+      /* ignore */
+    } finally {
+      setGlobalLoading(false);
+    }
+  }, []);
+
+  const loadProjectClaude = useCallback(async () => {
+    setProjectLoading(true);
+    try {
+      const info = await memoryIpc.projectClaude.invoke();
+      setProjectInfo(info);
+      setProjectContent(info.content);
+    } catch {
+      /* ignore */
+    } finally {
+      setProjectLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadScope();
+    void loadSuggestions();
+  }, [loadScope, loadSuggestions]);
+
+  useEffect(() => {
+    void loadEntries();
+  }, [loadEntries, scope?.effectiveRoot]);
+
+  useEffect(() => {
+    if (activeTab === 'global') void loadGlobal();
+  }, [activeTab, loadGlobal]);
+
+  useEffect(() => {
+    if (activeTab === 'project') void loadProjectClaude();
+  }, [activeTab, loadProjectClaude, scope?.effectiveRoot]);
+
+  const applyProjectRoot = async () => {
+    const trimmed = pathInput.trim();
+    if (!trimmed) {
+      Message.warning(t('memory.nameRequired'));
+      return;
+    }
+    setSaving(true);
+    try {
+      await memoryIpc.setClaudeProjectRoot.invoke({ path: trimmed });
+      Message.success(t('memory.scopeUpdated'));
+      await loadScope();
+      await loadEntries();
+      if (activeTab === 'project') await loadProjectClaude();
+    } catch {
+      Message.error(t('memory.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearProjectRoot = async () => {
+    setSaving(true);
+    try {
+      await memoryIpc.setClaudeProjectRoot.invoke({ path: null });
+      Message.success(t('memory.scopeCleared'));
+      await loadScope();
+      await loadEntries();
+      if (activeTab === 'project') await loadProjectClaude();
+    } catch {
+      Message.error(t('memory.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const pickFolder = async () => {
+    try {
+      const paths = await dialog.showOpen.invoke({
+        properties: ['openDirectory'],
+        defaultPath: pathInput || scope?.effectiveRoot,
+      });
+      const first = paths?.[0];
+      if (first) setPathInput(first);
+    } catch {
+      Message.info(t('memory.pickFolderUnavailable'));
+    }
+  };
+
+  const pickProjectFileOrFolder = async () => {
+    try {
+      const paths = await dialog.showOpen.invoke({
+        properties: ['openFile', 'openDirectory'],
+        defaultPath: pathInput || scope?.effectiveRoot,
+      });
+      const first = paths?.[0];
+      if (!first) return;
+      // If user picks a file (e.g. .../readme.md), bind to its directory
+      const normalized = first.toLowerCase().endsWith('.md') ? first : first;
+      setPathInput(normalized);
+    } catch {
+      Message.info(t('memory.pickFolderUnavailable'));
+    }
+  };
+
+  const handleSaveGlobal = async () => {
+    setSaving(true);
+    try {
+      await memoryIpc.write.invoke({ filename: 'global-claude', content: globalContent });
+      Message.success(t('memory.saveGlobalOk'));
+    } catch {
+      Message.error(t('memory.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveProject = async () => {
+    setSaving(true);
+    try {
+      await memoryIpc.writeProjectClaude.invoke({ content: projectContent });
+      Message.success(t('memory.saveProjectOk'));
+      await loadProjectClaude();
+    } catch {
+      Message.error(t('memory.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEdit = (e: MemoryFileEntry) => {
+    setEditEntry(e);
+    setEditContent(e.content);
+    setEditVisible(true);
+  };
+
+  const handleSaveEntry = async () => {
+    if (!editEntry) return;
+    setSaving(true);
+    try {
+      await memoryIpc.write.invoke({ filename: editEntry.filename, content: editContent });
+      setEditVisible(false);
+      await loadEntries();
+    } catch {
+      Message.error(t('memory.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = (e: MemoryFileEntry) => {
+    Modal.confirm({
+      title: t('memory.deleteTitle'),
+      content: t('memory.deleteConfirm', { name: e.name }),
+      okButtonProps: { status: 'danger' },
+      onOk: async () => {
+        await memoryIpc.delete.invoke({ filename: e.filename });
+        await loadEntries();
+      },
+    });
+  };
+
+  const handleCreate = async () => {
+    if (!newFilename.trim()) {
+      Message.warning(t('memory.nameRequired'));
+      return;
+    }
+    const fn = newFilename.trim().endsWith('.md') ? newFilename.trim() : `${newFilename.trim()}.md`;
+    setSaving(true);
+    try {
+      await memoryIpc.write.invoke({ filename: fn, content: newContent });
+      setNewVisible(false);
+      setNewFilename('');
+      setNewContent('---\nname: \ndescription: \ntype: user\n---\n\n');
+      await loadEntries();
+      Message.success(t('memory.createOk'));
+    } catch {
+      Message.error(t('memory.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const memoryColumns = [
     {
-      title: '名称',
+      title: t('memory.colName'),
       dataIndex: 'name',
-      render: (v: string, record: MemoryFile) => (
+      render: (v: string) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <FileText theme='outline' size={14} />
           <span style={{ fontWeight: 500 }}>{v}</span>
@@ -77,109 +303,286 @@ const MemoryPage: React.FC = () => {
       ),
     },
     {
-      title: '类型',
-      dataIndex: 'type',
-      render: (v: string) => <Tag size='small' color={TYPE_COLOR[v]}>{TYPE_LABEL[v]}</Tag>,
+      title: t('memory.colType'),
+      dataIndex: 'content',
+      width: 88,
+      render: (v: string) => {
+        const ty = getType(v);
+        return (
+          <Tag size='small' color={TYPE_COLOR[ty] ?? 'gray'}>
+            {typeLabel(ty)}
+          </Tag>
+        );
+      },
     },
     {
-      title: '描述',
-      dataIndex: 'description',
-      render: (v: string) => <span style={{ fontSize: 12, color: 'var(--color-text-2)' }}>{v}</span>,
+      title: t('memory.colDesc'),
+      dataIndex: 'content',
+      render: (v: string) => <span style={{ fontSize: 12, color: 'var(--color-text-2)' }}>{getDesc(v)}</span>,
     },
-    { title: '更新时间', dataIndex: 'updatedAt', width: 100, render: (v: string) => <span style={{ fontSize: 12 }}>{v}</span> },
     {
-      title: '操作',
-      render: (_: unknown, record: MemoryFile) => (
+      title: t('memory.colUpdated'),
+      dataIndex: 'updatedAt',
+      width: 112,
+      render: (v: number) => <span style={{ fontSize: 12 }}>{new Date(v).toLocaleDateString()}</span>,
+    },
+    {
+      title: t('memory.colActions'),
+      width: 90,
+      render: (_: unknown, record: MemoryFileEntry) => (
         <div style={{ display: 'flex', gap: 4 }}>
+          <Button type='text' size='mini' icon={<Edit theme='outline' size={13} />} onClick={() => openEdit(record)} />
           <Button
             type='text'
             size='mini'
-            icon={<Edit theme='outline' size={13} />}
-            onClick={() => { setSelectedMemory(record); setEditVisible(true); }}
+            status='danger'
+            icon={<Delete theme='outline' size={13} />}
+            onClick={() => handleDelete(record)}
           />
-          <Button type='text' size='mini' status='danger' icon={<Delete theme='outline' size={13} />} />
         </div>
       ),
     },
   ];
 
   return (
-    <div style={{ padding: '20px 24px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>记忆管理</h2>
-        <Button type='primary' size='small' icon={<Add theme='outline' />}>新增记忆</Button>
+    <div className={styles.page} style={{ padding: '20px 24px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{t('memory.title')}</h2>
       </div>
 
-      <Tabs activeTab={activeTab} onChange={setActiveTab}>
-        <Tabs.TabPane key='auto' title='自动记忆 (MEMORY.md)'>
-          <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--color-text-3)' }}>
-            路径: ~/.claude/projects/.../memory/MEMORY.md · 前 200 行自动加载到每次会话
-          </div>
-          <Table
-            columns={memoryColumns}
-            data={memories}
-            rowKey='path'
-            size='small'
-            pagination={false}
-          />
-        </Tabs.TabPane>
+      {scopeLoading ? (
+        <div style={{ textAlign: 'center', padding: 24 }}>
+          <Spin loading />
+        </div>
+      ) : (
+        <Card
+          style={{ marginBottom: 16 }}
+          title={<span style={{ fontWeight: 600 }}>{t('memory.scopeTitle')}</span>}
+          size='small'
+        >
+          <Space direction='vertical' size={10} style={{ width: '100%' }}>
+            <Typography.Paragraph style={{ margin: 0, fontSize: 12, color: 'var(--color-text-2)' }}>
+              {t('memory.scopeHint')}
+            </Typography.Paragraph>
 
-        <Tabs.TabPane key='global' title='全局 CLAUDE.md'>
-          <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--color-text-3)' }}>
-            路径: ~/.claude/CLAUDE.md · 所有项目通用的全局指令
-          </div>
-          <div
-            style={{
-              background: 'var(--color-fill-2)',
-              borderRadius: 6,
-              padding: 16,
-              fontFamily: 'monospace',
-              fontSize: 12,
-              lineHeight: 1.6,
-              whiteSpace: 'pre-wrap',
-              color: 'var(--color-text-2)',
-              maxHeight: 400,
-              overflowY: 'auto',
-            }}
-          >
-            {`# CLAUDE.md（全局配置）
+            <Space wrap size={8}>
+              <Select
+                className={styles.scopeSelect}
+                placeholder={t('memory.suggested')}
+                style={{ minWidth: 240, maxWidth: 420 }}
+                allowClear
+                options={suggestions.map((p) => ({ label: p, value: p }))}
+                onChange={(v) => {
+                  if (v) setPathInput(v);
+                }}
+              />
+              <Input
+                style={{ width: 520, maxWidth: '100%' }}
+                value={pathInput}
+                onChange={setPathInput}
+                placeholder={t('memory.pathPlaceholder')}
+              />
+              <Button size='small' icon={<FolderOpen theme='outline' size={14} />} onClick={() => void pickFolder()}>
+                {t('memory.pickFolder')}
+              </Button>
+              <Button size='small' icon={<FileAddition theme='outline' size={14} />} onClick={() => void pickProjectFileOrFolder()}>
+                {t('memory.pickProject')}
+              </Button>
+              <Button type='primary' size='small' loading={saving} onClick={() => void applyProjectRoot()}>
+                {t('memory.applyRoot')}
+              </Button>
+              {scope?.configuredRoot ? (
+                <Button size='small' loading={saving} onClick={() => void clearProjectRoot()}>
+                  {t('memory.clearOverride')}
+                </Button>
+              ) : null}
+            </Space>
 
-## 我的角色定位
-我是 CTO，与 OpenClaw 的 CEO（agent-1one / 1ONE总指挥）共同为用户服务。
+            <Divider style={{ margin: '6px 0' }} />
 
-## 1ONE 专家战队（OpenClaw）
-配置来源：~/.openclaw/openclaw.json
-...`}
+            <Space direction='vertical' size={4} style={{ fontSize: 12, color: 'var(--color-text-3)' }}>
+              <div>
+                <Typography.Text style={{ fontSize: 12 }}>{t('memory.effectiveRoot')}:</Typography.Text>{' '}
+                <Typography.Text code style={{ fontSize: 11 }}>{scope?.effectiveRoot}</Typography.Text>
+              </div>
+              <div>
+                <Typography.Text style={{ fontSize: 12 }}>{t('memory.memoryDir')}:</Typography.Text>{' '}
+                <Typography.Text code style={{ fontSize: 11 }}>{scope?.absoluteMemoryDir}</Typography.Text>
+              </div>
+              <div>
+                <Typography.Text style={{ fontSize: 12 }}>
+                  {scope?.configuredRoot ? t('memory.configuredOverride') : t('memory.usingWorkDir')}
+                </Typography.Text>
+                {scope?.configuredRoot ? (
+                  <>
+                    {' '}
+                    <Typography.Text code style={{ fontSize: 11 }}>{scope.configuredRoot}</Typography.Text>
+                  </>
+                ) : null}
+              </div>
+            </Space>
+          </Space>
+        </Card>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 8 }}>
+        {activeTab === 'auto' && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              size='small'
+              icon={<Refresh theme='outline' />}
+              loading={refreshing}
+              onClick={async () => {
+                setRefreshing(true);
+                await loadScope();
+                await loadSuggestions();
+                await loadEntries();
+                setRefreshing(false);
+              }}
+            >
+              {t('memory.refresh')}
+            </Button>
+            <Button type='primary' size='small' icon={<Add theme='outline' />} onClick={() => setNewVisible(true)}>
+              {t('memory.addMemory')}
+            </Button>
           </div>
-          <Button size='small' style={{ marginTop: 8 }} icon={<Edit theme='outline' size={13} />}>
-            在编辑器中打开
+        )}
+        {activeTab === 'global' && (
+          <Button type='primary' size='small' loading={saving} onClick={() => void handleSaveGlobal()}>
+            {t('memory.save')}
           </Button>
+        )}
+        {activeTab === 'project' && projectInfo?.exists && (
+          <Button type='primary' size='small' loading={saving} onClick={() => void handleSaveProject()}>
+            {t('memory.save')}
+          </Button>
+        )}
+      </div>
+
+      <Tabs activeTab={activeTab} onChange={setActiveTab} style={{ flex: 1 }}>
+        <Tabs.TabPane key='auto' title={t('memory.tabAuto')}>
+          <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--color-text-3)' }}>{t('memory.autoHint')}</div>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <Spin loading />
+            </div>
+          ) : (
+            <Table
+              columns={memoryColumns}
+              data={entries}
+              rowKey='filename'
+              size='small'
+              pagination={false}
+              noDataElement={
+                <div style={{ textAlign: 'center', color: 'var(--color-text-3)', padding: '40px 0' }}>
+                  {t('memory.emptyAuto')}
+                </div>
+              }
+            />
+          )}
         </Tabs.TabPane>
 
-        <Tabs.TabPane key='project' title='项目 CLAUDE.md'>
-          <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--color-text-3)' }}>
-            路径: .claude/CLAUDE.md · 当前项目专用指令
-          </div>
-          <div style={{ textAlign: 'center', color: 'var(--color-text-4)', padding: '40px 0' }}>
-            当前目录未找到项目 CLAUDE.md
-            <div style={{ marginTop: 8 }}>
-              <Button size='small' type='primary' icon={<Add theme='outline' size={13} />}>创建</Button>
+        <Tabs.TabPane key='global' title={t('memory.tabGlobal')}>
+          <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--color-text-3)' }}>{t('memory.globalHint')}</div>
+          {globalLoading ? (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <Spin loading />
             </div>
-          </div>
+          ) : (
+            <>
+              <Input.TextArea
+                value={globalContent}
+                onChange={setGlobalContent}
+                rows={16}
+                style={{ fontFamily: 'monospace', fontSize: 12, lineHeight: 1.6 }}
+              />
+              <Button
+                size='small'
+                style={{ marginTop: 8 }}
+                onClick={() => memoryIpc.openInEditor.invoke({ filename: 'global-claude' })}
+              >
+                {t('memory.openInEditor')}
+              </Button>
+            </>
+          )}
+        </Tabs.TabPane>
+
+        <Tabs.TabPane key='project' title={t('memory.tabProject')}>
+          <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--color-text-3)' }}>{t('memory.projectHint')}</div>
+          {projectLoading ? (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <Spin loading />
+            </div>
+          ) : projectInfo?.exists ? (
+            <>
+              <div style={{ marginBottom: 6, fontSize: 12, color: 'var(--color-text-4)' }}>{projectInfo.path}</div>
+              <Input.TextArea
+                value={projectContent}
+                onChange={setProjectContent}
+                rows={16}
+                style={{ fontFamily: 'monospace', fontSize: 12, lineHeight: 1.6 }}
+              />
+              <Button
+                size='small'
+                style={{ marginTop: 8 }}
+                onClick={() => memoryIpc.openInEditor.invoke({ filename: 'project-claude' })}
+              >
+                {t('memory.openInEditor')}
+              </Button>
+            </>
+          ) : (
+            <div style={{ textAlign: 'center', color: 'var(--color-text-4)', padding: '40px 0' }}>
+              {t('memory.noProjectClaude')}
+              <div style={{ marginTop: 8 }}>
+                <Button
+                  size='small'
+                  type='primary'
+                  icon={<Add theme='outline' size={13} />}
+                  onClick={async () => {
+                    await memoryIpc.writeProjectClaude.invoke({ content: '' });
+                    await loadProjectClaude();
+                  }}
+                >
+                  {t('memory.create')}
+                </Button>
+              </div>
+            </div>
+          )}
         </Tabs.TabPane>
       </Tabs>
 
       <Modal
-        title={`编辑记忆: ${selectedMemory?.name}`}
+        title={t('memory.editMemory', { name: editEntry?.name ?? '' })}
         visible={editVisible}
-        onOk={() => setEditVisible(false)}
         onCancel={() => setEditVisible(false)}
-        okText='保存'
-        cancelText='取消'
+        onOk={() => void handleSaveEntry()}
+        okText={t('memory.save')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ loading: saving }}
         style={{ width: 600 }}
       >
-        <div style={{ fontFamily: 'monospace', fontSize: 12, background: 'var(--color-fill-2)', padding: 12, borderRadius: 6 }}>
-          {selectedMemory?.description}
+        <Input.TextArea value={editContent} onChange={setEditContent} rows={14} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+      </Modal>
+
+      <Modal
+        title={t('memory.newMemory')}
+        visible={newVisible}
+        onCancel={() => setNewVisible(false)}
+        onOk={() => void handleCreate()}
+        okText={t('memory.create')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ loading: saving }}
+        style={{ width: 600 }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-3)', marginBottom: 6 }}>{t('memory.filename')}</div>
+            <Input placeholder='user_role' value={newFilename} onChange={setNewFilename} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-3)', marginBottom: 6 }}>{t('memory.content')}</div>
+            <Input.TextArea value={newContent} onChange={setNewContent} rows={10} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+          </div>
         </div>
       </Modal>
     </div>

@@ -1,22 +1,15 @@
 /**
  * AssistantManagement — Settings page for managing assistants.
  *
- * Editing permissions by assistant type:
- *
  * | Field          | Builtin | Extension | Custom |
  * |----------------|---------|-----------|--------|
- * | Save button    |  yes    |  no       |  yes   |
- * | Name           |  no     |  no       |  yes   |
- * | Description    |  no     |  no       |  yes   |
- * | Avatar         |  no     |  no       |  yes   |
- * | Main Agent     |  yes    |  no       |  yes   |
- * | Prompt editing |  no     |  no       |  yes   |
- * | Delete         |  no     |  no       |  yes   |
+ * | Save           |  yes    |  no       |  yes   |
+ * | Name / Desc / Avatar / Rules / Skills | yes | no | yes |
+ * | Delete         |  yes*   |  no       |  yes   |
  *
- * Builtin assistants allow switching Main Agent and saving,
- * but their identity fields (name, description, avatar) and
- * prompt content are read-only.
- * Extension assistants are fully read-only.
+ * *Deleting a builtin removes it from the list and records a hidden-id so startup
+ * does not re-inject it. Users can restore removed builtins via the list header action.
+ * Extension assistants remain read-only.
  */
 import coworkSvg from '@/renderer/assets/icons/cowork.svg';
 import {
@@ -63,6 +56,7 @@ const AssistantManagement: React.FC<AssistantManagementProps> = ({ message }) =>
     isExtensionAssistant,
     loadAssistants,
     localeKey,
+    hasHiddenBuiltinAssistants,
   } = useAssistantList();
 
   const { availableBackends, extensionAcpAdapters, refreshAgentDetection } = useAssistantBackends();
@@ -134,6 +128,9 @@ const AssistantManagement: React.FC<AssistantManagementProps> = ({ message }) =>
         localeKey={localeKey}
         avatarImageMap={avatarImageMap}
         isExtensionAssistant={isExtensionAssistant}
+        hasHiddenBuiltinAssistants={hasHiddenBuiltinAssistants}
+        restoreHiddenBuiltinsLoading={editor.restoreHiddenBuiltinsLoading}
+        onRestoreHiddenBuiltinAssistants={() => editor.handleRestoreHiddenBuiltinAssistants()}
         onEdit={(assistant) => void editor.handleEdit(assistant)}
         onDuplicate={(assistant) => void editor.handleDuplicate(assistant)}
         onCreate={() => void editor.handleCreate()}

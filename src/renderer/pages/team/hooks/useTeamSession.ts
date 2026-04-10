@@ -85,6 +85,8 @@ export function useTeamSession(team: TTeam) {
       if (event.teamId !== team.id) return;
       if (event.status === 'failed') {
         saveFailedAgent(team.id, event.slotId);
+      } else {
+        clearFailedAgent(team.id, event.slotId);
       }
       setStatusMap((prev) => {
         const next = new Map(prev);

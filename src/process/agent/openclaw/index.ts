@@ -67,6 +67,8 @@ export class OpenClawAgent {
   private readonly config: OpenClawAgentConfig;
   private gatewayManager: OpenClawGatewayManager | null = null;
   private connection: OpenClawGatewayConnection | null = null;
+  /** Serialize start() so concurrent sendMessage reconnects cannot stomp each other's socket. */
+  private startPromise: Promise<void> | null = null;
   private adapter: AcpAdapter;
   private approvalStore = new AcpApprovalStore();
   private pendingPermissions = new Map<
@@ -109,6 +111,18 @@ export class OpenClawAgent {
    * - Resolve session
    */
   async start(): Promise<void> {
+    if (this.startPromise) {
+      return this.startPromise;
+    }
+    this.startPromise = this.runStart();
+    try {
+      await this.startPromise;
+    } finally {
+      this.startPromise = null;
+    }
+  }
+
+  private async runStart(): Promise<void> {
     try {
       this.emitStatusMessage('connecting');
 
@@ -142,6 +156,14 @@ export class OpenClawAgent {
             throw new Error(`Failed to start OpenClaw Gateway: ${errorMsg}`, { cause: error });
           }
         }
+      }
+
+      // Tear down any previous Gateway WebSocket client before opening a new one.
+      // Without this, orphaned clients keep `scheduleReconnect()` timers and extra sockets,
+      // which races with the new connection and causes rapid disconnect/reconnect (UI flashing, code 1000).
+      if (this.connection) {
+        this.connection.stop();
+        this.connection = null;
       }
 
       // Create and configure connection

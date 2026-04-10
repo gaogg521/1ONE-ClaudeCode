@@ -637,7 +637,9 @@ const GuidPage: React.FC = () => {
                 />
               ) : null}
             </div>
-          ) : agentSelection.availableAgents === undefined ? (
+          ) : null}
+
+          {agentSelection.availableAgents === undefined ? (
             <AgentPillBarSkeleton />
           ) : agentSelection.availableAgents.length > 0 ? (
             <AgentPillBar

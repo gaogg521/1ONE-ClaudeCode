@@ -18,6 +18,7 @@ import useSWR from 'swr';
 export const useAssistantList = () => {
   const { i18n } = useTranslation();
   const [assistants, setAssistants] = useState<AssistantListItem[]>([]);
+  const [hiddenBuiltinAssistantIds, setHiddenBuiltinAssistantIds] = useState<string[]>([]);
   const [activeAssistantId, setActiveAssistantId] = useState<string | null>(null);
   const localeKey = resolveLocaleKey(i18n.language);
 
@@ -40,8 +41,14 @@ export const useAssistantList = () => {
 
   const loadAssistants = useCallback(async () => {
     try {
-      // Read stored assistants from config (includes builtin and user-defined)
-      const localAgents: AssistantListItem[] = (await ConfigStorage.get('acp.customAgents')) || [];
+      const [localAgentsRaw, hiddenRaw] = await Promise.all([
+        ConfigStorage.get('acp.customAgents'),
+        ConfigStorage.get('acp.hiddenBuiltinAssistantIds'),
+      ]);
+      const localAgents: AssistantListItem[] = localAgentsRaw || [];
+      setHiddenBuiltinAssistantIds(
+        Array.isArray(hiddenRaw) ? hiddenRaw.filter((id): id is string => typeof id === 'string' && id.length > 0) : []
+      );
 
       const mergedAgents = [...localAgents];
       for (const extAssistant of normalizedExtAssistants) {
@@ -68,6 +75,7 @@ export const useAssistantList = () => {
 
   const activeAssistant = assistants.find((assistant) => assistant.id === activeAssistantId) || null;
   const isReadonlyAssistant = Boolean(activeAssistant && isExtensionAssistant(activeAssistant));
+  const hasHiddenBuiltinAssistants = hiddenBuiltinAssistantIds.length > 0;
 
   return {
     assistants,
@@ -79,5 +87,6 @@ export const useAssistantList = () => {
     isExtensionAssistant,
     loadAssistants,
     localeKey,
+    hasHiddenBuiltinAssistants,
   };
 };

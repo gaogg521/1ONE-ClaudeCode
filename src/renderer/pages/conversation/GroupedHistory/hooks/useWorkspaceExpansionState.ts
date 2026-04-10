@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export const WORKSPACE_EXPANSION_STORAGE_KEY = '1one_workspace_expansion';
+export const WORKSPACE_EXPANSION_STORAGE_KEY = '1one-claudecode_workspace_expansion';
 export const WORKSPACE_EXPANSION_EVENT = '1ONE ClaudeCode:workspace-expansion-changed';
 
 type WorkspaceExpansionChangeDetail = {

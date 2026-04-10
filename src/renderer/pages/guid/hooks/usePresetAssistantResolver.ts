@@ -113,10 +113,10 @@ export const usePresetAssistantResolver = ({
 
   const resolvePresetAgentType = useCallback(
     (agentInfo: { backend: AcpBackend; customAgentId?: string } | undefined): string => {
-      if (!agentInfo) return 'claude';
+      if (!agentInfo) return 'gemini';
       if (agentInfo.backend !== 'custom') return agentInfo.backend as string;
       const customAgent = customAgents.find((agent) => agent.id === agentInfo.customAgentId);
-      return customAgent?.presetAgentType || 'claude';
+      return customAgent?.presetAgentType || 'gemini';
     },
     [customAgents]
   );

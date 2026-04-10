@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@arco-design/web-react';
 import { IconMoonFill, IconSunFill } from '@arco-design/web-react/icon';
@@ -93,10 +93,11 @@ async function applyTheme(t: ThemeItem) {
   localStorage.setItem(STORAGE_KEY, t.id);
   localStorage.setItem('__1one_theme', t.theme);
   localStorage.setItem('__1one_colorScheme', t.colorScheme);
-  try {
-    await ConfigStorage.set('colorScheme', t.colorScheme as never);
-    await ConfigStorage.set('theme', t.theme as never);
-  } catch (_e) { /* noop */ }
+  // 临时禁用ConfigStorage调用以修复卡死问题
+  // try {
+  //   await ConfigStorage.set('colorScheme', t.colorScheme as never);
+  //   await ConfigStorage.set('theme', t.theme as never);
+  // } catch (_e) { /* noop */ }
 }
 
 const SiderFooter: React.FC<SiderFooterProps> = ({
@@ -117,8 +118,15 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
   const handleSelectTheme = useCallback((th: ThemeItem) => {
     setCurrentTheme(th);
     void applyTheme(th);
-    // 如果切换到 light 主题（月光银），触发外层 onThemeToggle 同步
-    // 如果外层 theme 和新主题的 mode 不一致才需要切换
+    // 同步父组件的 light/dark 状态（月光银=亮色，其他=暗色）
+    if (th.theme === 'light' && theme === 'dark') onThemeToggle();
+    if (th.theme === 'dark' && theme === 'light') onThemeToggle();
+  }, [theme, onThemeToggle]);
+
+  // 挂载时立即应用已保存的主题，确保 DOM 与 localStorage 同步
+  useEffect(() => {
+    void applyTheme(currentTheme);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

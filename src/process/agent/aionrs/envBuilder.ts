@@ -76,9 +76,6 @@ export function buildSpawnConfig(
   if (options.maxTurns) {
     args.push('--max-turns', String(options.maxTurns));
   }
-  if (options.systemPrompt) {
-    args.push('--system-prompt', options.systemPrompt);
-  }
   if (options.autoApprove) {
     args.push('--auto-approve');
   }
@@ -88,6 +85,31 @@ export function buildSpawnConfig(
     args.push('--resume', options.resume);
   } else if (options.sessionId) {
     args.push('--session-id', options.sessionId);
+  }
+
+  // For OpenAI-compatible providers (custom/LiteLLM/Gemini), override the binary's
+  // default Claude identity with a neutral system prompt.
+  // Anthropic keeps its own default (no override needed).
+  // Use a more explicit prompt that discourages unnecessary tool use —
+  // some models (e.g. doubao-seed) trigger tool-call bugs when they explore the workspace
+  // unprompted, leading to tool_call_id errors.
+  const neutralSystemPrompt =
+    provider !== 'anthropic'
+      ? 'You are a helpful AI assistant. Answer questions directly. Only use file system tools when the user explicitly asks you to read, write, or execute files — never run tools just to explore the environment.'
+      : undefined;
+  const effectiveSystemPrompt = options.systemPrompt ?? neutralSystemPrompt;
+  if (effectiveSystemPrompt) {
+    args.push('--system-prompt', effectiveSystemPrompt);
+  }
+
+  // Some "seed" / deep-thinking models (e.g. doubao-seed-2-pro) have a known bug
+  // in LiteLLM's doubao adapter: tool_call_id is missing from forwarded messages,
+  // causing cascading 400 errors after the first tool call.
+  // Cap max-turns to 1 for these models to prevent the loop from hanging.
+  const useModelLower = (model.useModel ?? '').toLowerCase();
+  const isSeedModel = useModelLower.includes('seed') || useModelLower.includes('thinking') || useModelLower.includes('reasoner');
+  if (isSeedModel && !options.maxTurns) {
+    args.push('--max-turns', '1');
   }
 
   // Set auth credentials and base URL via CLI args and env vars.

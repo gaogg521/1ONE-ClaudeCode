@@ -32,13 +32,18 @@ agentFactory.register('gemini', (conv, opts) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 agentFactory.register('acp', (conv, opts) => {
   const c = conv as any;
+  // Safety net: some historical records incorrectly persisted extra.backend="acp"
+  // (conversation type) instead of a real ACP backend (claude/codex/cursor/...).
+  // AcpConnection.connect() will throw "Unsupported backend: acp" if we pass it through.
+  const safeBackend = c.extra?.backend === 'acp' ? 'claude' : c.extra?.backend;
   return new AcpAgentManager({
     ...c.extra,
+    backend: safeBackend,
     conversation_id: c.id,
     yoloMode: opts?.yoloMode,
     // Only gemini ACP conversations use conversation.model as a backend-aligned model
     // fallback. Other ACP backends persist their own CLI model IDs in extra.currentModelId.
-    currentModelId: c.extra?.currentModelId ?? (c.extra?.backend === 'gemini' ? c.model?.useModel : undefined),
+    currentModelId: c.extra?.currentModelId ?? (safeBackend === 'gemini' ? c.model?.useModel : undefined),
   }) as unknown as ReturnType<typeof agentFactory.create>;
 });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

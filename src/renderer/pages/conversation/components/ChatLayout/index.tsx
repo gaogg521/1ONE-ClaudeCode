@@ -37,6 +37,8 @@ const ChatLayout: React.FC<{
   sider: React.ReactNode;
   siderTitle?: React.ReactNode;
   backend?: string;
+  /** Visual tone for distinguishing special sessions (e.g. team) */
+  tone?: 'default' | 'team';
   agentName?: string;
   /** Custom agent logo (can be SVG path or emoji string) */
   agentLogo?: string;
@@ -56,6 +58,7 @@ const ChatLayout: React.FC<{
 }> = (props) => {
   const { conversationId, workspacePath } = props;
   const { backend, agentName, agentLogo, agentLogoIsEmoji, workspaceEnabled = true } = props;
+  const tone = props.tone ?? 'default';
   const layout = useLayoutContext();
   const isMacRuntime = isMacEnvironment();
   const isWindowsRuntime = isWindowsEnvironment();
@@ -178,6 +181,7 @@ const ChatLayout: React.FC<{
       <ArcoLayout.Header
         className={classNames(
           'min-h-44px flex items-center justify-between px-16px pt-8px pb-10px gap-16px !bg-1 chat-layout-header chat-layout-header--glass overflow-hidden',
+          tone === 'team' && 'chat-layout-header--team',
           layout?.isMobile && 'chat-layout-header--mobile-unified'
         )}
       >

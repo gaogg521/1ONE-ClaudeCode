@@ -3,7 +3,6 @@
  * Contains name/avatar fields, agent selector, rules editor, and skills section.
  */
 import type { AssistantListItem, SkillInfo } from './types';
-import { hasBuiltinSkills } from './assistantUtils';
 import EmojiPicker from '@/renderer/components/chat/EmojiPicker';
 import MarkdownView from '@/renderer/components/Markdown';
 import { Avatar, Button, Checkbox, Collapse, Drawer, Input, Select, Tag, Typography } from '@arco-design/web-react';
@@ -85,7 +84,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
   setDeleteCustomSkillName,
   setSkillsModalVisible,
   activeAssistant,
-  activeAssistantId,
+  activeAssistantId: _activeAssistantId,
   isReadonlyAssistant,
   isExtensionAssistant,
   availableBackends,
@@ -124,9 +123,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
 
   // Whether skills section should be visible
   const showSkills =
-    isCreating ||
-    (activeAssistantId !== null && hasBuiltinSkills(activeAssistantId)) ||
-    (activeAssistant !== null && !activeAssistant.isBuiltin && !isExtensionAssistant(activeAssistant));
+    isCreating || (activeAssistant !== null && !isExtensionAssistant(activeAssistant));
 
   const customSkillItems = availableSkills.filter((skill) => skill.isCustom);
   const builtinSkillItems = availableSkills.filter((skill) => !skill.isCustom);
@@ -143,7 +140,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
   const totalActiveSkillsCount = selectedSkills.filter(
     (name) => pendingSkills.some((skill) => skill.name === name) || availableSkills.some((skill) => skill.name === name)
   ).length;
-  const isRuleEditable = !activeAssistant?.isBuiltin && !isReadonlyAssistant;
+  const isRuleEditable = !isReadonlyAssistant;
   const rulesContainerHeight = rulesExpanded
     ? '420px'
     : isRuleEditable && promptViewMode === 'edit'
@@ -203,7 +200,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
               {t('common.cancel', { defaultValue: 'Cancel' })}
             </Button>
           </div>
-          {!isCreating && !activeAssistant?.isBuiltin && !isExtensionAssistant(activeAssistant) && (
+          {!isCreating && !isExtensionAssistant(activeAssistant) && (
             <Button
               status='danger'
               onClick={handleDeleteClick}
@@ -225,7 +222,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
               {t('settings.assistantNameAvatar', { defaultValue: 'Name & Avatar' })}
             </Typography.Text>
             <div className='mt-10px flex items-center gap-12px'>
-              {activeAssistant?.isBuiltin || isReadonlyAssistant ? (
+              {isReadonlyAssistant ? (
                 <Avatar shape='square' size={40} className='bg-bg-1 rounded-4px'>
                   {editAvatarImage ? (
                     <img src={editAvatarImage} alt='' width={24} height={24} style={{ objectFit: 'contain' }} />
@@ -253,7 +250,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
               <Input
                 value={editName}
                 onChange={(value) => setEditName(value)}
-                disabled={activeAssistant?.isBuiltin || isReadonlyAssistant}
+                disabled={isReadonlyAssistant}
                 placeholder={t('settings.agentNamePlaceholder', { defaultValue: 'Enter a name for this agent' })}
                 className='flex-1 rounded-4px bg-bg-1'
               />
@@ -269,7 +266,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
               className='mt-10px rounded-4px bg-bg-1'
               value={editDescription}
               onChange={(value) => setEditDescription(value)}
-              disabled={activeAssistant?.isBuiltin || isReadonlyAssistant}
+              disabled={isReadonlyAssistant}
               placeholder={t('settings.assistantDescriptionPlaceholder', {
                 defaultValue: 'What can this assistant help with?',
               })}
@@ -286,6 +283,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
               disabled={isReadonlyAssistant}
             >
               {[
+                { value: 'aionrs', label: '1ONE' },
                 { value: 'gemini', label: 'Gemini CLI' },
                 { value: 'claude', label: 'Claude Code' },
                 { value: 'qwen', label: 'Qwen Code' },

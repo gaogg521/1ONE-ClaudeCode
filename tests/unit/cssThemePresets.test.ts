@@ -185,6 +185,11 @@ describe('CssThemeSettings preset structure', () => {
     'retroma-nocturne-parchment',
     'discourse-horizon',
     'glittering-input-field',
+    '1one-aurora',
+    '1one-cyber',
+    '1one-forest',
+    '1one-moonlight',
+    '1one-volcanic',
   ];
 
   it.each(expectedThemes)('should have CSS file for theme: %s', (theme) => {

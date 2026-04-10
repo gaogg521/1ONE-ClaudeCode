@@ -27,6 +27,7 @@ import { prepareFirstMessage } from '../task/agentUtils';
 import { refreshTrayMenu } from '@process/utils/tray';
 import { copyFilesToDirectory, readDirectoryRecursive } from '@process/utils';
 import { computeOpenClawIdentityHash } from '@process/utils/openclawUtils';
+import { readOpenClawConfig } from '@process/agent/openclaw/openclawConfig';
 import fs from 'fs';
 import path from 'path';
 import { migrateConversationToDatabase } from './migrationUtils';
@@ -120,6 +121,43 @@ export function initConversationBridge(
         success: false,
         msg: error instanceof Error ? error.message : String(error),
       };
+    }
+  });
+
+  ipcBridge.openclawConversation.getModels.provider(async () => {
+    try {
+      const config = readOpenClawConfig() as unknown as {
+        models?: {
+          providers?: Record<
+            string,
+            {
+              models?: Array<{ id?: unknown; name?: unknown }>;
+            }
+          >;
+        };
+      } | null;
+
+      const providers = config?.models?.providers ?? {};
+      const result: Array<{ id: string; name?: string; provider?: string }> = [];
+      for (const [provider, info] of Object.entries(providers)) {
+        const models = Array.isArray(info?.models) ? info.models : [];
+        for (const m of models) {
+          const id = typeof m?.id === 'string' ? m.id : '';
+          if (!id) continue;
+          result.push({
+            id,
+            name: typeof m?.name === 'string' ? m.name : undefined,
+            provider,
+          });
+        }
+      }
+
+      // Stable order: provider then id
+      result.sort((a, b) => (a.provider || '').localeCompare(b.provider || '') || a.id.localeCompare(b.id));
+
+      return { success: true, data: result };
+    } catch (error) {
+      return { success: false, msg: error instanceof Error ? error.message : String(error), data: [] };
     }
   });
 

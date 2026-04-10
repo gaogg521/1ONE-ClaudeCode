@@ -5,6 +5,15 @@
   --titlebar-height: 36px;
 }
 
+/*
+ * Root text color for the whole app.
+ * Uno preflight sets `* { color: inherit }`, so every element inherits from ancestors;
+ * if `html` has no color, UA default (often black) wins — unreadable on dark themes.
+ */
+html {
+  color: var(--text-primary);
+}
+
 .app-shell {
   min-height: 0;
 }

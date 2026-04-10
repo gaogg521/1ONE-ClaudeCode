@@ -310,8 +310,14 @@ export interface AcpBackendConfig {
    */
   models?: string[];
 
-  /** 是否为内置助手（不可编辑/删除）/ Whether this is a built-in assistant (cannot be edited/deleted) */
+  /** 是否为内置助手（来自应用预设；仍可由用户在本地编辑或从列表移除）/ Built-in preset assistant (user may edit locally or remove from list) */
   isBuiltin?: boolean;
+
+  /**
+   * 用户已保存过对预设助手（含内置）的自定义；启动合并时保留名称、描述、头像等身份字段
+   * User has saved edits to a preset/builtin assistant; startup merge keeps identity fields
+   */
+  userCustomizedPreset?: boolean;
 
   /**
    * 此助手启用的 skills 列表（仅 isPreset=true 时生效）
@@ -519,7 +525,7 @@ export const ACP_BACKENDS_ALL: Record<AcpBackendAll, AcpBackendConfig> = {
   },
   aionrs: {
     id: 'aionrs',
-    name: 'Aion CLI',
+    name: '1ONE',
     cliCommand: 'aionrs',
     authRequired: false, // Auth handled via env vars from model config
     enabled: true,

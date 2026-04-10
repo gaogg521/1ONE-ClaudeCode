@@ -1,0 +1,28 @@
+/* 1ONE ClaudeCode — 极光紫 (Aurora Purple) CSS Preset */
+:root {
+  --bg-base: #070515; --bg-1: #0d0b22; --bg-2: #150e32; --bg-3: #1e1344;
+  --bg-4: #291a5c; --bg-5: #362278; --bg-6: #472d96; --bg-8: #7a60c0;
+  --bg-9: #b8a4e0; --bg-10: #ede9fe; --bg-hover: #100d28; --bg-active: #191338;
+  --text-primary: #f0ecff; --text-secondary: #c4b5fd; --text-disabled: #6b52a8;
+  --text-t-primary: #f0ecff; --text-t-secondary: #b8a4f8; --text-t-tertiary: #7c64c8;
+  --color-primary: #a78bfa;
+  --primary: #a78bfa; --success: #a5f3d0; --warning: #ddd6fe; --danger: #fca5c0; --info: #e879f9;
+  --border-base: #523b9e; --border-light: #1e1344; --brand: #a78bfa; --brand-light: #150e32; --brand-hover: #c4b5fd;
+  --message-user-bg: #140e36; --message-tips-bg: #0d0b26; --workspace-btn-bg: #150e32;
+  --fill: #0d0b22; --inverse: #f0ecff; --dialog-fill-0: #1e1344;
+  --text-0: #f0ecff; --text-white: #f0ecff; --fill-0: rgba(167,139,250,0.07);
+  --fill-white-to-black: #070515; --border-special: #a78bfa; --color-guid-agent-bar: #150e32;
+  --aou-1: #070515; --aou-2: #150e32; --aou-3: #1e1344; --aou-4: #291a5c;
+  --aou-5: #472d96; --aou-6: #6b4dc0; --aou-7: #a78bfa; --aou-8: #c4b5fd; --aou-9: #ddd6fe; --aou-10: #f0ecff;
+  --color-bg-1: #070515; --color-bg-2: #0d0b22; --color-bg-3: #150e32; --color-bg-4: #1e1344; --color-bg-5: #291a5c; --color-bg-white: #070515;
+  --color-fill-1: rgba(167,139,250,0.05); --color-fill-2: rgba(167,139,250,0.10); --color-fill-3: rgba(167,139,250,0.16); --color-fill-4: rgba(167,139,250,0.23);
+  --color-border: #523b9e; --color-border-2: #1e1344;
+  --color-text-1: #f0ecff; --color-text-2: #c4b5fd; --color-text-3: #a78bfa; --color-text-4: #6b52a8;
+  --primary-1: #180840; --primary-2: #2a1068; --primary-3: #3c1890; --primary-4: #7040d8; --primary-5: #8a62ef; --primary-6: #a78bfa; --primary-7: #c4b5fd;
+  --color-primary-6: #a78bfa; --color-success-6: #a5f3d0; --color-danger-6: #fca5c0; --color-warning-6: #ddd6fe; --color-link-6: #a78bfa;
+}
+body { color: #f0ecff; background: radial-gradient(ellipse at 10% 5%, rgba(167,139,250,0.26) 0, transparent 40%), radial-gradient(ellipse at 90% 8%, rgba(232,121,249,0.16) 0, transparent 45%), #070515; }
+
+[data-theme='dark'] {
+  /* This preset is designed as a dark theme; keep variables unchanged. */
+}

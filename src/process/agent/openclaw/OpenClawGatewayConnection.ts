@@ -393,6 +393,7 @@ export class OpenClawGatewayConnection {
 
           // Forward to handler
           this.opts.onEvent?.(evt);
+          this.touchActivity();
           break;
         }
 
@@ -418,6 +419,7 @@ export class OpenClawGatewayConnection {
             (err as Error & { details?: unknown }).details = res.error?.details;
             pending.reject(err);
           }
+          this.touchActivity();
           break;
         }
 
@@ -471,6 +473,11 @@ export class OpenClawGatewayConnection {
     this.pending.clear();
   }
 
+  /** Any inbound protocol traffic counts as liveness (not only `tick` events). */
+  private touchActivity(): void {
+    this.lastTick = Date.now();
+  }
+
   private startTickWatch(): void {
     if (this.tickTimer) {
       clearInterval(this.tickTimer);
@@ -484,9 +491,11 @@ export class OpenClawGatewayConnection {
         return;
       }
       const gap = Date.now() - this.lastTick;
-      if (gap > this.tickIntervalMs * 2) {
-        console.warn('[OpenClawGateway] Tick timeout, closing connection');
-        this.ws?.close(4000, 'tick timeout');
+      // Require several missed intervals: many gateways rarely emit `tick`, but still stream chat/events.
+      // Any inbound frame refreshes lastTick via touchActivity().
+      if (gap > this.tickIntervalMs * 8) {
+        console.warn('[OpenClawGateway] Activity timeout, closing connection');
+        this.ws?.close(4000, 'activity timeout');
       }
     }, interval);
   }

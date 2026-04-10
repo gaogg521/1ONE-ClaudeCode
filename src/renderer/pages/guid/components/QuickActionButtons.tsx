@@ -113,10 +113,10 @@ const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({ onOpenLink, ina
           style={quickActionStyle(hoveredQuickAction === 'feedback')}
           onMouseEnter={() => setHoveredQuickAction('feedback')}
           onMouseLeave={() => setHoveredQuickAction(null)}
-          onClick={() => onOpenLink('https://x.com/1ONE ClaudeCode')}
+          onClick={() => onOpenLink('https://github.com/gaogg521/1ONE-ClaudeCode')}
         >
           <svg
-            className='flex-shrink-0 text-[var(--color-text-3)] group-hover:text-[#2C7FFF] transition-colors duration-300'
+            className='flex-shrink-0 text-[var(--color-text-3)] group-hover:text-[var(--primary)] transition-colors duration-300'
             width='20'
             height='20'
             viewBox='0 0 20 20'
@@ -140,10 +140,10 @@ const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({ onOpenLink, ina
           style={quickActionStyle(hoveredQuickAction === 'repo')}
           onMouseEnter={() => setHoveredQuickAction('repo')}
           onMouseLeave={() => setHoveredQuickAction(null)}
-          onClick={() => onOpenLink('https://github.com/iOfficeAI/1ONE ClaudeCode')}
+          onClick={() => onOpenLink('https://github.com/gaogg521/1ONE-ClaudeCode')}
         >
           <svg
-            className='flex-shrink-0 text-[var(--color-text-3)] group-hover:text-[#FE9900] transition-colors duration-300'
+            className='flex-shrink-0 text-[var(--color-text-3)] group-hover:text-[var(--warning)] transition-colors duration-300'
             width='20'
             height='20'
             viewBox='0 0 20 20'

@@ -24,7 +24,7 @@ const ModalWrapper: React.FC<ModalWrapperProps> = ({
           <div className='one-modal-header'>
             <h3 className='one-modal-title'>{title}</h3>
             <button onClick={onCancel} className='one-modal-close-btn'>
-              <Close size={20} fill='#86909c' />
+              <Close size={20} fill='var(--color-text-3)' />
             </button>
           </div>
         )}

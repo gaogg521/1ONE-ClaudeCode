@@ -1,6 +1,7 @@
 import FlexFullContainer from '@/renderer/components/layout/FlexFullContainer';
 import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/platform';
-import { extensions as extensionsIpc, type IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
+import type { IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
+import { useExtensionSettingsTabs } from '@/renderer/hooks/extensions/useExtensionSettingsTabs';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
 import {
   Communication,
@@ -17,7 +18,7 @@ import {
   Toolkit,
 } from '@icon-park/react';
 import classNames from 'classnames';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Tooltip } from '@arco-design/web-react';
@@ -25,16 +26,15 @@ import { getSiderTooltipProps } from '@/renderer/utils/ui/siderTooltip';
 
 /** Builtin settings tab IDs in display order (must match router paths). */
 export const BUILTIN_TAB_IDS = [
-  'gemini',
   'agent',
   'model',
   'assistants',
   'skills-hub',
   'tools',
-  'display',
   'webui',
   'system',
   'about',
+  'gemini',
 ] as const;
 
 type SiderItem = {
@@ -55,63 +55,8 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
   const { pathname } = useLocation();
   const isDesktop = isElectronDesktop();
 
-  const [extensionTabs, setExtensionTabs] = useState<IExtensionSettingsTab[]>([]);
+  const { extensionTabs } = useExtensionSettingsTabs();
   const { resolveExtTabName } = useExtI18n();
-
-  const loadExtensionTabs = useCallback(async (): Promise<IExtensionSettingsTab[]> => {
-    const maxAttempts = 20;
-    const retryDelayCapMs = 300;
-    let lastError: unknown;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        const tabs = (await extensionsIpc.getSettingsTabs.invoke()) ?? [];
-        if (tabs.length > 0 || attempt === maxAttempts - 1) {
-          return tabs;
-        }
-      } catch (error) {
-        lastError = error;
-        if (attempt === maxAttempts - 1) {
-          throw error;
-        }
-      }
-
-      await new Promise((resolve) => window.setTimeout(resolve, Math.min(100 * (attempt + 1), retryDelayCapMs)));
-    }
-
-    if (lastError) {
-      throw lastError;
-    }
-
-    return [];
-  }, []);
-
-  useEffect(() => {
-    let disposed = false;
-
-    const syncExtensionTabs = async () => {
-      try {
-        const tabs = await loadExtensionTabs();
-        if (!disposed) {
-          setExtensionTabs(tabs);
-        }
-      } catch (err) {
-        if (!disposed) {
-          console.error('[SettingsSider] Failed to load extension settings tabs:', err);
-        }
-      }
-    };
-
-    void syncExtensionTabs();
-    const unsubscribe = extensionsIpc.stateChanged.on(() => {
-      void syncExtensionTabs();
-    });
-
-    return () => {
-      disposed = true;
-      unsubscribe();
-    };
-  }, [loadExtensionTabs]);
 
   const menus: SiderItem[] = useMemo(() => {
     // Build builtin items
@@ -137,7 +82,6 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
         path: 'skills-hub',
       },
       tools: { id: 'tools', label: t('settings.tools'), icon: <Toolkit />, path: 'tools' },
-      display: { id: 'display', label: t('settings.display'), icon: <Computer />, path: 'display' },
       webui: {
         id: 'webui',
         label: t('settings.webui'),
@@ -214,7 +158,8 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
       })}
     >
       {menus.map((item) => {
-        const isSelected = pathname.includes(item.path);
+        const itemRoute = `/settings/${item.path}`;
+        const isSelected = pathname === itemRoute;
         return (
           <Tooltip key={item.id} {...siderTooltipProps} content={item.label} position='right'>
             <div
@@ -227,9 +172,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
                 }
               )}
               onClick={() => {
-                Promise.resolve(navigate(`/settings/${item.path}`, { replace: true })).catch((error) => {
-                  console.error('Navigation failed:', error);
-                });
+                navigate(itemRoute, { replace: true });
               }}
             >
               {item.isImageIcon ? (

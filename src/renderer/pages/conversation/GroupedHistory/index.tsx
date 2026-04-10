@@ -15,7 +15,7 @@ import classNames from 'classnames';
 import { Down, Right } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import WorkspaceCollapse from '../components/WorkspaceCollapse';
 import ConversationRow from './ConversationRow';
@@ -27,6 +27,19 @@ import { useConversations } from './hooks/useConversations';
 import { useDragAndDrop } from './hooks/useDragAndDrop';
 import { useExport } from './hooks/useExport';
 import type { ConversationRowProps, WorkspaceGroupedHistoryProps } from './types';
+import { getActivityTime } from '@/renderer/utils/chat/timeline';
+
+const ViewAllRow: React.FC<{ label: string; onClick: () => void }> = ({ label, onClick }) => {
+  return (
+    <div
+      className='mx-8px mt-6px px-12px py-10px rd-10px flex items-center justify-between cursor-pointer select-none transition-colors border border-solid border-[rgba(var(--primary-6),0.18)] bg-[rgba(var(--primary-6),0.10)] hover:bg-[rgba(var(--primary-6),0.14)]'
+      onClick={onClick}
+    >
+      <span className='text-12px text-t-primary font-medium'>{label}</span>
+      <Right theme='outline' size={14} className='text-t-secondary' />
+    </div>
+  );
+};
 
 const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
   onSessionClick,
@@ -37,6 +50,7 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
 }) => {
   const { id } = useParams();
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { getJobStatus, markAsRead, setActiveConversation } = useCronJobsMap();
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set());
   const toggleSection = useCallback((key: string) => {
@@ -169,6 +183,11 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
     ]
   );
 
+  const recentConversations = useMemo(() => {
+    const sorted = [...conversations].toSorted((a, b) => getActivityTime(b) - getActivityTime(a));
+    return sorted.slice(0, 8);
+  }, [conversations]);
+
   const renderConversation = (conversation: TChatConversation) => {
     const rowProps = getConversationRowProps(conversation);
     return <ConversationRow key={conversation.id} {...rowProps} />;
@@ -181,6 +200,26 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
     return (
       <div className='py-48px flex-center'>
         <Empty description={t('conversation.history.noHistory')} />
+      </div>
+    );
+  }
+
+  // Collapsed sider: show only recent 10 conversations + "View all".
+  if (collapsed) {
+    return (
+      <div className='px-6px pt-4px pb-8px'>
+        <div className='flex flex-col gap-2px'>
+          {recentConversations.map((conversation) => renderConversation(conversation))}
+        </div>
+        {conversations.length > 8 ? (
+          <ViewAllRow
+            label={t('conversation.history.viewAll', { defaultValue: '查看所有' })}
+            onClick={() => {
+              Promise.resolve(navigate('/sessions')).catch(() => {});
+              if (onSessionClick) onSessionClick();
+            }}
+          />
+        ) : null}
       </div>
     );
   }
@@ -413,7 +452,14 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
             )}
 
             {!collapsedSections.has(section.timeline) &&
-              section.items.map((item) => {
+              (() => {
+                const isRecents = section.timeline === t('conversation.history.recents');
+                const visibleItems = isRecents ? section.items.slice(0, 8) : section.items;
+                const hasMore = isRecents && section.items.length > 8;
+
+                return (
+                  <>
+                    {visibleItems.map((item) => {
                 if (item.type === 'workspace' && item.workspaceGroup) {
                   const group = item.workspaceGroup;
                   return (
@@ -443,7 +489,19 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
                 }
 
                 return null;
-              })}
+                    })}
+                    {hasMore ? (
+                      <ViewAllRow
+                        label={t('conversation.history.viewAll', { defaultValue: '查看所有' })}
+                        onClick={() => {
+                          Promise.resolve(navigate('/sessions')).catch(() => {});
+                          if (onSessionClick) onSessionClick();
+                        }}
+                      />
+                    ) : null}
+                  </>
+                );
+              })()}
           </div>
         ))}
       </div>

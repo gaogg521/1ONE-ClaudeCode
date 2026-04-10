@@ -38,7 +38,7 @@ function makeExt(overrides: Partial<IHubExtension> & { name: string }): IHubExte
     description: 'test',
     author: 'test',
     dist: { tarball: `${overrides.name}.zip`, integrity: 'sha512-abc', unpackedSize: 100 },
-    engines: { 1one-claudecode: '>=1.0.0' },
+      engines: { '1one-claudecode': '>=1.0.0' },
     hubs: ['acpAdapters'],
     ...overrides,
   };

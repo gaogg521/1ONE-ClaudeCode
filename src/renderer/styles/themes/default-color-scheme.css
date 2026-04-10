@@ -74,6 +74,22 @@
   --text-t-primary:   #1d2129;
   --text-t-secondary: #86909c;
   --text-t-tertiary:  #c9cdd4;
+
+  /* Arco / Uno text-* and inline var(--color-text-*) — light (same role as dark block) */
+  --color-text-1: var(--text-primary);
+  --color-text-2: var(--text-secondary);
+  --color-text-3: var(--text-disabled);
+  --color-text-4: var(--bg-6);
+
+  --color-bg-1: var(--bg-base);
+  --color-bg-2: var(--bg-1);
+  --color-bg-3: var(--bg-2);
+  --color-bg-4: var(--bg-3);
+  --color-bg-5: var(--bg-4);
+  --color-bg-white: #ffffff;
+
+  --color-border: var(--border-base);
+  --color-border-2: var(--bg-3);
 }
 
 /* Dark Mode */
@@ -111,6 +127,22 @@
   --text-primary: #e5e5e5; /* 主要文字 */
   --text-secondary: #a6a6a6; /* 次要文字 */
   --text-disabled: #737373; /* 禁用文字 */
+
+  /* Arco / UnoCSS semantic mappings (avoid black text fallback in dark mode) */
+  --color-text-1: var(--text-primary);
+  --color-text-2: var(--text-secondary);
+  --color-text-3: var(--text-disabled);
+  --color-text-4: var(--bg-6);
+
+  --color-bg-1: var(--bg-base);
+  --color-bg-2: var(--bg-1);
+  --color-bg-3: var(--bg-2);
+  --color-bg-4: var(--bg-3);
+  --color-bg-5: var(--bg-4);
+  --color-bg-white: var(--bg-1);
+
+  --color-border: var(--border-base);
+  --color-border-2: var(--bg-3);
 
   /* Semantic Colors - Dark Mode */
   --primary: #4d9fff;

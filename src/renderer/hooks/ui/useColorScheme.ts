@@ -5,7 +5,6 @@
  */
 
 // hooks/useColorScheme.ts - Color Scheme Management Hook 配色方案管理
-import { ConfigStorage } from '@/common/config/storage';
 import { useCallback, useEffect, useState } from 'react';
 
 // Supported color schemes 支持的配色方案类型
@@ -20,19 +19,15 @@ const COLOR_SCHEME_CACHE_KEY = '__1one_colorScheme';
  */
 const initColorScheme = async () => {
   try {
-    // localStorage 优先（ThemeSwitcher 同步写入，比 ConfigStorage 更快更可靠）
-    let initialScheme: ColorScheme;
+    // 只从localStorage读取，不调用ConfigStorage避免阻塞
+    let initialScheme: ColorScheme = DEFAULT_COLOR_SCHEME;
     try {
       const cached = localStorage.getItem(COLOR_SCHEME_CACHE_KEY) as ColorScheme | null;
       if (cached) {
         initialScheme = cached;
-      } else {
-        const scheme = (await ConfigStorage.get('colorScheme')) as ColorScheme;
-        initialScheme = scheme || DEFAULT_COLOR_SCHEME;
       }
     } catch (_e) {
-      const scheme = (await ConfigStorage.get('colorScheme')) as ColorScheme;
-      initialScheme = scheme || DEFAULT_COLOR_SCHEME;
+      /* noop */
     }
     document.documentElement.setAttribute('data-color-scheme', initialScheme);
     try {
@@ -83,7 +78,8 @@ const useColorScheme = (): [ColorScheme, (scheme: ColorScheme) => Promise<void>]
       try {
         setColorSchemeState(newScheme);
         applyColorScheme(newScheme);
-        await ConfigStorage.set('colorScheme', newScheme);
+        // 禁用ConfigStorage调用以避免卡死
+        // await ConfigStorage.set('colorScheme', newScheme);
       } catch (error) {
         console.error('Failed to save color scheme:', error);
         // Revert on error 保存失败时回滚

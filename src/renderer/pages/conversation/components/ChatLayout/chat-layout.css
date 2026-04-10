@@ -27,6 +27,16 @@
   background: linear-gradient(180deg, color-mix(in srgb, var(--bg-1) 68%, transparent) 0%, transparent 100%);
 }
 
+.chat-layout-header--team {
+  background: linear-gradient(
+      180deg,
+      color-mix(in srgb, rgba(var(--primary-6), 0.18) 32%, transparent) 0%,
+      transparent 100%
+    ),
+    color-mix(in srgb, var(--bg-1) 92%, transparent) !important;
+  border-bottom: 1px solid rgba(var(--primary-6), 0.16);
+}
+
 @supports ((-webkit-backdrop-filter: blur(6px)) or (backdrop-filter: blur(6px))) {
   .chat-layout-header--glass {
     -webkit-backdrop-filter: saturate(110%) blur(6px);

@@ -106,6 +106,22 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     }
   }, [pathname, search, hash]);
 
+  useEffect(() => {
+    if (!isSettings) return;
+    void Promise.all([
+      import('@renderer/pages/settings/AgentSettings'),
+      import('@renderer/pages/settings/AssistantSettings'),
+      import('@renderer/pages/settings/SkillsHubSettings'),
+      import('@renderer/pages/settings/AionrsSettings'),
+      import('@renderer/pages/settings/GeminiSettings'),
+      import('@renderer/pages/settings/ModeSettings'),
+      import('@renderer/pages/settings/SystemSettings'),
+      import('@renderer/pages/settings/ToolsSettings'),
+      import('@renderer/pages/settings/WebuiSettings'),
+      import('@renderer/pages/settings/ExtensionSettingsPage'),
+    ]).catch(() => {});
+  }, [isSettings]);
+
   const handleNewChat = () => {
     cleanupSiderTooltips();
     blurActiveElement();

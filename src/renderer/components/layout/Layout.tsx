@@ -5,25 +5,23 @@
  */
 
 import { ipcBridge } from '@/common';
-import { ConfigStorage, type ICssTheme } from '@/common/config/storage';
 import PwaPullToRefresh from '@/renderer/components/layout/PwaPullToRefresh';
 import Titlebar from '@/renderer/components/layout/Titlebar';
 import { Layout as ArcoLayout } from '@arco-design/web-react';
 import { Tooltip } from '@arco-design/web-react';
-import { MenuFold, MenuUnfold, CommentOne, FolderOpen, Checklist, Lightning, Server, Brain, AlarmClock } from '@icon-park/react';
+import { MenuFold, MenuUnfold, CommentOne, FolderOpen, Checklist, Lightning, Server, Brain, AlarmClock, Setting } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
 import { useNotificationClick } from '@renderer/hooks/system/useNotificationClick';
 import { useDirectorySelection } from '@renderer/hooks/file/useDirectorySelection';
 import { useMultiAgentDetection } from '@renderer/hooks/agent/useMultiAgentDetection';
-import { processCustomCss } from '@renderer/utils/theme/customCssProcessor';
 import { cleanupSiderTooltips } from '@renderer/utils/ui/siderTooltip';
 import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShortcuts';
 import { isElectronDesktop } from '@renderer/utils/platform';
-import { computeCssSyncDecision, resolveCssByActiveTheme } from '@renderer/utils/theme/themeCssSync';
 import '@renderer/styles/layout.css';
 
 const useDebug = () => {
@@ -36,11 +34,11 @@ const useDebug = () => {
       });
       setCount(0);
     };
-    if (count >= 3) {
+    if (count >= 7) {
       return open();
     }
     setCount((prev) => {
-      if (prev >= 2) {
+      if (prev >= 6) {
         open();
         return 0;
       }
@@ -57,18 +55,20 @@ const useDebug = () => {
 };
 
 const NAV_ITEMS = [
-  { icon: <CommentOne theme='outline' size={18} />, label: '会话中心', path: '/sessions' },
-  { icon: <FolderOpen theme='outline' size={18} />, label: '工作区', path: '/workspace', paths: ['/conversation'] },
-  { icon: <Checklist theme='outline' size={18} />, label: '任务看板', path: '/tasks' },
-  { icon: <Lightning theme='outline' size={18} />, label: 'Hook 监控', path: '/hooks' },
-  { icon: <Server theme='outline' size={18} />, label: 'MCP 服务', path: '/mcp' },
-  { icon: <Brain theme='outline' size={18} />, label: '记忆管理', path: '/memory' },
-  { icon: <AlarmClock theme='outline' size={18} />, label: '定时任务', path: '/scheduled' },
+  { icon: <CommentOne theme='outline' size={18} />, labelKey: 'nav.sessions', path: '/sessions', paths: ['/conversation'] },
+  { icon: <FolderOpen theme='outline' size={18} />, labelKey: 'nav.workspace', path: '/workspace' },
+  { icon: <Checklist theme='outline' size={18} />, labelKey: 'nav.tasks', path: '/tasks' },
+  { icon: <Lightning theme='outline' size={18} />, labelKey: 'nav.hooks', path: '/hooks' },
+  { icon: <Server theme='outline' size={18} />, labelKey: 'nav.mcp', path: '/mcp' },
+  { icon: <Brain theme='outline' size={18} />, labelKey: 'nav.memory', path: '/memory' },
+  { icon: <AlarmClock theme='outline' size={18} />, labelKey: 'nav.scheduled', path: '/scheduled' },
+  { icon: <Setting theme='outline' size={18} />, labelKey: 'nav.globalSettings', path: '/settings' },
 ];
 
 const SidebarNavIcons: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   return (
     <div style={{
       display: 'flex',
@@ -84,7 +84,7 @@ const SidebarNavIcons: React.FC = () => {
         const allPaths = [item.path, ...(item.paths ?? [])];
         const active = allPaths.some((p) => location.pathname.startsWith(p));
         return (
-          <Tooltip key={item.path} content={item.label} position='right' mini>
+          <Tooltip key={item.path} content={t(item.labelKey, { defaultValue: item.path })} position='right' mini>
             <div
               onClick={() => navigate(item.path)}
               style={{
@@ -157,7 +157,6 @@ const Layout: React.FC<{
   const [viewportWidth, setViewportWidth] = useState<number>(() =>
     typeof window === 'undefined' ? 390 : window.innerWidth
   );
-  const [customCss, setCustomCss] = useState<string>('');
   const [shouldMountUpdateModal, setShouldMountUpdateModal] = useState(false);
   const { onClick } = useDebug();
   const { contextHolder: multiAgentContextHolder } = useMultiAgentDetection();
@@ -169,144 +168,16 @@ const Layout: React.FC<{
   const location = useLocation();
   const workspaceAvailable = location.pathname.startsWith('/conversation/') || location.pathname.startsWith('/team/') || location.pathname.startsWith('/workspace');
   const collapsedRef = useRef(collapsed);
-  const lastCssRef = useRef('');
-  const lastUiCssUpdateAtRef = useRef(0);
   const dragStateRef = useRef<{ active: boolean; startX: number; startWidth: number }>({
     active: false,
     startX: 0,
     startWidth: DEFAULT_SIDER_WIDTH,
   });
 
-  const loadAndHealCustomCss = useCallback(async () => {
-    try {
-      const [savedCssRaw, activeThemeId, savedThemes] = await Promise.all([
-        ConfigStorage.get('customCss'),
-        ConfigStorage.get('css.activeThemeId'),
-        ConfigStorage.get('css.themes'),
-      ]);
 
-      const decision = computeCssSyncDecision({
-        savedCss: savedCssRaw || '',
-        activeThemeId: activeThemeId || '',
-        savedThemes: (savedThemes || []) as ICssTheme[],
-        currentUiCss: customCss,
-        lastUiCssUpdateAt: lastUiCssUpdateAtRef.current,
-      });
+  // CSS 注入系统已移除（"显示"功能模块已删除）
+  // 主题通过 SiderFooter 的 ThemeSwitcher + data-color-scheme CSS 变量实现
 
-      if (decision.shouldSkipApply) {
-        return;
-      }
-
-      let effectiveCss = decision.effectiveCss;
-
-      // If the active theme resolved to empty CSS and there IS a saved activeThemeId
-      // (but it no longer matches any known theme), fall back to default and persist.
-      if (!effectiveCss && activeThemeId && activeThemeId !== 'default-theme') {
-        const defaultCss = resolveCssByActiveTheme('default-theme', (savedThemes || []) as ICssTheme[]);
-        effectiveCss = defaultCss;
-        // Persist the fallback so Layout doesn't keep retrying
-        await Promise.all([
-          ConfigStorage.set('css.activeThemeId', 'default-theme'),
-          ConfigStorage.set('customCss', effectiveCss),
-        ]).catch((error) => {
-          console.warn('Failed to persist theme fallback:', error);
-        });
-      } else if (decision.shouldHealStorage) {
-        await ConfigStorage.set('customCss', effectiveCss).catch((error) => {
-          console.warn('Failed to heal custom CSS from active theme:', error);
-        });
-      }
-
-      setCustomCss(effectiveCss);
-      if (lastCssRef.current !== effectiveCss) {
-        lastCssRef.current = effectiveCss;
-        window.dispatchEvent(new CustomEvent('custom-css-updated', { detail: { customCss: effectiveCss } }));
-      }
-    } catch (error) {
-      console.error('Failed to load or heal custom CSS:', error);
-    }
-  }, [customCss]);
-
-  // 加载并监听自定义 CSS 配置 / Load & watch custom CSS configuration
-  useEffect(() => {
-    void loadAndHealCustomCss();
-
-    const handleCssUpdate = (event: CustomEvent) => {
-      if (event.detail?.customCss !== undefined) {
-        const css = event.detail.customCss || '';
-        lastCssRef.current = css;
-        lastUiCssUpdateAtRef.current = Date.now();
-        setCustomCss(css);
-      }
-    };
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key && (event.key.includes('customCss') || event.key.includes('css.activeThemeId'))) {
-        void loadAndHealCustomCss();
-      }
-    };
-
-    window.addEventListener('custom-css-updated', handleCssUpdate as EventListener);
-    window.addEventListener('storage', handleStorageChange);
-
-    return () => {
-      window.removeEventListener('custom-css-updated', handleCssUpdate as EventListener);
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [loadAndHealCustomCss]);
-
-  // Re-sync theme css on route changes, because some settings pages do not mount CssThemeSettings.
-  useEffect(() => {
-    void loadAndHealCustomCss();
-  }, [location.pathname, location.search, location.hash, loadAndHealCustomCss]);
-
-  // 注入自定义 CSS / Inject custom CSS into document head
-  useEffect(() => {
-    const styleId = 'user-defined-custom-css';
-
-    if (!customCss) {
-      document.getElementById(styleId)?.remove();
-      return;
-    }
-
-    const wrappedCss = processCustomCss(customCss);
-
-    const ensureStyleAtEnd = () => {
-      let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
-
-      if (styleEl && styleEl.textContent === wrappedCss && styleEl === document.head.lastElementChild) {
-        return;
-      }
-
-      styleEl?.remove();
-      styleEl = document.createElement('style');
-      styleEl.id = styleId;
-      styleEl.type = 'text/css';
-      styleEl.textContent = wrappedCss;
-      document.head.appendChild(styleEl);
-    };
-
-    ensureStyleAtEnd();
-
-    const observer = new MutationObserver((mutations) => {
-      const hasNewStyle = mutations.some((mutation) =>
-        Array.from(mutation.addedNodes).some((node) => node.nodeName === 'STYLE' || node.nodeName === 'LINK')
-      );
-
-      if (hasNewStyle) {
-        const element = document.getElementById(styleId);
-        if (element && element !== document.head.lastElementChild) {
-          ensureStyleAtEnd();
-        }
-      }
-    });
-
-    observer.observe(document.head, { childList: true });
-
-    return () => {
-      observer.disconnect();
-      document.getElementById(styleId)?.remove();
-    };
-  }, [customCss]);
 
   // 检测移动端并响应窗口大小变化
   useEffect(() => {
@@ -341,7 +212,7 @@ const Layout: React.FC<{
   useEffect(() => {
     const unsubscribe = ipcBridge.application.logStream.on((entry) => {
       const prefix = `%c[Main:${entry.tag}]%c ${entry.message}`;
-      const style = 'color:#7c3aed;font-weight:bold';
+      const style = 'color:var(--primary);font-weight:bold';
       if (entry.level === 'error') {
         console.error(prefix, style, 'color:inherit', ...(entry.data !== undefined ? [entry.data] : []));
       } else if (entry.level === 'warn') {
@@ -519,8 +390,8 @@ const Layout: React.FC<{
                 onClick={onClick}
               >
                 <img
-                  src='/brand-mark.png'
-                  alt='1ONE'
+                  src='./brand-mark.png'
+                  alt='1ONE Code'
                   style={{
                     height: collapsed ? '20px' : '28px',
                     width: 'auto',
@@ -530,7 +401,7 @@ const Layout: React.FC<{
                   }}
                 />
               </div>
-              <div className='flex-1 text-20px text-1 collapsed-hidden font-bold'>1ONE</div>
+              <div className='flex-1 text-20px text-1 collapsed-hidden font-bold'>1ONE Code</div>
               {isMobile && !collapsed && (
                 <button
                   type='button'

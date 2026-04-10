@@ -12,7 +12,6 @@ const MemoryPage = React.lazy(() => import('@renderer/pages/memory'));
 const AgentSettings = React.lazy(() => import('@renderer/pages/settings/AgentSettings'));
 const AssistantSettings = React.lazy(() => import('@renderer/pages/settings/AssistantSettings'));
 const SkillsHubSettings = React.lazy(() => import('@renderer/pages/settings/SkillsHubSettings'));
-const DisplaySettings = React.lazy(() => import('@renderer/pages/settings/DisplaySettings'));
 const AionrsSettings = React.lazy(() => import('@renderer/pages/settings/AionrsSettings'));
 const GeminiSettings = React.lazy(() => import('@renderer/pages/settings/GeminiSettings'));
 const ModeSettings = React.lazy(() => import('@renderer/pages/settings/ModeSettings'));
@@ -25,6 +24,8 @@ const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase
 const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage'));
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
 const TeamIndex = React.lazy(() => import('@renderer/pages/team'));
+const WorkspacePage = React.lazy(() => import('@renderer/pages/workspace'));
+const WorkspaceSettingsShell = React.lazy(() => import('@renderer/pages/workspace/WorkspaceSettings'));
 
 const withRouteFallback = (Component: React.LazyExoticComponent<React.ComponentType>) => (
   <Suspense fallback={<AppLoader />}>
@@ -59,6 +60,48 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
         <Route element={<ProtectedLayout layout={layout} />}>
           <Route index element={<Navigate to='/sessions' replace />} />
           <Route path='/sessions' element={withRouteFallback(SessionsPage)} />
+          <Route path='/workspace' element={withRouteFallback(WorkspacePage)} />
+          <Route path='/workspace/settings' element={<Navigate to='/workspace/settings/model' replace />} />
+          <Route
+            path='/workspace/settings/model'
+            element={
+              <Suspense fallback={<AppLoader />}>
+                <WorkspaceSettingsShell>
+                  <ModeSettings />
+                </WorkspaceSettingsShell>
+              </Suspense>
+            }
+          />
+          <Route
+            path='/workspace/settings/assistants'
+            element={
+              <Suspense fallback={<AppLoader />}>
+                <WorkspaceSettingsShell>
+                  <AssistantSettings />
+                </WorkspaceSettingsShell>
+              </Suspense>
+            }
+          />
+          <Route
+            path='/workspace/settings/tools'
+            element={
+              <Suspense fallback={<AppLoader />}>
+                <WorkspaceSettingsShell>
+                  <ToolsSettings />
+                </WorkspaceSettingsShell>
+              </Suspense>
+            }
+          />
+          <Route
+            path='/workspace/settings/agent'
+            element={
+              <Suspense fallback={<AppLoader />}>
+                <WorkspaceSettingsShell>
+                  <AgentSettings />
+                </WorkspaceSettingsShell>
+              </Suspense>
+            }
+          />
           <Route path='/tasks' element={withRouteFallback(TasksPage)} />
           <Route path='/hooks' element={withRouteFallback(HooksPage)} />
           <Route path='/mcp' element={withRouteFallback(MCPPage)} />
@@ -72,7 +115,6 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/settings/assistants' element={withRouteFallback(AssistantSettings)} />
           <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
           <Route path='/settings/skills-hub' element={withRouteFallback(SkillsHubSettings)} />
-          <Route path='/settings/display' element={withRouteFallback(DisplaySettings)} />
           <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
           <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
           <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />

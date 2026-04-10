@@ -12,7 +12,7 @@
 import os from 'os';
 import path from 'path';
 import { ipcBridge } from '@/common';
-import { getSystemDir, ProcessEnv } from '@process/utils/initStorage';
+import { getSystemDir, ProcessEnv, restoreHiddenBuiltinAssistants } from '@process/utils/initStorage';
 import { copyDirectoryRecursively } from '@process/utils';
 
 export function initApplicationBridgeCore(): void {
@@ -43,5 +43,16 @@ export function initApplicationBridgeCore(): void {
       downloads: path.join(home, 'Downloads'),
     };
     return Promise.resolve(map[name] ?? home);
+  });
+
+  ipcBridge.application.restoreHiddenBuiltinAssistants.provider(async () => {
+    try {
+      const data = await restoreHiddenBuiltinAssistants();
+      return { success: true, data };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[ApplicationBridgeCore] restoreHiddenBuiltinAssistants failed:', e);
+      return { success: false, msg };
+    }
   });
 }

@@ -16,19 +16,15 @@ interface TitlebarProps {
   workspaceAvailable: boolean;
 }
 
+import brandMark from '@/renderer/assets/brand-mark.png';
+
 const AionLogoMark: React.FC = () => (
-  <svg className='app-titlebar__brand-logo' viewBox='0 0 80 80' fill='none' aria-hidden='true' focusable='false'>
-    {/* OpenClaw logo: stylized claw mark */}
-    <path d='M25 20 C20 30 18 45 28 55' stroke='currentColor' strokeWidth='5' fill='none' strokeLinecap='round' />
-    <path d='M40 16 C40 28 40 44 40 58' stroke='currentColor' strokeWidth='5' fill='none' strokeLinecap='round' />
-    <path d='M55 20 C60 30 62 45 52 55' stroke='currentColor' strokeWidth='5' fill='none' strokeLinecap='round' />
-    <path d='M30 58 Q40 66 50 58' stroke='currentColor' strokeWidth='3.5' fill='none' strokeLinecap='round' />
-  </svg>
+  <img src={brandMark} alt='1ONE Code' className='app-titlebar__brand-logo w-20px h-20px object-contain' />
 );
 
 const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const { t } = useTranslation();
-  const appTitle = useMemo(() => '1ONE ClaudeCode', []);
+  const appTitle = useMemo(() => '1ONE Code', []);
   const [workspaceCollapsed, setWorkspaceCollapsed] = useState(true);
   const [mobileCenterTitle, setMobileCenterTitle] = useState(appTitle);
   const [mobileCenterOffset, setMobileCenterOffset] = useState(0);

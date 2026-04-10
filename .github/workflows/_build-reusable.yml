@@ -568,8 +568,8 @@ jobs:
             out/*.msi
             out/*.dmg
             out/*.deb
-            out/1ONE ClaudeCode-*-win32-*.zip
-            out/1ONE ClaudeCode-*-mac-*.zip
+            out/1ONE Code-*-win32-*.zip
+            out/1ONE Code-*-mac-*.zip
             out/*.yml
           if-no-files-found: warn
           retention-days: 7

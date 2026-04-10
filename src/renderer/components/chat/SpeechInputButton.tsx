@@ -21,7 +21,7 @@ type SpeechInputButtonProps = {
   onTranscript: (transcript: string) => void;
 };
 
-const SPEECH_TO_TEXT_CONFIG_CHANGED_EVENT = '1ONE ClaudeCode:speech-to-text-config-changed';
+const SPEECH_TO_TEXT_CONFIG_CHANGED_EVENT = '1one-claudecode:speech-to-text-config-changed';
 
 const getAvailabilityMessageKey = (availability: SpeechInputAvailability) => {
   switch (availability) {

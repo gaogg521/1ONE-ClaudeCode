@@ -2,10 +2,7 @@ import { ipcBridge } from '@/common';
 import { ConfigStorage } from '@/common/config/storage';
 import type { Message } from '@arco-design/web-react';
 import type { AcpBackendConfig } from '@/common/types/acpTypes';
-import {
-  hasBuiltinSkills,
-  isExtensionAssistant as isExtensionAssistantUtil,
-} from '@/renderer/pages/settings/AgentSettings/AssistantManagement/assistantUtils';
+import { isExtensionAssistant as isExtensionAssistantUtil } from '@/renderer/pages/settings/AgentSettings/AssistantManagement/assistantUtils';
 import type {
   AssistantListItem,
   PendingSkill,
@@ -32,7 +29,7 @@ type UseAssistantEditorParams = {
 export const useAssistantEditor = ({
   localeKey,
   activeAssistant,
-  isReadonlyAssistant,
+  isReadonlyAssistant: _isReadonlyAssistant,
   isExtensionAssistant,
   setActiveAssistantId,
   loadAssistants,
@@ -63,6 +60,7 @@ export const useAssistantEditor = ({
   const [deletePendingSkillName, setDeletePendingSkillName] = useState<string | null>(null);
   const [deleteCustomSkillName, setDeleteCustomSkillName] = useState<string | null>(null);
   const [skillsModalVisible, setSkillsModalVisible] = useState(false);
+  const [restoreHiddenBuiltinsLoading, setRestoreHiddenBuiltinsLoading] = useState(false);
 
   // Load assistant rule content from file
   const loadAssistantContext = useCallback(
@@ -115,6 +113,8 @@ export const useAssistantEditor = ({
       return;
     }
 
+    setPromptViewMode('edit');
+
     // Load rules, skills content
     try {
       const [context, skills] = await Promise.all([
@@ -124,23 +124,18 @@ export const useAssistantEditor = ({
       setEditContext(context);
       setEditSkills(skills);
 
-      // Load skills list for builtin assistants with skillFiles and all custom assistants
-      if (hasBuiltinSkills(assistant.id) || !assistant.isBuiltin) {
-        const skillsList = await ipcBridge.fs.listAvailableSkills.invoke();
-        setAvailableSkills(skillsList);
-        setSelectedSkills(assistant.enabledSkills || []);
-        setCustomSkills(assistant.customSkillNames || []);
-      } else {
-        setAvailableSkills([]);
-        setSelectedSkills([]);
-        setCustomSkills([]);
-      }
+      // Load skills list for all non-extension assistants (builtin + custom)
+      const skillsList = await ipcBridge.fs.listAvailableSkills.invoke();
+      setAvailableSkills(skillsList);
+      setSelectedSkills(assistant.enabledSkills || []);
+      setCustomSkills(assistant.customSkillNames || []);
     } catch (error) {
       console.error('Failed to load assistant content:', error);
       setEditContext('');
       setEditSkills('');
       setAvailableSkills([]);
       setSelectedSkills([]);
+      setCustomSkills([]);
     }
   };
 
@@ -293,14 +288,28 @@ export const useAssistantEditor = ({
         // Update existing assistant
         if (!activeAssistant) return;
 
+        const shouldPatchI18n =
+          Boolean(activeAssistant.isBuiltin) ||
+          Boolean(activeAssistant.nameI18n) ||
+          Boolean(activeAssistant.descriptionI18n);
+        const nameI18nPatch = shouldPatchI18n
+          ? { nameI18n: { ...activeAssistant.nameI18n, [localeKey]: editName.trim() } }
+          : {};
+        const descriptionI18nPatch = shouldPatchI18n
+          ? { descriptionI18n: { ...activeAssistant.descriptionI18n, [localeKey]: editDescription.trim() } }
+          : {};
+
         const updatedAgent: AcpBackendConfig = {
           ...activeAssistant,
-          name: editName,
-          description: editDescription,
+          name: editName.trim(),
+          description: editDescription.trim(),
           avatar: editAvatar,
           presetAgentType: editAgent,
           enabledSkills: selectedSkills,
           customSkillNames: finalCustomSkills,
+          ...nameI18nPatch,
+          ...descriptionI18nPatch,
+          ...(activeAssistant.isBuiltin ? { userCustomizedPreset: true } : {}),
         };
 
         // Save rule file (if changed)
@@ -329,11 +338,6 @@ export const useAssistantEditor = ({
 
   const handleDeleteClick = () => {
     if (!activeAssistant) return;
-    // Cannot delete builtin assistants
-    if (activeAssistant.isBuiltin) {
-      message.warning(t('settings.cannotDeleteBuiltin', { defaultValue: 'Cannot delete builtin assistants' }));
-      return;
-    }
     // Extension assistants are read-only
     if (isExtensionAssistant(activeAssistant)) {
       message.warning(
@@ -358,18 +362,21 @@ export const useAssistantEditor = ({
     const target = pendingDeleteAssistant ?? activeAssistant;
     if (!target) return;
     try {
-      // Only delete rule/skill files for non-builtin assistants (builtin files are read-only resources)
-      if (!target.isBuiltin) {
-        await Promise.all([
-          ipcBridge.fs.deleteAssistantRule.invoke({ assistantId: target.id }),
-          ipcBridge.fs.deleteAssistantSkill.invoke({ assistantId: target.id }),
-        ]);
-      }
+      await Promise.all([
+        ipcBridge.fs.deleteAssistantRule.invoke({ assistantId: target.id }),
+        ipcBridge.fs.deleteAssistantSkill.invoke({ assistantId: target.id }),
+      ]);
 
       // Remove assistant from config
       const agents = (await ConfigStorage.get('acp.customAgents')) || [];
       const updatedAgents = agents.filter((agent) => agent.id !== target.id);
       await ConfigStorage.set('acp.customAgents', updatedAgents);
+
+      if (target.isBuiltin && typeof target.id === 'string' && target.id.startsWith('builtin-')) {
+        const hidden = (await ConfigStorage.get('acp.hiddenBuiltinAssistantIds')) || [];
+        const nextHidden = [...new Set([...hidden, target.id])];
+        await ConfigStorage.set('acp.hiddenBuiltinAssistantIds', nextHidden);
+      }
 
       // Reload merged assistant list (local + extensions)
       await loadAssistants();
@@ -411,6 +418,31 @@ export const useAssistantEditor = ({
       message.error(t('common.failed', { defaultValue: 'Failed' }));
     }
   };
+
+  const handleRestoreHiddenBuiltinAssistants = useCallback(async () => {
+    setRestoreHiddenBuiltinsLoading(true);
+    try {
+      const res = await ipcBridge.application.restoreHiddenBuiltinAssistants.invoke();
+      if (!res.success) {
+        message.error(res.msg || t('common.failed', { defaultValue: 'Failed' }));
+        return;
+      }
+      const count = res.data?.restoredCount ?? 0;
+      message.success(
+        t('settings.restoreHiddenBuiltinAssistantsSuccess', {
+          defaultValue: 'Restored {{count}} built-in assistant(s) to the list.',
+          count,
+        })
+      );
+      await loadAssistants();
+      await refreshAgentDetection();
+    } catch (error) {
+      console.error('Failed to restore hidden builtin assistants:', error);
+      message.error(t('common.failed', { defaultValue: 'Failed' }));
+    } finally {
+      setRestoreHiddenBuiltinsLoading(false);
+    }
+  }, [loadAssistants, message, refreshAgentDetection, t]);
 
   return {
     // Edit drawer state
@@ -463,6 +495,7 @@ export const useAssistantEditor = ({
     handleDirectDeleteClick,
     handleDeleteConfirm,
     handleToggleEnabled,
-    pendingDeleteAssistant,
+    restoreHiddenBuiltinsLoading,
+    handleRestoreHiddenBuiltinAssistants,
   };
 };

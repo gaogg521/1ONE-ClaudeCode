@@ -212,7 +212,9 @@ export class TeammateManager extends EventEmitter {
       }, TeammateManager.WAKE_TIMEOUT_MS);
       this.wakeTimeouts.set(slotId, timeoutHandle);
     } catch (error) {
-      this.setStatus(slotId, 'failed');
+      const msg = error instanceof Error ? error.message : String(error);
+      this.setStatus(slotId, 'failed', msg);
+      console.error(`[TeammateManager] Agent wake failed (team=${this.teamId}, slot=${slotId}):`, error);
       this.activeWakes.delete(slotId);
       throw error;
     }

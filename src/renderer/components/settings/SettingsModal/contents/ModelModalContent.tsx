@@ -507,7 +507,7 @@ const ModelModalContent: React.FC = () => {
             <p className='text-14px text-t-secondary text-center max-w-400px'>
               {t('settings.needHelpConfigGuide')}
               <a
-                href='https://github.com/iOfficeAI/1ONE ClaudeCode/wiki/LLM-Configuration'
+                href='https://github.com/gaogg521/1ONE-ClaudeCode'
                 target='_blank'
                 rel='noopener noreferrer'
                 className='text-[rgb(var(--primary-6))] hover:text-[rgb(var(--primary-5))] underline ml-4px'
@@ -609,7 +609,10 @@ const ModelModalContent: React.FC = () => {
                       </div>
                     }
                   >
-                    {platform.model.map((model: string, index: number, arr: string[]) => {
+                    {/* Perf: only render heavy model list when expanded.
+                        Otherwise switching tabs may block the main thread for seconds when many models exist. */}
+                    {isExpanded
+                      ? platform.model.map((model: string, index: number, arr: string[]) => {
                       const isNewApiProvider = isNewApiPlatform(platform.platform);
                       const modelProtocol = platform.modelProtocols?.[model] || 'openai';
                       const modelHealth = platform.modelHealth?.[model];
@@ -728,7 +731,8 @@ const ModelModalContent: React.FC = () => {
                           {index < arr.length - 1 && <Divider className='!my-0 !border-[var(--color-border-2)]/70' />}
                         </div>
                       );
-                    })}
+                    })
+                      : null}
                   </Collapse.Item>
                 </Collapse>
               );

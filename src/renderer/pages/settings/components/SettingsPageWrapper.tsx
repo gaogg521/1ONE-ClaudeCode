@@ -1,9 +1,10 @@
 import classNames from 'classnames';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { SettingsViewModeProvider } from '@/renderer/components/settings/SettingsModal/settingsViewContext';
 import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/platform';
-import { extensions as extensionsIpc, type IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
+import type { IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
+import { useExtensionSettingsTabs } from '@/renderer/hooks/extensions/useExtensionSettingsTabs';
 import {
   Communication,
   Computer,
@@ -82,14 +83,7 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
   const { t } = useTranslation();
   const isDesktop = isElectronDesktop();
 
-  const [extensionTabs, setExtensionTabs] = useState<IExtensionSettingsTab[]>([]);
-
-  useEffect(() => {
-    void extensionsIpc.getSettingsTabs
-      .invoke()
-      .then((tabs) => setExtensionTabs(tabs ?? []))
-      .catch((err) => console.error('[SettingsPageWrapper] Failed to load extension tabs:', err));
-  }, []);
+  const { extensionTabs } = useExtensionSettingsTabs();
 
   const { resolveExtTabName } = useExtI18n();
 
@@ -161,7 +155,8 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
         {isMobile && (
           <div className='settings-mobile-top-nav'>
             {menuItems.map((item) => {
-              const active = pathname.includes(`/settings/${item.path}`);
+              const itemRoute = `/settings/${item.path}`;
+              const active = pathname === itemRoute;
               return (
                 <button
                   key={item.path}
@@ -170,7 +165,7 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
                     'settings-mobile-top-nav__item--active': active,
                   })}
                   onClick={() => {
-                    void navigate(`/settings/${item.path}`, { replace: true });
+                    void navigate(itemRoute, { replace: true });
                   }}
                 >
                   <span className='settings-mobile-top-nav__icon'>{item.icon}</span>

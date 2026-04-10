@@ -103,11 +103,11 @@ const ComponentsShowcase: React.FC = () => {
         <StepsWrapper current={currentStep} size='small'>
           <StepsWrapper.Step
             title='步骤一'
-            icon={currentStep > 1 ? <Check theme='filled' size={16} fill='#165dff' /> : undefined}
+            icon={currentStep > 1 ? <Check theme='filled' size={16} fill='var(--primary)' /> : undefined}
           />
           <StepsWrapper.Step
             title='步骤二'
-            icon={currentStep > 2 ? <Check theme='filled' size={16} fill='#165dff' /> : undefined}
+            icon={currentStep > 2 ? <Check theme='filled' size={16} fill='var(--primary)' /> : undefined}
           />
           <StepsWrapper.Step title='步骤三' />
         </StepsWrapper>

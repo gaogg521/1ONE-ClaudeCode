@@ -14,6 +14,36 @@ import {
 } from '@office-ai/aioncli-core';
 import { ipcBridge } from '@/common';
 import { promises as fsAsync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+
+/**
+ * 在 Windows 上注入 Edge/Chrome 作为 OAuth 浏览器，避免 360 等国产浏览器
+ * 阻断 localhost OAuth 回调的问题。
+ * Returns a cleanup function to restore the override.
+ */
+function injectWindowsOAuthBrowser(): (() => void) | null {
+  if (process.platform !== 'win32') return null;
+  const candidates = [
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ];
+  const browserPath = candidates.find((p) => existsSync(p));
+  if (!browserPath) {
+    console.log('[Auth] No Edge/Chrome found, using system default browser for OAuth');
+    return null;
+  }
+  console.log('[Auth] Using browser for OAuth:', browserPath);
+  (globalThis as Record<string, unknown>)['__1ONE_BROWSER_OPENER'] = async (url: string) => {
+    spawn(browserPath, [url], { detached: true, stdio: 'ignore' }).unref();
+    return {};
+  };
+  return () => {
+    delete (globalThis as Record<string, unknown>)['__1ONE_BROWSER_OPENER'];
+  };
+}
 
 export function initAuthBridge(): void {
   ipcBridge.googleAuth.status.provider(async ({ proxy }) => {
@@ -81,12 +111,19 @@ export function initAuthBridge(): void {
 
       // 执行 OAuth 登录流程
       // Execute OAuth login flow
+      // 注入 Windows 浏览器 override（避免 360 等浏览器阻断 localhost 回调）
+      const restoreBrowser = injectWindowsOAuthBrowser();
       // 添加超时机制，防止用户未完成登录导致一直卡住 / Add timeout to prevent hanging if user doesn't complete login
       const timeoutPromise = new Promise<null>((_, reject) => {
         setTimeout(() => reject(new Error('Login timed out after 2 minutes')), 2 * 60 * 1000);
       });
 
-      const client = await Promise.race([loginWithOauth(AuthType.LOGIN_WITH_GOOGLE, config), timeoutPromise]);
+      let client: unknown;
+      try {
+        client = await Promise.race([loginWithOauth(AuthType.LOGIN_WITH_GOOGLE, config), timeoutPromise]);
+      } finally {
+        restoreBrowser?.();
+      }
 
       if (client) {
         // 登录成功后，验证凭证是否被正确保存

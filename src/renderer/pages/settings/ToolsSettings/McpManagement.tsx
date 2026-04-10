@@ -1,9 +1,8 @@
-import { Button, Collapse, Modal, Dropdown, Menu } from '@arco-design/web-react';
-import { Plus, Down } from '@icon-park/react';
+import { Button, Modal } from '@arco-design/web-react';
+import { Plus } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type IMcpServer, BUILTIN_IMAGE_GEN_ID } from '@/common/config/storage';
-import { acpConversation } from '@/common/adapter/ipcBridge';
 import AddMcpServerModal from '../components/AddMcpServerModal';
 import McpServerItem from './McpServerItem';
 import {
@@ -165,23 +164,8 @@ const McpManagement: React.FC<McpManagementProps> = ({ message }) => {
     [handleBatchImportMcpServers, handleTestMcpConnection, checkOAuthStatus, syncMcpToAgents]
   );
 
-  // 检测可用agents的状态
-  const [detectedAgents, setDetectedAgents] = React.useState<Array<{ backend: string; name: string }>>([]);
+  // 检测可用agents的状态（保留 importMode 用于 Modal）
   const [importMode, setImportMode] = React.useState<'json' | 'oneclick'>('json');
-
-  React.useEffect(() => {
-    const loadAgents = async () => {
-      try {
-        const response = await acpConversation.getAvailableAgents.invoke();
-        if (response.success && response.data) {
-          setDetectedAgents(response.data.map((agent) => ({ backend: agent.backend, name: agent.name })));
-        }
-      } catch (error) {
-        console.error('Failed to load agents:', error);
-      }
-    };
-    void loadAgents();
-  }, []);
 
   const allMcpServers = React.useMemo(() => [...mcpServers, ...extensionMcpServers], [mcpServers, extensionMcpServers]);
 
@@ -213,66 +197,52 @@ const McpManagement: React.FC<McpManagementProps> = ({ message }) => {
 
   return (
     <div>
-      <Collapse.Item
-        className={' [&_div.arco-collapse-item-header-title]:flex-1'}
-        header={
-          <div className='flex items-center justify-between'>
-            {t('settings.mcpSettings')}
-            {detectedAgents.length > 0 ? (
-              <Dropdown
-                trigger='click'
-                droplist={
-                  <Menu>
-                    <Menu.Item
-                      key='json'
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setImportMode('json');
-                        showAddMcpModal();
-                      }}
-                    >
-                      {t('settings.mcpImportFromJSON')}
-                    </Menu.Item>
-                    <Menu.Item
-                      key='oneclick'
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setImportMode('oneclick');
-                        showAddMcpModal();
-                      }}
-                    >
-                      {t('settings.mcpOneKeyImport')}
-                    </Menu.Item>
-                  </Menu>
-                }
-              >
-                <Button type='outline' icon={<Plus size={'14'} />} shape='round' onClick={(e) => e.stopPropagation()}>
-                  {t('settings.mcpAddServer')} <Down size={'12'} />
-                </Button>
-              </Dropdown>
-            ) : (
-              <Button
-                type='outline'
-                icon={<Plus size={'16'} />}
-                shape='round'
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setImportMode('json');
-                  showAddMcpModal();
-                }}
-              >
-                {t('settings.mcpAddServer')}
-              </Button>
-            )}
+      {/* Header */}
+      <div className='flex items-center justify-between mb-12px'>
+        <div className='flex items-center gap-8px'>
+          <span className='text-14px font-medium text-t-primary'>{t('settings.mcpSettings')}</span>
+          {(visibleMcpServers.length + extensionMcpServers.length) > 0 && (
+            <span className='text-12px text-t-secondary bg-fill-2 px-6px py-1px rd-full'>
+              {visibleMcpServers.length + extensionMcpServers.length}
+            </span>
+          )}
+        </div>
+        <Button
+          type='primary'
+          size='small'
+          icon={<Plus size='14' />}
+          shape='round'
+          onClick={() => {
+            setImportMode('json');
+            showAddMcpModal();
+          }}
+        >
+          {t('settings.mcpAddServer')}
+        </Button>
+      </div>
+
+      {/* Server list */}
+      <div className='flex flex-col gap-6px'>
+        {visibleMcpServers.length === 0 && extensionMcpServers.length === 0 ? (
+          <div className='flex flex-col items-center justify-center py-32px gap-8px rd-12px border border-dashed border-[var(--color-border-2)]'>
+            <span className='text-24px'>🔌</span>
+            <span className='text-14px font-medium text-t-primary'>{t('settings.mcpNoServersFound') || '暂无 MCP 服务器'}</span>
+            <span className='text-12px text-t-secondary text-center max-w-280px'>
+              {'MCP 服务器可以让 AI 调用外部工具和服务，例如浏览器控制、文件操作、数据库查询等。'}
+            </span>
+            <Button
+              type='outline'
+              size='small'
+              icon={<Plus size='13' />}
+              className='mt-4px'
+              onClick={() => { setImportMode('json'); showAddMcpModal(); }}
+            >
+              {'添加第一个服务器'}
+            </Button>
           </div>
-        }
-        name={'mcp-servers'}
-      >
-        <div>
-          {visibleMcpServers.length === 0 && extensionMcpServers.length === 0 ? (
-            <div className='text-center py-8 text-t-secondary'>{t('settings.mcpNoServersFound')}</div>
-          ) : (
-            visibleMcpServers.map((server) => (
+        ) : (
+          <>
+            {visibleMcpServers.map((server) => (
               <McpServerItem
                 key={server.id}
                 server={server}
@@ -289,10 +259,8 @@ const McpManagement: React.FC<McpManagementProps> = ({ message }) => {
                 onToggleServer={handleToggleMcpServer}
                 onOAuthLogin={handleOAuthLogin}
               />
-            ))
-          )}
-          {extensionMcpServers.length > 0 &&
-            extensionMcpServers.map((server) => (
+            ))}
+            {extensionMcpServers.map((server) => (
               <McpServerItem
                 key={server.id}
                 server={server}
@@ -308,8 +276,9 @@ const McpManagement: React.FC<McpManagementProps> = ({ message }) => {
                 isReadOnly
               />
             ))}
-        </div>
-      </Collapse.Item>
+          </>
+        )}
+      </div>
 
       <AddMcpServerModal
         visible={showMcpModal}

@@ -1,0 +1,28 @@
+/* 1ONE ClaudeCode — 熔岩橙 (Volcanic Orange) CSS Preset */
+:root {
+  --bg-base: #130b05; --bg-1: #1e1008; --bg-2: #2a180f; --bg-3: #3d2214;
+  --bg-4: #55301a; --bg-5: #6d3f21; --bg-6: #8a502b; --bg-8: #c07840;
+  --bg-9: #e0a870; --bg-10: #fde8c8; --bg-hover: #201208; --bg-active: #2e1a0c;
+  --text-primary: #fff3e0; --text-secondary: #fbc88a; --text-disabled: #8a5a30;
+  --text-t-primary: #fff3e0; --text-t-secondary: #f5b870; --text-t-tertiary: #9a6838;
+  --color-primary: #fb923c;
+  --primary: #fb923c; --success: #86efac; --warning: #fcd34d; --danger: #fca5a5; --info: #fb923c;
+  --border-base: #7c4820; --border-light: #3d2214; --brand: #fb923c; --brand-light: #2a180f; --brand-hover: #fdba74;
+  --message-user-bg: #281407; --message-tips-bg: #1c0e05; --workspace-btn-bg: #2a180f;
+  --fill: #1e1008; --inverse: #fff3e0; --dialog-fill-0: #2a180f;
+  --text-0: #fff3e0; --text-white: #fff3e0; --fill-0: rgba(251,146,60,0.08);
+  --fill-white-to-black: #130b05; --border-special: #fb923c; --color-guid-agent-bar: #2a180f;
+  --aou-1: #130b05; --aou-2: #2a180f; --aou-3: #3d2214; --aou-4: #55301a;
+  --aou-5: #8a502b; --aou-6: #c07840; --aou-7: #e0a870; --aou-8: #fbc88a; --aou-9: #fde8c8; --aou-10: #fff3e0;
+  --color-bg-1: #130b05; --color-bg-2: #1e1008; --color-bg-3: #2a180f; --color-bg-4: #3d2214; --color-bg-5: #55301a; --color-bg-white: #130b05;
+  --color-fill-1: rgba(251,146,60,0.05); --color-fill-2: rgba(251,146,60,0.10); --color-fill-3: rgba(251,146,60,0.16); --color-fill-4: rgba(251,146,60,0.22);
+  --color-border: #7c4820; --color-border-2: #3d2214;
+  --color-text-1: #fff3e0; --color-text-2: #fbc88a; --color-text-3: #e0a870; --color-text-4: #8a5a30;
+  --primary-1: #280f00; --primary-2: #481c00; --primary-3: #6a2c00; --primary-4: #c46018; --primary-5: #f07825; --primary-6: #fb923c; --primary-7: #fdba74;
+  --color-primary-6: #fb923c; --color-success-6: #86efac; --color-danger-6: #fca5a5; --color-warning-6: #fcd34d; --color-link-6: #fb923c;
+}
+body { color: #fff3e0; background: radial-gradient(circle at 15% 8%, rgba(251,146,60,0.20) 0, transparent 35%), radial-gradient(circle at 85% 15%, rgba(245,158,11,0.16) 0, transparent 42%), #130b05; }
+
+[data-theme='dark'] {
+  /* This preset is designed as a dark theme; keep variables unchanged. */
+}

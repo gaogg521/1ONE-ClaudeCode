@@ -30,6 +30,13 @@ export function resolveAionrsBinary(): string | null {
     if (existsSync(bundled)) return bundled;
   }
 
+  // 1b. Dev mode fallback — check resources/ in project root (process.cwd())
+  if (process.env.NODE_ENV === 'development') {
+    const runtimeKey = `${process.platform}-${process.arch}`;
+    const devBundled = join(process.cwd(), 'resources', 'bundled-aionrs', runtimeKey, getBinaryName());
+    if (existsSync(devBundled)) return devBundled;
+  }
+
   // 2. System PATH
   try {
     const cmd = process.platform === 'win32' ? 'where aionrs' : 'which aionrs';

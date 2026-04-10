@@ -24,6 +24,17 @@ export function generateInspectScript(inspectMode: boolean, messages: InspectMes
   const copySuccess = JSON.stringify(messages.copySuccess);
   return `
     (function() {
+      const getThemeVar = (name, fallback) => {
+        try {
+          const raw = window.parent?.getComputedStyle(window.parent.document.documentElement).getPropertyValue(name);
+          const v = (raw || '').trim();
+          return v || fallback;
+        } catch {
+          return fallback;
+        }
+      };
+      const PRIMARY = getThemeVar('--primary', '#3b82f6');
+      const SUCCESS = getThemeVar('--success', '#10b981');
 
       // 移除旧的检查模式样式和监听器 / Remove old inspect mode styles and listeners
       const oldStyle = document.getElementById('inspect-mode-style');
@@ -58,8 +69,8 @@ export function generateInspectScript(inspectMode: boolean, messages: InspectMes
         .inspect-overlay {
           position: fixed;
           pointer-events: none;
-          background: rgba(59, 130, 246, 0.1);
-          border: 2px solid #3b82f6;
+          background: color-mix(in srgb, \${PRIMARY} 12%, transparent);
+          border: 2px solid \${PRIMARY};
           z-index: 999999;
           transition: all 0.1s ease;
         }
@@ -83,7 +94,7 @@ export function generateInspectScript(inspectMode: boolean, messages: InspectMes
           position: fixed;
           top: 20px;
           right: 20px;
-          background: #10b981;
+          background: \${SUCCESS};
           color: white;
           padding: 12px 20px;
           border-radius: 6px;

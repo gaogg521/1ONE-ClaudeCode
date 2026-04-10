@@ -839,6 +839,160 @@ const cleanupOrphanedHealthCheckConversations = async () => {
   }
 };
 
+/**
+ * Copy builtin assistant rule/skill files to the user directory, then merge preset assistant
+ * rows into `acp.customAgents` (respecting `acp.hiddenBuiltinAssistantIds`).
+ * Safe to call after startup — e.g. to re-apply presets after the user clears hidden IDs.
+ */
+export async function syncBuiltinAssistantsConfig(): Promise<void> {
+  await initBuiltinAssistantRules();
+
+  const existingAgents = (await configFile.get('acp.customAgents').catch((): undefined => undefined)) || [];
+  const builtinAssistants = getBuiltinAssistants();
+  const hiddenBuiltinRaw =
+    (await configFile.get('acp.hiddenBuiltinAssistantIds').catch((): undefined => undefined)) || [];
+  const hiddenBuiltinIds = new Set(
+    Array.isArray(hiddenBuiltinRaw)
+      ? hiddenBuiltinRaw.filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : []
+  );
+
+  const ASSISTANT_ENABLED_MIGRATION_KEY = 'migration.assistantEnabledFixed';
+  const migrationDone = await configFile.get(ASSISTANT_ENABLED_MIGRATION_KEY).catch(() => false);
+  const needsMigration = !migrationDone && existingAgents.length > 0;
+
+  const BUILTIN_SKILLS_MIGRATION_KEY = 'migration.builtinDefaultSkillsAdded_v2';
+  const builtinSkillsMigrationDone = await configFile.get(BUILTIN_SKILLS_MIGRATION_KEY).catch(() => false);
+  const needsBuiltinSkillsMigration = !builtinSkillsMigrationDone;
+
+  const PROMPTS_I18N_MIGRATION_KEY = 'migration.promptsI18nAdded';
+  const promptsI18nMigrationDone = await configFile.get(PROMPTS_I18N_MIGRATION_KEY).catch(() => false);
+  const needsPromptsI18nMigration = !promptsI18nMigrationDone;
+
+  const updatedAgents = [...existingAgents];
+  let hasChanges = false;
+
+  for (const builtin of builtinAssistants) {
+    if (hiddenBuiltinIds.has(builtin.id)) {
+      continue;
+    }
+    const index = updatedAgents.findIndex((a: AcpBackendConfig) => a.id === builtin.id);
+    if (index >= 0) {
+      const existing = updatedAgents[index];
+      const promptsI18nMissing = !existing.promptsI18n && builtin.promptsI18n;
+      const promptsI18nChanged =
+        existing.promptsI18n &&
+        builtin.promptsI18n &&
+        JSON.stringify(existing.promptsI18n) !== JSON.stringify(builtin.promptsI18n);
+      const needsPromptsI18nUpdate = needsPromptsI18nMigration || promptsI18nMissing || promptsI18nChanged;
+      const nameI18nMissing = !existing.nameI18n && !!builtin.nameI18n;
+      const nameI18nChanged =
+        existing.nameI18n &&
+        builtin.nameI18n &&
+        JSON.stringify(existing.nameI18n) !== JSON.stringify(builtin.nameI18n);
+      const descriptionI18nMissing = !existing.descriptionI18n && !!builtin.descriptionI18n;
+      const descriptionI18nChanged =
+        existing.descriptionI18n &&
+        builtin.descriptionI18n &&
+        JSON.stringify(existing.descriptionI18n) !== JSON.stringify(builtin.descriptionI18n);
+      const identityShouldUpdate =
+        !existing.userCustomizedPreset &&
+        (existing.name !== builtin.name ||
+          existing.description !== builtin.description ||
+          existing.avatar !== builtin.avatar ||
+          existing.isPreset !== builtin.isPreset ||
+          existing.isBuiltin !== builtin.isBuiltin ||
+          nameI18nMissing ||
+          !!nameI18nChanged ||
+          descriptionI18nMissing ||
+          !!descriptionI18nChanged);
+      const shouldUpdate = identityShouldUpdate || needsPromptsI18nUpdate;
+      const needsEnabledFix = existing.enabled === undefined || needsMigration;
+      const resolvedEnabled = needsEnabledFix ? builtin.enabled : existing.enabled;
+      const resolvedPresetAgentType = existing.presetAgentType ?? builtin.presetAgentType;
+
+      let resolvedEnabledSkills = existing.enabledSkills;
+      const needsSkillsMigration =
+        needsBuiltinSkillsMigration &&
+        builtin.enabledSkills &&
+        (!existing.enabledSkills || existing.enabledSkills.length === 0);
+      if (needsSkillsMigration) {
+        resolvedEnabledSkills = builtin.enabledSkills;
+      }
+
+      if (
+        shouldUpdate ||
+        needsEnabledFix ||
+        (needsSkillsMigration && resolvedEnabledSkills !== existing.enabledSkills) ||
+        needsPromptsI18nUpdate
+      ) {
+        if (existing.userCustomizedPreset) {
+          updatedAgents[index] = {
+            ...builtin,
+            ...existing,
+            enabled: resolvedEnabled,
+            presetAgentType: resolvedPresetAgentType,
+            enabledSkills: resolvedEnabledSkills,
+            promptsI18n: needsPromptsI18nUpdate ? builtin.promptsI18n : existing.promptsI18n,
+            userCustomizedPreset: true,
+          };
+        } else {
+          updatedAgents[index] = {
+            ...existing,
+            ...builtin,
+            enabled: resolvedEnabled,
+            presetAgentType: resolvedPresetAgentType,
+            enabledSkills: resolvedEnabledSkills,
+            promptsI18n: builtin.promptsI18n,
+          };
+        }
+        hasChanges = true;
+      }
+    } else {
+      updatedAgents.unshift(builtin);
+      hasChanges = true;
+    }
+  }
+
+  const prunedAgents = updatedAgents.filter(
+    (a) => !(typeof a.id === 'string' && a.id.startsWith('builtin-') && hiddenBuiltinIds.has(a.id))
+  );
+  if (prunedAgents.length !== updatedAgents.length) {
+    hasChanges = true;
+  }
+
+  if (hasChanges) {
+    await configFile.set('acp.customAgents', prunedAgents);
+  }
+
+  if (needsMigration) {
+    await configFile.set(ASSISTANT_ENABLED_MIGRATION_KEY, true);
+  }
+  if (needsBuiltinSkillsMigration) {
+    await configFile.set(BUILTIN_SKILLS_MIGRATION_KEY, true);
+  }
+  if (needsPromptsI18nMigration) {
+    await configFile.set(PROMPTS_I18N_MIGRATION_KEY, true);
+  }
+}
+
+/**
+ * Clears `acp.hiddenBuiltinAssistantIds` and re-runs builtin sync so removed presets reappear.
+ */
+export async function restoreHiddenBuiltinAssistants(): Promise<{ restoredCount: number }> {
+  const agentsBefore =
+    ((await configFile.get('acp.customAgents').catch((): undefined => undefined)) || []) as AcpBackendConfig[];
+  const idsBefore = new Set(agentsBefore.map((a) => a.id));
+  await configFile.set('acp.hiddenBuiltinAssistantIds', []);
+  await syncBuiltinAssistantsConfig();
+  const agentsAfter =
+    ((await configFile.get('acp.customAgents').catch((): undefined => undefined)) || []) as AcpBackendConfig[];
+  const restoredCount = agentsAfter.filter(
+    (a) => typeof a.id === 'string' && a.id.startsWith('builtin-') && !idsBefore.has(a.id)
+  ).length;
+  return { restoredCount };
+}
+
 const initStorage = async () => {
   const t0 = performance.now();
   const mark = (label: string) => console.log(`[1ONE:init] ${label} +${Math.round(performance.now() - t0)}ms`);
@@ -898,140 +1052,8 @@ const initStorage = async () => {
 
   // 5. 初始化内置助手（Assistants）
   try {
-    // 5.1 初始化内置助手的规则文件到用户目录
-    // Initialize builtin assistant rule files to user directory
-    await initBuiltinAssistantRules();
-    mark('5.1 initBuiltinAssistantRules');
-
-    // 5.2 初始化助手配置（只包含元数据，不包含 context）
-    // Initialize assistant config (metadata only, no context)
-    const existingAgents = (await configFile.get('acp.customAgents').catch((): undefined => undefined)) || [];
-    const builtinAssistants = getBuiltinAssistants();
-
-    // 5.2.1 检查是否需要迁移：修复老版本中所有助手都默认启用的问题
-    // Check if migration needed: fix old version where all assistants were enabled by default
-    const ASSISTANT_ENABLED_MIGRATION_KEY = 'migration.assistantEnabledFixed';
-    const migrationDone = await configFile.get(ASSISTANT_ENABLED_MIGRATION_KEY).catch(() => false);
-    const needsMigration = !migrationDone && existingAgents.length > 0;
-
-    // 5.2.2 检查是否需要迁移：为内置助手添加默认启用的技能
-    // Check if migration needed: add default enabled skills for builtin assistants
-    const BUILTIN_SKILLS_MIGRATION_KEY = 'migration.builtinDefaultSkillsAdded_v2';
-    const builtinSkillsMigrationDone = await configFile.get(BUILTIN_SKILLS_MIGRATION_KEY).catch(() => false);
-    const needsBuiltinSkillsMigration = !builtinSkillsMigrationDone;
-
-    // 5.2.3 检查是否需要迁移：为内置助手添加 promptsI18n
-    // Check if migration needed: add promptsI18n for builtin assistants
-    const PROMPTS_I18N_MIGRATION_KEY = 'migration.promptsI18nAdded';
-    const promptsI18nMigrationDone = await configFile.get(PROMPTS_I18N_MIGRATION_KEY).catch(() => false);
-    const needsPromptsI18nMigration = !promptsI18nMigrationDone;
-
-    // 更新或添加内置助手配置
-    // Update or add built-in assistant configurations
-    const updatedAgents = [...existingAgents];
-    let hasChanges = false;
-
-    for (const builtin of builtinAssistants) {
-      const index = updatedAgents.findIndex((a: AcpBackendConfig) => a.id === builtin.id);
-      if (index >= 0) {
-        // 更新现有内置助手配置
-        // Update existing built-in assistant config
-        const existing = updatedAgents[index];
-        // 只有当关键字段不同时才更新，避免不必要的写入
-        // Update only if key fields are different to avoid unnecessary writes
-        // 注意：enabled 和 presetAgentType 字段由用户控制，不参与 shouldUpdate 判断
-        // Note: enabled and presetAgentType are user-controlled, not included in shouldUpdate check
-        // 检查 promptsI18n 是否需要更新（如果不存在或已更改，或需要迁移）
-        // Check if promptsI18n needs update (if missing, changed, or migration needed)
-        const promptsI18nMissing = !existing.promptsI18n && builtin.promptsI18n;
-        const promptsI18nChanged =
-          existing.promptsI18n &&
-          builtin.promptsI18n &&
-          JSON.stringify(existing.promptsI18n) !== JSON.stringify(builtin.promptsI18n);
-        const needsPromptsI18nUpdate = needsPromptsI18nMigration || promptsI18nMissing || promptsI18nChanged;
-        const nameI18nMissing = !existing.nameI18n && !!builtin.nameI18n;
-        const nameI18nChanged =
-          existing.nameI18n &&
-          builtin.nameI18n &&
-          JSON.stringify(existing.nameI18n) !== JSON.stringify(builtin.nameI18n);
-        const descriptionI18nMissing = !existing.descriptionI18n && !!builtin.descriptionI18n;
-        const descriptionI18nChanged =
-          existing.descriptionI18n &&
-          builtin.descriptionI18n &&
-          JSON.stringify(existing.descriptionI18n) !== JSON.stringify(builtin.descriptionI18n);
-        const shouldUpdate =
-          existing.name !== builtin.name ||
-          existing.description !== builtin.description ||
-          existing.avatar !== builtin.avatar ||
-          existing.isPreset !== builtin.isPreset ||
-          existing.isBuiltin !== builtin.isBuiltin ||
-          nameI18nMissing ||
-          !!nameI18nChanged ||
-          descriptionI18nMissing ||
-          !!descriptionI18nChanged ||
-          needsPromptsI18nUpdate;
-        // 当 enabled 是 undefined 或需要迁移时，设置默认值（Cowork 启用，其他禁用）
-        // When enabled is undefined or migration needed, set default value (Cowork enabled, others disabled)
-        const needsEnabledFix = existing.enabled === undefined || needsMigration;
-        // 迁移时强制使用默认值，否则保留用户设置
-        // Force default value during migration, otherwise preserve user setting
-        const resolvedEnabled = needsEnabledFix ? builtin.enabled : existing.enabled;
-        // presetAgentType 由用户控制，未设置时使用内置默认值
-        // presetAgentType is user-controlled, use builtin default if not set
-        const resolvedPresetAgentType = existing.presetAgentType ?? builtin.presetAgentType;
-
-        // 为有 defaultEnabledSkills 配置的内置助手添加默认技能（仅在迁移时且用户未设置 enabledSkills 时）
-        // Add default enabled skills for builtin assistants with defaultEnabledSkills (only during migration and if user hasn't set enabledSkills)
-        let resolvedEnabledSkills = existing.enabledSkills;
-        const needsSkillsMigration =
-          needsBuiltinSkillsMigration &&
-          builtin.enabledSkills &&
-          (!existing.enabledSkills || existing.enabledSkills.length === 0);
-        if (needsSkillsMigration) {
-          resolvedEnabledSkills = builtin.enabledSkills;
-        }
-
-        if (
-          shouldUpdate ||
-          needsEnabledFix ||
-          (needsSkillsMigration && resolvedEnabledSkills !== existing.enabledSkills) ||
-          needsPromptsI18nUpdate
-        ) {
-          // 保留用户已设置的 enabled 和 presetAgentType / Preserve user-set enabled and presetAgentType
-          updatedAgents[index] = {
-            ...existing,
-            ...builtin,
-            enabled: resolvedEnabled,
-            presetAgentType: resolvedPresetAgentType,
-            enabledSkills: resolvedEnabledSkills,
-            // 确保 promptsI18n 被更新 / Ensure promptsI18n is updated
-            promptsI18n: builtin.promptsI18n,
-          };
-          hasChanges = true;
-        }
-      } else {
-        // 添加新的内置助手
-        // Add new built-in assistant
-        updatedAgents.unshift(builtin);
-        hasChanges = true;
-      }
-    }
-
-    if (hasChanges) {
-      await configFile.set('acp.customAgents', updatedAgents);
-    }
-
-    // 标记迁移完成 / Mark migration as done
-    if (needsMigration) {
-      await configFile.set(ASSISTANT_ENABLED_MIGRATION_KEY, true);
-    }
-    if (needsBuiltinSkillsMigration) {
-      await configFile.set(BUILTIN_SKILLS_MIGRATION_KEY, true);
-    }
-    if (needsPromptsI18nMigration) {
-      await configFile.set(PROMPTS_I18N_MIGRATION_KEY, true);
-    }
-    mark('5.2 assistant config + migrations');
+    await syncBuiltinAssistantsConfig();
+    mark('5. builtin assistants');
   } catch (error) {
     console.error('[1ONE ClaudeCode] Failed to initialize builtin assistants:', error);
   }

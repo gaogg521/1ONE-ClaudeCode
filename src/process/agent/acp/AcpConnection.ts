@@ -26,7 +26,7 @@ import { mainLog } from '@process/utils/mainLogger';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
-import { getNpxCacheDir, getWindowsShellExecutionOptions, resolveNpxPath } from '@process/utils/shellEnv';
+import { getEnhancedEnv, getNpxCacheDir, getWindowsShellExecutionOptions, resolveNpxPath } from '@process/utils/shellEnv';
 import {
   ACP_PERF_LOG,
   connectClaude,
@@ -78,6 +78,20 @@ export function buildStartupErrorMessage(
   ) {
     const cliHint = resolvedBackend ?? backend;
     errMsg = `'${cliHint}' CLI not found. Please install it or update the CLI path in Settings.\n${stderrCombined}`;
+  }
+
+  // Cursor Windows shim issue: `agent` resolves to a PowerShell wrapper that points to a missing *.ps1.
+  // Provide actionable guidance instead of raw PowerShell error.
+  if (
+    backend === 'cursor' &&
+    /-File parameter/i.test(stderrCombined) &&
+    /does not exist|不存在/i.test(stderrCombined)
+  ) {
+    errMsg =
+      `Cursor Agent CLI 启动失败：系统里的 'agent' 命令看起来指向了一个临时 PowerShell 脚本，但该 .ps1 文件已不存在。\n` +
+      `建议：1）在系统终端运行 'where agent' 查看实际命令路径；2）在设置里把 Cursor 的 CLI 路径改为真实的 agent.exe/agent.cmd；` +
+      `3）或在 Cursor 中重新安装/修复 CLI（确保 'agent' 不指向临时目录）。\n\n` +
+      stderrCombined;
   }
 
   // Detect CLI config loading errors and provide actionable guidance.
@@ -196,6 +210,42 @@ export class AcpConnection {
   ): Promise<void> {
     const result = await spawnGenericBackend(backend, cliPath, workingDir, acpArgs, customEnv);
     await this.spawnAndSetup(result, backend);
+  }
+
+  private async resolveWindowsAgentCliFallback(excludePath?: string): Promise<string | null> {
+    if (process.platform !== 'win32') return null;
+    try {
+      const env = getEnhancedEnv();
+      const { stdout } = await execFile('where', ['agent'], {
+        env,
+        timeout: 2000,
+        windowsHide: true,
+        ...getWindowsShellExecutionOptions(),
+      });
+      const candidates = stdout
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        // Skip known-bad ephemeral shims (Cursor workspace temp, 1ONE temp folder, etc.)
+        .filter((p) => !/\\1OneClaudeCode-Dev\\1one\\cursor-temp-\d+\\/i.test(p))
+        .filter((p) => !/\\workspaceStorage\\.*\\cursor.*\\cursor-temp-\d+\\/i.test(p))
+        .filter((p) => (excludePath ? path.resolve(p) !== path.resolve(excludePath) : true));
+
+      for (const p of candidates) {
+        try {
+          const stat = await fs.stat(p);
+          if (!stat.isFile()) continue;
+          // Prefer real executables / cmd shims
+          if (!/\.(exe|cmd|bat)$/i.test(p)) continue;
+          return p;
+        } catch {
+          // ignore missing candidates
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return null;
   }
 
   /** Npx-based backends that may need npm cache recovery on version mismatch */
@@ -320,7 +370,25 @@ export class AcpConnection {
         if (!cliPath) {
           throw new Error(`CLI path is required for ${backend} backend`);
         }
-        await this.connectGenericBackend(backend, cliPath, workingDir, acpArgs, customEnv);
+        try {
+          await this.connectGenericBackend(backend, cliPath, workingDir, acpArgs, customEnv);
+        } catch (error) {
+          // Windows Cursor CLI sometimes resolves to an ephemeral PowerShell shim that points to a deleted .ps1.
+          // Auto-fallback: try another "agent" path from `where agent` and retry once.
+          const errMsg = error instanceof Error ? error.message : String(error);
+          const isCursorPs1Missing =
+            backend === 'cursor' &&
+            process.platform === 'win32' &&
+            /-File parameter/i.test(errMsg) &&
+            /does not exist|不存在/i.test(errMsg);
+          if (!isCursorPs1Missing) throw error;
+
+          const fallbackCli = await this.resolveWindowsAgentCliFallback(cliPath);
+          if (!fallbackCli) throw error;
+
+          console.warn(`[ACP cursor] Detected broken agent shim. Retrying with resolved CLI: ${fallbackCli}`);
+          await this.connectGenericBackend(backend, fallbackCli, workingDir, acpArgs, customEnv);
+        }
         break;
 
       case 'custom':

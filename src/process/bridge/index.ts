@@ -12,6 +12,8 @@ import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
 import { initAcpConversationBridge } from './acpConversationBridge';
 import { initApplicationBridge } from './applicationBridge';
 import { initAuthBridge } from './authBridge';
+import { initHooksBridge } from './hooksBridge';
+import { initMemoryBridge } from './memoryBridge';
 import { initBedrockBridge } from './bedrockBridge';
 import { initChannelBridge } from './channelBridge';
 import { initConversationBridge } from './conversationBridge';
@@ -59,6 +61,8 @@ export interface BridgeDependencies {
 export function initAllBridges(deps: BridgeDependencies): void {
   initDialogBridge();
   initShellBridge();
+  initHooksBridge();
+  initMemoryBridge(deps.conversationRepo);
   initFsBridge();
   initFileWatchBridge();
   initConversationBridge(deps.conversationService, deps.workerTaskManager, deps.teamSessionService);

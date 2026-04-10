@@ -23,6 +23,7 @@ import ChatLayout from './ChatLayout';
 import ChatSider from './ChatSider';
 import NanobotChat from '../platforms/nanobot/NanobotChat';
 import OpenClawChat from '../platforms/openclaw/OpenClawChat';
+import { OpenClawModelSelector } from '../platforms/openclaw/OpenClawModelSelector';
 import RemoteChat from '../platforms/remote/RemoteChat';
 import GeminiChat from '../platforms/gemini/GeminiChat';
 import AcpModelSelector from '@/renderer/components/agent/AcpModelSelector';
@@ -36,6 +37,7 @@ import StarOfficeMonitorCard from '../platforms/openclaw/StarOfficeMonitorCard.t
 // import SkillRuleGenerator from './components/SkillRuleGenerator'; // Temporarily hidden
 
 const _AssociatedConversation: React.FC<{ conversation_id: string }> = ({ conversation_id }) => {
+  const { t } = useTranslation();
   const { data } = useSWR(['getAssociateConversation', conversation_id], () =>
     ipcBridge.conversation.getAssociateConversation.invoke({ conversation_id })
   );
@@ -45,23 +47,35 @@ const _AssociatedConversation: React.FC<{ conversation_id: string }> = ({ conver
     return data.filter((conversation) => conversation.id !== conversation_id);
   }, [data]);
   if (!list.length) return null;
+
+  const recentList = list.slice(0, 8);
+  const hasMore = list.length > 8;
   return (
     <Dropdown
       droplist={
         <Menu
           onClickMenuItem={(key) => {
+            if (key === '__view_all__') {
+              Promise.resolve(navigate('/sessions')).catch(() => {});
+              return;
+            }
             Promise.resolve(navigate(`/conversation/${key}`)).catch((error) => {
               console.error('Navigation failed:', error);
             });
           }}
         >
-          {list.map((conversation) => {
+          {recentList.map((conversation) => {
             return (
               <Menu.Item key={conversation.id}>
                 <Typography.Ellipsis className={'max-w-300px'}>{conversation.name}</Typography.Ellipsis>
               </Menu.Item>
             );
           })}
+          {hasMore ? (
+            <Menu.Item key='__view_all__'>
+              <span className='text-t-secondary'>{t('conversation.history.viewAll', { defaultValue: '查看所有' })}</span>
+            </Menu.Item>
+          ) : null}
         </Menu>
       }
       trigger={['click']}
@@ -344,6 +358,21 @@ const ChatConversation: React.FC<{
     }
     if (conversation.type === 'codex') {
       return <AcpModelSelector conversationId={conversation.id} />;
+    }
+    if (conversation.type === 'openclaw-gateway') {
+      return (
+        <OpenClawModelSelector
+          conversationId={conversation.id}
+          selectedModel={(conversation as unknown as { model?: { useModel?: string } }).model?.useModel}
+          onSelectModel={async (modelId) => {
+            // Kill worker on model switch — will be rebuilt on next message
+            await ipcBridge.conversation.stop.invoke({ conversation_id: conversation.id });
+            const existingModel = (conversation as unknown as { model?: Record<string, unknown> }).model;
+            const selected = { ...(existingModel ?? {}), useModel: modelId } as TProviderWithModel;
+            await ipcBridge.conversation.update.invoke({ id: conversation.id, updates: { model: selected } as any });
+          }}
+        />
+      );
     }
     return <GeminiModelSelector disabled={true} />;
   }, [conversation, isGeminiConversation, isAionrsConversation]);

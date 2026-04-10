@@ -42,6 +42,14 @@ const DeleteAssistantModal: React.FC<DeleteAssistantModalProps> = ({
           defaultValue: 'Are you sure you want to delete this assistant? This action cannot be undone.',
         })}
       </p>
+      {activeAssistant?.isBuiltin ? (
+        <p className='mt-8px text-13px text-t-secondary'>
+          {t('settings.deleteBuiltinAssistantExtra', {
+            defaultValue:
+              'Built-in assistants are removed from your list and will not reappear after restart. You can use Duplicate to keep a copy first.',
+          })}
+        </p>
+      ) : null}
       {activeAssistant && (
         <div className='mt-12px p-12px bg-fill-2 rounded-lg flex items-center gap-12px'>
           <AssistantAvatar assistant={activeAssistant} size={32} avatarImageMap={avatarImageMap} />

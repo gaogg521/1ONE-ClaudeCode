@@ -14,7 +14,7 @@
 export const ONE_TIMESTAMP_SEPARATOR = '_ONE_';
 
 /** 用于匹配和清理时间戳后缀的正则表达式 */
-export const ONE_TIMESTAMP_REGEX = /_ONE_\d{13}(\.\w+)?$/;
+export const ONE_TIMESTAMP_REGEX = /_(?:ONE|1one-claudecode)_\d{13}(\.\w+)?$/;
 export const ONE_FILES_MARKER = '[[1ONE_FILES]]';
 
 // ===== 媒体类型相关常量 =====

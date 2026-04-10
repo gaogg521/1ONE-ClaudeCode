@@ -11,7 +11,7 @@ import {
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import type { AssistantListItem } from './types';
 import AssistantAvatar from './AssistantAvatar';
-import { Button, Input, Switch, Tabs, Tag } from '@arco-design/web-react';
+import { Button, Input, Popconfirm, Switch, Tabs, Tag } from '@arco-design/web-react';
 import { Delete, Plus, Search, SettingOne, CloseSmall } from '@icon-park/react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +21,9 @@ type AssistantListPanelProps = {
   localeKey: string;
   avatarImageMap: Record<string, string>;
   isExtensionAssistant: (assistant: AssistantListItem | null | undefined) => boolean;
+  hasHiddenBuiltinAssistants: boolean;
+  restoreHiddenBuiltinsLoading: boolean;
+  onRestoreHiddenBuiltinAssistants: () => Promise<void>;
   onEdit: (assistant: AssistantListItem) => void;
   onDuplicate: (assistant: AssistantListItem) => void;
   onCreate: () => void;
@@ -34,6 +37,9 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
   localeKey,
   avatarImageMap,
   isExtensionAssistant,
+  hasHiddenBuiltinAssistants,
+  restoreHiddenBuiltinsLoading,
+  onRestoreHiddenBuiltinAssistants,
   onEdit,
   onDuplicate,
   onCreate,
@@ -84,7 +90,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
 
   const renderAssistantCard = (assistant: AssistantListItem) => {
     const assistantIsExtension = isExtensionAssistant(assistant);
-    const isDeletable = assistant.enabled === false && !assistantIsExtension;
+    const isDeletable = !assistantIsExtension;
 
     return (
       <div
@@ -179,7 +185,32 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
                 {t('settings.assistants', { defaultValue: 'Assistants' })}
               </h2>
             </div>
-            <div className={`${isMobile ? 'w-full' : 'flex-shrink-0'}`}>
+            <div
+              className={`${isMobile ? 'w-full' : 'flex-shrink-0'} flex flex-wrap items-center justify-end gap-8px`}
+            >
+              {hasHiddenBuiltinAssistants ? (
+                <Popconfirm
+                  title={t('settings.restoreHiddenBuiltinAssistantsTitle', {
+                    defaultValue: 'Restore built-in assistants?',
+                  })}
+                  content={t('settings.restoreHiddenBuiltinAssistantsConfirm', {
+                    defaultValue:
+                      'This will show built-in assistants you removed from the list again. Your custom assistants are not affected.',
+                  })}
+                  okText={t('common.confirm', { defaultValue: 'Confirm' })}
+                  cancelText={t('common.cancel', { defaultValue: 'Cancel' })}
+                  onOk={() => onRestoreHiddenBuiltinAssistants()}
+                >
+                  <Button
+                    type='outline'
+                    size='small'
+                    loading={restoreHiddenBuiltinsLoading}
+                    className={`!rounded-[100px] ${isMobile ? '!w-full !h-36px' : '!px-14px !h-32px'}`}
+                  >
+                    {t('settings.restoreHiddenBuiltinAssistants', { defaultValue: 'Restore built-in assistants' })}
+                  </Button>
+                </Popconfirm>
+              ) : null}
               <Button
                 type='primary'
                 size='small'

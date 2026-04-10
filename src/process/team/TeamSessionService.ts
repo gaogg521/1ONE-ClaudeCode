@@ -508,7 +508,7 @@ export class TeamSessionService {
     if (existing) return existing;
     const team = await this.repo.findById(teamId);
     if (!team) throw new Error(`Team "${teamId}" not found`);
-    let session!: TeamSession;
+    let session: TeamSession | null = null;
     const spawnAgent = async (agentName: string, agentType?: string) => {
       const newAgent = await this.addAgent(teamId, {
         conversationId: '',
@@ -529,15 +529,111 @@ export class TeamSessionService {
       }
       return newAgent;
     };
-    session = new TeamSession(team, this.repo, this.workerTaskManager, spawnAgent);
+
+    // Repair agents whose conversationId is missing OR points to a non-existent conversation.
+    // This happens when the DB was cleaned/compacted or a conversation record was deleted.
+    const repairedAgents = await Promise.all(
+      team.agents.map(async (agent): Promise<TeamAgent> => {
+        const agentType = agent.agentType ?? 'claude';
+        const backend = this.resolveBackend(agentType, team.agents);
+        const model = await this.resolveConversationModel({ backend, isPreset: false });
+        const type = getConversationTypeForBackend(backend) as AgentType;
+
+        const createFreshConversation = async (): Promise<TeamAgent> => {
+          const newConv = await this.conversationService.createConversation({
+            type,
+            name: agent.agentName ?? agentType,
+            model,
+            extra: {
+              workspace: team.workspace ?? '',
+              customWorkspace: true,
+              backend: backend as AcpBackendAll,
+              agentName: agent.agentName ?? agentType,
+            },
+          });
+          return { ...agent, conversationId: newConv.id };
+        };
+
+        if (!agent.conversationId) {
+          console.warn(`[TeamSession] Agent ${agent.slotId} has no conversationId, creating new`);
+          try {
+            return await createFreshConversation();
+          } catch (err) {
+            console.error(`[TeamSession] Failed to create conversation for agent ${agent.slotId}:`, err);
+            return agent;
+          }
+        }
+
+        // Has a conversationId — verify it exists; if missing, recreate.
+        try {
+          const conv = await this.conversationService.getConversation(agent.conversationId);
+          if (!conv) {
+            console.warn(
+              `[TeamSession] Conversation missing for agent ${agent.slotId} (${agent.conversationId}), recreating`
+            );
+            return await createFreshConversation();
+          }
+          return agent;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('Conversation not found')) {
+            console.warn(
+              `[TeamSession] Conversation not found for agent ${agent.slotId} (${agent.conversationId}), recreating`
+            );
+            try {
+              return await createFreshConversation();
+            } catch (createErr) {
+              console.error(`[TeamSession] Failed to recreate conversation for agent ${agent.slotId}:`, createErr);
+              return agent;
+            }
+          }
+          // Unknown error — do not overwrite to avoid data loss
+          console.error(`[TeamSession] Failed to verify conversation for agent ${agent.slotId}:`, err);
+          return agent;
+        }
+      })
+    );
+
+    // Persist new conversationIds back to the DB
+    const needsRepair = repairedAgents.some((a, i) => a.conversationId !== team.agents[i]?.conversationId);
+    if (needsRepair) {
+      await this.repo.update(team.id, { agents: repairedAgents });
+    }
+
+    const effectiveTeam = needsRepair ? { ...team, agents: repairedAgents } : team;
+    session = new TeamSession(effectiveTeam, this.repo, this.workerTaskManager, spawnAgent);
     this.sessions.set(teamId, session);
 
     // Start MCP server and inject per-agent stdio config into all agent conversations.
     // After DB update, rebuild cached agent tasks so they pick up teamMcpStdioConfig.
     await session.startMcpServer();
+
     await Promise.all(
-      team.agents.map(async (agent) => {
+      repairedAgents.map(async (agent) => {
         if (agent.conversationId) {
+          // Repair legacy/bad conversation backend metadata.
+          // Some historical records incorrectly stored extra.backend="acp" which is a conversation type,
+          // not a real ACP backend (claude/codex/cursor/...); this breaks AcpConnection.connect().
+          try {
+            const conv = await this.conversationService.getConversation(agent.conversationId);
+            if (conv?.type === 'acp') {
+              const extra = conv.extra as { backend?: unknown } | undefined;
+              if (extra?.backend === 'acp') {
+                const repairedBackend = this.resolveBackend(
+                  agent.agentType ?? 'claude',
+                  repairedAgents
+                ) as AcpBackendAll;
+                await this.conversationService.updateConversation(
+                  agent.conversationId,
+                  { extra: { backend: repairedBackend } } as any,
+                  true
+                );
+              }
+            }
+          } catch {
+            // Ignore repair errors — session build will surface issues if any.
+          }
+
           const agentStdioConfig = session.getStdioConfig(agent.slotId);
           await this.conversationService.updateConversation(
             agent.conversationId,

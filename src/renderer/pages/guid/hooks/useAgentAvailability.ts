@@ -42,7 +42,9 @@ export const useAgentAvailability = ({
   );
 
   const getAvailableFallbackAgent = useCallback((): string | null => {
-    const fallbackOrder: PresetAgentType[] = ['claude', 'qwen', 'codex', 'codebuddy', 'opencode', 'gemini'];
+    // Prefer Gemini first when it is available (e.g. Google Auth), so the onboarding
+    // experience is consistent even if other ACP agents exist on the system.
+    const fallbackOrder: PresetAgentType[] = ['gemini', 'claude', 'qwen', 'codex', 'codebuddy', 'opencode'];
     for (const agentType of fallbackOrder) {
       if (isMainAgentAvailable(agentType)) {
         return agentType;

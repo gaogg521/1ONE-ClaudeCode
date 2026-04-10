@@ -108,12 +108,22 @@ const HTMLPreview: React.FC<HTMLPreviewProps> = ({ content, filePath, hideToolba
         let hoveredElement = null;
         let overlay = null;
 
+        function getThemePrimary() {
+          try {
+            const raw = window.parent?.getComputedStyle(window.parent.document.documentElement).getPropertyValue('--primary');
+            return (raw || '').trim() || '#3b82f6';
+          } catch {
+            return '#3b82f6';
+          }
+        }
+
         // 创建高亮遮罩
         function createOverlay() {
+          const primary = getThemePrimary();
           overlay = document.createElement('div');
           overlay.style.position = 'absolute';
-          overlay.style.border = '2px solid #2196F3';
-          overlay.style.backgroundColor = 'rgba(33, 150, 243, 0.1)';
+          overlay.style.border = '2px solid ' + primary;
+          overlay.style.backgroundColor = 'color-mix(in srgb, ' + primary + ' 12%, transparent)';
           overlay.style.pointerEvents = 'none';
           overlay.style.zIndex = '999999';
           overlay.style.boxSizing = 'border-box';

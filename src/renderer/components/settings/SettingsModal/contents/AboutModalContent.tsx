@@ -45,7 +45,7 @@ const AboutModalContent: React.FC = () => {
     window.dispatchEvent(new CustomEvent('one-open-update-modal', { detail: { source: 'about' } }));
   };
 
-  const REPO = 'https://github.com/gaogg521/gaogg521-openclaw-Visual-Control-Panel';
+  const REPO = 'https://github.com/gaogg521/1ONE-ClaudeCode';
 
   const linkItems = [
     {
@@ -88,7 +88,7 @@ const AboutModalContent: React.FC = () => {
           {/* App Info Section */}
           <div className='flex flex-col items-center pb-24px'>
             <Typography.Title heading={3} className='text-24px font-bold text-t-primary mb-8px'>
-              1ONE ClaudeCode
+              1ONE Code
             </Typography.Title>
             <Typography.Text className='text-14px text-t-secondary mb-12px text-center'>
               {t('settings.appDescription')}

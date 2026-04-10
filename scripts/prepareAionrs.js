@@ -55,6 +55,17 @@ function getVersion() {
   return (process.env.AIONRS_VERSION || 'latest').trim();
 }
 
+function fetchLatestTagName() {
+  // Use GitHub API so we can derive asset names in "latest" mode.
+  // No auth required for public repos (rate-limited but fine for this use).
+  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+  const result = execSync(`powershell -NoProfile -NonInteractive -Command "(Invoke-RestMethod -Uri '${url}').tag_name"`, {
+    encoding: 'utf-8',
+    timeout: 20000,
+  }).trim();
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Source resolvers
 // ---------------------------------------------------------------------------
@@ -62,14 +73,19 @@ function getVersion() {
 /**
  * 1. Download from GitHub releases
  */
-function getAssetName(platform, arch) {
+function getAssetName(platform, arch, versionOrTag) {
   const archMap = { x64: 'x86_64', arm64: 'aarch64' };
   const platformMap = { darwin: 'apple-darwin', linux: 'unknown-linux-gnu', win32: 'pc-windows-msvc' };
   const normalizedArch = archMap[arch];
   const normalizedPlatform = platformMap[platform];
   if (!normalizedArch || !normalizedPlatform) return null;
   const ext = platform === 'win32' ? '.zip' : '.tar.gz';
-  return `aionrs-${normalizedArch}-${normalizedPlatform}${ext}`;
+  // Asset naming (2026-04): aionrs-v0.1.7-x86_64-pc-windows-msvc.zip
+  // We keep it version-aware so both "latest" and pinned versions work reliably.
+  const tag = versionOrTag && versionOrTag !== 'latest' ? versionOrTag : '';
+  if (!tag) return null;
+  const normalizedTag = tag.startsWith('v') ? tag : `v${tag}`;
+  return `aionrs-${normalizedTag}-${normalizedArch}-${normalizedPlatform}${ext}`;
 }
 
 function getDownloadUrl(assetName, version) {
@@ -123,7 +139,8 @@ function findBinaryInDir(dir, binaryName) {
 }
 
 function downloadAndExtract(platform, arch, version) {
-  const assetName = getAssetName(platform, arch);
+  const resolvedTag = version === 'latest' ? fetchLatestTagName() : version;
+  const assetName = getAssetName(platform, arch, resolvedTag);
   if (!assetName) {
     throw new Error(`Unsupported aionrs target: ${platform}-${arch}`);
   }
@@ -181,7 +198,8 @@ function prepareAionrs() {
       sourcePath = result.binaryPath;
       tempDir = result.tempDir;
       sourceType = 'download';
-      sourceDetail = { url: getDownloadUrl(getAssetName(platform, arch), version) };
+      const tagForDetail = version === 'latest' ? fetchLatestTagName() : version;
+      sourceDetail = { url: getDownloadUrl(getAssetName(platform, arch, tagForDetail), version) };
       console.log(`  Downloaded from GitHub releases`);
     } catch (error) {
       console.warn(`  Download failed: ${error.message}`);

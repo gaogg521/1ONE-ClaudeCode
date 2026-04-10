@@ -13,6 +13,7 @@ export const MIGRATABLE_KEYS: ReadonlyArray<keyof IConfigStorageRefer> = [
   'tools.imageGenerationModel',
   'mcp.config',
   'acp.customAgents',
+  'acp.hiddenBuiltinAssistantIds',
 ] as const;
 
 // Minimal interface for the config store — enables testing without real files.

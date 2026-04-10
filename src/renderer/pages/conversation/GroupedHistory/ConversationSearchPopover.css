@@ -1,17 +1,17 @@
 conversation-search-modal {
-  --conversation-search-mask-bg: rgba(15, 23, 42, 0.1);
-  --conversation-search-panel-bg: rgba(255, 255, 255, 0.72);
-  --conversation-search-panel-inner-bg: rgba(255, 255, 255, 0.82);
-  --conversation-search-panel-border: rgba(229, 230, 235, 0.92);
-  --conversation-search-panel-shadow: 0 14px 34px rgba(29, 33, 41, 0.14);
-  --conversation-search-panel-outline: rgba(255, 255, 255, 0.64);
-  --conversation-search-surface-bg: rgba(247, 248, 250, 0.92);
-  --conversation-search-input-bg: rgba(255, 255, 255, 0.94);
-  --conversation-search-input-border: rgba(196, 201, 209, 0.78);
-  --conversation-search-input-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 6px 14px rgba(15, 23, 42, 0.05);
-  --conversation-search-divider: rgba(229, 230, 235, 0.72);
-  --conversation-search-hover-bg: rgba(243, 244, 246, 0.74);
-  --conversation-search-highlight-fg: #2563eb;
+  --conversation-search-mask-bg: rgba(15, 23, 42, 0.45);
+  --conversation-search-panel-bg: var(--color-bg-2);
+  --conversation-search-panel-inner-bg: var(--color-bg-2);
+  --conversation-search-panel-border: var(--color-border-2);
+  --conversation-search-panel-shadow: 0 16px 48px rgba(29, 33, 41, 0.22), 0 4px 12px rgba(29, 33, 41, 0.1);
+  --conversation-search-panel-outline: var(--color-border-1);
+  --conversation-search-surface-bg: var(--color-fill-1);
+  --conversation-search-input-bg: var(--color-bg-3);
+  --conversation-search-input-border: var(--color-border-2);
+  --conversation-search-input-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --conversation-search-divider: var(--color-border-2);
+  --conversation-search-hover-bg: var(--color-fill-2);
+  --conversation-search-highlight-fg: var(--primary);
 }
 
 .conversation-search-trigger-full {
@@ -40,19 +40,32 @@ conversation-search-modal {
 
 [data-theme='dark'] .conversation-search-modal,
 body[arco-theme='dark'] .conversation-search-modal {
-  --conversation-search-mask-bg: color-mix(in srgb, var(--color-bg-5) 58%, transparent);
-  --conversation-search-panel-bg: color-mix(in srgb, var(--color-bg-2) 76%, transparent);
-  --conversation-search-panel-inner-bg: color-mix(in srgb, var(--color-bg-3) 82%, transparent);
+  --conversation-search-mask-bg: rgba(0, 0, 0, 0.55);
+  --conversation-search-panel-bg: var(--color-bg-2);
+  --conversation-search-panel-inner-bg: var(--color-bg-2);
   --conversation-search-panel-border: var(--color-border-2);
   --conversation-search-panel-shadow: 0 20px 44px rgba(0, 0, 0, 0.38);
-  --conversation-search-panel-outline: color-mix(in srgb, var(--color-border-3) 56%, transparent);
-  --conversation-search-surface-bg: color-mix(in srgb, var(--color-fill-2) 88%, transparent);
-  --conversation-search-input-bg: color-mix(in srgb, var(--color-fill-2) 92%, transparent);
+  --conversation-search-surface-bg: var(--color-fill-2);
+  --conversation-search-input-bg: var(--color-fill-2);
   --conversation-search-input-border: var(--color-border-2);
-  --conversation-search-input-shadow: 0 1px 2px rgba(0, 0, 0, 0.22), 0 8px 18px rgba(0, 0, 0, 0.18);
   --conversation-search-divider: var(--color-border-2);
   --conversation-search-hover-bg: var(--color-fill-2);
-  --conversation-search-highlight-fg: #93c5fd;
+  --conversation-search-highlight-fg: var(--primary);
+}
+
+/* 月光银主题：浅蓝底色下搜索框用白色背景+橙色点缀保证对比度 */
+[data-color-scheme='1one-moonlight'] .conversation-search-modal {
+  --conversation-search-mask-bg: rgba(15, 30, 60, 0.35);
+  --conversation-search-panel-bg: var(--color-bg-white);
+  --conversation-search-panel-inner-bg: var(--color-bg-white);
+  --conversation-search-panel-border: var(--color-border);
+  --conversation-search-panel-shadow: 0 16px 48px rgba(15, 30, 80, 0.18), 0 4px 12px rgba(15, 30, 80, 0.1);
+  --conversation-search-surface-bg: var(--color-fill-1);
+  --conversation-search-input-bg: var(--color-bg-2);
+  --conversation-search-input-border: var(--color-border);
+  --conversation-search-highlight-fg: var(--warning);
+  --conversation-search-hover-bg: var(--color-fill-2);
+  --conversation-search-divider: var(--color-border-2);
 }
 
 .conversation-search-modal.one-modal .arco-modal,
@@ -76,10 +89,8 @@ body[arco-theme='dark'] .conversation-search-modal {
   border: 1px solid var(--conversation-search-panel-border) !important;
   border-radius: 24px !important;
   box-shadow: var(--conversation-search-panel-shadow) !important;
-  outline: 1px solid var(--conversation-search-panel-outline);
-  outline-offset: -1px;
-  backdrop-filter: blur(10px) saturate(115%);
-  -webkit-backdrop-filter: blur(10px) saturate(115%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   padding: 0 !important;
   margin: 0 !important;
   overflow: hidden !important;
@@ -91,8 +102,8 @@ body[arco-theme='dark'] .conversation-search-modal {
 
 .conversation-search-modal__panel {
   background: var(--conversation-search-panel-inner-bg) !important;
-  backdrop-filter: blur(2px) saturate(106%);
-  -webkit-backdrop-filter: blur(2px) saturate(106%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border: none;
   box-shadow: none;
   padding: 24px 24px 22px;

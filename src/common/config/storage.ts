@@ -58,6 +58,8 @@ export interface IConfigStorageRefer {
   /** Global LLM prompt timeout in seconds (default: 300). Per-backend promptTimeout overrides this. */
   'acp.promptTimeout'?: number;
   'acp.customAgents'?: AcpBackendConfig[];
+  /** Builtin assistant IDs the user removed from the list; startup will not re-inject them */
+  'acp.hiddenBuiltinAssistantIds'?: string[];
   // Cached model lists per ACP backend for Guid page pre-selection
   'acp.cachedModels'?: Record<string, import('@/common/types/acpTypes').AcpModelInfo>;
   // Cached config options per ACP backend for Guid page pre-selection
@@ -158,6 +160,12 @@ export interface IConfigStorageRefer {
   };
   // Skills Market: whether the 1ONE-skills builtin skill is enabled
   'skillsMarket.enabled'?: boolean;
+  /**
+   * Absolute path of the repository / workspace whose Claude Code auto-memory
+   * (under ~/.claude/projects/{sanitized path}/memory) and project CLAUDE.md are bound to.
+   * When unset, the app uses Settings → work directory (same as getSystemDir().workDir).
+   */
+  'memory.claudeProjectRoot'?: string;
 }
 
 export interface IEnvStorageRefer {

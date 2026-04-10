@@ -11,9 +11,8 @@ import {
   BUILTIN_IMAGE_GEN_ID,
 } from '@/common/config/storage';
 import type { SpeechToTextConfig, SpeechToTextProvider } from '@/common/types/speech';
-import { acpConversation } from '@/common/adapter/ipcBridge';
-import { Divider, Form, Tooltip, Message, Button, Dropdown, Menu, Modal, Switch, Input } from '@arco-design/web-react';
-import { Help, Down, Plus } from '@icon-park/react';
+import { Divider, Form, Message, Button, Modal, Switch, Input } from '@arco-design/web-react';
+import { Plus } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useConfigModelListWithImage from '@/renderer/hooks/agent/useConfigModelListWithImage';
@@ -37,7 +36,7 @@ import { useSettingsViewMode } from '../settingsViewContext';
 type MessageInstance = ReturnType<typeof Message.useMessage>[0];
 
 const isBuiltinImageGenServer = (server: IMcpServer) => server.builtin === true && server.id === BUILTIN_IMAGE_GEN_ID;
-const SPEECH_TO_TEXT_CONFIG_CHANGED_EVENT = '1ONE ClaudeCode:speech-to-text-config-changed';
+const SPEECH_TO_TEXT_CONFIG_CHANGED_EVENT = '1one-claudecode:speech-to-text-config-changed';
 const DEFAULT_SPEECH_TO_TEXT_CONFIG: SpeechToTextConfig = {
   enabled: false,
   provider: 'openai',
@@ -56,6 +55,13 @@ const DEFAULT_SPEECH_TO_TEXT_CONFIG: SpeechToTextConfig = {
     punctuate: true,
     smartFormat: true,
   },
+  custom: {
+    providerName: '',
+    apiKey: '',
+    baseUrl: '',
+    model: '',
+    language: '',
+  },
 };
 
 const normalizeSpeechToTextConfig = (config?: SpeechToTextConfig): SpeechToTextConfig => ({
@@ -69,7 +75,202 @@ const normalizeSpeechToTextConfig = (config?: SpeechToTextConfig): SpeechToTextC
     ...DEFAULT_SPEECH_TO_TEXT_CONFIG.deepgram,
     ...config?.deepgram,
   },
+  custom: {
+    ...DEFAULT_SPEECH_TO_TEXT_CONFIG.custom,
+    ...config?.custom,
+  },
 });
+
+// ─── Image Generation Presets ─────────────────────────────────────────────────
+
+type ImageGenPreset = {
+  id: string;
+  label: string;
+  baseUrl: string;
+  defaultModel: string;
+};
+
+const IMAGE_GEN_PRESETS: ImageGenPreset[] = [
+  { id: 'dall-e-3', label: 'DALL-E 3 (OpenAI)', baseUrl: 'https://api.openai.com/v1', defaultModel: 'dall-e-3' },
+  { id: 'dall-e-2', label: 'DALL-E 2 (OpenAI)', baseUrl: 'https://api.openai.com/v1', defaultModel: 'dall-e-2' },
+  { id: 'stability', label: 'Stability AI', baseUrl: 'https://api.stability.ai/v2beta', defaultModel: 'stable-image/generate/ultra' },
+  { id: 'gemini-image', label: 'Google Gemini Image', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', defaultModel: 'gemini-2.5-flash-image-preview' },
+  { id: 'doubao', label: '豆包 (Doubao)', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', defaultModel: 'doubao-seedream-3-0' },
+  { id: 'custom', label: '自定义 (Custom)', baseUrl: '', defaultModel: '' },
+];
+
+function detectPreset(baseUrl?: string, model?: string): string {
+  if (!baseUrl && !model) return 'custom';
+  for (const p of IMAGE_GEN_PRESETS) {
+    if (p.id === 'custom') continue;
+    if (p.baseUrl && baseUrl?.startsWith(p.baseUrl) && model === p.defaultModel) return p.id;
+  }
+  return 'custom';
+}
+
+const ImageGenerationSettingsSection: React.FC<{
+  imageGenerationModel?: IConfigStorageRefer['tools.imageGenerationModel'];
+  builtinImageGenServer?: IMcpServer;
+  agentInstallStatus: Record<string, string[]>;
+  isServerLoading: (name: string) => boolean;
+  isUpdating: boolean;
+  onModelChange: (value: Partial<IConfigStorageRefer['tools.imageGenerationModel']>) => void;
+  onToggle: (checked: boolean) => Promise<void>;
+}> = ({ imageGenerationModel, builtinImageGenServer, agentInstallStatus, isServerLoading, isUpdating, onModelChange, onToggle }) => {
+  const { t } = useTranslation();
+
+  const initPreset = detectPreset(imageGenerationModel?.baseUrl, imageGenerationModel?.useModel);
+  const [selectedPresetId, setSelectedPresetId] = React.useState<string>(initPreset);
+  const [apiKey, setApiKey] = React.useState<string>(imageGenerationModel?.apiKey ?? '');
+  const [baseUrl, setBaseUrl] = React.useState<string>(imageGenerationModel?.baseUrl ?? '');
+  const [model, setModel] = React.useState<string>(imageGenerationModel?.useModel ?? '');
+
+  // Keep local form state in sync when the stored model config loads asynchronously.
+  useEffect(() => {
+    setSelectedPresetId(detectPreset(imageGenerationModel?.baseUrl, imageGenerationModel?.useModel));
+    setApiKey(imageGenerationModel?.apiKey ?? '');
+    setBaseUrl(imageGenerationModel?.baseUrl ?? '');
+    setModel(imageGenerationModel?.useModel ?? '');
+  }, [imageGenerationModel?.apiKey, imageGenerationModel?.baseUrl, imageGenerationModel?.useModel]);
+
+  const renderLabel = useCallback(
+    (label: string, requirement: 'required' | 'optional') => (
+      <span className='inline-flex items-center gap-6px'>
+        <span>{label}</span>
+        <span aria-hidden='true' className='text-12px text-t-tertiary'>
+          ({requirement === 'required' ? t('settings.fieldRequired') : t('settings.fieldOptional')})
+        </span>
+      </span>
+    ),
+    [t]
+  );
+
+  const handlePresetChange = useCallback(
+    (presetId: string) => {
+      const preset = IMAGE_GEN_PRESETS.find((p) => p.id === presetId);
+      if (!preset) return;
+      setSelectedPresetId(presetId);
+      const newBaseUrl = preset.baseUrl;
+      const newModel = preset.defaultModel;
+      setBaseUrl(newBaseUrl);
+      setModel(newModel);
+      onModelChange({ baseUrl: newBaseUrl, useModel: newModel });
+    },
+    [onModelChange]
+  );
+
+  const handleApiKeyChange = useCallback(
+    (value: string) => {
+      setApiKey(value);
+      onModelChange({ apiKey: value });
+    },
+    [onModelChange]
+  );
+
+  const handleBaseUrlChange = useCallback(
+    (value: string) => {
+      setBaseUrl(value);
+      onModelChange({ baseUrl: value });
+    },
+    [onModelChange]
+  );
+
+  const handleModelChange = useCallback(
+    (value: string) => {
+      setModel(value);
+      onModelChange({ useModel: value });
+    },
+    [onModelChange]
+  );
+
+  const imageGenerationInstalledAgents = builtinImageGenServer?.name
+    ? (agentInstallStatus[builtinImageGenServer.name] ?? [])
+    : [];
+
+  return (
+    <div className='px-[12px] md:px-[32px] py-[24px] bg-2 rd-12px md:rd-16px border border-border-2'>
+      <div className='flex items-center justify-between mb-16px'>
+        <div className='flex flex-col gap-4px'>
+          <span className='text-14px text-t-primary'>{t('settings.imageGeneration')}</span>
+          <span className='text-13px text-t-secondary'>{'配置 AI 图像生成服务，支持 DALL-E、Stability AI 等提供商。'}</span>
+        </div>
+        <div className='flex items-center gap-8px'>
+          {builtinImageGenServer?.enabled && builtinImageGenServer.name && (
+            <McpAgentStatusDisplay
+              serverName={builtinImageGenServer.name}
+              agentInstallStatus={agentInstallStatus}
+              isLoadingAgentStatus={isServerLoading(builtinImageGenServer.name) && imageGenerationInstalledAgents.length === 0}
+              alwaysVisible
+            />
+          )}
+          <Switch
+            disabled={isUpdating || !builtinImageGenServer}
+            checked={Boolean(builtinImageGenServer?.enabled)}
+            onChange={onToggle}
+          />
+        </div>
+      </div>
+
+      <Divider className='mt-0px mb-20px' />
+
+      <Form layout='horizontal' labelAlign='left' className='space-y-12px'>
+        <Form.Item label={'提供商 / 预设'}>
+          <AionSelect value={selectedPresetId} onChange={handlePresetChange}>
+            {IMAGE_GEN_PRESETS.map((p) => (
+              <AionSelect.Option key={p.id} value={p.id}>{p.label}</AionSelect.Option>
+            ))}
+          </AionSelect>
+        </Form.Item>
+
+        <Form.Item label={renderLabel('API Key', 'required')}>
+          <Input.Password
+            value={apiKey}
+            visibilityToggle
+            placeholder={selectedPresetId === 'gemini-image' ? 'Google API Key' : 'sk-...'}
+            onChange={handleApiKeyChange}
+          />
+        </Form.Item>
+
+        <Form.Item label={renderLabel('Base URL', 'optional')}>
+          <Input
+            value={baseUrl}
+            placeholder='https://api.openai.com/v1'
+            onChange={handleBaseUrlChange}
+          />
+        </Form.Item>
+
+        <Form.Item label={renderLabel('模型', 'optional')}>
+          <Input
+            value={model}
+            placeholder={IMAGE_GEN_PRESETS.find(p => p.id === selectedPresetId)?.defaultModel ?? 'dall-e-3'}
+            onChange={handleModelChange}
+          />
+        </Form.Item>
+
+        {/* LiteLLM hint — shown for custom preset */}
+        {selectedPresetId === 'custom' && (
+          <div className='mt-4px p-12px rd-8px bg-[rgba(var(--primary-6),0.06)] border border-[rgba(var(--primary-6),0.15)] text-12px text-t-secondary space-y-6px'>
+            <div className='font-medium text-t-primary mb-2px'>💡 使用 LiteLLM 代理时的填写格式</div>
+            <div className='font-mono bg-[rgba(0,0,0,0.04)] rd-4px p-8px space-y-2px'>
+              <div><span className='text-t-tertiary'>Base URL: </span>https://your-litellm.com</div>
+              <div><span className='text-t-tertiary'>API Key:  </span>sk-your-litellm-key</div>
+              <div><span className='text-t-tertiary'>模型:     </span>dall-e-3</div>
+            </div>
+            <div className='text-11px'>
+              {'模型名填写 LiteLLM 中配置的图像模型别名即可，例如 '}
+              <code className='bg-[rgba(0,0,0,0.05)] px-4px rd-3px'>dall-e-3</code>
+              {'、'}
+              <code className='bg-[rgba(0,0,0,0.05)] px-4px rd-3px'>flux-dev</code>
+              {'。如 LiteLLM 使用 provider/model 格式，则填完整名称，例如 '}
+              <code className='bg-[rgba(0,0,0,0.05)] px-4px rd-3px'>gemini/gemini-3.1-pro-preview</code>
+              {'。'}
+            </div>
+          </div>
+        )}
+      </Form>
+    </div>
+  );
+};
 
 const SpeechToTextSettingsSection: React.FC<{
   config: SpeechToTextConfig;
@@ -124,6 +325,19 @@ const SpeechToTextSettingsSection: React.FC<{
     [onChange]
   );
 
+  const handleCustomChange = useCallback(
+    (field: keyof NonNullable<SpeechToTextConfig['custom']>, value: string) => {
+      onChange((current) => ({
+        ...current,
+        custom: {
+          ...current.custom,
+          [field]: value,
+        },
+      }));
+    },
+    [onChange]
+  );
+
   return (
     <div className='px-[12px] md:px-[32px] py-[24px] bg-2 rd-12px md:rd-16px border border-border-2'>
       <div className='flex items-center justify-between gap-12px mb-8px'>
@@ -149,10 +363,11 @@ const SpeechToTextSettingsSection: React.FC<{
           <AionSelect value={config.provider} onChange={handleProviderChange}>
             <AionSelect.Option value='openai'>{t('settings.speechToTextProviderOpenAI')}</AionSelect.Option>
             <AionSelect.Option value='deepgram'>{t('settings.speechToTextProviderDeepgram')}</AionSelect.Option>
+            <AionSelect.Option value='custom'>{'自定义 (OpenAI 兼容)'}</AionSelect.Option>
           </AionSelect>
         </Form.Item>
 
-        {config.provider === 'openai' ? (
+        {config.provider === 'openai' && (
           <>
             <Form.Item label={renderSpeechToTextFieldLabel('settings.speechToTextApiKey', 'required')}>
               <Input.Password
@@ -171,7 +386,8 @@ const SpeechToTextSettingsSection: React.FC<{
               <Input value={config.openai?.language} onChange={(value) => handleOpenAIChange('language', value)} />
             </Form.Item>
           </>
-        ) : (
+        )}
+        {config.provider === 'deepgram' && (
           <>
             <Form.Item label={renderSpeechToTextFieldLabel('settings.speechToTextApiKey', 'required')}>
               <Input.Password
@@ -208,6 +424,56 @@ const SpeechToTextSettingsSection: React.FC<{
               />
             </Form.Item>
           </>
+        )}
+        {config.provider === 'custom' && (
+          <>
+            <Form.Item label={renderSpeechToTextFieldLabel('提供商名称', 'optional')}>
+              <Input
+                placeholder='例如: Azure STT, Whisper API'
+                value={config.custom?.providerName}
+                onChange={(value) => handleCustomChange('providerName', value)}
+              />
+            </Form.Item>
+            <Form.Item label={renderSpeechToTextFieldLabel('settings.speechToTextApiKey', 'required')}>
+              <Input.Password
+                value={config.custom?.apiKey}
+                visibilityToggle
+                onChange={(value) => handleCustomChange('apiKey', value)}
+              />
+            </Form.Item>
+            <Form.Item label={renderSpeechToTextFieldLabel('settings.speechToTextBaseUrl', 'required')}>
+              <Input
+                placeholder='例如: https://api.example.com/v1'
+                value={config.custom?.baseUrl}
+                onChange={(value) => handleCustomChange('baseUrl', value)}
+              />
+            </Form.Item>
+            <Form.Item label={renderSpeechToTextFieldLabel('settings.speechToTextModel', 'optional')}>
+              <Input
+                placeholder='例如: whisper-1'
+                value={config.custom?.model}
+                onChange={(value) => handleCustomChange('model', value)}
+              />
+            </Form.Item>
+            <Form.Item label={renderSpeechToTextFieldLabel('settings.speechToTextLanguage', 'optional')}>
+              <Input value={config.custom?.language} onChange={(value) => handleCustomChange('language', value)} />
+            </Form.Item>
+            <div className='p-12px rd-8px bg-[rgba(var(--primary-6),0.06)] border border-[rgba(var(--primary-6),0.15)] text-12px text-t-secondary space-y-6px'>
+              <div className='font-medium text-t-primary mb-2px'>💡 使用 LiteLLM 代理时的填写格式</div>
+              <div className='font-mono bg-[rgba(0,0,0,0.04)] rd-4px p-8px space-y-2px'>
+                <div><span className='text-t-tertiary'>Base URL: </span>https://your-litellm.com/v1</div>
+                <div><span className='text-t-tertiary'>API Key:  </span>sk-your-litellm-key</div>
+                <div><span className='text-t-tertiary'>模型:     </span>whisper-1</div>
+              </div>
+              <div className='text-11px'>
+                {'LiteLLM 代理语音转文字走 '}
+                <code className='bg-[rgba(0,0,0,0.05)] px-4px rd-3px'>/v1/audio/transcriptions</code>
+                {'，Base URL 末尾加 '}
+                <code className='bg-[rgba(0,0,0,0.05)] px-4px rd-3px'>/v1</code>
+                {'，模型填 LiteLLM 中配置的别名即可。'}
+              </div>
+            </div>
+</>
         )}
       </Form>
     </div>
@@ -336,27 +602,7 @@ const ModalMcpManagementSection: React.FC<{
     [handleBatchImportMcpServers, handleTestMcpConnection, checkOAuthStatus, syncMcpToAgents]
   );
 
-  const [detectedAgents, setDetectedAgents] = useState<Array<{ backend: string; name: string }>>([]);
   const [importMode, setImportMode] = useState<'json' | 'oneclick'>('json');
-
-  useEffect(() => {
-    const loadAgents = async () => {
-      try {
-        const response = await acpConversation.getAvailableAgents.invoke();
-        if (response.success && response.data) {
-          setDetectedAgents(
-            response.data.map((agent) => ({
-              backend: agent.backend,
-              name: agent.name,
-            }))
-          );
-        }
-      } catch (error) {
-        console.error('Failed to load agents:', error);
-      }
-    };
-    void loadAgents();
-  }, []);
 
   useEffect(() => {
     const httpServers = mcpServers.filter((s) => s.transport.type === 'http' || s.transport.type === 'sse');
@@ -373,57 +619,20 @@ const ModalMcpManagementSection: React.FC<{
     await handleDeleteMcpServer(serverToDelete);
   }, [serverToDelete, hideDeleteConfirm, handleDeleteMcpServer]);
 
-  const renderAddButton = () => {
-    if (detectedAgents.length > 0) {
-      return (
-        <Dropdown
-          trigger='click'
-          droplist={
-            <Menu>
-              <Menu.Item
-                key='json'
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setImportMode('json');
-                  showAddMcpModal();
-                }}
-              >
-                {t('settings.mcpImportFromJSON')}
-              </Menu.Item>
-              <Menu.Item
-                key='oneclick'
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setImportMode('oneclick');
-                  showAddMcpModal();
-                }}
-              >
-                {t('settings.mcpOneKeyImport')}
-              </Menu.Item>
-            </Menu>
-          }
-        >
-          <Button type='outline' icon={<Plus size={'16'} />} shape='round' onClick={(e) => e.stopPropagation()}>
-            {t('settings.mcpAddServer')} <Down size='12' />
-          </Button>
-        </Dropdown>
-      );
-    }
-
-    return (
-      <Button
-        type='outline'
-        icon={<Plus size={'16'} />}
-        shape='round'
-        onClick={() => {
-          setImportMode('json');
-          showAddMcpModal();
-        }}
-      >
-        {t('settings.mcpAddServer')}
-      </Button>
-    );
-  };
+  const renderAddButton = () => (
+    <Button
+      type='primary'
+      size='small'
+      icon={<Plus size='14' />}
+      shape='round'
+      onClick={() => {
+        setImportMode('json');
+        showAddMcpModal();
+      }}
+    >
+      {t('settings.mcpAddServer')}
+    </Button>
+  );
 
   return (
     <div className='flex flex-col gap-16px min-h-0'>
@@ -525,27 +734,6 @@ const ToolsModalContent: React.FC = () => {
   const { syncMcpToAgents, removeMcpFromAgents } = useMcpOperations(mcpServers, mcpMessage);
   const builtinImageGenServer = useMemo(() => mcpServers.find(isBuiltinImageGenServer), [mcpServers]);
   const skipNextImageGenerationAutoCheckRef = useRef(false);
-  const imageGenerationInstalledAgents = builtinImageGenServer?.name
-    ? (agentInstallStatus[builtinImageGenServer.name] ?? [])
-    : [];
-
-  const imageGenerationModelList = useMemo(() => {
-    if (!data) return [];
-    // Filter models that support image generation
-    const isImageModel = (modelName: string) => {
-      const name = modelName.toLowerCase();
-      return name.includes('image') || name.includes('banana') || name.includes('imagine');
-    };
-    return (data || [])
-      .filter((v) => {
-        const filteredModels = v.model.filter(isImageModel);
-        return filteredModels.length > 0;
-      })
-      .map((v) => {
-        const filteredModels = v.model.filter(isImageModel);
-        return Object.assign({}, v, { model: filteredModels });
-      });
-  }, [data]);
 
   useEffect(() => {
     const loadConfigs = async () => {
@@ -554,6 +742,20 @@ const ToolsModalContent: React.FC = () => {
         const storedSpeechToTextConfig = await ConfigStorage.get('tools.speechToText');
         if (storedModel) {
           setImageGenerationModel(storedModel);
+        } else if (builtinImageGenServer?.transport.type === 'stdio') {
+          // Fallback: derive config from the built-in MCP server env so the toggle is usable
+          // even when tools.imageGenerationModel has not been initialized yet.
+          const env = builtinImageGenServer.transport.env ?? {};
+          const derived = {
+            platform: env.ONE_IMG_PLATFORM,
+            baseUrl: env.ONE_IMG_BASE_URL,
+            apiKey: env.ONE_IMG_API_KEY,
+            useModel: env.ONE_IMG_MODEL,
+            switch: builtinImageGenServer.enabled,
+          } as Partial<IConfigStorageRefer['tools.imageGenerationModel']>;
+          if (derived.apiKey || derived.useModel || derived.baseUrl) {
+            setImageGenerationModel(derived as IConfigStorageRefer['tools.imageGenerationModel']);
+          }
         }
         setSpeechToTextConfig(normalizeSpeechToTextConfig(storedSpeechToTextConfig));
       } catch (error) {
@@ -562,7 +764,7 @@ const ToolsModalContent: React.FC = () => {
     };
 
     void loadConfigs();
-  }, []);
+  }, [builtinImageGenServer?.enabled, builtinImageGenServer?.transport.type]);
 
   const updateSpeechToTextConfig = useCallback((updater: (current: SpeechToTextConfig) => SpeechToTextConfig) => {
     setSpeechToTextConfig((current) => {
@@ -685,6 +887,10 @@ const ToolsModalContent: React.FC = () => {
   const handleImageGenerationToggle = useCallback(
     async (checked: boolean) => {
       if (!builtinImageGenServer) return;
+      if (checked && (!imageGenerationModel?.apiKey || !imageGenerationModel?.useModel)) {
+        mcpMessage.error(t('settings.fillRequiredFields'));
+        return;
+      }
 
       const updatedServer: IMcpServer = {
         ...builtinImageGenServer,
@@ -730,9 +936,13 @@ const ToolsModalContent: React.FC = () => {
       builtinImageGenServer,
       checkSingleServerInstallStatus,
       clearImageGenerationAgentStatus,
+      imageGenerationModel?.apiKey,
+      imageGenerationModel?.useModel,
+      mcpMessage,
       removeMcpFromAgents,
       saveMcpServers,
       syncMcpToAgents,
+      t,
     ]
   );
 
@@ -764,99 +974,15 @@ const ToolsModalContent: React.FC = () => {
             </div>
           </div>
           {/* 图像生成 */}
-          <div className='px-[12px] md:px-[32px] py-[24px] bg-2 rd-12px md:rd-16px border border-border-2'>
-            <div className='flex items-center justify-between mb-16px'>
-              <span className='text-14px text-t-primary'>{t('settings.imageGeneration')}</span>
-              <div className='flex items-center gap-8px'>
-                {builtinImageGenServer?.enabled && builtinImageGenServer.name && (
-                  <McpAgentStatusDisplay
-                    serverName={builtinImageGenServer.name}
-                    agentInstallStatus={agentInstallStatus}
-                    isLoadingAgentStatus={
-                      isServerLoading(builtinImageGenServer.name) && imageGenerationInstalledAgents.length === 0
-                    }
-                    alwaysVisible
-                  />
-                )}
-                <Switch
-                  disabled={
-                    isUpdatingImageGeneration ||
-                    !builtinImageGenServer ||
-                    !imageGenerationModelList.length ||
-                    !imageGenerationModel?.useModel
-                  }
-                  checked={Boolean(builtinImageGenServer?.enabled)}
-                  onChange={handleImageGenerationToggle}
-                />
-              </div>
-            </div>
-
-            <Divider className='mt-0px mb-20px' />
-
-            <Form layout='horizontal' labelAlign='left' className='space-y-12px'>
-              <Form.Item label={t('settings.imageGenerationModel')}>
-                {imageGenerationModelList.length > 0 ? (
-                  <AionSelect
-                    value={
-                      imageGenerationModel?.id && imageGenerationModel?.useModel
-                        ? `${imageGenerationModel.id}|${imageGenerationModel.useModel}`
-                        : undefined
-                    }
-                    onChange={(value) => {
-                      const [platformId, modelName] = value.split('|');
-                      const platform = imageGenerationModelList.find((p) => p.id === platformId);
-                      if (platform) {
-                        handleImageGenerationModelChange({
-                          ...platform,
-                          useModel: modelName,
-                        });
-                      }
-                    }}
-                  >
-                    {imageGenerationModelList.map(({ model, ...platform }) => (
-                      <AionSelect.OptGroup label={platform.name} key={platform.id}>
-                        {model.map((modelName) => (
-                          <AionSelect.Option key={platform.id + modelName} value={platform.id + '|' + modelName}>
-                            {modelName}
-                          </AionSelect.Option>
-                        ))}
-                      </AionSelect.OptGroup>
-                    ))}
-                  </AionSelect>
-                ) : (
-                  <div className='text-t-secondary flex items-center'>
-                    {t('settings.noAvailable')}
-                    <Tooltip
-                      content={
-                        <div>
-                          {t('settings.needHelpTooltip')}
-                          <a
-                            href='https://github.com/iOfficeAI/1ONE ClaudeCode/wiki/1ONE ClaudeCode-Image-Generation-Tool-Model-Configuration-Guide'
-                            target='_blank'
-                            rel='noopener noreferrer'
-                            className='text-[rgb(var(--primary-6))] hover:text-[rgb(var(--primary-5))] underline ml-4px'
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {t('settings.configGuide')}
-                          </a>
-                        </div>
-                      }
-                    >
-                      <a
-                        href='https://github.com/iOfficeAI/1ONE ClaudeCode/wiki/1ONE ClaudeCode-Image-Generation-Tool-Model-Configuration-Guide'
-                        target='_blank'
-                        rel='noopener noreferrer'
-                        className='ml-8px text-[rgb(var(--primary-6))] hover:text-[rgb(var(--primary-5))] cursor-pointer'
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Help theme='outline' size='14' />
-                      </a>
-                    </Tooltip>
-                  </div>
-                )}
-              </Form.Item>
-            </Form>
-          </div>
+          <ImageGenerationSettingsSection
+            imageGenerationModel={imageGenerationModel}
+            builtinImageGenServer={builtinImageGenServer}
+            agentInstallStatus={agentInstallStatus}
+            isServerLoading={isServerLoading}
+            isUpdating={isUpdatingImageGeneration}
+            onModelChange={handleImageGenerationModelChange}
+            onToggle={handleImageGenerationToggle}
+          />
           <SpeechToTextSettingsSection config={speechToTextConfig} onChange={updateSpeechToTextConfig} />
         </div>
       </AionScrollArea>

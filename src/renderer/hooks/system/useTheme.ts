@@ -1,5 +1,4 @@
 // hooks/useTheme.ts
-import { ConfigStorage } from '@/common/config/storage';
 import { useCallback, useEffect, useState } from 'react';
 
 export type Theme = 'light' | 'dark';
@@ -10,19 +9,15 @@ const THEME_CACHE_KEY = '__1one_theme';
 // Initialize theme immediately when module loads
 const initTheme = async () => {
   try {
-    // localStorage 优先（ThemeSwitcher 同步写入）
-    let initialTheme: Theme;
+    // 只从localStorage读取，不调用ConfigStorage避免阻塞
+    let initialTheme: Theme = DEFAULT_THEME;
     try {
       const cached = localStorage.getItem(THEME_CACHE_KEY) as Theme | null;
       if (cached === 'light' || cached === 'dark') {
         initialTheme = cached;
-      } else {
-        const theme = (await ConfigStorage.get('theme')) as Theme;
-        initialTheme = theme || DEFAULT_THEME;
       }
     } catch (_e) {
-      const theme = (await ConfigStorage.get('theme')) as Theme;
-      initialTheme = theme || DEFAULT_THEME;
+      /* noop */
     }
     document.documentElement.setAttribute('data-theme', initialTheme);
     document.body.setAttribute('arco-theme', initialTheme);
@@ -66,7 +61,8 @@ const useTheme = (): [Theme, (theme: Theme) => Promise<void>] => {
       try {
         setThemeState(newTheme);
         applyTheme(newTheme);
-        await ConfigStorage.set('theme', newTheme);
+        // 禁用ConfigStorage调用以避免卡死
+        // await ConfigStorage.set('theme', newTheme);
       } catch (error) {
         console.error('Failed to save theme:', error);
         // Revert on error

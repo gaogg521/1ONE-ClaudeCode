@@ -1,0 +1,14 @@
+{
+  "title": "会话中心",
+  "new": "新会话",
+  "searchPlaceholder": "搜索会话...",
+  "empty": "还没有会话，点击「新会话」开始",
+  "emptySearch": "没有匹配的会话",
+  "startFirst": "开始第一个会话",
+  "recentLimitNote": "默认展示最近 10 条；更早的会话按创建日期归档。",
+  "archiveByDate": "按日期归档",
+  "folderTitle": "会话归档",
+  "folderSubtitleFallback": "点击查看当天全部对话",
+  "count": "{{count}} 条"
+}
+

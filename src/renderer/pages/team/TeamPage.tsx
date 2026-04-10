@@ -59,9 +59,10 @@ const AgentChatSlot: React.FC<{
   isLead: boolean;
   isFullscreen?: boolean;
   runtimeStatus?: string;
+  runtimeLastMessage?: string;
   onToggleFullscreen?: () => void;
   onRemove?: () => void;
-}> = ({ agent, teamId, isLead, isFullscreen = false, runtimeStatus, onToggleFullscreen, onRemove }) => {
+}> = ({ agent, teamId, isLead, isFullscreen = false, runtimeStatus, runtimeLastMessage, onToggleFullscreen, onRemove }) => {
   const { data: conversation } = useSWR(agent.conversationId ? ['team-conversation', agent.conversationId] : null, () =>
     ipcBridge.conversation.get.invoke({ id: agent.conversationId })
   );
@@ -159,16 +160,27 @@ const AgentChatSlot: React.FC<{
             agentSlotId={isLead ? undefined : agent.slotId}
           />
         ) : (
-          <div className='flex flex-1 items-center justify-center'>
+          <div className='flex flex-1 items-center justify-center flex-col gap-12px text-t-secondary'>
             <Spin loading />
+            <span className='text-13px'>
+              {runtimeStatus === 'failed' ? 'Agent 启动失败' : '正在连接 Agent...'}
+            </span>
+            {runtimeStatus === 'failed' ? (
+              <span className='text-11px text-t-tertiary max-w-520px text-center px-16px break-words'>
+                {runtimeLastMessage}
+              </span>
+            ) : null}
+            {!runtimeStatus || runtimeStatus === 'connecting' ? (
+              <span className='text-11px text-t-tertiary'>如长时间无响应，请确认 Claude Code 已登录认证</span>
+            ) : null}
           </div>
         )}
         {(runtimeStatus ?? agent.status) === 'failed' && !isLead && onRemove && (
           <div className='absolute inset-0 z-10 flex flex-col items-center justify-center gap-12px bg-[color:var(--color-bg-1)]/80'>
-            <CloseOne theme='filled' size='32' fill='#f53f3f' />
+            <CloseOne theme='filled' size='32' fill='var(--danger)' />
             <span className='text-14px text-[color:var(--color-text-2)]'>Agent failed to start</span>
             <button
-              className='px-16px py-6px rd-8px bg-[#f53f3f] text-white text-13px cursor-pointer hover:opacity-80 transition-opacity border-none'
+              className='px-16px py-6px rd-8px bg-[var(--danger)] text-[var(--color-white)] text-13px cursor-pointer hover:opacity-80 transition-opacity border-none'
               onClick={onRemove}
             >
               Remove
@@ -339,6 +351,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
       {leadConversationId && <TeamConfirmOverlay allConversationIds={allConversationIds} />}
       <ChatLayout
         title={team.name}
+        tone='team'
         siderTitle={siderTitle}
         sider={sider}
         workspaceEnabled={workspaceEnabled}
@@ -363,6 +376,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
                     isLead={isLeadSlot}
                     isFullscreen
                     runtimeStatus={statusMap.get(agent.slotId)?.status}
+                    runtimeLastMessage={statusMap.get(agent.slotId)?.lastMessage}
                     onToggleFullscreen={() => setFullscreenSlotId(null)}
                     onRemove={() => handleRemoveAgent(agent.slotId)}
                   />
@@ -381,7 +395,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
                     className='w-32px h-32px rd-full flex items-center justify-center'
                     style={{ background: 'rgba(0,0,0,0.5)', lineHeight: 0 }}
                   >
-                    <Left size='24' fill='#fff' />
+                    <Left size='24' fill='var(--color-text-1)' />
                   </div>
                 </div>
               )}
@@ -412,6 +426,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
                         teamId={team.id}
                         isLead={isLeadSlot}
                         runtimeStatus={statusMap.get(agent.slotId)?.status}
+                        runtimeLastMessage={statusMap.get(agent.slotId)?.lastMessage}
                         onToggleFullscreen={() => setFullscreenSlotId(agent.slotId)}
                         onRemove={() => handleRemoveAgent(agent.slotId)}
                       />
@@ -429,7 +444,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
                     className='w-32px h-32px rd-full flex items-center justify-center'
                     style={{ background: 'rgba(0,0,0,0.5)', lineHeight: 0 }}
                   >
-                    <Right size='24' fill='#fff' />
+                    <Right size='24' fill='var(--color-text-1)' />
                   </div>
                 </div>
               )}

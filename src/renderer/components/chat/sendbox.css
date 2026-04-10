@@ -2,8 +2,8 @@
 
 /* Send button disabled state - override Arco Design default disabled styles */
 .send-button-custom:disabled {
-  background-color: #d3d4d9 !important;
-  border-color: #d3d4d9 !important;
+  background-color: var(--color-fill-3) !important;
+  border-color: var(--color-fill-3) !important;
   opacity: 1 !important;
 }
 
@@ -15,7 +15,7 @@
 
 /* Input placeholder color */
 ::placeholder {
-  color: #a1a2aa !important;
+  color: var(--color-text-4) !important;
 }
 
 /* Sendbox input wrapper: force transparent so the panel background shows through.
@@ -31,7 +31,7 @@
 /* Explicit placeholder override for sendbox — prevent color inheritance from parent color rule */
 .sendbox-panel .arco-input::placeholder,
 .sendbox-panel .arco-textarea::placeholder {
-  color: var(--color-text-4, #a1a2aa) !important;
+  color: var(--color-text-4) !important;
 }
 
 /* Sendbox tools buttons - prevent layout jitter from theme hover transforms (#1075) */

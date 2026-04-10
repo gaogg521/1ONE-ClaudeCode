@@ -148,8 +148,8 @@ const PreviewContextMenu: React.FC<PreviewContextMenuProps> = ({
       style={{
         left: `${contextMenu.x}px`,
         top: `${contextMenu.y}px`,
-        backgroundColor: currentTheme === 'dark' ? '#1d1d1f' : '#ffffff',
-        border: '1px solid var(--border-base, #e5e6eb)',
+        backgroundColor: currentTheme === 'dark' ? 'var(--color-bg-2)' : 'var(--color-bg-white)',
+        border: '1px solid var(--border-base)',
         minWidth: '140px',
       }}
     >

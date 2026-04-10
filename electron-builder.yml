@@ -1,10 +1,10 @@
 appId: com.1one.command
-productName: 1ONE ClaudeCode
+productName: 1ONE Code
 executableName: 1OneClaudeCode
 copyright: Copyright © 2025 1ONE
 
 protocols:
-  - name: 1ONE ClaudeCode Protocol
+  - name: 1ONE Code Protocol
     schemes:
       - 1one
 

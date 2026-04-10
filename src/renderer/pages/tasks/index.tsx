@@ -1,10 +1,12 @@
 /**
- * Tasks — Claude Code 任务看板
- * 可视化管理 Claude Code 内置的 TaskCreate/TaskUpdate/TaskList 任务系统
+ * Tasks — 任务看板
+ * 本地任务管理，支持新增/编辑/状态切换
  */
-import React, { useState } from 'react';
-import { Button, Tag, Badge } from '@arco-design/web-react';
-import { Add } from '@icon-park/react';
+import React, { useState, useCallback } from 'react';
+import { Button, Badge, Modal, Form, Input, Message } from '@arco-design/web-react';
+import { Add, Edit, DeleteFour } from '@icon-park/react';
+import { ConfigStorage } from '@/common/config/storage';
+import AionSelect from '@/renderer/components/base/AionSelect';
 
 type TaskStatus = 'pending' | 'in_progress' | 'completed';
 
@@ -16,108 +18,175 @@ interface Task {
   sessionName?: string;
 }
 
-const MOCK_TASKS: Task[] = [
-  { id: '1', subject: '写单元测试', status: 'pending', sessionName: 'auth-refactor' },
-  { id: '2', subject: '更新 API 文档', status: 'pending', sessionName: 'auth-refactor' },
-  { id: '3', subject: '重构 auth.ts', status: 'in_progress', activeForm: '重构 auth 模块中', sessionName: 'auth-refactor' },
-  { id: '4', subject: '读取现有代码结构', status: 'completed', sessionName: 'auth-refactor' },
-  { id: '5', subject: '识别 token 刷新逻辑', status: 'completed', sessionName: 'auth-refactor' },
-  { id: '6', subject: '抽取 TokenService', status: 'completed', sessionName: 'auth-refactor' },
-];
-
-const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; dot: string }> = {
-  pending: { label: '待处理', color: 'var(--color-neutral-3)', dot: '#8c8c8c' },
-  in_progress: { label: '进行中', color: 'var(--color-warning-light-2)', dot: '#fa8c16' },
-  completed: { label: '已完成', color: 'var(--color-success-light-2)', dot: '#52c41a' },
+const STATUS_CONFIG: Record<TaskStatus, { label: string; dot: string }> = {
+  pending: { label: '待处理', dot: 'var(--color-text-4)' },
+  in_progress: { label: '进行中', dot: 'var(--warning)' },
+  completed: { label: '已完成', dot: 'var(--success)' },
 };
 
-const TaskCard: React.FC<{ task: Task }> = ({ task }) => {
+const STORAGE_KEY = 'tasks.board' as any;
+
+function loadTasks(): Task[] {
+  try {
+    const raw = localStorage.getItem('1one_tasks');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+function saveTasks(tasks: Task[]): void {
+  localStorage.setItem('1one_tasks', JSON.stringify(tasks));
+}
+
+const EMPTY_FORM = { subject: '', status: 'pending' as TaskStatus, activeForm: '', sessionName: '' };
+
+const TaskCard: React.FC<{ task: Task; onEdit: (t: Task) => void; onDelete: (id: string) => void; onStatusChange: (id: string, s: TaskStatus) => void }> = ({ task, onEdit, onDelete, onStatusChange }) => {
   const cfg = STATUS_CONFIG[task.status];
   return (
     <div
-      style={{
-        background: 'var(--color-bg-2)',
-        border: '1px solid var(--color-border)',
-        borderRadius: 6,
-        padding: '10px 12px',
-        marginBottom: 8,
-        borderLeft: `3px solid ${cfg.dot}`,
-      }}
+      className='bg-bg-2 border border-border-1 rd-6px p-10px mb-8px group relative'
+      style={{ borderLeft: `3px solid ${cfg.dot}` }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: '50%',
-            background: cfg.dot,
-            flexShrink: 0,
-          }}
-        />
-        <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{task.subject}</span>
+      <div className='flex items-center gap-6px'>
+        <span className='w-7px h-7px rd-full shrink-0' style={{ background: cfg.dot }} />
+        <span className='text-13px font-500 flex-1 text-t-primary'>{task.subject}</span>
+        <div className='flex items-center gap-4px opacity-0 group-hover:opacity-100 transition-opacity'>
+          <AionSelect
+            value={task.status}
+            size='mini'
+            onChange={(v) => onStatusChange(task.id, v as TaskStatus)}
+            style={{ width: 72 }}
+          >
+            {(Object.keys(STATUS_CONFIG) as TaskStatus[]).map(s => (
+              <AionSelect.Option key={s} value={s}>
+                <span className='text-11px'>{STATUS_CONFIG[s].label}</span>
+              </AionSelect.Option>
+            ))}
+          </AionSelect>
+          <Button size='mini' icon={<Edit size={12} />} onClick={() => onEdit(task)} />
+          <Button size='mini' status='danger' icon={<DeleteFour size={12} />} onClick={() => onDelete(task.id)} />
+        </div>
       </div>
       {task.activeForm && (
-        <div style={{ fontSize: 11, color: '#fa8c16', marginTop: 4, paddingLeft: 13 }}>
-          ▶ {task.activeForm}
-        </div>
+        <div className='text-11px mt-4px pl-13px text-[var(--warning)]'>▶ {task.activeForm}</div>
       )}
       {task.sessionName && (
-        <div style={{ fontSize: 11, color: 'var(--color-text-4)', marginTop: 4, paddingLeft: 13 }}>
-          会话: {task.sessionName}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const Column: React.FC<{ status: TaskStatus; tasks: Task[] }> = ({ status, tasks }) => {
-  const cfg = STATUS_CONFIG[status];
-  return (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          marginBottom: 12,
-          paddingBottom: 8,
-          borderBottom: '1px solid var(--color-border)',
-        }}
-      >
-        <span style={{ fontWeight: 600, fontSize: 13 }}>{cfg.label}</span>
-        <Badge count={tasks.length} style={{ background: cfg.dot }} />
-      </div>
-      {tasks.map((t) => (
-        <TaskCard key={t.id} task={t} />
-      ))}
-      {tasks.length === 0 && (
-        <div style={{ fontSize: 12, color: 'var(--color-text-4)', textAlign: 'center', padding: '16px 0' }}>
-          暂无任务
-        </div>
+        <div className='text-11px text-t-tertiary mt-4px pl-13px'>会话: {task.sessionName}</div>
       )}
     </div>
   );
 };
 
 const TasksPage: React.FC = () => {
-  const [tasks] = useState<Task[]>(MOCK_TASKS);
+  const [tasks, setTasks] = useState<Task[]>(loadTasks);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editing, setEditing] = useState<Task | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
 
-  const byStatus = (s: TaskStatus) => tasks.filter((t) => t.status === s);
+  const persist = useCallback((next: Task[]) => {
+    setTasks(next);
+    saveTasks(next);
+  }, []);
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setModalVisible(true);
+  };
+
+  const openEdit = (t: Task) => {
+    setEditing(t);
+    setForm({ subject: t.subject, status: t.status, activeForm: t.activeForm ?? '', sessionName: t.sessionName ?? '' });
+    setModalVisible(true);
+  };
+
+  const handleSubmit = () => {
+    if (!form.subject.trim()) { Message.warning('请填写任务名称'); return; }
+    const entry: Task = {
+      id: editing?.id ?? String(Date.now()),
+      subject: form.subject.trim(),
+      status: form.status,
+      activeForm: form.activeForm.trim() || undefined,
+      sessionName: form.sessionName.trim() || undefined,
+    };
+    const next = editing ? tasks.map(t => t.id === editing.id ? entry : t) : [...tasks, entry];
+    persist(next);
+    setModalVisible(false);
+  };
+
+  const handleDelete = useCallback((id: string) => {
+    Modal.confirm({
+      title: '删除任务',
+      content: '确认删除此任务？',
+      onOk: () => persist(tasks.filter(t => t.id !== id)),
+    });
+  }, [tasks, persist]);
+
+  const handleStatusChange = useCallback((id: string, status: TaskStatus) => {
+    persist(tasks.map(t => t.id === id ? { ...t, status } : t));
+  }, [tasks, persist]);
+
+  const byStatus = (s: TaskStatus) => tasks.filter(t => t.status === s);
 
   return (
-    <div style={{ padding: '20px 24px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>任务看板</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button size='small' icon={<Add theme='outline' />}>新任务</Button>
-        </div>
+    <div className='p-20px flex flex-col h-full'>
+      <div className='flex items-center justify-between mb-20px'>
+        <h2 className='m-0 text-18px font-700 text-t-primary'>任务看板</h2>
+        <Button type='primary' size='small' icon={<Add theme='outline' />} onClick={openAdd}>
+          ＋新任务
+        </Button>
       </div>
 
-      <div style={{ display: 'flex', gap: 20, flex: 1, overflow: 'hidden' }}>
-        {(['pending', 'in_progress', 'completed'] as TaskStatus[]).map((s) => (
-          <Column key={s} status={s} tasks={byStatus(s)} />
-        ))}
+      <div className='flex gap-20px flex-1 overflow-hidden'>
+        {(['pending', 'in_progress', 'completed'] as TaskStatus[]).map(s => {
+          const cfg = STATUS_CONFIG[s];
+          const col = byStatus(s);
+          return (
+            <div key={s} className='flex-1 min-w-0 flex flex-col'>
+              <div className='flex items-center gap-8px mb-12px pb-8px border-b border-border-1'>
+                <span className='font-600 text-13px text-t-primary'>{cfg.label}</span>
+                <Badge count={col.length} style={{ background: cfg.dot }} />
+              </div>
+              <div className='flex-1 overflow-y-auto'>
+                {col.map(t => (
+                  <TaskCard key={t.id} task={t} onEdit={openEdit} onDelete={handleDelete} onStatusChange={handleStatusChange} />
+                ))}
+                {col.length === 0 && (
+                  <div className='text-12px text-t-tertiary text-center py-16px'>暂无任务</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      <Modal
+        title={editing ? '编辑任务' : '新建任务'}
+        visible={modalVisible}
+        onCancel={() => setModalVisible(false)}
+        onOk={handleSubmit}
+        okText='保存'
+        cancelText='取消'
+      >
+        <Form layout='vertical' className='space-y-12px'>
+          <Form.Item label='任务名称' required>
+            <Input placeholder='例如: 修复登录 Bug' value={form.subject} onChange={v => setForm(f => ({ ...f, subject: v }))} />
+          </Form.Item>
+          <Form.Item label='状态'>
+            <AionSelect value={form.status} onChange={v => setForm(f => ({ ...f, status: v as TaskStatus }))}>
+              {(Object.keys(STATUS_CONFIG) as TaskStatus[]).map(s => (
+                <AionSelect.Option key={s} value={s}>{STATUS_CONFIG[s].label}</AionSelect.Option>
+              ))}
+            </AionSelect>
+          </Form.Item>
+          <Form.Item label='当前进度描述 (可选)'>
+            <Input placeholder='例如: 正在分析代码' value={form.activeForm} onChange={v => setForm(f => ({ ...f, activeForm: v }))} />
+          </Form.Item>
+          <Form.Item label='关联会话 (可选)'>
+            <Input placeholder='例如: auth-refactor' value={form.sessionName} onChange={v => setForm(f => ({ ...f, sessionName: v }))} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

@@ -76,7 +76,7 @@ const createAgent = (overrides: Partial<IHubAgentItem>): IHubAgentItem => ({
     unpackedSize: 1,
   },
   engines: {
-    1one-claudecode: '^1.0.0',
+    '1one-claudecode': '^1.0.0',
   },
   hubs: ['acpAdapters'],
   status: 'not_installed',

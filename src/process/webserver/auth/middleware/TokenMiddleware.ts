@@ -210,10 +210,20 @@ export const TokenMiddleware = {
    * Security: URL query token is no longer supported to prevent token leakage via logs, Referrer, etc.
    */
   extractWebSocketToken(req: IncomingMessage): string | null {
+    const isLikelyJwt = (value: string): boolean => {
+      const v = value.trim();
+      if (!v) return false;
+      // Very small heuristic: JWT has 3 dot-separated parts (header.payload.signature).
+      // Also reject common non-token protocol values (e.g. Vite HMR uses "vite-hmr").
+      const parts = v.split('.');
+      return parts.length === 3 && parts.every((p) => p.length > 0);
+    };
+
     // 1. 从 Authorization header 提取
     const authHeader = req.headers['authorization'];
     if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-      return authHeader.substring(7);
+      const token = authHeader.substring(7);
+      return isLikelyJwt(token) ? token : null;
     }
 
     // 2. 从 Cookie 提取 (WebUI 模式)
@@ -221,7 +231,7 @@ export const TokenMiddleware = {
     if (typeof cookieHeader === 'string') {
       const cookies = cookie.parse(cookieHeader);
       const cookieToken = cookies[AUTH_CONFIG.COOKIE.NAME];
-      if (cookieToken) {
+      if (typeof cookieToken === 'string' && isLikelyJwt(cookieToken)) {
         return cookieToken;
       }
     }
@@ -229,7 +239,8 @@ export const TokenMiddleware = {
     // 3. 从 sec-websocket-protocol 提取（用于不支持 Cookie 的客户端）
     const protocolHeader = req.headers['sec-websocket-protocol'];
     if (typeof protocolHeader === 'string' && protocolHeader.trim() !== '') {
-      return protocolHeader.split(',')[0]?.trim() ?? null;
+      const token = protocolHeader.split(',')[0]?.trim() ?? '';
+      return isLikelyJwt(token) ? token : null;
     }
 
     // 不再支持从 URL query 参数提取 token（安全风险）

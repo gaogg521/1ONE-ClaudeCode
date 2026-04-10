@@ -1,0 +1,38 @@
+/* 1ONE ClaudeCode — 月光银 (Moonlight) CSS Preset */
+:root {
+  --bg-base: #f0f4fb; --bg-1: #eaeff8; --bg-2: #e0e8f4; --bg-3: #d0d9ec;
+  --bg-4: #b8c4de; --bg-5: #9caec8; --bg-6: #7a94b8; --bg-8: #466ea0;
+  --bg-9: #1c4480; --bg-10: #0a2255; --bg-hover: #e4eaf5; --bg-active: #d4dcee;
+  --text-primary: #0d1a2e; --text-secondary: #2e4e80; --text-disabled: #9caec8;
+  --text-t-primary: #0d1a2e; --text-t-secondary: #2e4e80; --text-t-tertiary: #7a94b8;
+  --color-primary: #1d6fa8;
+  --primary: #1d6fa8; --success: #16803d; --warning: #b45309; --danger: #c0191e; --info: #1d6fa8;
+  --border-base: #b8c8e8; --border-light: #e0e8f4; --brand: #1d6fa8; --brand-light: #dbeefb; --brand-hover: #1a85c5;
+  --message-user-bg: #ddeeff; --message-tips-bg: #eaf4ff; --workspace-btn-bg: #e0e8f4;
+  --fill: #f0f4fb; --inverse: #0d1a2e; --dialog-fill-0: #ffffff;
+  --text-0: #0d1a2e; --text-white: #ffffff; --fill-0: rgba(29,111,168,0.06);
+  --fill-white-to-black: #ffffff; --border-special: #b8c8e8; --color-guid-agent-bar: #e0e8f4;
+  --aou-1: #f0f4fb; --aou-2: #e0e8f4; --aou-3: #d0d9ec; --aou-4: #b8c4de;
+  --aou-5: #9caec8; --aou-6: #7a94b8; --aou-7: #466ea0; --aou-8: #2c4e88; --aou-9: #1a3470; --aou-10: #0d1a2e;
+  --color-bg-1: #f0f4fb; --color-bg-2: #eaeff8; --color-bg-3: #e0e8f4; --color-bg-4: #d0d9ec; --color-bg-5: #b8c4de; --color-bg-white: #ffffff;
+  --color-fill-1: rgba(29,111,168,0.05); --color-fill-2: rgba(29,111,168,0.10); --color-fill-3: rgba(29,111,168,0.15); --color-fill-4: rgba(29,111,168,0.22);
+  --color-border: #b8c8e8; --color-border-2: #d0d9ec;
+  --color-text-1: #0d1a2e; --color-text-2: #2e4e80; --color-text-3: #7a94b8; --color-text-4: #9caec8;
+  --primary-1: #dff0fb; --primary-2: #b8dff5; --primary-3: #7ec2e8; --primary-4: #1a85c5; --primary-5: #1d6fa8; --primary-6: #1d6fa8; --primary-7: #145080;
+  --color-primary-6: #1d6fa8; --color-success-6: #16803d; --color-danger-6: #c0191e; --color-warning-6: #b45309; --color-link-6: #1d6fa8;
+}
+body { color: #0d1a2e; background: #f0f4fb; }
+
+[data-theme='dark'] {
+  /* Provide a basic dark fallback for the light preset. */
+  --color-bg-1: #0b1220;
+  --color-bg-2: #0f172a;
+  --color-bg-3: #111c33;
+  --color-bg-4: #132043;
+  --color-bg-5: #182a55;
+  --color-bg-white: #0b1220;
+  --color-text-1: #e5e7eb;
+  --color-text-2: #cbd5e1;
+  --color-text-3: #94a3b8;
+  --color-text-4: #64748b;
+}

@@ -1,5 +1,14 @@
 /* Arco Design custom overrides - non-theme related */
 
+/*
+ * Arco Layout ships with light-theme title/text colors in some builds; under dark + `* { color: inherit }`
+ * (Uno preflight) nested content can still resolve to near-black. Force semantic foreground on layout shells.
+ */
+body[arco-theme='dark'] .arco-layout,
+body[arco-theme='dark'] .arco-layout-content {
+  color: var(--color-text-1, var(--text-primary));
+}
+
 /* Override Arco Design component backgrounds to white in light mode */
 /* 覆盖 Arco Design 组件背景色为白色（浅色模式） */
 /* .arco-input,
@@ -249,6 +258,32 @@ body[arco-theme='dark'] .arco-message-error {
     height: 2px;
     background: var(--color-primary);
   }
+}
+
+/*
+ * Global "active/selected" highlight color
+ * Use a bright semantic token so it stays readable across themes.
+ */
+:root {
+  --one-active-highlight: rgb(var(--success-6));
+}
+
+/* Tabs: make the active tab label more visible */
+.arco-tabs-nav-tab-active {
+  color: var(--one-active-highlight) !important;
+  font-weight: 600;
+}
+
+/* Tabs ink bar: match active highlight */
+.arco-tabs-nav-ink {
+  background: var(--one-active-highlight) !important;
+}
+
+/* Menu: selected item text highlight */
+.arco-menu-item.arco-menu-item-selected,
+.arco-menu-item-selected {
+  color: var(--one-active-highlight) !important;
+  font-weight: 600;
 }
 
 /* 1ONE 5套主题 - Arco Design 深色组件全面覆盖 */

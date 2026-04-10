@@ -24,6 +24,7 @@
   "history": {
     "recents": "最近",
     "noHistory": "暂无对话历史",
+    "viewAll": "查看所有",
     "deleteTitle": "删除",
     "deleteConfirm": "确定删除该对话吗？",
     "confirmDelete": "删除",
@@ -106,7 +107,7 @@
     "search.empty": "搜索结果为空",
     "addFile": "添加文件",
     "refresh": "刷新",
-    "temporarySpace": "临时空间",
+    "temporarySpace": "团队会话",
     "changeWorkspace": "更换工作空间",
     "migration": {
       "title": "更换工作空间",

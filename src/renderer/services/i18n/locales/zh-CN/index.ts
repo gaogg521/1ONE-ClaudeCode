@@ -22,6 +22,9 @@ import starOffice from './starOffice.json';
 import guid from './guid.json';
 import agent from './agent.json';
 import team from './team.json';
+import memory from './memory.json';
+import nav from './nav.json';
+import sessions from './sessions.json';
 
 export default {
   common,
@@ -43,4 +46,7 @@ export default {
   guid,
   agent,
   team,
+  memory,
+  nav,
+  sessions,
 };

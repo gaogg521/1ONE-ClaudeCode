@@ -1,0 +1,14 @@
+diff --git a/node_modules/@office-ai/aioncli-core/dist/src/code_assist/oauth2.js b/node_modules/@office-ai/aioncli-core/dist/src/code_assist/oauth2.js
+index 0000001..0000002 100644
+--- a/node_modules/@office-ai/aioncli-core/dist/src/code_assist/oauth2.js
++++ b/node_modules/@office-ai/aioncli-core/dist/src/code_assist/oauth2.js
+@@ -202,7 +202,8 @@
+             // Attempt to open the authentication URL in the default browser.
+             // We do not use the `wait` option here because the main script's execution
+             // is already paused by `loginCompletePromise`, which awaits the server callback.
+-            const childProcess = await open(webLogin.authUrl);
++            // Allow overriding the browser opener (e.g., to avoid 360 browser on Windows)
++            const childProcess = await (globalThis.__1ONE_BROWSER_OPENER || open)(webLogin.authUrl);
+             // IMPORTANT: Attach an error handler to the returned child process.
+             // Without this, if `open` fails to spawn a process (e.g., `xdg-open` is not found
+             // in a minimal Docker container), it will emit an unhandled 'error' event,

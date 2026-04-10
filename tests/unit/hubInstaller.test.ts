@@ -92,7 +92,7 @@ function makeExtInfo(name: string, bundled = false) {
     description: 'test',
     author: 'test',
     dist: { tarball: `extensions/${name}.zip`, integrity: 'sha512-abc', unpackedSize: 100 },
-    engines: { 1one-claudecode: '>=1.0.0' },
+    engines: { '1one-claudecode': '>=1.0.0' },
     hubs: ['acpAdapters'],
     bundled,
   };
