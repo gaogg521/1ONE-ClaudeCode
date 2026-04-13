@@ -8,13 +8,13 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-0.1.0-32CD32?style=flat-square" alt="Version">
   &nbsp;
-  <img src="https://img.shields.io/badge/license-Apache--2.0-32CD32?style=flat-square" alt="License">
+  <img src="https://img.shields.io/badge/license-MIT-32CD32?style=flat-square" alt="License">
   &nbsp;
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-6C757D?style=flat-square" alt="Platform">
   &nbsp;
-  <img src="https://img.shields.io/badge/Electron-30+-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron">
+  <img src="https://img.shields.io/badge/Electron-37-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron">
   &nbsp;
-  <img src="https://img.shields.io/badge/Vue-3-4FC08D?style=flat-square&logo=vue.js&logoColor=white" alt="Vue3">
+  <img src="https://img.shields.io/badge/React-19.1-149ECA?style=flat-square&logo=react&logoColor=white" alt="React">
 </p>
 
 <p align="center">
@@ -22,40 +22,54 @@
     <img src="https://img.shields.io/badge/⬇️%20立即下载-最新版本-32CD32?style=for-the-badge" alt="Download" height="45">
   </a>
   &nbsp;&nbsp;
-  <a href="https://github.com/gaogg521/gaogg521-openclaw-Visual-Control-Panel">
+  <a href="./docs/">
     <img src="https://img.shields.io/badge/📖%20使用文档-查看详情-0369a1?style=for-the-badge" alt="Docs" height="45">
   </a>
 </p>
 
----
-
-## 📋 目录
-
-- [✨ 功能概览](#-功能概览)
-- [🖼️ 最新功能截图](#️-最新功能截图按功能分组多图排版)
-  - [统一入口（双图）](#1-统一入口双图)
-  - [多 Agent 管理](#2-多-agent-管理)
-  - [模型管理](#3-模型管理)
-  - [MCP 服务管理（双图）](#4-mcp-服务管理双图)
-  - [Hook 监控](#5-hook-监控)
-  - [技能市场](#6-技能市场)
-  - [自定义助手](#7-自定义助手)
-  - [历史会话搜索](#8-历史会话搜索)
-  - [记忆中心](#9-记忆中心)
-  - [远程访问](#10-远程访问)
-  - [通讯渠道控制](#11-通讯渠道控制)
-  - [定时任务](#12-定时任务)
-  - [主题切换](#13-主题切换)
-  - [工作空间](#14-工作空间)
-  - [开机启动和多语言](#15-开机启动和多语言)
-  - [一键添加各种使用 MCP](#16-一键添加各种使用-mcp)
-- [🚀 快速开始](#-快速开始)
-- [🛠️ 技术栈](#️-技术栈)
-- [🤝 参与贡献](#-参与贡献)
-- [📬 联系作者](#-联系作者)
+<div align="center">
+  <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#22c55e;margin:0 4px;"></span>
+  <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#06b6d4;margin:0 4px;"></span>
+  <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#3b82f6;margin:0 4px;"></span>
+  <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#f59e0b;margin:0 4px;"></span>
+  <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#ef4444;margin:0 4px;"></span>
+  <div style="margin-top:8px;font-size:12px;opacity:.8;">UI 主题强调：清爽高对比 · 绿色开关态 · 统一品牌高亮</div>
+</div>
 
 ---
 
+<details>
+  <summary><strong>📋 目录（点击展开）</strong></summary>
+
+- [为什么用它](#why)
+- [快速开始](#quickstart)
+  - [下载安装](#install)
+  - [第一次使用（3 步上手）](#first-use)
+  - [源码运行（开发者）](#dev)
+- [功能概览](#features)
+- [功能截图](#screenshots)
+- [最近优化（稳定性与体验）](#recent-improvements)
+- [配置与数据存储位置](#data-and-config)
+- [常见问题（FAQ）](#faq)
+- [技术栈](#tech-stack)
+- [参与贡献](#contribute)
+- [联系作者](#contact)
+
+</details>
+
+---
+
+<a id="why"></a>
+## 为什么用它
+
+你可以把它理解成 **Claude Code / 多 Agent 的“可视化控制中心”**：
+
+- **不止一个 Agent**：Claude / OpenClaw / Gemini CLI / Cursor 等按场景切换
+- **不止一个模型**：支持任意 OpenAI-compatible / New-API / 自定义端点
+- **不止一台设备**：WebUI 远程访问 + 统一设置入口
+- **不止一次任务**：定时任务、Hook 监控、记忆中心，适合长期运行
+
+<a id="features"></a>
 ## ✨ 功能概览
 
 | 功能模块 | 说明 |
@@ -78,7 +92,55 @@
 
 ---
 
-## 🖼️ 最新功能截图（按功能分组，多图排版）
+<a id="quickstart"></a>
+## 🚀 快速开始
+
+<a id="install"></a>
+### 下载安装包（推荐）
+
+前往 [Releases 页面](https://github.com/gaogg521/1ONE-Claude-Code/releases) 下载对应系统的安装包：
+
+| 系统 | 文件格式 |
+|---|---|
+| Windows | `.exe` 安装包 / `.zip` 便携版 |
+| macOS | `.dmg` 安装包 |
+| Linux | `.deb` 安装包 |
+
+<a id="first-use"></a>
+### 第一次使用（3 步上手）
+
+1. 打开应用后，点击左侧 **Agents** 选择你要使用的 AI Agent（推荐先用 **1ONE CODE**）
+2. 进入左侧 **Models/模型**，添加你的 API Key / Base URL / 模型名
+3. 回到 **新会话**，开始与 AI 对话（需要文件就上传/打开工作区）
+
+<a id="dev"></a>
+### 源码运行（开发者）
+
+**环境要求：** Node.js >= 22、Git
+
+> **关于 Bun（macOS 常见疑问）**：Bun **不是必须安装**。本项目本地 `postinstall` 会优先使用 `bunx`，若你的机器未安装 Bun，会自动回退到 `npx` 来执行 `electron-builder install-app-deps`，不影响安装依赖与启动。
+
+```bash
+# 克隆项目
+git clone https://github.com/gaogg521/1ONE-Claude-Code.git
+cd 1ONE-Claude-Code
+
+# 安装依赖
+npm install
+
+# ⚠️ 重要：重新编译原生模块（针对 Electron，必须执行）
+npx electron-rebuild -f -w better-sqlite3
+
+# 启动开发模式
+npm run restart
+```
+
+> **黑屏 / `NODE_MODULE_VERSION` 错误**：通常是 `better-sqlite3` 未按 Electron 版本重编译，执行 `npx electron-rebuild -f -w better-sqlite3` 后重启即可。
+
+---
+
+<a id="screenshots"></a>
+## 🖼️ 功能截图
 
 ### 1. 统一入口（双图）
 
@@ -248,72 +310,88 @@
 
 ---
 
-## 🚀 快速开始
+<a id="recent-improvements"></a>
+## ✅ 最近优化（稳定性与体验）
 
-### 方式一：下载安装包（推荐）
+下面这些是近期已经落地的体验优化（确保“开箱即用”，并减少新用户疑惑）：
 
-前往 [Releases 页面](https://github.com/gaogg521/1ONE-Claude-Code/releases) 下载对应系统的安装包：
-
-| 系统 | 文件格式 |
-|---|---|
-| Windows | `.exe` 安装包 / `.zip` 便携版 |
-| macOS | `.dmg` 安装包 |
-| Linux | `.deb` 安装包 |
-
-### 方式二：源码运行（开发者）
-
-**环境要求：** Node.js >= 22、Git
-
-```bash
-# 克隆项目
-git clone https://github.com/gaogg521/1ONE-Claude-Code.git
-cd 1ONE-Claude-Code
-
-# 安装依赖
-npm install
-
-# ⚠️ 重要：重新编译原生模块（针对 Electron，必须执行）
-npx electron-rebuild -f -w better-sqlite3
-
-# 启动开发模式
-npm run start
-```
-
-> **黑屏 / `NODE_MODULE_VERSION` 错误**：是因为 `better-sqlite3` 需要针对 Electron 重新编译，执行 `npx electron-rebuild -f -w better-sqlite3` 后重启即可。
-
-### 第一次使用
-
-1. 启动应用后，点击左侧 **Agents** 选择你要使用的 AI Agent
-2. 进入**模型**设置，添加你的 API Key
-3. 回到首页，开始与 AI 对话
+- **设置默认打开 Agents**：进入设置后默认落到本地 Agents 页面，而不是 Gemini CLI。
+- **新用户工作区空态更友好**：在 Workspace Hub 提供可执行的引导（去创建会话 / 项目设置）。
+- **Agents 支持启用/禁用开关**：禁用的本地 Agent 不会出现在“新建会话”的 Agent 选择框里。
+- **内置助手与源码同步**：源码删掉的内置助手，会自动从用户配置中清理，避免“幽灵助手”。
+- **全局 Switch 开启态为绿色**：统一视觉语义（开启=绿色，减少误读）。
+- **设置页切换更顺**：避免一次性挂载全部 Tab 内容，并在空闲时预加载常用设置页，降低首切卡顿。
 
 ---
 
+<a id="data-and-config"></a>
+## 📦 配置与数据存储位置
+
+以下路径用于排查问题/备份数据（不同系统路径会略有差异）：
+
+- **数据库（会话/消息/团队）**：`%APPDATA%\1OneClaudeCode-Dev\1one\1one.db`
+- **配置（模型/MCP/Agents 等）**：`%APPDATA%\1OneClaudeCode-Dev\config\one-config.txt`（base64 编码 JSON）
+- **开发模式锁文件**：`%APPDATA%\1OneClaudeCode-Dev\lockfile`
+
+> 如果你启动后发现窗口/实例异常，优先用 `npm run restart`（它会清理 lockfile 并重启）。
+
+---
+
+<a id="faq"></a>
+## ❓ 常见问题（FAQ）
+
+**1）为什么设置页打开很早时，本地 Agents 可能短暂为空？**  
+本地 Agent 识别是异步完成的，通常稍等片刻会自动出现；如果你刚启动就立刻打开设置，可能会看到短暂空列表。
+
+**2）为什么我禁用了某个 Agent 后，新建会话里看不到它？**  
+这是预期行为：禁用=不参与“新建会话”的候选列表，你可以随时在设置里重新开启。
+
+**3）开发模式启动报 `NODE_MODULE_VERSION` / SQLite 相关错误？**  
+执行一次：
+
+```bash
+npx electron-rebuild -f -w better-sqlite3
+```
+
+然后用：
+
+```bash
+npm run restart
+```
+
+**4）如何在浏览器远程访问 WebUI？**  
+开发/本地模式可用 `npm run webui:prod` 启动 WebUI（默认 `localhost:25809`）。如需远程访问再使用带 `--remote` 的脚本（见 `package.json`）。
+
+---
+
+<a id="tech-stack"></a>
 ## 🛠️ 技术栈
 
 | 层级 | 技术 |
 |---|---|
-| **桌面壳** | Electron 30+ |
-| **前端框架** | Vue 3 + TypeScript |
-| **构建工具** | Vite + electron-vite |
+| **桌面壳** | Electron 37 |
+| **前端框架** | React 19.1 + TypeScript（strict） |
+| **构建工具** | Vite 6 + electron-vite |
 | **UI 组件** | Arco Design + UnoCSS |
 | **终端集成** | node-pty + xterm.js |
 | **本地存储** | SQLite (better-sqlite3) |
-| **运行时** | Bun |
+| **运行时** | Node.js（桌面端）；Bun（用于 CI/部分脚本与调试工具） |
 | **协议支持** | MCP (Model Context Protocol) |
 
 ---
 
+<a id="contribute"></a>
 ## 🤝 参与贡献
 
 欢迎提交 Issue 和 Pull Request！
 
-- 🐛 **Bug 反馈**：[提交 Issue](https://github.com/gaogg521/gaogg521-openclaw-Visual-Control-Panel/issues)
-- 💡 **功能建议**：[发起讨论](https://github.com/gaogg521/gaogg521-openclaw-Visual-Control-Panel/issues)
-- 📖 **文档完善**：[查看文档仓库](https://github.com/gaogg521/gaogg521-openclaw-Visual-Control-Panel)
+- 🐛 **Bug 反馈**：[提交 Issue](https://github.com/gaogg521/1ONE-Claude-Code/issues)
+- 💡 **功能建议**：[发起讨论](https://github.com/gaogg521/1ONE-Claude-Code/discussions)
+- 📖 **版本发布**：[Releases](https://github.com/gaogg521/1ONE-Claude-Code/releases)
 
 ---
 
+<a id="contact"></a>
 ## 📬 联系作者
 
 有问题、想交流、或者想一起共建？欢迎通过以下方式联系：
@@ -324,12 +402,16 @@ npm run start
       <strong>💬 QQ 技术交流群</strong><br>
       <sub>oneclaw技术交流群 · 群号：2159069958</sub><br>
       <sub>欢迎进群交流产品使用、插件能力和自动化实践</sub>
+      <br><br>
+      <img src="./resources/QQ.png" alt="QQ群二维码" width="220">
     </td>
     <td align="center" width="50"></td>
     <td align="center" width="300">
       <strong>💚 微信</strong><br>
       <sub>Allen.赵 · 上海浦东</sub><br>
       <sub>可用于问题反馈、商务合作与生态共建沟通</sub>
+      <br><br>
+      <img src="./resources/微信.png" alt="微信二维码" width="220">
     </td>
   </tr>
 </table>
@@ -337,5 +419,5 @@ npm run start
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/gaogg521">gaogg521</a> · Licensed under Apache-2.0</sub>
+  <sub>Built by <a href="https://github.com/gaogg521">gaogg521</a> · Licensed under MIT</sub>
 </p>

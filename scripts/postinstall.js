@@ -4,9 +4,25 @@
  */
 
 const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 // Note: web-tree-sitter is now a direct dependency in package.json
 // No need for symlinks or copying - npm will install it directly to node_modules
+
+function hasCommand(cmd) {
+  try {
+    // Cross-platform: `where` (Windows) / `command -v` (macOS/Linux)
+    if (process.platform === 'win32') {
+      execSync(`where ${cmd}`, { stdio: 'ignore' });
+      return true;
+    }
+    execSync(`command -v ${cmd}`, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function runPostInstall() {
   try {
@@ -24,13 +40,34 @@ function runPostInstall() {
     } else {
       // In local environment, use electron-builder to install dependencies
       console.log('Local environment, installing app deps');
-      execSync('bunx electron-builder install-app-deps', {
+      const runner = hasCommand('bunx') ? 'bunx' : 'npx';
+      if (runner !== 'bunx') {
+        console.log('bunx not found, falling back to npx for electron-builder');
+      }
+
+      execSync(`${runner} electron-builder install-app-deps`, {
         stdio: 'inherit',
         env: {
           ...process.env,
           npm_config_build_from_source: 'true',
         },
       });
+
+      // Prepare bundled aionrs binary for local dev/runtime (non-fatal).
+      // resources/bundled-aionrs is gitignored; ensure it's present so "1ONE CODE" agent can appear.
+      try {
+        const platform = process.platform;
+        const arch = process.env.AIONRS_ARCH || process.env.npm_config_target_arch || process.arch;
+        const runtimeKey = `${platform}-${arch}`;
+        const binaryName = platform === 'win32' ? 'aionrs.exe' : 'aionrs';
+        const targetBinary = path.join(process.cwd(), 'resources', 'bundled-aionrs', runtimeKey, binaryName);
+        if (!fs.existsSync(targetBinary)) {
+          console.log(`Bundled aionrs not found at ${targetBinary}, preparing...`);
+          execSync('node -e "require(\'./scripts/prepareAionrs\')()"', { stdio: 'inherit' });
+        }
+      } catch (e) {
+        console.warn('Prepare aionrs skipped/failed (non-fatal):', e && e.message ? e.message : String(e));
+      }
     }
   } catch (e) {
     console.error('Postinstall failed:', e.message);
