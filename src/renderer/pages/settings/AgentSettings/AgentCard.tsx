@@ -24,8 +24,10 @@ type AgentCardProps =
   | {
       type: 'detected';
       agent: DetectedAgent;
+      enabled?: boolean;
       onSettings?: () => void;
       settingsDisabled?: boolean;
+      onToggle?: (enabled: boolean) => void;
       variant?: 'row' | 'grid';
     }
   | {
@@ -40,7 +42,7 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
   const { t } = useTranslation();
 
   if (props.type === 'detected') {
-    const { agent, onSettings, settingsDisabled = true, variant = 'row' } = props;
+    const { agent, enabled = true, onSettings, settingsDisabled = true, onToggle, variant = 'row' } = props;
     const extensionAvatar = resolveExtensionAssetUrl(agent.isExtension ? agent.avatar : undefined);
     const gridSettingsButtonClassName = '!w-full !justify-center !rounded-10px !text-12px';
     const logo =
@@ -52,30 +54,21 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
       });
 
     if (variant === 'grid') {
-      const settingsButton = (
-        <Button
-          size='small'
-          type='secondary'
-          icon={<Setting theme='outline' size='14' />}
-          onClick={settingsDisabled ? undefined : onSettings}
-          disabled={settingsDisabled}
-          className={gridSettingsButtonClassName}
-          style={settingsDisabled ? { color: 'var(--color-text-4)' } : undefined}
-        >
-          {t('settings.agentManagement.settings')}
-        </Button>
-      );
-
       return (
-        <div className='flex min-h-[154px] flex-col rounded-12px border border-solid border-[var(--color-border-2)] bg-[var(--color-bg-2)] p-12px transition-colors hover:border-[var(--color-border-3)]'>
-          <div className='mb-10px flex justify-center'>
+        <div className={`flex min-h-[154px] flex-col rounded-12px border border-solid border-[var(--color-border-2)] p-12px transition-colors hover:border-[var(--color-border-3)] ${enabled ? 'bg-[var(--color-bg-2)]' : 'bg-[var(--color-fill-1)] opacity-70'}`}>
+          <div className='mb-10px flex justify-center relative'>
             <Avatar size={40} shape='square' style={{ flexShrink: 0, backgroundColor: 'transparent' }}>
               {logo ? <img src={logo} alt={agent.name} className='h-full w-full object-contain' /> : '🤖'}
             </Avatar>
+            {onToggle && (
+              <div className='absolute top-0 right-0'>
+                <Switch size='small' checked={enabled} onChange={onToggle} />
+              </div>
+            )}
           </div>
 
           <div className='mb-10px flex-1 text-center'>
-            <Typography.Text className='block text-13px font-medium leading-18px line-clamp-2'>
+            <Typography.Text className={`block text-13px font-medium leading-18px line-clamp-2 ${enabled ? '' : 'text-t-secondary'}`}>
               {agent.name}
             </Typography.Text>
             <Typography.Text className='mt-4px block text-11px text-t-secondary'>
@@ -83,32 +76,45 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
             </Typography.Text>
           </div>
 
-          {settingsButton}
+          <Button
+            size='small'
+            type='secondary'
+            icon={<Setting theme='outline' size='14' />}
+            onClick={settingsDisabled || !enabled ? undefined : onSettings}
+            disabled={settingsDisabled || !enabled}
+            className='!w-full !justify-center !rounded-10px !text-12px'
+            style={settingsDisabled || !enabled ? { color: 'var(--color-text-4)' } : undefined}
+          >
+            {t('settings.agentManagement.settings')}
+          </Button>
         </div>
       );
     }
 
     return (
-      <div className='flex items-center justify-between px-16px py-10px rd-8px bg-aou-1 hover:bg-aou-2'>
+      <div className={`flex items-center justify-between px-16px py-10px rd-8px ${enabled ? 'bg-aou-1 hover:bg-aou-2' : 'bg-fill-1 opacity-70'}`}>
         <div className='flex items-center gap-12px min-w-0 flex-1'>
           <Avatar size={32} shape='square' style={{ flexShrink: 0, backgroundColor: 'transparent' }}>
             {logo ? <img src={logo} alt={agent.name} className='w-full h-full object-contain' /> : '🤖'}
           </Avatar>
-          <Typography.Text className='font-medium text-14px'>{agent.name}</Typography.Text>
+          <Typography.Text className={`font-medium text-14px ${enabled ? '' : 'text-t-secondary'}`}>{agent.name}</Typography.Text>
         </div>
-        {settingsDisabled ? (
-          <Tooltip content={t('settings.agentManagement.settingsDisabledHint')}>
-            <Button
-              size='small'
-              type='text'
-              icon={<Setting theme='outline' size='14' />}
-              disabled
-              style={{ color: 'var(--color-text-4)' }}
-            />
-          </Tooltip>
-        ) : (
-          <Button size='small' type='text' icon={<Setting theme='outline' size='14' />} onClick={onSettings} />
-        )}
+        <div className='flex items-center gap-8px'>
+          {onToggle && <Switch size='small' checked={enabled} onChange={onToggle} />}
+          {settingsDisabled ? (
+            <Tooltip content={t('settings.agentManagement.settingsDisabledHint')}>
+              <Button
+                size='small'
+                type='text'
+                icon={<Setting theme='outline' size='14' />}
+                disabled
+                style={{ color: 'var(--color-text-4)' }}
+              />
+            </Tooltip>
+          ) : (
+            <Button size='small' type='text' icon={<Setting theme='outline' size='14' />} onClick={onSettings} />
+          )}
+        </div>
       </div>
     );
   }

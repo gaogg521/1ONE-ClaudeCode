@@ -355,15 +355,20 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
               <div className=' flex-1 size-full flex items-center justify-center px-12px box-border'>
                 <Empty
                   description={
-                    <div>
-                      <span className='text-t-secondary font-bold text-14px'>
+                    <div className='text-center space-y-8px'>
+                      <span className='text-t-secondary font-bold text-16px'>
                         {searchHook.searchText
                           ? t('conversation.workspace.search.empty')
                           : t('conversation.workspace.empty')}
                       </span>
-                      <div className='text-t-secondary'>
+                      <div className='text-t-secondary text-14px max-w-280px mx-auto'>
                         {searchHook.searchText ? '' : t('conversation.workspace.emptyDescription')}
                       </div>
+                      {!searchHook.searchText && (
+                        <div className='text-t-tertiary text-12px mt-12px'>
+                          {t('conversation.workspace.emptyHint')}
+                        </div>
+                      )}
                     </div>
                   }
                 />

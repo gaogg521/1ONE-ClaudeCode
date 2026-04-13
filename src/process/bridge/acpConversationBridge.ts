@@ -7,7 +7,7 @@
 import { acpDetector } from '@process/agent/acp/AcpDetector';
 import { AcpConnection } from '@process/agent/acp/AcpConnection';
 import { buildAcpModelInfo, summarizeAcpModelInfo } from '@process/agent/acp/modelInfo';
-import { detectAionrs } from '@process/agent/aionrs/binaryResolver';
+import { resolveAionrsBinary } from '@process/agent/aionrs/binaryResolver';
 import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
 import AcpAgentManager from '@process/task/AcpAgentManager';
 import { GeminiAgentManager } from '@process/task/GeminiAgentManager';
@@ -15,6 +15,7 @@ import { AionrsManager } from '@process/task/AionrsManager';
 import { mcpService } from '@/process/services/mcpServices/McpService';
 import { mainLog, mainWarn } from '@/process/utils/mainLogger';
 import { ipcBridge } from '@/common';
+import { ProcessConfig } from '@process/utils/initStorage';
 import * as os from 'os';
 
 export function initAcpConversationBridge(workerTaskManager: IWorkerTaskManager): void {
@@ -46,31 +47,44 @@ export function initAcpConversationBridge(workerTaskManager: IWorkerTaskManager)
 
   // 新的ACP检测接口 - 基于全局标记位
   // Enrich with MCP transport support info so the frontend can show accurate counts
-  ipcBridge.acpConversation.getAvailableAgents.provider(() => {
+  ipcBridge.acpConversation.getAvailableAgents.provider(async () => {
     try {
+      // Get user-disabled detected agents from config
+      const disabledDetectedAgents =
+        ((await ProcessConfig.get('acp.disabledDetectedAgents').catch((): string[] => [])) || []) as string[];
+
       const agents = acpDetector.getDetectedAgents();
-      const enriched = agents.map((agent) => ({
-        ...agent,
-        supportedTransports: mcpService.getSupportedTransportsForAgent(agent),
-      }));
+      mainLog('[getAvailableAgents]', `Total detected: ${agents.length}, disabled: [${disabledDetectedAgents.join(',')}]`);
+
+      const enriched = agents
+        .filter((agent) => !disabledDetectedAgents.includes(agent.backend))
+        .map((agent) => ({
+          ...agent,
+          supportedTransports: mcpService.getSupportedTransportsForAgent(agent),
+        }));
+
+      mainLog('[getAvailableAgents]', `After filter: ${enriched.length} agents remain`);
 
       // Detect aionrs binary (non-ACP, uses JSON Lines protocol)
       // Insert at front so 1ONE appears before other agents (including Gemini)
-      const aionrs = detectAionrs();
-      if (aionrs.available) {
-        const aionrsAgent = { backend: 'aionrs' as const, name: '1ONE', cliPath: aionrs.path };
+      // Only include if not disabled by user
+      const aionrsPath = resolveAionrsBinary();
+      if (aionrsPath && !disabledDetectedAgents.includes('aionrs')) {
+        const aionrsAgent = { backend: 'aionrs' as const, name: '1ONE CODE', cliPath: aionrsPath };
         enriched.unshift({
           ...aionrsAgent,
           supportedTransports: mcpService.getSupportedTransportsForAgent(aionrsAgent),
         } as (typeof enriched)[number]);
+        mainLog('[getAvailableAgents]', 'Added aionrs agent to front');
       }
 
-      return Promise.resolve({ success: true, data: enriched });
+      return { success: true, data: enriched };
     } catch (error) {
-      return Promise.resolve({
+      mainWarn('[getAvailableAgents]', 'Error:', error instanceof Error ? error.message : String(error));
+      return {
         success: false,
         msg: error instanceof Error ? error.message : 'Unknown error',
-      });
+      };
     }
   });
 

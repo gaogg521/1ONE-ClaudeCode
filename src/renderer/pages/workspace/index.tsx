@@ -80,7 +80,37 @@ const WorkspacePage: React.FC = () => {
         </div>
 
         {workspaceEntries.length === 0 ? (
-          <Empty description={t('workspace.hub.empty', { defaultValue: '暂无工作区记录' })} />
+          <Empty
+            description={
+              <div className='space-y-10px text-center'>
+                <div className='text-14px font-medium text-t-secondary'>
+                  {t('workspace.hub.empty', { defaultValue: '暂无工作区记录' })}
+                </div>
+                <div className='text-12px text-t-tertiary max-w-360px mx-auto'>
+                  {t('workspace.hub.emptyHint', {
+                    defaultValue: '新用户这里会是空的。建议先创建一个会话并选择/打开工作区，之后最近工作区会自动出现在这里。',
+                  })}
+                </div>
+                <div className='flex items-center justify-center gap-10px pt-8px'>
+                  <Button
+                    type='primary'
+                    onClick={() => {
+                      void navigate('/sessions');
+                    }}
+                  >
+                    {t('workspace.hub.goToNewChat', { defaultValue: '去创建会话' })}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      void navigate('/workspace/settings');
+                    }}
+                  >
+                    {t('workspace.hub.goToProjectSettings', { defaultValue: '项目设置' })}
+                  </Button>
+                </div>
+              </div>
+            }
+          />
         ) : (
           <div className='grid gap-10px'>
             {workspaceEntries.slice(0, 8).map((w) => (

@@ -584,8 +584,6 @@ const getBuiltinAssistants = (): AcpBackendConfig[] => {
       preset.id === 'word-creator' ||
       preset.id === 'ppt-creator' ||
       preset.id === 'excel-creator' ||
-      preset.id === 'academic-paper' ||
-      preset.id === 'morph-ppt' ||
       preset.id === 'cowork' ||
       preset.id === 'openclaw-setup' ||
       preset.id === 'star-office-helper' ||
@@ -869,8 +867,28 @@ export async function syncBuiltinAssistantsConfig(): Promise<void> {
   const promptsI18nMigrationDone = await configFile.get(PROMPTS_I18N_MIGRATION_KEY).catch(() => false);
   const needsPromptsI18nMigration = !promptsI18nMigrationDone;
 
-  const updatedAgents = [...existingAgents];
-  let hasChanges = false;
+  // Get the set of valid builtin assistant IDs from source code
+  const validBuiltinIds = new Set(builtinAssistants.map((b) => b.id));
+
+  // Remove builtin assistants from user config that no longer exist in source code
+  // This ensures user config stays in sync with code changes (deleted assistants are removed)
+  const cleanedAgents = existingAgents.filter((a: AcpBackendConfig) => {
+    // Keep non-builtin assistants (custom and extension)
+    if (!a.isBuiltin && !a.id?.startsWith('builtin-')) return true;
+    // For builtin assistants, only keep if they still exist in ASSISTANT_PRESETS
+    return validBuiltinIds.has(a.id);
+  });
+
+  // Log the cleanup if any assistants were removed
+  if (cleanedAgents.length !== existingAgents.length) {
+    const removedIds = existingAgents
+      .filter((a: AcpBackendConfig) => !cleanedAgents.some((c: AcpBackendConfig) => c.id === a.id))
+      .map((a: AcpBackendConfig) => a.id);
+    console.log(`[1ONE ClaudeCode] Removed obsolete builtin assistants from user config: ${removedIds.join(', ')}`);
+  }
+
+  const updatedAgents = [...cleanedAgents];
+  let hasChanges = cleanedAgents.length !== existingAgents.length;
 
   for (const builtin of builtinAssistants) {
     if (hiddenBuiltinIds.has(builtin.id)) {

@@ -3,7 +3,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Card, Divider, Input, Message, Modal, Select, Space, Spin, Table, Tabs, Tag, Typography } from '@arco-design/web-react';
-import { Add, Edit, Delete, FileText, FolderOpen, Refresh, FileAddition } from '@icon-park/react';
+import { Add, Edit, Delete, FileText, Refresh, FileAddition } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import {
   dialog,
@@ -169,6 +169,24 @@ const MemoryPage: React.FC = () => {
     }
   };
 
+  const applyProjectRootPath = async (path: string) => {
+    const trimmed = path.trim();
+    if (!trimmed) return;
+    setPathInput(trimmed);
+    setSaving(true);
+    try {
+      await memoryIpc.setClaudeProjectRoot.invoke({ path: trimmed });
+      Message.success(t('memory.scopeUpdated'));
+      await loadScope();
+      await loadEntries();
+      if (activeTab === 'project') await loadProjectClaude();
+    } catch {
+      Message.error(t('memory.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const clearProjectRoot = async () => {
     setSaving(true);
     try {
@@ -184,19 +202,6 @@ const MemoryPage: React.FC = () => {
     }
   };
 
-  const pickFolder = async () => {
-    try {
-      const paths = await dialog.showOpen.invoke({
-        properties: ['openDirectory'],
-        defaultPath: pathInput || scope?.effectiveRoot,
-      });
-      const first = paths?.[0];
-      if (first) setPathInput(first);
-    } catch {
-      Message.info(t('memory.pickFolderUnavailable'));
-    }
-  };
-
   const pickProjectFileOrFolder = async () => {
     try {
       const paths = await dialog.showOpen.invoke({
@@ -205,9 +210,7 @@ const MemoryPage: React.FC = () => {
       });
       const first = paths?.[0];
       if (!first) return;
-      // If user picks a file (e.g. .../readme.md), bind to its directory
-      const normalized = first.toLowerCase().endsWith('.md') ? first : first;
-      setPathInput(normalized);
+      await applyProjectRootPath(first);
     } catch {
       Message.info(t('memory.pickFolderUnavailable'));
     }
@@ -373,7 +376,9 @@ const MemoryPage: React.FC = () => {
                 allowClear
                 options={suggestions.map((p) => ({ label: p, value: p }))}
                 onChange={(v) => {
-                  if (v) setPathInput(v);
+                  if (v) {
+                    void applyProjectRootPath(v);
+                  }
                 }}
               />
               <Input
@@ -382,9 +387,6 @@ const MemoryPage: React.FC = () => {
                 onChange={setPathInput}
                 placeholder={t('memory.pathPlaceholder')}
               />
-              <Button size='small' icon={<FolderOpen theme='outline' size={14} />} onClick={() => void pickFolder()}>
-                {t('memory.pickFolder')}
-              </Button>
               <Button size='small' icon={<FileAddition theme='outline' size={14} />} onClick={() => void pickProjectFileOrFolder()}>
                 {t('memory.pickProject')}
               </Button>

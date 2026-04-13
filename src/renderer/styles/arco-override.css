@@ -443,3 +443,38 @@ body[arco-theme='dark'] .arco-message-error {
     background: var(--color-primary);
   }
 }
+
+/* ===========================================
+ * Switch Toggle - Green color when enabled
+ * Switch 开关 - 开启时显示绿色
+ * =========================================== */
+
+/* Light mode: Switch checked state - green */
+.arco-switch-checked {
+  background-color: rgb(var(--success-6, 34 197 94)) !important;
+  border-color: rgb(var(--success-6, 34 197 94)) !important;
+}
+
+/* Dark mode: Switch checked state - green */
+body[arco-theme='dark'] .arco-switch-checked,
+[data-color-scheme^='1one-']:not([data-color-scheme='1one-moonlight']) .arco-switch-checked {
+  background-color: rgb(var(--success-6, 74 222 128)) !important;
+  border-color: rgb(var(--success-6, 74 222 128)) !important;
+}
+
+/* Switch unchecked state - keep default gray */
+.arco-switch {
+  background-color: var(--color-fill-4);
+}
+
+/* Disabled checked state - lighter green */
+.arco-switch-checked.arco-switch-disabled {
+  background-color: rgb(var(--success-3, 134 239 172)) !important;
+  border-color: rgb(var(--success-3, 134 239 172)) !important;
+}
+
+body[arco-theme='dark'] .arco-switch-checked.arco-switch-disabled,
+[data-color-scheme^='1one-']:not([data-color-scheme='1one-moonlight']) .arco-switch-checked.arco-switch-disabled {
+  background-color: rgb(var(--success-4, 50 180 90)) !important;
+  border-color: rgb(var(--success-4, 50 180 90)) !important;
+}

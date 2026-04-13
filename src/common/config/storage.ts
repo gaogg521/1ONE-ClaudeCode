@@ -60,6 +60,8 @@ export interface IConfigStorageRefer {
   'acp.customAgents'?: AcpBackendConfig[];
   /** Builtin assistant IDs the user removed from the list; startup will not re-inject them */
   'acp.hiddenBuiltinAssistantIds'?: string[];
+  /** Detected agent backends that the user has disabled; these will not appear in the agent selection */
+  'acp.disabledDetectedAgents'?: string[];
   // Cached model lists per ACP backend for Guid page pre-selection
   'acp.cachedModels'?: Record<string, import('@/common/types/acpTypes').AcpModelInfo>;
   // Cached config options per ACP backend for Guid page pre-selection

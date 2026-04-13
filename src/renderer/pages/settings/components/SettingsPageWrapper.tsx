@@ -87,6 +87,32 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
 
   const { resolveExtTabName } = useExtI18n();
 
+  // Preload common settings pages on idle to reduce first-switch jank.
+  React.useEffect(() => {
+    const preload = () => {
+      void Promise.allSettled([
+        import('@renderer/pages/settings/ModeSettings'),
+        import('@renderer/pages/settings/AssistantSettings'),
+        import('@renderer/pages/settings/ToolsSettings'),
+        import('@renderer/pages/settings/AgentSettings'),
+        import('@renderer/pages/settings/SkillsHubSettings'),
+      ]);
+    };
+
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (typeof w.requestIdleCallback === 'function') {
+      const idleId = w.requestIdleCallback(preload, { timeout: 1500 });
+      return () => w.cancelIdleCallback?.(idleId);
+    }
+
+    const timer = window.setTimeout(preload, 300);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const menuItems = React.useMemo(() => {
     const builtins = getBuiltinSettingsNavItems(isDesktop, t);
 

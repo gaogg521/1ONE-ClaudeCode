@@ -525,7 +525,7 @@ export const ACP_BACKENDS_ALL: Record<AcpBackendAll, AcpBackendConfig> = {
   },
   aionrs: {
     id: 'aionrs',
-    name: '1ONE',
+    name: '1ONE CODE',
     cliCommand: 'aionrs',
     authRequired: false, // Auth handled via env vars from model config
     enabled: true,

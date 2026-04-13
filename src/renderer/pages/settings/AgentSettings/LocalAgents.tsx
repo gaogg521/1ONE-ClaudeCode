@@ -10,7 +10,7 @@ import type { AcpBackendConfig } from '@/common/types/acpTypes';
 import AionModal from '@/renderer/components/base/AionModal';
 import { Button, Typography } from '@arco-design/web-react';
 import { Home, Plus } from '@icon-park/react';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
@@ -24,21 +24,55 @@ const LocalAgents: React.FC = () => {
   const [hubModalVisible, setHubModalVisible] = useState(false);
 
   // Detected agents (include built-in backends and extension-contributed agents, exclude user custom and remote)
-  const { data: detectedAgents } = useSWR('acp.agents.available.settings', async () => {
-    const result = await ipcBridge.acpConversation.getAvailableAgents.invoke();
-    if (result.success && result.data) {
-      return result.data.filter(
-        (agent) => agent.backend !== 'remote' && (agent.backend !== 'custom' || agent.isExtension)
-      );
-    }
-    return [];
-  });
+  const { data: detectedAgents, mutate: mutateDetectedAgents } = useSWR(
+    'acp.agents.available.settings',
+    async () => {
+      const result = await ipcBridge.acpConversation.getAvailableAgents.invoke();
+      if (result.success && result.data) {
+        return result.data.filter((agent) => agent.backend !== 'remote' && (agent.backend !== 'custom' || agent.isExtension));
+      }
+      return [];
+    },
+    { revalidateOnMount: true, dedupingInterval: 500, revalidateOnFocus: false }
+  );
+
+  // ACP agent detection runs asynchronously at startup; retry a few times until we get results.
+  // This avoids showing a permanent empty list when the user opens Settings very early,
+  // without keeping a long-running interval that can slow down navigation.
+  useEffect(() => {
+    if (detectedAgents && detectedAgents.length > 0) return;
+    let cancelled = false;
+    const attempts = [800, 1600, 2500, 4000, 6500];
+    let idx = 0;
+
+    const tick = () => {
+      if (cancelled) return;
+      void mutateDetectedAgents();
+      idx += 1;
+      if (idx >= attempts.length) return;
+      window.setTimeout(tick, attempts[idx]);
+    };
+
+    window.setTimeout(tick, attempts[idx]);
+    return () => {
+      cancelled = true;
+    };
+  }, [detectedAgents, mutateDetectedAgents]);
 
   // Custom agents
   const { data: customAgents, mutate: mutateCustomAgents } = useSWR('acp.customAgents.settings', async () => {
     const agents = await ConfigStorage.get('acp.customAgents');
     return ((agents || []) as AcpBackendConfig[]).filter((a) => !a.isPreset);
   });
+
+  // Disabled detected agents list
+  const { data: disabledDetectedAgents, mutate: mutateDisabledDetected } = useSWR(
+    'acp.disabledDetectedAgents.settings',
+    async () => {
+      const disabled = await ConfigStorage.get('acp.disabledDetectedAgents');
+      return (disabled || []) as string[];
+    }
+  );
 
   const [editorVisible, setEditorVisible] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AcpBackendConfig | null>(null);
@@ -81,6 +115,27 @@ const LocalAgents: React.FC = () => {
       }
     },
     [mutateCustomAgents]
+  );
+
+  // Handle toggling detected agents (built-in agents like gemini, aionrs, etc.)
+  const handleToggleDetectedAgent = useCallback(
+    async (backend: string, enabled: boolean) => {
+      const current = ((await ConfigStorage.get('acp.disabledDetectedAgents')) || []) as string[];
+      const updated = enabled
+        ? current.filter((b) => b !== backend) // Remove from disabled list if enabling
+        : [...current.filter((b) => b !== backend), backend]; // Add to disabled list if disabling
+      await ConfigStorage.set('acp.disabledDetectedAgents', updated);
+      await mutateDisabledDetected();
+    },
+    [mutateDisabledDetected]
+  );
+
+  // Check if a detected agent is enabled
+  const isDetectedAgentEnabled = useCallback(
+    (backend: string) => {
+      return !(disabledDetectedAgents || []).includes(backend);
+    },
+    [disabledDetectedAgents]
   );
 
   // Aion CLI and Gemini CLI first among detected agents
@@ -148,8 +203,10 @@ const LocalAgents: React.FC = () => {
           <AgentCard
             type='detected'
             agent={aionrsAgent}
+            enabled={isDetectedAgentEnabled(aionrsAgent.backend)}
             settingsDisabled={false}
             onSettings={() => navigate('/settings/aionrs')}
+            onToggle={(enabled) => void handleToggleDetectedAgent(aionrsAgent.backend, enabled)}
             variant='grid'
           />
         )}
@@ -157,13 +214,22 @@ const LocalAgents: React.FC = () => {
           <AgentCard
             type='detected'
             agent={geminiAgent}
+            enabled={isDetectedAgentEnabled(geminiAgent.backend)}
             settingsDisabled={false}
             onSettings={() => navigate('/settings/gemini')}
+            onToggle={(enabled) => void handleToggleDetectedAgent(geminiAgent.backend, enabled)}
             variant='grid'
           />
         )}
         {otherDetected.map((agent) => (
-          <AgentCard key={agent.backend} type='detected' agent={agent} variant='grid' />
+          <AgentCard
+            key={agent.backend}
+            type='detected'
+            agent={agent}
+            enabled={isDetectedAgentEnabled(agent.backend)}
+            onToggle={(enabled) => void handleToggleDetectedAgent(agent.backend, enabled)}
+            variant='grid'
+          />
         ))}
       </div>
       {(!detectedAgents || detectedAgents.length === 0) && (

@@ -5,8 +5,7 @@
  */
 
 import { Tabs, Message } from '@arco-design/web-react';
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import LocalAgents from '@/renderer/pages/settings/AgentSettings/LocalAgents';
 import RemoteAgents from '@/renderer/pages/settings/AgentSettings/RemoteAgents';
@@ -18,19 +17,10 @@ const AgentModalContent: React.FC = () => {
   const [agentMessage, agentMessageContext] = Message.useMessage({ maxCount: 10 });
   const viewMode = useSettingsViewMode();
   const isPageMode = viewMode === 'page';
-  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<string>('local');
-
-  useEffect(() => {
-    const tabParam = searchParams.get('tab');
-    if (tabParam === 'remote' || tabParam === 'local') {
-      setActiveTab(tabParam);
-    }
-  }, [searchParams]);
 
   const handleTabChange = (key: string) => {
     setActiveTab(key);
-    setSearchParams({ tab: key });
   };
 
   return (
@@ -45,12 +35,12 @@ const AgentModalContent: React.FC = () => {
       >
         <Tabs.TabPane key='local' title={t('settings.agentManagement.localAgents')}>
           <AionScrollArea className='flex-1 min-h-0 pb-16px scrollbar-hide' disableOverflow={isPageMode}>
-            <LocalAgents />
+            {activeTab === 'local' ? <LocalAgents /> : null}
           </AionScrollArea>
         </Tabs.TabPane>
         <Tabs.TabPane key='remote' title={t('settings.agentManagement.remoteAgents')}>
           <AionScrollArea className='flex-1 min-h-0 pb-16px scrollbar-hide' disableOverflow={isPageMode}>
-            <RemoteAgents />
+            {activeTab === 'remote' ? <RemoteAgents /> : null}
           </AionScrollArea>
         </Tabs.TabPane>
       </Tabs>
