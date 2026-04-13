@@ -1,7 +1,7 @@
 {
   "name": "ext-feishu",
   "displayName": "ext-飞书",
-  "version": "0.1.0",
+  "version": "0.9.0",
   "description": "Feishu Channels extension example (not integrated by default), demonstrates i18n, data collection hooks, and cross-runtime assets",
   "author": "1ONE ClaudeCode Contributors",
   "icon": "assets/ext-feishu.svg",

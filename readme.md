@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.1.0-32CD32?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/github/v/release/gaogg521/1ONE-Claude-Code?display_name=tag&sort=semver&style=flat-square&color=32CD32" alt="Version">
   &nbsp;
   <img src="https://img.shields.io/badge/license-MIT-32CD32?style=flat-square" alt="License">
   &nbsp;
@@ -145,14 +145,14 @@ npm run restart
 ### 1. 统一入口（双图）
 
 <p align="center">
-  <img src="./resources/统一入口.png" alt="统一入口总览（新版）" width="90%">
+  <img src="./resources/统一入口.png" alt="统一入口总览：本地 AI 开发工具统一入口" width="90%">
 </p>
 
 <p align="center">
   <img src="./resources/统一入口2.png" alt="统一入口扩展视图" width="90%">
 </p>
 
-**图片说明：** 同一功能以双图展示，左图为你刚更新的统一入口新版截图，右图是扩展视图，突出统一调度与快速切换能力。
+**图片说明：** 同一功能以双图展示：左图是“统一入口”总览（本地 Claude Code / OpenClaw / Google CLI / Cursor 等一处汇总、开箱即用），右图是扩展视图，突出统一调度与快速切换能力。
 
 ---
 

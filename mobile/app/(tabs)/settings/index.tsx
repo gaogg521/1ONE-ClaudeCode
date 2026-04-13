@@ -94,7 +94,7 @@ export default function SettingsScreen() {
         <View style={[styles.card, { backgroundColor: surface }]}>
           <View style={[styles.row, { borderBottomColor: border }]}>
             <ThemedText>{t('settings.version')}</ThemedText>
-            <ThemedText type='caption'>0.1.0</ThemedText>
+            <ThemedText type='caption'>0.9.0</ThemedText>
           </View>
         </View>
       </View>
