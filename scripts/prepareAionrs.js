@@ -57,12 +57,19 @@ function getVersion() {
 
 function fetchLatestTagName() {
   // Use GitHub API so we can derive asset names in "latest" mode.
-  // No auth required for public repos (rate-limited but fine for this use).
+  // Cross-platform: avoid PowerShell dependency (macOS/Linux often don't have it).
   const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
-  const result = execSync(`powershell -NoProfile -NonInteractive -Command "(Invoke-RestMethod -Uri '${url}').tag_name"`, {
-    encoding: 'utf-8',
-    timeout: 20000,
-  }).trim();
+
+  const result = execSync(
+    `node -e "const https=require('https');const u='${url}';https.get(u,{headers:{'User-Agent':'1ONE-ClaudeCode','Accept':'application/vnd.github+json'}},(res)=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>{try{const j=JSON.parse(d);process.stdout.write(String(j.tag_name||''));}catch(e){process.exit(2);}})}).on('error',()=>process.exit(3));"`,
+    {
+      encoding: 'utf-8',
+      timeout: 20000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }
+  ).trim();
+
+  if (!result) throw new Error('Failed to resolve latest aionrs release tag');
   return result;
 }
 
