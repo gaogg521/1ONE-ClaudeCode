@@ -39,3 +39,9 @@
 ## 与截图错误区分（ACP / Claude Code）
 
 - 若会话类型为 **ACP + Claude Code** 且本机未安装或未配置 `claude` CLI，会报 **CLI not found** / bun 找不到 npm 模块等，与上文「自定义 OpenAI 网关模型」链路不同；需在 **Agent 设置** 中安装或修正 CLI 路径，或使用已配置好的 **aionrs / Gemini** 对话测模型身份。
+
+## 回归修复：Claude ACP / OpenClaw PATH、Gemini Google CLI 认证（2026-04-14）
+
+- **`shellEnv.getEnhancedEnv`**：bundled `bun` 目录不得排在 PATH **最前**（否则 Windows 上 `npx` 易解析为 Bun 的 shim，ACP 在 `claude-temp-*` 下报找不到 `npm-prefix.js` / `npx-cli.js`；OpenClaw 等也可能被错误解释器执行）。已改为将 bundled bun **追加**到 PATH 末尾；扩展仍可用 `getBundledBunDir()` 的绝对路径调用 bun。
+- **`GeminiAgent`**：构造函数曾把除 `vertex` 外全部写成 `USE_GEMINI`，导致 `gemini-with-google-auth` 无法走 `LOGIN_WITH_GOOGLE`（Google CLI 会话报 *default credentials*）。已改为静态方法 `resolveAuthType()`，按 `getProviderAuthType` 映射 `openai` / `anthropic` / `bedrock` / `vertex` / `LOGIN_WITH_GOOGLE`。
+- **OpenClaw** `warning-filter.js` 缺失：多为全局 `npm i -g openclaw` 安装不完整；代码侧 PATH 修正后若仍失败，需重装或升级 `openclaw` CLI。
