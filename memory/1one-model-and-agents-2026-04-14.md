@@ -45,3 +45,7 @@
 - **`shellEnv.getEnhancedEnv`**：bundled `bun` 目录不得排在 PATH **最前**（否则 Windows 上 `npx` 易解析为 Bun 的 shim，ACP 在 `claude-temp-*` 下报找不到 `npm-prefix.js` / `npx-cli.js`；OpenClaw 等也可能被错误解释器执行）。已改为将 bundled bun **追加**到 PATH 末尾；扩展仍可用 `getBundledBunDir()` 的绝对路径调用 bun。
 - **`GeminiAgent`**：构造函数曾把除 `vertex` 外全部写成 `USE_GEMINI`，导致 `gemini-with-google-auth` 无法走 `LOGIN_WITH_GOOGLE`（Google CLI 会话报 *default credentials*）。已改为静态方法 `resolveAuthType()`，按 `getProviderAuthType` 映射 `openai` / `anthropic` / `bedrock` / `vertex` / `LOGIN_WITH_GOOGLE`。
 - **OpenClaw** `warning-filter.js` 缺失：多为全局 `npm i -g openclaw` 安装不完整；代码侧 PATH 修正后若仍失败，需重装或升级 `openclaw` CLI。
+
+## aionrs 长时间「正在处理」无输出
+
+- `AionrsAgent`：若上游在发送后 **120s** 内没有任何 JSON 行事件（滑动窗口在 `stream_start` / `text_delta` / `thinking` / `tool_*` / `info` 上续期），则主动发出 `error` + `finish`，避免 UI 永久卡在 `waitingResponse`（常见于网关挂死、DNS、代理或 baseUrl 不可达）。

@@ -31,6 +31,9 @@ export type AionrsAgentOptions = {
 };
 
 export class AionrsAgent {
+  /** Sliding window: no JSON event from aionrs for this long → synthetic error + finish. */
+  private static readonly RESPONSE_STALL_MS = 120_000;
+
   private childProcess: ChildProcess | null = null;
   private ready = false;
   private readyPromise: Promise<void>;
@@ -41,6 +44,9 @@ export class AionrsAgent {
   private activeMsgId: string | null = null;
   private configBackup: { path: string; content: string | null } | null = null;
   public sessionId?: string;
+  /** Last user message id for this turn — used when upstream events omit msg_id. */
+  private pendingTurnMsgId: string | null = null;
+  private responseStallTimer: NodeJS.Timeout | null = null;
 
   constructor(options: AionrsAgentOptions) {
     this.options = options;
@@ -99,6 +105,7 @@ export class AionrsAgent {
 
     // Handle process exit
     this.childProcess.on('exit', (code) => {
+      this.clearResponseStallTimer();
       this.restoreProjectConfig();
       if (!this.ready) {
         this.readyReject(new Error(`aionrs exited with code ${code} during init`));
@@ -137,6 +144,35 @@ export class AionrsAgent {
     }
   }
 
+  private clearResponseStallTimer(): void {
+    if (this.responseStallTimer) {
+      clearTimeout(this.responseStallTimer);
+      this.responseStallTimer = null;
+    }
+  }
+
+  /**
+   * If the aionrs binary emits nothing for too long after a user send, unblock the UI
+   * (otherwise the renderer stays on "processing" forever).
+   */
+  private slideResponseStallWatchdog(msgId: string): void {
+    this.clearResponseStallTimer();
+    if (!msgId) return;
+    this.responseStallTimer = setTimeout(() => {
+      this.responseStallTimer = null;
+      const id = this.activeMsgId || this.pendingTurnMsgId || msgId;
+      this.onStreamEvent({
+        type: 'error',
+        data:
+          '[aionrs] No events from the model within 2 minutes (upstream may be hung or unreachable). Check base URL, API key, proxy, and provider status.',
+        msg_id: id,
+      });
+      this.onStreamEvent({ type: 'finish', data: '', msg_id: id });
+      this.activeMsgId = null;
+      this.pendingTurnMsgId = null;
+    }, AionrsAgent.RESPONSE_STALL_MS);
+  }
+
   private handleEvent(event: AionrsEvent): void {
     switch (event.type) {
       case 'ready':
@@ -147,18 +183,22 @@ export class AionrsAgent {
 
       case 'stream_start':
         this.activeMsgId = event.msg_id;
+        this.slideResponseStallWatchdog(event.msg_id);
         this.onStreamEvent({ type: 'start', data: '', msg_id: event.msg_id });
         break;
 
       case 'text_delta':
+        this.slideResponseStallWatchdog(event.msg_id);
         this.onStreamEvent({ type: 'content', data: event.text, msg_id: event.msg_id });
         break;
 
       case 'thinking':
+        this.slideResponseStallWatchdog(event.msg_id);
         this.onStreamEvent({ type: 'thought', data: event.text, msg_id: event.msg_id });
         break;
 
       case 'tool_request':
+        this.slideResponseStallWatchdog(event.msg_id);
         this.onStreamEvent({
           type: 'tool_group',
           data: [
@@ -176,6 +216,7 @@ export class AionrsAgent {
         break;
 
       case 'tool_running':
+        this.slideResponseStallWatchdog(event.msg_id);
         this.onStreamEvent({
           type: 'tool_group',
           data: [
@@ -192,6 +233,7 @@ export class AionrsAgent {
         break;
 
       case 'tool_result':
+        this.slideResponseStallWatchdog(event.msg_id);
         this.onStreamEvent({
           type: 'tool_group',
           data: [
@@ -212,6 +254,7 @@ export class AionrsAgent {
         break;
 
       case 'tool_cancelled':
+        this.slideResponseStallWatchdog(event.msg_id);
         this.onStreamEvent({
           type: 'tool_group',
           data: [
@@ -228,11 +271,14 @@ export class AionrsAgent {
         break;
 
       case 'stream_end':
+        this.clearResponseStallTimer();
         this.onStreamEvent({ type: 'finish', data: event.usage ?? '', msg_id: event.msg_id });
         this.activeMsgId = null;
+        this.pendingTurnMsgId = null;
         break;
 
       case 'error':
+        this.clearResponseStallTimer();
         this.onStreamEvent({
           type: 'error',
           data: event.error.message,
@@ -250,6 +296,7 @@ export class AionrsAgent {
         break;
 
       case 'info':
+        this.slideResponseStallWatchdog(event.msg_id);
         this.onStreamEvent({
           type: 'info',
           data: event.message,
@@ -305,6 +352,8 @@ export class AionrsAgent {
 
   async send(input: string, msgId: string, files?: string[]): Promise<void> {
     await this.readyPromise;
+    this.pendingTurnMsgId = msgId;
+    this.slideResponseStallWatchdog(msgId);
     this.sendCommand({
       type: 'message',
       msg_id: msgId,
@@ -319,6 +368,8 @@ export class AionrsAgent {
   }
 
   stop(): void {
+    this.clearResponseStallTimer();
+    this.pendingTurnMsgId = null;
     this.sendCommand({ type: 'stop' });
   }
 
@@ -331,6 +382,8 @@ export class AionrsAgent {
   }
 
   kill(): void {
+    this.clearResponseStallTimer();
+    this.pendingTurnMsgId = null;
     this.restoreProjectConfig();
     if (this.childProcess) {
       this.childProcess.kill('SIGTERM');
