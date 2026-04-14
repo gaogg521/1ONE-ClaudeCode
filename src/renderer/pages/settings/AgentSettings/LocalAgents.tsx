@@ -8,7 +8,7 @@ import { ipcBridge } from '@/common';
 import { ConfigStorage } from '@/common/config/storage';
 import type { AcpBackendConfig } from '@/common/types/acpTypes';
 import AionModal from '@/renderer/components/base/AionModal';
-import { Button, Typography } from '@arco-design/web-react';
+import { Button, Message, Typography } from '@arco-design/web-react';
 import { Home, Plus } from '@icon-park/react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +22,7 @@ const LocalAgents: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [hubModalVisible, setHubModalVisible] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
 
   // Detected agents (include built-in backends and extension-contributed agents, exclude user custom and remote)
   const { data: detectedAgents, mutate: mutateDetectedAgents } = useSWR(
@@ -148,6 +149,29 @@ const LocalAgents: React.FC = () => {
     setEditorVisible(true);
   }, []);
 
+  const handleScanLocalAgents = useCallback(async () => {
+    setScanLoading(true);
+    try {
+      const res = await ipcBridge.acpConversation.refreshDetectedAgents.invoke();
+      if (!res.success) {
+        Message.error(
+          t('settings.agentManagement.scanLocalAgentFailed', {
+            defaultValue: '扫描失败，请稍后重试',
+          })
+        );
+        return;
+      }
+      await mutateDetectedAgents();
+      Message.success(
+        t('settings.agentManagement.scanLocalAgentDone', {
+          defaultValue: '已重新扫描本地 Agent',
+        })
+      );
+    } finally {
+      setScanLoading(false);
+    }
+  }, [mutateDetectedAgents, t]);
+
   return (
     <div className='flex flex-col gap-8px py-16px'>
       <div className='px-16px text-12px text-t-secondary'>
@@ -160,6 +184,20 @@ const LocalAgents: React.FC = () => {
         >
           {t('settings.agentManagement.detectCustomAgent')}
         </Button>
+        <Button
+          type='text'
+          size='mini'
+          loading={scanLoading}
+          className='!ml-10px !h-auto !p-0 !align-baseline !text-12px !font-normal !text-success-6 hover:!text-success-7 hover:!underline underline-offset-2'
+          onClick={() => void handleScanLocalAgents()}
+        >
+          {t('settings.agentManagement.scanLocalAgent', { defaultValue: '扫描本地 Agent' })}
+        </Button>
+        <span className='ml-8px text-12px text-t-tertiary'>
+          {t('settings.agentManagement.scanLocalAgentHint', {
+            defaultValue: '用于重新检测本机已安装的 Agent（PATH/安装后点这里）',
+          })}
+        </span>
       </div>
 
       {process.env.NODE_ENV === 'development' && (

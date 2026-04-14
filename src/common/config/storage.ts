@@ -7,6 +7,7 @@
 import type { AcpBackend, AcpBackendAll, AcpBackendConfig } from '@/common/types/acpTypes';
 import type { SpeechToTextConfig } from '@/common/types/speech';
 import { storage } from '@office-ai/platform';
+import type { ProviderAuthType, ProviderAuthTypeChoice } from '@/common/types/providerAuthType';
 
 /**
  * @description 聊天相关的存储
@@ -459,6 +460,20 @@ export interface IProvider {
   name: string;
   baseUrl: string;
   apiKey: string;
+  /**
+   * Optional protocol/auth override for this provider.
+   * When set, it takes precedence over `platform` inference.
+   *
+   * - openai: OpenAI-compatible (chat/completions)
+   * - anthropic: Anthropic (messages)
+   * - gemini / vertex / bedrock: platform-specific
+   */
+  authType?: ProviderAuthTypeChoice;
+  /**
+   * Custom protocol/mode hint string when authType === 'custom'.
+   * This is vendor/gateway specific, e.g. "compatible-mode".
+   */
+  authTypeCustom?: string;
   model: string[];
   /**
    * 模型能力标签列表。打了标签就是支持，没打就是不支持

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { AuthType } from '@office-ai/aioncli-core';
+import type { ProviderAuthType, ProviderAuthTypeChoice } from '@/common/types/providerAuthType';
 import { isNewApiPlatform } from './platformConstants';
 
 /**
@@ -12,35 +12,35 @@ import { isNewApiPlatform } from './platformConstants';
  * @param platform 平台名称
  * @returns 对应的AuthType
  */
-export function getAuthTypeFromPlatform(platform: string): AuthType {
+export function getAuthTypeFromPlatform(platform: string): ProviderAuthType {
   const platformLower = platform?.toLowerCase() || '';
 
   // Gemini 相关平台
   if (platformLower.includes('gemini-with-google-auth')) {
-    return AuthType.LOGIN_WITH_GOOGLE;
+    return 'gemini';
   }
   if (platformLower.includes('gemini-vertex-ai') || platformLower.includes('vertex-ai')) {
-    return AuthType.USE_VERTEX_AI;
+    return 'vertex';
   }
   if (platformLower.includes('gemini') || platformLower.includes('google')) {
-    return AuthType.USE_GEMINI;
+    return 'gemini';
   }
 
   // Anthropic/Claude 相关平台
   if (platformLower.includes('anthropic') || platformLower.includes('claude')) {
-    return AuthType.USE_ANTHROPIC;
+    return 'anthropic';
   }
 
   // AWS Bedrock 平台
   if (platformLower.includes('bedrock')) {
-    return AuthType.USE_BEDROCK;
+    return 'bedrock';
   }
 
   // New API 网关默认使用 OpenAI 兼容协议（per-model 协议由 getProviderAuthType 处理）
   // New API gateway defaults to OpenAI compatible (per-model protocol handled by getProviderAuthType)
   // 其他所有平台默认使用OpenAI兼容协议
   // 包括：OpenRouter, OpenAI, DeepSeek, new-api, 等
-  return AuthType.USE_OPENAI;
+  return 'openai';
 }
 
 /**
@@ -53,12 +53,16 @@ export function getAuthTypeFromPlatform(platform: string): AuthType {
  */
 export function getProviderAuthType(provider: {
   platform: string;
-  authType?: AuthType;
+  authType?: ProviderAuthTypeChoice;
+  authTypeCustom?: string;
   modelProtocols?: Record<string, string>;
   useModel?: string;
-}): AuthType {
+}): ProviderAuthType {
   // 如果明确指定了authType，直接使用
   if (provider.authType) {
+    if (provider.authType === 'custom') {
+      return getAuthTypeFromPlatform(provider.authTypeCustom || 'openai');
+    }
     return provider.authType;
   }
 

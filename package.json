@@ -11,7 +11,7 @@
   "main": "./out/main/index.js",
   "scripts": {
     "start": "electron-vite dev",
-    "restart": "taskkill /F /IM electron.exe /T 2>NUL & del /F \"%APPDATA%\\1OneClaudeCode-Dev\\lockfile\" 2>NUL & electron-vite dev",
+    "restart": "bun scripts/restart-dev.ts",
     "stop": "taskkill /F /IM electron.exe /T 2>NUL || true",
     "start:multi": "cross-env ONE_MULTI_INSTANCE=1 electron-vite dev",
     "cli": "electron-vite dev",

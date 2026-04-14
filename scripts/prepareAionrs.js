@@ -2,7 +2,9 @@
  * Prepare aionrs binary for Electron packaging.
  *
  * Resolution order:
- *  1. GitHub release download (requires AIONRS_VERSION or defaults to "latest")
+ *  1. Existing bundled output at resources/bundled-aionrs/{platform-arch}/aionrs(.exe) (offline / vendored)
+ *  2. Optional vendor drop at resources/vendor/aionrs/{platform-arch}/aionrs(.exe)
+ *  3. GitHub release download (ONLY if AIONRS_ALLOW_DOWNLOAD=1; end-user installs must not rely on this)
  *
  * Output: resources/bundled-aionrs/{platform}-{arch}/aionrs[.exe]
  *
@@ -55,18 +57,32 @@ function getVersion() {
   return (process.env.AIONRS_VERSION || 'latest').trim();
 }
 
+function allowDownload() {
+  return process.env.AIONRS_ALLOW_DOWNLOAD === '1' || process.env.AIONRS_ALLOW_DOWNLOAD === 'true';
+}
+
+function readBinaryVersion(binaryPath, fallbackVersion) {
+  try {
+    return execFileSync(binaryPath, ['--version'], { encoding: 'utf-8', timeout: 5000 }).trim();
+  } catch {
+    return fallbackVersion;
+  }
+}
+
 function fetchLatestTagName() {
   // Use GitHub API so we can derive asset names in "latest" mode.
-  // Cross-platform: avoid PowerShell dependency (macOS/Linux often don't have it).
+  // Important: use `process.execPath` so we don't depend on `node` being on PATH.
   const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 
-  const result = execSync(
-    `node -e "const https=require('https');const u='${url}';https.get(u,{headers:{'User-Agent':'1ONE-ClaudeCode','Accept':'application/vnd.github+json'}},(res)=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>{try{const j=JSON.parse(d);process.stdout.write(String(j.tag_name||''));}catch(e){process.exit(2);}})}).on('error',()=>process.exit(3));"`,
-    {
-      encoding: 'utf-8',
-      timeout: 20000,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }
+  const nodeBin = process.execPath;
+  const result = execFileSync(
+    nodeBin,
+    [
+      '-e',
+      "const https=require('https');const u=process.argv[1];https.get(u,{headers:{'User-Agent':'1ONE-ClaudeCode','Accept':'application/vnd.github+json'}},(res)=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>{try{const j=JSON.parse(d);process.stdout.write(String(j.tag_name||''));}catch(e){process.exit(2);}})}).on('error',()=>process.exit(3));",
+      url,
+    ],
+    { encoding: 'utf-8', timeout: 25000, windowsHide: true }
   ).trim();
 
   if (!result) throw new Error('Failed to resolve latest aionrs release tag');
@@ -176,7 +192,11 @@ function downloadAndExtract(platform, arch, version) {
 // Main
 // ---------------------------------------------------------------------------
 
-function prepareAionrs() {
+/**
+ * @param {{ strict?: boolean }} [opts]
+ */
+function prepareAionrs(opts) {
+  const strict = Boolean(opts && opts.strict);
   const projectRoot = path.resolve(__dirname, '..');
   const platform = process.platform;
   // Support cross-compilation: AIONRS_ARCH > npm_config_target_arch > process.arch
@@ -190,15 +210,72 @@ function prepareAionrs() {
 
   console.log(`Preparing aionrs for ${runtimeKey} (version: ${version})`);
 
-  removeDirectorySafe(targetDir);
-  ensureDirectory(targetDir);
-
   let sourcePath = null;
   let sourceType = 'none';
   let sourceDetail = {};
   let tempDir = null;
 
-  // 1. Download from GitHub releases
+  // 1) Reuse already-bundled binary (committed in repo for offline packaging)
+  if (fs.existsSync(targetBinaryPath)) {
+    const sourceTypeLocal = 'bundled-local';
+    const sourceDetailLocal = { path: path.relative(projectRoot, targetBinaryPath) };
+    console.log(`  Using existing bundled binary: ${sourceDetailLocal.path}`);
+
+    ensureExecutableMode(targetBinaryPath);
+    const binaryVersion = readBinaryVersion(targetBinaryPath, version);
+    writeJson(path.join(targetDir, 'manifest.json'), {
+      platform,
+      arch,
+      version: binaryVersion,
+      generatedAt: new Date().toISOString(),
+      sourceType: sourceTypeLocal,
+      source: sourceDetailLocal,
+      files: [binaryName],
+      skipped: false,
+    });
+
+    console.log(
+      `  Bundled aionrs prepared: resources/bundled-aionrs/${runtimeKey}/${binaryName} [source=${sourceTypeLocal}]`
+    );
+    return { prepared: true, dir: targetDir, sourceType: sourceTypeLocal };
+  }
+
+  // 2) Vendor drop folder (optional): resources/vendor/aionrs/{runtimeKey}/aionrs(.exe)
+  if (!sourcePath) {
+    const vendorPath = path.join(projectRoot, 'resources', 'vendor', 'aionrs', runtimeKey, binaryName);
+    if (fs.existsSync(vendorPath)) {
+      removeDirectorySafe(targetDir);
+      ensureDirectory(targetDir);
+      copyFileSafe(vendorPath, targetBinaryPath);
+      ensureExecutableMode(targetBinaryPath);
+      const binaryVersion = readBinaryVersion(targetBinaryPath, version);
+      writeJson(path.join(targetDir, 'manifest.json'), {
+        platform,
+        arch,
+        version: binaryVersion,
+        generatedAt: new Date().toISOString(),
+        sourceType: 'vendor',
+        source: { path: path.relative(projectRoot, vendorPath) },
+        files: [binaryName],
+        skipped: false,
+      });
+      console.log(`  Bundled aionrs from vendor: ${path.relative(projectRoot, vendorPath)}`);
+      return { prepared: true, dir: targetDir, sourceType: 'vendor' };
+    }
+  }
+
+  if (!sourcePath && !allowDownload()) {
+    const msg =
+      'aionrs binary missing in repo (offline mode). Add resources/bundled-aionrs/<platform-arch>/aionrs(.exe) or set AIONRS_ALLOW_DOWNLOAD=1 on the build machine only.';
+    if (strict) throw new Error(msg);
+    console.warn(`  ${msg}`);
+    return { prepared: false, reason: 'missing_offline' };
+  }
+
+  removeDirectorySafe(targetDir);
+  ensureDirectory(targetDir);
+
+  // 3) Download from GitHub releases (maintainer/build machine only)
   if (!sourcePath) {
     try {
       const result = downloadAndExtract(platform, arch, version);
@@ -215,14 +292,13 @@ function prepareAionrs() {
 
   // Write result
   if (sourcePath) {
-    copyFileSafe(sourcePath, targetBinaryPath);
+    if (sourceType !== 'bundled-local') {
+      copyFileSafe(sourcePath, targetBinaryPath);
+    }
     ensureExecutableMode(targetBinaryPath);
 
     // Get version info from binary
-    let binaryVersion = version;
-    try {
-      binaryVersion = execSync(`"${targetBinaryPath}" --version`, { encoding: 'utf-8', timeout: 5000 }).trim();
-    } catch {}
+    const binaryVersion = readBinaryVersion(targetBinaryPath, version);
 
     const manifest = {
       platform,
@@ -258,7 +334,11 @@ function prepareAionrs() {
   };
 
   writeJson(path.join(targetDir, 'manifest.json'), manifest);
-  console.warn(`  aionrs not found — skipping bundle (agent will not be available in packaged app)`);
+  const msg = 'aionrs not found — skipping bundle (agent will not be available in packaged app)';
+  if (strict) {
+    throw new Error(msg);
+  }
+  console.warn(`  ${msg}`);
   return { prepared: false, reason: 'not_found' };
 }
 

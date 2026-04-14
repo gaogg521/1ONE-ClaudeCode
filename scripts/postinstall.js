@@ -54,7 +54,8 @@ function runPostInstall() {
       });
 
       // Prepare bundled aionrs binary for local dev/runtime (non-fatal).
-      // resources/bundled-aionrs is gitignored; ensure it's present so "1ONE CODE" agent can appear.
+      // Default is offline: the binary should be vendored under resources/bundled-aionrs/... in the repo.
+      // Maintainers may set AIONRS_ALLOW_DOWNLOAD=1 to fetch during install on dev machines only.
       try {
         const platform = process.platform;
         const arch = process.env.AIONRS_ARCH || process.env.npm_config_target_arch || process.arch;
@@ -62,8 +63,11 @@ function runPostInstall() {
         const binaryName = platform === 'win32' ? 'aionrs.exe' : 'aionrs';
         const targetBinary = path.join(process.cwd(), 'resources', 'bundled-aionrs', runtimeKey, binaryName);
         if (!fs.existsSync(targetBinary)) {
-          console.log(`Bundled aionrs not found at ${targetBinary}, preparing...`);
-          execSync('node -e "require(\'./scripts/prepareAionrs\')()"', { stdio: 'inherit' });
+          console.log(`Bundled aionrs not found at ${targetBinary}, running prepare (offline-first)...`);
+          execSync('node -e "require(\'./scripts/prepareAionrs\')()"', {
+            stdio: 'inherit',
+            env: { ...process.env },
+          });
         }
       } catch (e) {
         console.warn('Prepare aionrs skipped/failed (non-fatal):', e && e.message ? e.message : String(e));

@@ -10,16 +10,16 @@ import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/platform';
 import { extensions as extensionsIpc, type IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
-import { Tabs } from '@arco-design/web-react';
+import { Spin, Tabs } from '@arco-design/web-react';
 import { Computer, Earth, Gemini, Info, LinkCloud, Puzzle, Toolkit } from '@icon-park/react';
 import classNames from 'classnames';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import AboutModalContent from './contents/AboutModalContent';
 import AgentModalContent from './contents/AgentModalContent';
 import ExtensionSettingsTabContent from './contents/ExtensionSettingsTabContent';
 import GeminiModalContent from './contents/GeminiModalContent';
-import ModelModalContent from './contents/ModelModalContent';
+const LazyModelModalContent = React.lazy(() => import('./contents/ModelModalContent'));
 import SystemModalContent from './contents/SystemModalContent';
 import ToolsModalContent from './contents/ToolsModalContent';
 import WebuiModalContent from './contents/WebuiModalContent';
@@ -168,6 +168,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
     };
   }, [handleResize]);
 
+  // Warm the heavy model settings chunk as soon as the modal opens (before user clicks "Model").
+  useEffect(() => {
+    if (!visible) return;
+    void import('./contents/ModelModalContent');
+  }, [visible]);
+
   // Fetch extension-contributed settings tabs when modal opens
   useEffect(() => {
     if (!visible) return;
@@ -315,7 +321,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
       case 'gemini':
         return <GeminiModalContent />;
       case 'model':
-        return <ModelModalContent />;
+        return (
+          <Suspense
+            fallback={
+              <div className='flex items-center justify-center min-h-200px'>
+                <Spin />
+              </div>
+            }
+          >
+            <LazyModelModalContent />
+          </Suspense>
+        );
       case 'agent':
         return <AgentModalContent />;
       case 'tools':

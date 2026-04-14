@@ -8,7 +8,6 @@
 import { ipcBridge } from '@/common';
 import type { IProvider } from '@/common/config/storage';
 import { getProviderAuthType } from '@/common/utils/platformAuthType';
-import { AuthType } from '@office-ai/aioncli-core';
 import { Button, Dropdown, Menu, Tooltip } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -55,7 +54,7 @@ export const OneModelSelector: React.FC<{ conversationId: string }> = ({ convers
       for (const m of p.model || []) {
         if (p.modelEnabled?.[m] === false) continue;
         const authType = getProviderAuthType({ platform: p.platform, authType: (p as any).authType, modelProtocols: p.modelProtocols, useModel: m });
-        if (authType !== AuthType.USE_OPENAI) continue;
+        if (authType !== 'openai') continue;
         out.push({
           id: buildId(p.id, m),
           label: `${p.name} · ${m}`,

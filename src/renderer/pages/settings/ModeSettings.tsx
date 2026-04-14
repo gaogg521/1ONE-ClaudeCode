@@ -4,14 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import ModelModalContent from '@/renderer/components/settings/SettingsModal/contents/ModelModalContent';
+import React, { Suspense } from 'react';
+import AppLoader from '@renderer/components/layout/AppLoader';
 import SettingsPageWrapper from './components/SettingsPageWrapper';
+
+const ModelModalContent = React.lazy(() => import('@/renderer/components/settings/SettingsModal/contents/ModelModalContent'));
 
 const ModeSettings: React.FC = () => {
   return (
     <SettingsPageWrapper contentClassName='max-w-1100px'>
-      <ModelModalContent />
+      <Suspense fallback={<AppLoader />}>
+        <ModelModalContent />
+      </Suspense>
     </SettingsPageWrapper>
   );
 };

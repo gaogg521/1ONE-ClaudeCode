@@ -764,6 +764,10 @@
     "marketContributionAction": "Open a PR on AionHub",
     "marketComingSoon": "AionHub market is coming soon.",
     "detectCustomAgent": "Detect Custom Agent",
+    "scanLocalAgent": "Scan local agents",
+    "scanLocalAgentHint": "Re-detect local agents after installs or PATH changes",
+    "scanLocalAgentDone": "Local agents re-scanned",
+    "scanLocalAgentFailed": "Scan failed, please try again later",
     "editCustomAgent": "Edit Custom Agent",
     "localAgentsEmpty": "No local agents detected",
     "detected": "Detected",
@@ -813,4 +817,12 @@
     "pendingCancel": "Cancel",
     "pendingTimeRemaining": "Time remaining: {{time}}"
   }
+  ,
+  "custom": "Custom",
+  "modelProtocolCustom": "Custom protocol/mode",
+  "modelProtocolCustomTip": "Vendor/gateway specific mode string, e.g. compatible-mode. It will be resolved for routing and URL normalization.",
+  "healthCheckHint405": "405: baseUrl path is incorrect (often missing /v1). Please set baseUrl to .../v1 (or the vendor-compatible path).",
+  "healthCheckHintUnsupported": "This model/route does not support the requested operation (often OpenAI chat/completions). Try another model, adjust gateway routing, or use a vendor-compatible mode (e.g. compatible-mode).",
+  "healthCheckHintProtocolMismatch": "Protocol mismatch: this model only supports OpenAI. Select OpenAI in “Request protocol”, or set a per-model protocol override.",
+  "healthCheckHintGeneric": "Please verify API Key, baseUrl, request protocol/mode, and gateway routing."
 }

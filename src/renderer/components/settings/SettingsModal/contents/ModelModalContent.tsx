@@ -20,7 +20,7 @@ import EditModeModal from '@/renderer/pages/settings/components/EditModeModal';
 import AionScrollArea from '@/renderer/components/base/AionScrollArea';
 import { useSettingsViewMode } from '../settingsViewContext';
 import { consumePendingDeepLink } from '@/renderer/hooks/system/useDeepLink';
-import { classifyHealthCheckMessage } from './healthCheckUtils';
+import { buildHealthCheckHint, classifyHealthCheckMessage } from './healthCheckUtils';
 import '../model-provider.css';
 
 /**
@@ -261,7 +261,16 @@ const ModelModalContent: React.FC = () => {
             }
             resolveOnce({
               success: false,
-              error: (msg.data as { error?: string } | undefined)?.error || 'Unknown error',
+              error:
+                typeof msg.data === 'string'
+                  ? msg.data
+                  : typeof (msg.data as { message?: unknown } | null | undefined)?.message === 'string'
+                    ? String((msg.data as { message?: string }).message)
+                    : typeof (msg.data as { error?: unknown } | null | undefined)?.error === 'string'
+                      ? String((msg.data as { error?: string }).error)
+                      : msg.data
+                        ? String(msg.data)
+                        : 'Unknown error',
               latency: duration,
             });
             return;
@@ -347,8 +356,9 @@ const ModelModalContent: React.FC = () => {
               duration: 3000,
             });
           } else {
+            const hint = buildHealthCheckHint(result.error || '', t);
             Message.error({
-              content: `${platform.name} - ${modelName}: ${t('common.failed')} - ${result.error}`,
+              content: `${platform.name} - ${modelName}: ${t('common.failed')} - ${hint.message}`,
               duration: 5000,
             });
           }
@@ -368,8 +378,9 @@ const ModelModalContent: React.FC = () => {
     } catch (error: unknown) {
       const latency = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : String(error);
+      const hint = buildHealthCheckHint(errorMessage, t);
       Message.error({
-        content: `${platform.name} - ${modelName}: ${t('common.failed')} - ${errorMessage}`,
+        content: `${platform.name} - ${modelName}: ${t('common.failed')} - ${hint.message}`,
         duration: 5000,
       });
 

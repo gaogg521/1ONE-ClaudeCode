@@ -6,6 +6,7 @@
 
 import type { TProviderWithModel } from '@/common/config/storage';
 import { isOpenAIHost } from '@/common/utils/urlValidation';
+import type { ProviderAuthTypeChoice } from '@/common/types/providerAuthType';
 
 type AionrsProvider = 'anthropic' | 'openai' | 'bedrock' | 'vertex';
 
@@ -15,6 +16,18 @@ type AionrsProvider = 'anthropic' | 'openai' | 'bedrock' | 'vertex';
  * 1ONE PlatformType values: 'custom' | 'new-api' | 'gemini' | 'gemini-vertex-ai' | 'anthropic' | 'bedrock'
  */
 function mapProvider(model: TProviderWithModel): AionrsProvider {
+  // Respect explicit authType override (protocol selection in UI).
+  // This is critical for gateway endpoints (LiteLLM/new-api) where the same baseUrl can host
+  // multiple upstream protocols.
+  const authType = (model as { authType?: ProviderAuthTypeChoice }).authType;
+  if (authType) {
+    if (authType === 'anthropic') return 'anthropic';
+    if (authType === 'bedrock') return 'bedrock';
+    if (authType === 'vertex') return 'vertex';
+    if (authType === 'custom') return 'openai';
+    return 'openai';
+  }
+
   const mapping: Record<string, AionrsProvider> = {
     anthropic: 'anthropic',
     bedrock: 'bedrock',
@@ -179,7 +192,18 @@ function buildProjectConfig(model: TProviderWithModel, provider: AionrsProvider)
   // OpenAI official API needs max_completion_tokens for newer models.
   // Only apply when the host is actually OpenAI (not Gemini or other providers).
   const baseUrl = model.baseUrl || '';
-  if (baseUrl && isOpenAIHost(baseUrl)) {
+  const useModelLower = (model.useModel ?? '').toLowerCase();
+  const needsMaxCompletionTokens =
+    // Newer OpenAI model families and many Azure/LiteLLM routes require `max_completion_tokens`
+    // and reject `max_tokens` (e.g. gpt-5.*, o1/o3, some "codex" variants).
+    useModelLower.startsWith('gpt-5') ||
+    useModelLower.startsWith('o1') ||
+    useModelLower.startsWith('o3') ||
+    useModelLower.includes('codex');
+
+  // OpenAI host: always apply for the affected families.
+  // Non-OpenAI (LiteLLM/new-api/custom gateways): apply only when model name strongly suggests it.
+  if ((baseUrl && isOpenAIHost(baseUrl)) || needsMaxCompletionTokens) {
     overrides.push('max_tokens_field = "max_completion_tokens"');
   }
 

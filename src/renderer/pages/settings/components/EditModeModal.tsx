@@ -7,6 +7,7 @@ import AionModal from '@/renderer/components/base/AionModal';
 import { LinkCloud } from '@icon-park/react';
 import { ipcBridge } from '@/common';
 import useModeModeList from '@renderer/hooks/agent/useModeModeList';
+import type { ProviderAuthTypeChoice } from '@/common/types/providerAuthType';
 
 // Provider Logo imports
 import GeminiLogo from '@/renderer/assets/logos/ai-major/gemini.svg';
@@ -113,6 +114,22 @@ const EditModeModal = ModalHOC<{ data?: IProvider; onChange(data: IProvider): vo
     // Watch bedrockAuthMethod only for UI conditional rendering (not for auto-refresh)
     const bedrockAuthMethod = Form.useWatch('bedrockAuthMethod', form);
     const isBedrock = data?.platform === 'bedrock';
+    const isNewApi = data?.platform === 'new-api';
+    const isGemini = data?.platform === 'gemini' || data?.platform === 'gemini-vertex-ai';
+    const isCustom = data?.platform === 'custom';
+    const protocolChoice = Form.useWatch('authType', form) as ProviderAuthTypeChoice | undefined;
+    const isCustomProtocol = protocolChoice === 'custom';
+
+    const PROVIDER_PROTOCOL_OPTIONS = useMemo(
+      () =>
+        [
+          { label: 'OpenAI (chat/completions)', value: 'openai' },
+          { label: 'Anthropic (messages)', value: 'anthropic' },
+          { label: 'Gemini', value: 'gemini' },
+          { label: t('settings.custom', { defaultValue: '自定义' }), value: 'custom' },
+        ] satisfies Array<{ label: string; value: ProviderAuthTypeChoice }>,
+      [t]
+    );
 
     // 获取供应商 Logo / Get provider logo
     const providerLogo = useMemo(() => {
@@ -134,6 +151,8 @@ const EditModeModal = ModalHOC<{ data?: IProvider; onChange(data: IProvider): vo
           bedrockAccessKeyId: data.bedrockConfig?.accessKeyId || '',
           bedrockSecretAccessKey: data.bedrockConfig?.secretAccessKey || '',
           bedrockProfile: data.bedrockConfig?.profile || '',
+          authType: data.authType ?? 'openai',
+          authTypeCustom: data.authTypeCustom ?? '',
         });
       }
     }, [data, form]);
@@ -154,6 +173,7 @@ const EditModeModal = ModalHOC<{ data?: IProvider; onChange(data: IProvider): vo
               // Ensure model is always an array
               model: Array.isArray(values.model) ? values.model : [values.model],
             };
+            updatedProvider.authTypeCustom = values.authType === 'custom' ? values.authTypeCustom : undefined;
 
             // Add Bedrock configuration if platform is Bedrock
             if (isBedrock) {
@@ -219,6 +239,43 @@ const EditModeModal = ModalHOC<{ data?: IProvider; onChange(data: IProvider): vo
               extra={<div className='text-11px text-t-secondary mt-2'>💡 {t('settings.multiApiKeyEditTip')}</div>}
             >
               <Input.TextArea rows={4} placeholder={t('settings.apiKeyPlaceholder')} />
+            </Form.Item>
+
+            {/* Provider 协议选择（Custom 场景）/ Provider protocol selection (custom gateways) */}
+            <Form.Item
+              hidden={isBedrock || isNewApi || isGemini || !isCustom}
+              label={t('settings.modelProtocol', { defaultValue: '请求协议' })}
+              field={'authType'}
+              required={!isBedrock}
+              rules={[{ required: !isBedrock }]}
+              extra={
+                <span className='text-11px text-t-secondary'>
+                  {t('settings.modelProtocolTip', {
+                    defaultValue:
+                      '用于自定义/网关服务：同一 baseUrl 可能同时支持 OpenAI/Anthropic 等不同协议，请选择正确的请求格式。',
+                  })}
+                </span>
+              }
+            >
+              <Select options={PROVIDER_PROTOCOL_OPTIONS} />
+            </Form.Item>
+
+            <Form.Item
+              hidden={isBedrock || isNewApi || isGemini || !isCustom || !isCustomProtocol}
+              label={t('settings.modelProtocolCustom', { defaultValue: '自定义协议/模式' })}
+              field={'authTypeCustom'}
+              required={isCustomProtocol}
+              rules={[{ required: isCustomProtocol }]}
+              extra={
+                <span className='text-11px text-t-secondary'>
+                  {t('settings.modelProtocolCustomTip', {
+                    defaultValue:
+                      '用于厂商/网关的特殊模式标识，例如：compatible-mode。系统会基于该值解析成可用协议并进行路由/URL 规范化。',
+                  })}
+                </span>
+              }
+            >
+              <Input placeholder='compatible-mode' />
             </Form.Item>
 
             {/* AWS Bedrock Authentication Method */}

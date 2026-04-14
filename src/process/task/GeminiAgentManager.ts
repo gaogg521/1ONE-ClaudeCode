@@ -187,7 +187,8 @@ export class GeminiAgentManager extends BaseAgentManager<
       .then(async ([config, mcpServers]) => {
         let projectId: string | undefined;
         const authType = getProviderAuthType(this.model);
-        const needsGoogleOAuth = authType === AuthType.LOGIN_WITH_GOOGLE || authType === AuthType.USE_VERTEX_AI;
+        const needsGoogleOAuth =
+          this.model.platform?.toLowerCase().includes('gemini-with-google-auth') || authType === 'vertex';
 
         if (needsGoogleOAuth) {
           try {

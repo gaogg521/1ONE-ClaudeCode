@@ -14,7 +14,9 @@ const AssistantSettings = React.lazy(() => import('@renderer/pages/settings/Assi
 const SkillsHubSettings = React.lazy(() => import('@renderer/pages/settings/SkillsHubSettings'));
 const AionrsSettings = React.lazy(() => import('@renderer/pages/settings/AionrsSettings'));
 const GeminiSettings = React.lazy(() => import('@renderer/pages/settings/GeminiSettings'));
-const ModeSettings = React.lazy(() => import('@renderer/pages/settings/ModeSettings'));
+// Model settings is a high-traffic route and pulls in heavy UI modules.
+// Eager-load it to avoid long Suspense spinner / perceived "freeze" when navigating from Settings.
+import ModeSettings from '@renderer/pages/settings/ModeSettings';
 const SystemSettings = React.lazy(() => import('@renderer/pages/settings/SystemSettings'));
 const ToolsSettings = React.lazy(() => import('@renderer/pages/settings/ToolsSettings'));
 const WebuiSettings = React.lazy(() => import('@renderer/pages/settings/WebuiSettings'));
@@ -111,7 +113,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/settings/aionrs' element={withRouteFallback(AionrsSettings)} />
           <Route path='/team/:id' element={withRouteFallback(TeamIndex)} />
           <Route path='/settings/gemini' element={withRouteFallback(GeminiSettings)} />
-          <Route path='/settings/model' element={withRouteFallback(ModeSettings)} />
+          <Route path='/settings/model' element={<ModeSettings />} />
           <Route path='/settings/assistants' element={withRouteFallback(AssistantSettings)} />
           <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
           <Route path='/settings/skills-hub' element={withRouteFallback(SkillsHubSettings)} />

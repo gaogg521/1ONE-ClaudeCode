@@ -92,6 +92,7 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
     const preload = () => {
       void Promise.allSettled([
         import('@renderer/pages/settings/ModeSettings'),
+        import('@renderer/components/settings/SettingsModal/contents/ModelModalContent'),
         import('@renderer/pages/settings/AssistantSettings'),
         import('@renderer/pages/settings/ToolsSettings'),
         import('@renderer/pages/settings/AgentSettings'),

@@ -23,6 +23,7 @@ import {
   type PlatformConfig,
 } from '@/renderer/utils/model/modelPlatforms';
 import type { DeepLinkAddProviderDetail } from '@/renderer/hooks/system/useDeepLink';
+import type { ProviderAuthTypeChoice } from '@/common/types/providerAuthType';
 
 /**
  * Protocol icon configurations
@@ -233,6 +234,19 @@ const AddPlatformModal = ModalHOC<{
   const isBedrock = platform === 'bedrock';
   const isGemini = isGeminiPlatform(platform);
   const isNewApi = isNewApiPlatform(platform);
+  const protocolChoice = Form.useWatch('authType', form) as ProviderAuthTypeChoice | undefined;
+  const isCustomProtocol = protocolChoice === 'custom';
+
+  const PROVIDER_PROTOCOL_OPTIONS = useMemo(
+    () =>
+      [
+        { label: 'OpenAI (chat/completions)', value: 'openai' },
+        { label: 'Anthropic (messages)', value: 'anthropic' },
+        { label: 'Gemini', value: 'gemini' },
+        { label: t('settings.custom', { defaultValue: '自定义' }), value: 'custom' },
+      ] satisfies Array<{ label: string; value: ProviderAuthTypeChoice }>,
+    [t]
+  );
 
   // new-api 每模型协议选择状态 / new-api per-model protocol selection state
   const [modelProtocol, setModelProtocol] = useState<string>('openai');
@@ -303,6 +317,7 @@ const AddPlatformModal = ModalHOC<{
       form.resetFields();
       form.setFieldValue('bedrockAuthMethod', 'accessKey');
       form.setFieldValue('bedrockRegion', 'us-east-1');
+      form.setFieldValue('authType', 'openai');
       protocolDetection.reset();
       setLastDetectionInput(null); // 重置检测记录 / Reset detection record
       setModelProtocol('openai'); // 重置协议选择 / Reset protocol selection
@@ -350,6 +365,8 @@ const AddPlatformModal = ModalHOC<{
           // Prefer user input baseUrl, fallback to platform preset
           baseUrl: isBedrock ? '' : values.baseUrl || selectedPlatform?.baseUrl || '',
           apiKey: isBedrock ? '' : values.apiKey,
+          authType: !isBedrock ? values.authType : undefined,
+          authTypeCustom: values.authType === 'custom' ? values.authTypeCustom : undefined,
           model: [values.model],
         };
 
@@ -555,6 +572,43 @@ const AddPlatformModal = ModalHOC<{
             extra={t('settings.bedrock.profileHint')}
           >
             <Input placeholder='default' />
+          </Form.Item>
+
+          {/* Provider 协议选择（Custom 场景）/ Provider protocol selection (custom gateways) */}
+          <Form.Item
+            hidden={isBedrock || isNewApi || isGemini}
+            label={t('settings.modelProtocol', { defaultValue: '请求协议' })}
+            field={'authType'}
+            required={!isBedrock}
+            rules={[{ required: !isBedrock }]}
+            extra={
+              <span className='text-11px text-t-secondary'>
+                {t('settings.modelProtocolTip', {
+                  defaultValue:
+                    '用于自定义/网关服务：同一 baseUrl 可能同时支持 OpenAI/Anthropic 等不同协议，请选择正确的请求格式。',
+                })}
+              </span>
+            }
+          >
+            <Select options={PROVIDER_PROTOCOL_OPTIONS} />
+          </Form.Item>
+
+          <Form.Item
+            hidden={isBedrock || isNewApi || isGemini || !isCustomProtocol}
+            label={t('settings.modelProtocolCustom', { defaultValue: '自定义协议/模式' })}
+            field={'authTypeCustom'}
+            required={isCustomProtocol}
+            rules={[{ required: isCustomProtocol }]}
+            extra={
+              <span className='text-11px text-t-secondary'>
+                {t('settings.modelProtocolCustomTip', {
+                  defaultValue:
+                    '用于厂商/网关的特殊模式标识，例如：compatible-mode。系统会基于该值解析成可用协议并进行路由/URL 规范化。',
+                })}
+              </span>
+            }
+          >
+            <Input placeholder='compatible-mode' />
           </Form.Item>
 
           {/* 模型选择 / Model Selection */}

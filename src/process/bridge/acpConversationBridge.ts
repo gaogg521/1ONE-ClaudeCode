@@ -101,6 +101,20 @@ export function initAcpConversationBridge(workerTaskManager: IWorkerTaskManager)
     }
   });
 
+  // Refresh local agent detection (builtin + extension + custom)
+  // "Scan local agents" in Settings UI triggers this to re-check PATH and installed CLIs.
+  ipcBridge.acpConversation.refreshDetectedAgents.provider(async () => {
+    try {
+      await acpDetector.refreshAll();
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        msg: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
   // Test custom agent connection - validates CLI exists and ACP handshake works
   ipcBridge.acpConversation.testCustomAgent.provider(async (params) => {
     const { testCustomAgentConnection } = await import('./testCustomAgentConnection');

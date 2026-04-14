@@ -765,6 +765,10 @@
     "marketContributionAction": "前往 AionHub 提交 PR",
     "marketComingSoon": "AionHub 市场即将上线。",
     "detectCustomAgent": "识别自定义 Agent",
+    "scanLocalAgent": "扫描本地 Agent",
+    "scanLocalAgentHint": "用于重新检测本机已安装的 Agent（PATH/安装后点这里）",
+    "scanLocalAgentDone": "已重新扫描本地 Agent",
+    "scanLocalAgentFailed": "扫描失败，请稍后重试",
     "editCustomAgent": "编辑自定义 Agent",
     "localAgentsEmpty": "未检测到本地 Agent",
     "detected": "已检测",
@@ -814,4 +818,12 @@
     "pendingCancel": "取消",
     "pendingTimeRemaining": "剩余时间：{{time}}"
   }
+  ,
+  "custom": "自定义",
+  "modelProtocolCustom": "自定义协议/模式",
+  "modelProtocolCustomTip": "用于厂商/网关的特殊模式标识，例如：compatible-mode。系统会基于该值解析成可用协议并进行路由/URL 规范化。",
+  "healthCheckHint405": "405：baseUrl 路径不对（常见是缺少 /v1）。请检查 baseUrl 是否为 .../v1（或厂商要求的兼容路径）。",
+  "healthCheckHintUnsupported": "该模型/线路不支持当前请求操作（通常是不支持 OpenAI chat/completions）。请尝试换模型、换网关路由，或切换为厂商兼容模式（如 compatible-mode）。",
+  "healthCheckHintProtocolMismatch": "协议不匹配：该模型仅支持 OpenAI 协议。请在“请求协议”里选择 OpenAI，或为该模型配置协议覆盖。",
+  "healthCheckHintGeneric": "请检查 API Key、baseUrl、请求协议/模式与网关路由是否匹配。"
 }

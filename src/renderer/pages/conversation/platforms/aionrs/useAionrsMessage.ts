@@ -207,7 +207,18 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
           break;
         default: {
           if (message.type === 'error') {
+            // aionrs may emit `error` without a trailing `finish` in some failure paths
+            // (e.g. worker crash / upstream timeout). Ensure the UI is unblocked for the next turn.
             setWaitingResponse(false);
+            waitingResponseRef.current = false;
+            setStreamRunning(false);
+            streamRunningRef.current = false;
+            setHasActiveTools(false);
+            hasActiveToolsRef.current = false;
+            setThought({ subject: '', description: '' });
+            hasContentInTurnRef.current = false;
+            // Clear active message id so next request won't be filtered
+            activeMsgIdRef.current = null;
             onError?.(message as IResponseMessage);
           } else {
             // Mark that current turn has content output (exclude error type)

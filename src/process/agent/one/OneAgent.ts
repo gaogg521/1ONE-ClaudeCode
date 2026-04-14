@@ -177,26 +177,58 @@ export class OneAgent extends EventEmitter {
 
     // Call API
     const url = `${baseUrl}/chat/completions`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
+    const buildBody = (useMaxCompletionTokens: boolean) => {
+      const body: Record<string, unknown> = {
         model: model.useModel,
         messages,
         tools: tools.length > 0 ? tools : undefined,
         tool_choice: tools.length > 0 ? 'auto' : undefined,
-        max_tokens: this.options.maxTokens,
         stream: true,
-      }),
-      signal: this.abortController?.signal,
-    });
+      };
+      if (this.options.maxTokens) {
+        if (useMaxCompletionTokens) {
+          body.max_completion_tokens = this.options.maxTokens;
+        } else {
+          body.max_tokens = this.options.maxTokens;
+        }
+      }
+      return body;
+    };
+
+    const doFetch = async (useMaxCompletionTokens: boolean) => {
+      return await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(buildBody(useMaxCompletionTokens)),
+        signal: this.abortController?.signal,
+      });
+    };
+
+    let response = await doFetch(false);
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`API error ${response.status}: ${errorText}`);
+      // Some OpenAI/Azure/LiteLLM routes reject `max_tokens` and require `max_completion_tokens`.
+      // Best-effort retry with the alternative parameter to improve compatibility.
+      const lower = errorText.toLowerCase();
+      const shouldRetryWithMaxCompletionTokens =
+        lower.includes("unsupported parameter") &&
+        lower.includes("'max_tokens'") &&
+        lower.includes('max_completion_tokens');
+      if (shouldRetryWithMaxCompletionTokens) {
+        response = await doFetch(true);
+        if (response.ok) {
+          // continue to streaming handling below
+        } else {
+          const retryErrorText = await response.text();
+          throw new Error(`API error ${response.status}: ${retryErrorText}`);
+        }
+      } else {
+        throw new Error(`API error ${response.status}: ${errorText}`);
+      }
     }
 
     // Process streaming response

@@ -238,6 +238,15 @@ export class AionrsAgent {
           data: event.error.message,
           msg_id: event.msg_id ?? this.activeMsgId ?? '',
         });
+        // Some upstream failures only emit `error` without `stream_end`.
+        // Emit a best-effort `finish` to unblock the renderer sendbox state machine.
+        if (event.msg_id || this.activeMsgId) {
+          const msgId = event.msg_id ?? this.activeMsgId ?? '';
+          if (msgId) {
+            this.onStreamEvent({ type: 'finish', data: '', msg_id: msgId });
+          }
+        }
+        this.activeMsgId = null;
         break;
 
       case 'info':

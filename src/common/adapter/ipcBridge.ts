@@ -462,6 +462,7 @@ export const acpConversation = {
   >('acp.get-available-agents'),
   checkEnv: bridge.buildProvider<{ env: Record<string, string> }, void>('acp.check.env'),
   refreshCustomAgents: bridge.buildProvider<IBridgeResponse, void>('acp.refresh-custom-agents'),
+  refreshDetectedAgents: bridge.buildProvider<IBridgeResponse, void>('acp.refresh-detected-agents'),
   testCustomAgent: bridge.buildProvider<
     IBridgeResponse<{ step: 'cli_check' | 'acp_initialize'; error?: string }>,
     { command: string; acpArgs?: string[]; env?: Record<string, string> }

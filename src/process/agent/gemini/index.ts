@@ -14,7 +14,7 @@ import type { TProviderWithModel } from '@/common/config/storage';
 import { uuid } from '@/common/utils';
 import { getProviderAuthType } from '@/common/utils/platformAuthType';
 import { isNewApiPlatform } from '@/common/utils/platformConstants';
-import { normalizeNewApiBaseUrl } from '@/common/api/ClientFactory';
+import { normalizeNewApiBaseUrl, normalizeOpenAiCompatBaseUrl } from '@/common/api/ClientFactory';
 import type {
   CompletedToolCall,
   Config,
@@ -143,8 +143,8 @@ export class GeminiAgent {
     this.googleCloudProject = options.GOOGLE_CLOUD_PROJECT;
     this.mcpServers = options.mcpServers || {};
     this.contextFileName = options.contextFileName;
-    // 使用统一的工具函数获取认证类型
-    this.authType = getProviderAuthType(options.model);
+    // 使用统一的工具函数获取认证类型（Gemini 实现内部仍沿用 AuthType）
+    this.authType = getProviderAuthType(options.model) === 'vertex' ? AuthType.USE_VERTEX_AI : AuthType.USE_GEMINI;
     this.onStreamEvent = options.onStreamEvent;
     this.presetRules = options.presetRules;
     this.skillsDir = options.skillsDir;
@@ -209,8 +209,15 @@ export class GeminiAgent {
     // 对 new-api 网关进行 URL 规范化（不同协议需要不同的 URL 格式）
     // Normalize URL for new-api gateway (different protocols need different URL formats)
     const isNewApi = isNewApiPlatform(this.model.platform);
-    const getBaseUrl = () =>
-      isNewApi ? normalizeNewApiBaseUrl(this.model.baseUrl, this.authType) : this.model.baseUrl;
+    const getBaseUrl = () => {
+      if (isNewApi) return normalizeNewApiBaseUrl(this.model.baseUrl, this.authType);
+      // OpenAI-compatible custom gateways: align with ClientFactory (e.g. /v1, compatible-mode/v1).
+      // Without this, model settings health checks often hit 405 while other paths still work.
+      if (this.authType === AuthType.USE_OPENAI) {
+        return normalizeOpenAiCompatBaseUrl(this.model.baseUrl, this.model.authTypeCustom);
+      }
+      return this.model.baseUrl;
+    };
 
     if (this.authType === AuthType.USE_GEMINI) {
       fallbackValue('GEMINI_API_KEY', getCurrentApiKey());

@@ -17,6 +17,41 @@ const crypto = require('crypto');
 const prepareBundledBun = require('./prepareBundledBun');
 const prepareAionrs = require('./prepareAionrs');
 
+function prepareAionrsForPackaging(archList) {
+  const uniq = [...new Set((archList || []).filter(Boolean))];
+  if (uniq.length === 0) {
+    throw new Error('prepareAionrsForPackaging: empty arch list');
+  }
+
+  const prev = process.env.AIONRS_ARCH;
+  try {
+    for (const arch of uniq) {
+      process.env.AIONRS_ARCH = arch;
+      const res = prepareAionrs({ strict: true });
+      if (!res || !res.prepared) {
+        throw new Error(`prepareAionrs failed for arch=${arch}`);
+      }
+    }
+  } finally {
+    if (prev === undefined) delete process.env.AIONRS_ARCH;
+    else process.env.AIONRS_ARCH = prev;
+  }
+}
+
+function assertAionrsBundledForPackaging(archList) {
+  const platform = process.platform;
+  const binaryName = platform === 'win32' ? 'aionrs.exe' : 'aionrs';
+  const projectRoot = path.resolve(__dirname, '..');
+  const uniq = [...new Set((archList || []).filter(Boolean))];
+  for (const arch of uniq) {
+    const runtimeKey = `${platform}-${arch}`;
+    const p = path.join(projectRoot, 'resources', 'bundled-aionrs', runtimeKey, binaryName);
+    if (!fs.existsSync(p)) {
+      throw new Error(`Packaging guard failed: missing aionrs binary at ${p}`);
+    }
+  }
+}
+
 // DMG retry logic for macOS: detects DMG creation failures by checking artifacts
 // (.app exists but .dmg missing) and retries only the DMG step using
 // electron-builder --prepackaged with the .app path (not the parent directory).
@@ -457,7 +492,10 @@ try {
   // 5b. Prepare hub resources (index.json + extension zips for offline fallback)
   execSync('node scripts/prepareHubResources.js', { stdio: 'inherit', env: process.env });
   // 5b. Prepare aionrs binary (Rust CLI for agent integration)
-  prepareAionrs();
+  // Must match the architecture(s) we package; otherwise installers may ship without "1ONE CODE".
+  const aionrsArchs = multiArch ? archArgs : [targetArch];
+  prepareAionrsForPackaging(aionrsArchs);
+  assertAionrsBundledForPackaging(aionrsArchs);
 
   // 6. 运行 electron-builder 生成分发包（DMG/ZIP/EXE等）
   // Run electron-builder to create distributables (DMG/ZIP/EXE, etc.)

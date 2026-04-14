@@ -2,7 +2,6 @@
  * Model list + compound IDs for the built-in One agent (OpenAI-compatible /chat/completions only).
  */
 
-import { AuthType } from '@office-ai/aioncli-core';
 import type { AcpModelInfo } from '@/common/types/acpTypes';
 import type { IProvider, TProviderWithModel } from '@/common/config/storage';
 import { ConfigStorage } from '@/common/config/storage';
@@ -24,7 +23,7 @@ export function parseOneCompoundModelId(id: string): { providerId: string; model
 function isOpenAiCompatibleForOne(pwm: TProviderWithModel): boolean {
   // Model list should not depend on whether the user has already filled API Key.
   // Lack of key should surface at request time (clear error), not hide models.
-  return getProviderAuthType(pwm) === AuthType.USE_OPENAI;
+  return getProviderAuthType(pwm) === 'openai';
 }
 
 export async function listOneAgentSelectableModels(): Promise<Array<{ id: string; label: string }>> {
