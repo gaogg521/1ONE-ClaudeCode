@@ -549,6 +549,47 @@ export function getWindowsShellExecutionOptions(): {
 }
 
 /**
+ * Windows: try standard install locations when `where node` is unreliable.
+ * Avoids falling back to bare `npx.cmd`, which may resolve to Bun and break ACP.
+ */
+function tryResolveWindowsNpxFromKnownInstalls(): string | null {
+  const pf = process.env.ProgramFiles || 'C:\\Program Files';
+  const pf86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+  const dirs = [
+    process.env.NVM_SYMLINK,
+    process.env.FNM_MULTISHELL_PATH,
+    path.join(pf, 'nodejs'),
+    path.join(pf86, 'nodejs'),
+  ].filter((d): d is string => Boolean(d));
+
+  const npxName = 'npx.cmd';
+  for (const dir of dirs) {
+    const nodeExe = path.join(dir, 'node.exe');
+    const npxCmd = path.join(dir, npxName);
+    const npxCliJs = path.join(dir, 'node_modules', 'npm', 'bin', 'npx-cli.js');
+    const npmPrefixJs = path.join(dir, 'node_modules', 'npm', 'bin', 'npm-prefix.js');
+    try {
+      if (!existsSync(nodeExe) || !existsSync(npxCmd) || !existsSync(npxCliJs) || !existsSync(npmPrefixJs)) {
+        continue;
+      }
+      const versionOutput = execFileSync(nodeExe, [npxCliJs, '--version'], {
+        encoding: 'utf-8',
+        timeout: 5000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      }).trim();
+      const majorVersion = parseInt(versionOutput.split('.')[0], 10);
+      if (majorVersion >= 7) {
+        return npxCmd;
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
+/**
  * Resolve a modern npx binary (npm >= 7) from the same directory as the
  * active node binary.  Old standalone npx packages (npm v5/v6 era) don't
  * understand `@scope/package` syntax and fail with
@@ -562,7 +603,7 @@ export function resolveNpxPath(env: Record<string, string | undefined>): string 
   const npxName = isWindows ? 'npx.cmd' : 'npx';
   try {
     const whichCmd = isWindows ? 'where' : 'which';
-    const nodePath = execFileSync(whichCmd, ['node'], {
+    const nodePaths = execFileSync(whichCmd, ['node'], {
       env,
       encoding: 'utf-8',
       timeout: 5000,
@@ -570,44 +611,53 @@ export function resolveNpxPath(env: Record<string, string | undefined>): string 
       ...getWindowsShellExecutionOptions(),
     })
       .trim()
-      .split(/\r?\n/)[0]; // `where` on Windows may return multiple lines
-    const npxCandidate = path.join(path.dirname(nodePath), npxName);
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
 
-    let versionOutput = '';
-    if (isWindows) {
-      // Packaged Windows builds may resolve a bundled node.exe whose sibling
-      // npx.cmd exists, but its bundled npm JS files are missing. Probe the
-      // npm entrypoint JS directly so we only trust a complete Node+npm install.
-      const npmBinDir = path.join(path.dirname(nodePath), 'node_modules', 'npm', 'bin');
-      const npmPrefixJs = path.join(npmBinDir, 'npm-prefix.js');
-      const npxCliJs = path.join(npmBinDir, 'npx-cli.js');
-      if (!existsSync(npxCandidate) || !existsSync(npmPrefixJs) || !existsSync(npxCliJs)) {
-        throw new Error('Node-adjacent npx.cmd or bundled npm scripts are missing');
+    // Windows `where node` can list Electron/broken shims first — try every candidate.
+    for (const nodePath of nodePaths) {
+      const npxCandidate = path.join(path.dirname(nodePath), npxName);
+
+      let versionOutput = '';
+      if (isWindows) {
+        const npmBinDir = path.join(path.dirname(nodePath), 'node_modules', 'npm', 'bin');
+        const npmPrefixJs = path.join(npmBinDir, 'npm-prefix.js');
+        const npxCliJs = path.join(npmBinDir, 'npx-cli.js');
+        if (!existsSync(npxCandidate) || !existsSync(npmPrefixJs) || !existsSync(npxCliJs)) {
+          continue;
+        }
+        versionOutput = execFileSync(nodePath, [npxCliJs, '--version'], {
+          env,
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true,
+        }).trim();
+      } else {
+        if (!existsSync(npxCandidate)) continue;
+        versionOutput = execFileSync(npxCandidate, ['--version'], {
+          env,
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        }).trim();
       }
-      versionOutput = execFileSync(nodePath, [npxCliJs, '--version'], {
-        env,
-        encoding: 'utf-8',
-        timeout: 5000,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true,
-      }).trim();
-    } else {
-      // Verify the candidate exists AND is modern (npm >= 7 bundles npx >= 7)
-      versionOutput = execFileSync(npxCandidate, ['--version'], {
-        env,
-        encoding: 'utf-8',
-        timeout: 5000,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim();
-    }
 
-    const majorVersion = parseInt(versionOutput.split('.')[0], 10);
-    if (majorVersion >= 7) {
-      return npxCandidate;
+      const majorVersion = parseInt(versionOutput.split('.')[0], 10);
+      if (majorVersion >= 7) {
+        return npxCandidate;
+      }
     }
-    console.warn(`[ShellEnv] npx at ${npxCandidate} is v${versionOutput} (too old), falling back to PATH lookup`);
+    console.warn('[ShellEnv] No suitable npx found from `which`/`where node` candidates, trying known installs');
   } catch {
     // which/node/npx resolution failed
+  }
+  if (isWindows) {
+    const fromKnown = tryResolveWindowsNpxFromKnownInstalls();
+    if (fromKnown) {
+      return fromKnown;
+    }
   }
   return npxName;
 }
