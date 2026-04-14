@@ -1,0 +1,52 @@
+{
+  "id": "b568a706",
+  "created_at": "2026-04-14T02:10:32.117390700Z",
+  "updated_at": "2026-04-14T02:10:53.070711500Z",
+  "provider": "openai",
+  "model": "gemini-3.1-pro-preview",
+  "cwd": "C:\\Users\\allenzhao\\AppData\\Roaming\\1ONE ClaudeCode\\1one\\aionrs-temp-1776132631680",
+  "total_usage": {
+    "input_tokens": 2121,
+    "output_tokens": 309,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "你好"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "你好！很高兴为你服务。有什么我可以帮你的吗？"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "你现在是哪个模型在提供服务"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "我是由 Google 训练的大型语言模型。有什么我可以帮你的吗？"
+        }
+      ]
+    }
+  ]
+}

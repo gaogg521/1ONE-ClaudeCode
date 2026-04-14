@@ -3,7 +3,8 @@
 This file indexes all memories for the 1ONE ClaudeCode project. **Repo-local facts** live under this repository’s `memory/` directory (committed with the project). Claude Code may also mirror under `~/.claude/projects/<path>/memory/`.
 
 ## User Memories
-- [开发改动后自动重启（2026-04-14）](memory/user-dev-restart-preference-2026-04-14.md) — 完成影响主进程/渲染层的改动后应执行 `bun run restart`；agent 终端无 `npm` 时用 `bun`。
+- [开发改动后自动重启（2026-04-14）](memory/user-dev-restart-preference-2026-04-14.md) — 完成后应 **`npm run restart`**；勿默认用 bun；仅当 shell 中 npm 不可用时再说明并备选。
+- [重启脚本、打包与示例模块（2026-04-14）](memory/session-2026-04-14-restart-packaging-demo.md) — `restart-dev.mjs` 用 Node 直调 electron-vite CLI；白屏与 API 502/400 备忘；**`npm run dist:win`** 产出位置；任务看板 / Hook / MCP 已随应用包打进 asar + 内置 MCP 拆包说明。
 
 ## Feedback Memories
 - (none yet)

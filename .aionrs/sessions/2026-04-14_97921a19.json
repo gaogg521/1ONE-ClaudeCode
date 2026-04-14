@@ -1,0 +1,52 @@
+{
+  "id": "97921a19",
+  "created_at": "2026-04-14T02:08:51.611640300Z",
+  "updated_at": "2026-04-14T02:09:08.214484700Z",
+  "provider": "openai",
+  "model": "qwen-3-6-plus",
+  "cwd": "C:\\Users\\allenzhao\\AppData\\Roaming\\1ONE ClaudeCode\\1one\\aionrs-temp-1776132531193",
+  "total_usage": {
+    "input_tokens": 2737,
+    "output_tokens": 380,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "你好啊"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "你好！有什么我可以帮你的吗？"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "你是什么模型"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "你好！我是 Qwen（通义千问），是由阿里巴巴集团旗下通义实验室自主研发的大语言模型。\n\n很高兴能与你交流，有什么我可以帮你的吗？"
+        }
+      ]
+    }
+  ]
+}

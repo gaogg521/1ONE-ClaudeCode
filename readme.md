@@ -44,6 +44,7 @@
 - [为什么用它](#why)
 - [快速开始](#quickstart)
   - [下载安装](#install)
+  - [macOS 安装步骤（Gatekeeper 放行）](#macos)
   - [第一次使用（3 步上手）](#first-use)
   - [源码运行（开发者）](#dev)
 - [功能概览](#features)
@@ -103,8 +104,19 @@
 | 系统 | 文件格式 |
 |---|---|
 | Windows | `.exe` 安装包 / `.zip` 便携版 |
-| macOS | `.dmg` 安装包 |
+| macOS | `.dmg` / `.zip`（以 Releases 实际资产为准） |
 | Linux | `.deb` 安装包 |
+
+<a id="macos"></a>
+### macOS 安装步骤（Gatekeeper 放行）
+
+> 摘自 `out/1OneClaudeCode  Mac安装步骤.docx`，用于解决 macOS 首次打开的系统安全限制提示。
+
+1. **双击安装包**，向右拖动完成安装。
+2. 安装完成后，在 **应用程序（Applications）** 里找到 `1OneClaudeCode`，双击运行。
+3. 点击完成，先**忽略警告信息**。
+4. 打开 **系统设置 → 隐私与安全性**，点击 **仍要打开**（Allow/Open Anyway）。
+5. 输入解锁密码后即可成功运行。
 
 <a id="first-use"></a>
 ### 第一次使用（3 步上手）
@@ -119,6 +131,8 @@
 **环境要求：** Node.js >= 22、Git
 
 > **关于 Bun（macOS 常见疑问）**：Bun **不是必须安装**。本项目本地 `postinstall` 会优先使用 `bunx`，若你的机器未安装 Bun，会自动回退到 `npx` 来执行 `electron-builder install-app-deps`，不影响安装依赖与启动。
+
+> **关于 1ONE CODE（aionrs）与离线可用性**：发布版安装包会把 `aionrs` 预置进应用资源（`resources/bundled-aionrs/...`），**最终用户不需要访问 GitHub**。仓库维护者如需在本机重新生成该二进制，可在可联网环境临时设置 `AIONRS_ALLOW_DOWNLOAD=1` 运行 `scripts/prepareAionrs.js`（默认离线模式不会自动下载）。
 
 ```bash
 # 克隆项目

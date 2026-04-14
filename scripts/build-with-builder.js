@@ -258,7 +258,7 @@ function createDmgWithPrepackaged(appDir, targetArch) {
   if (!appName) throw new Error(`No .app found in ${appDir}`);
   const appPath = path.join(appDir, appName);
 
-  execSync(`bunx electron-builder --mac dmg --${targetArch} --prepackaged "${appPath}" --publish=never`, {
+  execSync(`npx --no-install electron-builder --mac dmg --${targetArch} --prepackaged "${appPath}" --publish=never`, {
     stdio: 'inherit',
     shell: process.platform === 'win32',
   });
@@ -434,7 +434,7 @@ try {
   if (!skipViteBuild) {
     // Run electron-vite to build all bundles (main + preload + renderer)
     console.log(`📦 Building ${targetArch}...`);
-    execSync(`bunx electron-vite build`, {
+    execSync(`npx --no-install electron-vite build`, {
       stdio: 'inherit',
       shell: process.platform === 'win32',
       env: {
@@ -579,7 +579,7 @@ try {
     cleanupWindowsPackOutput();
   }
 
-  const builderCommand = `bunx electron-builder ${builderArgs} ${archFlag} ${nsisInclude} ${publishArg}`;
+  const builderCommand = `npx --no-install electron-builder ${builderArgs} ${archFlag} ${nsisInclude} ${publishArg}`;
   try {
     buildWithDmgRetry(builderCommand, targetArch);
   } catch (error) {

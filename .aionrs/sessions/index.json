@@ -1,0 +1,28 @@
+{
+  "sessions": [
+    {
+      "id": "b568a706",
+      "created_at": "2026-04-14T02:10:32.117390700Z",
+      "updated_at": "2026-04-14T02:10:53.070711500Z",
+      "model": "gemini-3.1-pro-preview",
+      "summary": "你好",
+      "message_count": 4
+    },
+    {
+      "id": "c227a21f",
+      "created_at": "2026-04-14T02:11:27.270539100Z",
+      "updated_at": "2026-04-14T02:11:27.270539100Z",
+      "model": "gemini-3.1-pro-preview",
+      "summary": "",
+      "message_count": 0
+    },
+    {
+      "id": "9d8f7b4b",
+      "created_at": "2026-04-14T03:20:14.919002300Z",
+      "updated_at": "2026-04-14T03:20:14.919002500Z",
+      "model": "qwen-3-6-plus",
+      "summary": "",
+      "message_count": 0
+    }
+  ]
+}
