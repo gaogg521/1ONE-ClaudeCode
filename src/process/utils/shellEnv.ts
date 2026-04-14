@@ -409,11 +409,13 @@ export function getEnhancedEnv(customEnv?: Record<string, string>): Record<strin
     mergedPath = mergePaths(mergedPath, posixExtraPaths.join(':'));
   }
 
-  // Prepend bundled bun directory (highest priority — ensures extensions always
-  // have access to bun/bunx even if the user hasn't installed it)
+  // Append bundled bun (lowest priority). Prepending broke Windows ACP backends:
+  // `npx` / `npx.cmd` resolved to Bun's shim and failed with missing npm-prefix.js
+  // under the ACP temp cwd. Real Node.js (Program Files, nvm, npm global) must win.
+  // Extensions can still invoke bun via absolute path from getBundledBunDir().
   const bundledBunDir = getBundledBunDir();
   if (bundledBunDir) {
-    mergedPath = `${bundledBunDir}${separator}${mergedPath}`;
+    mergedPath = `${mergedPath}${separator}${bundledBunDir}`;
   }
 
   return {

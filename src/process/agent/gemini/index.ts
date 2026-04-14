@@ -134,6 +134,32 @@ export class GeminiAgent {
   static buildFileServer(workspace: string) {
     return new FileDiscoveryService(workspace);
   }
+
+  /**
+   * Map persisted provider config to aioncli-core {@link AuthType}.
+   * Must match {@link getProviderAuthType} / platform strings (incl. gemini-with-google-auth).
+   */
+  static resolveAuthType(model: TProviderWithModel): AuthType {
+    const platformLower = (model.platform || '').toLowerCase();
+    if (platformLower.includes('gemini-with-google-auth')) {
+      return AuthType.LOGIN_WITH_GOOGLE;
+    }
+    const p = getProviderAuthType(model);
+    switch (p) {
+      case 'vertex':
+        return AuthType.USE_VERTEX_AI;
+      case 'openai':
+        return AuthType.USE_OPENAI;
+      case 'anthropic':
+        return AuthType.USE_ANTHROPIC;
+      case 'bedrock':
+        return AuthType.USE_BEDROCK;
+      case 'gemini':
+      default:
+        return AuthType.USE_GEMINI;
+    }
+  }
+
   constructor(options: GeminiAgent2Options) {
     this.workspace = options.workspace;
     this.proxy = options.proxy;
@@ -143,8 +169,8 @@ export class GeminiAgent {
     this.googleCloudProject = options.GOOGLE_CLOUD_PROJECT;
     this.mcpServers = options.mcpServers || {};
     this.contextFileName = options.contextFileName;
-    // 使用统一的工具函数获取认证类型（Gemini 实现内部仍沿用 AuthType）
-    this.authType = getProviderAuthType(options.model) === 'vertex' ? AuthType.USE_VERTEX_AI : AuthType.USE_GEMINI;
+    // Map persisted provider auth → aioncli AuthType (must not collapse to USE_GEMINI only).
+    this.authType = GeminiAgent.resolveAuthType(options.model);
     this.onStreamEvent = options.onStreamEvent;
     this.presetRules = options.presetRules;
     this.skillsDir = options.skillsDir;
