@@ -46,6 +46,7 @@
 - **`resolveNpxPath`（Windows）**：`where node` 可能多行且**首条**为 Electron/残缺 Node；回退到裸 `npx.cmd` 时仍可能命中 Bun。已改为**逐条尝试** `where node` 的每个路径，再回退扫描 `NVM_SYMLINK`、`FNM_MULTISHELL_PATH`、`Program Files\nodejs` 等带完整 `node_modules/npm` 的安装。
 - **`GeminiAgent`**：构造函数曾把除 `vertex` 外全部写成 `USE_GEMINI`，导致 `gemini-with-google-auth` 无法走 `LOGIN_WITH_GOOGLE`（Google CLI 会话报 *default credentials*）。已改为静态方法 `resolveAuthType()`，按 `getProviderAuthType` 映射 `openai` / `anthropic` / `bedrock` / `vertex` / `LOGIN_WITH_GOOGLE`。
 - **OpenClaw** `warning-filter.js` 缺失：多为全局 `npm i -g openclaw` 安装不完整；代码侧 PATH 修正后若仍失败，需重装或升级 `openclaw` CLI。
+- **OpenClaw 网关自动回退**：`OpenClawGatewayManager` 在默认 `openclaw` 启动失败且 stderr 含 `Cannot find module` / `warning-filter` / `openclaw.mjs` 或 exit code 1 时，自动用 **`npx -y openclaw`**（与 ACP 相同的 `prepareCleanEnv` + `resolveNpxPath`）再启一次网关，缓解残缺全局包或 Bun 误执行 `.mjs`。
 
 ## aionrs 长时间「正在处理」无输出
 

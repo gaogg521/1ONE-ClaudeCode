@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { prepareCleanEnv } from '@process/agent/acp/acpConnectors';
 import { spawn, type ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
-import { getEnhancedEnv } from '@process/utils/shellEnv';
+import { getEnhancedEnv, resolveNpxPath } from '@process/utils/shellEnv';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -180,90 +181,62 @@ export class OpenClawGatewayManager extends EventEmitter {
     }
   }
 
-  private async doStart(): Promise<number> {
+  /**
+   * Spawn openclaw gateway and wait until ready (or reject).
+   */
+  private startProcessWithSpawn(
+    spawnCommand: string,
+    spawnArgs: string[],
+    env: Record<string, string>,
+    shell: boolean
+  ): Promise<number> {
     return new Promise((resolve, reject) => {
-      const args = ['gateway', '--port', String(this.port)];
-
-      // Use enhanced env with shell variables
-      const env = getEnhancedEnv(this.customEnv);
-
-      const isWindows = process.platform === 'win32';
-
-      const resolvedCli = this.resolveCommandPath(this.cliPath, env.PATH);
-      if (!resolvedCli) {
-        reject(
-          new Error(
-            `[OpenClawGatewayManager] CLI not found: "${this.cliPath}". ` +
-              'Please install openclaw or set the correct cliPath.'
-          )
-        );
-        return;
-      }
-      const bestNode = this.findBestNodeBinary(env);
-      const runViaNode = bestNode && this.shouldRunCliViaNode(resolvedCli);
-
-      const spawnCommand = runViaNode ? bestNode! : resolvedCli;
-      const spawnArgs = runViaNode ? [resolvedCli, ...args] : args;
-
       console.log(`[OpenClawGatewayManager] Starting: ${spawnCommand} ${spawnArgs.join(' ')}`);
 
       this.process = spawn(spawnCommand, spawnArgs, {
         stdio: ['pipe', 'pipe', 'pipe'],
         env,
-        shell: isWindows,
+        shell,
       });
 
       let hasResolved = false;
       let stdoutBuffer = '';
       let stderrBuffer = '';
 
-      // Look for ready signal in stdout
+      const tryResolveReady = (output: string) => {
+        if (
+          !hasResolved &&
+          (output.includes('Gateway listening') ||
+            output.includes(`port ${this.port}`) ||
+            output.includes('WebSocket server started') ||
+            output.includes('gateway ready') ||
+            output.includes('listening on'))
+        ) {
+          hasResolved = true;
+          console.log(`[OpenClawGatewayManager] Gateway ready on port ${this.port}`);
+          this.emit('ready', this.port);
+          resolve(this.port);
+        }
+      };
+
       this.process.stdout?.on('data', (data: Buffer) => {
         const output = data.toString();
         stdoutBuffer += output;
         this.emit('stdout', output);
-
-        // Look for gateway ready signals
-        if (
-          !hasResolved &&
-          (output.includes('Gateway listening') ||
-            output.includes(`port ${this.port}`) ||
-            output.includes('WebSocket server started') ||
-            output.includes('gateway ready') ||
-            output.includes('listening on'))
-        ) {
-          hasResolved = true;
-          console.log(`[OpenClawGatewayManager] Gateway ready on port ${this.port}`);
-          this.emit('ready', this.port);
-          resolve(this.port);
-        }
+        tryResolveReady(output);
       });
 
-      // Capture stderr
       this.process.stderr?.on('data', (data: Buffer) => {
         const output = data.toString();
         stderrBuffer += output;
         this.emit('stderr', output);
-
-        // Some CLIs output ready message to stderr
-        if (
-          !hasResolved &&
-          (output.includes('Gateway listening') ||
-            output.includes(`port ${this.port}`) ||
-            output.includes('WebSocket server started') ||
-            output.includes('gateway ready') ||
-            output.includes('listening on'))
-        ) {
-          hasResolved = true;
-          console.log(`[OpenClawGatewayManager] Gateway ready on port ${this.port}`);
-          this.emit('ready', this.port);
-          resolve(this.port);
-        }
+        tryResolveReady(output);
       });
 
       this.process.on('error', (error) => {
         console.error('[OpenClawGatewayManager] Process error:', error);
         if (!hasResolved) {
+          hasResolved = true;
           reject(error);
         }
         this.emit('error', error);
@@ -275,13 +248,12 @@ export class OpenClawGatewayManager extends EventEmitter {
         this.process = null;
 
         if (!hasResolved) {
+          hasResolved = true;
           const errorMsg = `Gateway exited with code ${code}.\nStdout: ${stdoutBuffer.slice(-500)}\nStderr: ${stderrBuffer.slice(-500)}`;
           reject(new Error(errorMsg));
         }
       });
 
-      // Timeout fallback - assume ready after 5 seconds if no explicit signal
-      // Only resolve if process is still running (not already exited)
       setTimeout(() => {
         if (!hasResolved && this.process && !this.process.killed) {
           hasResolved = true;
@@ -291,6 +263,57 @@ export class OpenClawGatewayManager extends EventEmitter {
         }
       }, 5000);
     });
+  }
+
+  private async doStart(): Promise<number> {
+    const gatewayArgs = ['gateway', '--port', String(this.port)];
+    const env = getEnhancedEnv(this.customEnv) as Record<string, string>;
+    const isWindows = process.platform === 'win32';
+
+    const tryDefaultCli = async (): Promise<number> => {
+      const resolvedCli = this.resolveCommandPath(this.cliPath, env.PATH);
+      if (!resolvedCli) {
+        throw new Error(
+          `[OpenClawGatewayManager] CLI not found: "${this.cliPath}". ` +
+            'Please install openclaw or set the correct cliPath.'
+        );
+      }
+      const bestNode = this.findBestNodeBinary(env);
+      const runViaNode = bestNode && this.shouldRunCliViaNode(resolvedCli);
+      const spawnCommand = runViaNode ? bestNode! : resolvedCli;
+      const spawnArgs = runViaNode ? [resolvedCli, ...gatewayArgs] : gatewayArgs;
+      return this.startProcessWithSpawn(spawnCommand, spawnArgs, env, isWindows);
+    };
+
+    try {
+      return await tryDefaultCli();
+    } catch (firstErr) {
+      const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      const looksLikeBrokenInstall =
+        /warning-filter|Cannot find module|MODULE_NOT_FOUND|\\openclaw\.mjs|\/openclaw\.mjs/i.test(msg);
+      const canNpxFallback = this.cliPath === 'openclaw' && (looksLikeBrokenInstall || /exited with code 1/i.test(msg));
+
+      if (!canNpxFallback) {
+        throw firstErr;
+      }
+
+      console.warn(
+        '[OpenClawGatewayManager] Global openclaw failed (often incomplete npm publish or Bun running .mjs); retrying via `npx -y openclaw`'
+      );
+
+      const cleanEnv = await prepareCleanEnv();
+      const stringEnv: Record<string, string> = {};
+      for (const [k, v] of Object.entries(cleanEnv)) {
+        if (v !== undefined) stringEnv[k] = v;
+      }
+      const npxCmd = resolveNpxPath(stringEnv);
+      const npxArgs = ['-y', 'openclaw', ...gatewayArgs];
+
+      if (isWindows) {
+        return this.startProcessWithSpawn(`chcp 65001 >nul && "${npxCmd}"`, npxArgs, stringEnv, true);
+      }
+      return this.startProcessWithSpawn(npxCmd, npxArgs, stringEnv, false);
+    }
   }
 
   /**
