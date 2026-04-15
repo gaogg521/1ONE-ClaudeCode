@@ -5,11 +5,42 @@
  */
 
 import { ipcBridge } from '@/common';
+import type { IProvider } from '@/common/config/storage';
 import { ConfigStorage } from '@/common/config/storage';
+import { isProviderLiteLlmProxy } from '@/common/utils/litellmGateway';
+import { getProviderAuthType } from '@/common/utils/platformAuthType';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 import { getGeminiModeList, type GeminiModeOption } from './useModeModeList';
+
+/**
+ * True when at least one enabled model provider may use Google OAuth / Vertex native flows.
+ * OpenAI-compatible gateways (e.g. LiteLLM with authType `openai`) must NOT trigger this —
+ * avoids background `googleAuth.status` / subscription calls that read ~/.gemini OAuth cache.
+ */
+function anyProviderNeedsGoogleSidecar(providers: unknown): boolean {
+  if (!Array.isArray(providers)) return false;
+  return (providers as IProvider[]).some((p) => {
+    if (p.enabled === false) return false;
+    if (isProviderLiteLlmProxy(p)) return false;
+    const pl = (p.platform || '').toLowerCase();
+    if (pl.includes('gemini-with-google-auth')) return true;
+    return (
+      getProviderAuthType({
+        platform: p.platform,
+        authType: p.authType,
+        authTypeCustom: p.authTypeCustom,
+        modelProtocols: p.modelProtocols,
+        useModel: p.useModel,
+        model: p.model,
+        baseUrl: p.baseUrl,
+        name: p.name,
+        litellmProxy: p.litellmProxy,
+      }) === 'vertex'
+    );
+  });
+}
 
 export interface GeminiGoogleAuthModelResult {
   geminiModeOptions: GeminiModeOption[];
@@ -27,13 +58,18 @@ export const useGeminiGoogleAuthModels = (): GeminiGoogleAuthModelResult => {
   const { data: geminiConfig } = useSWR('gemini.config', () => ConfigStorage.get('gemini.config'));
   const proxyKey = geminiConfig?.proxy || '';
 
-  // 先通过 Google Auth 状态判断是否可用原生 Gemini。Check whether Google Auth CLI is ready.
-  const { data: isGoogleAuth } = useSWR('google.auth.status' + proxyKey, async () => {
+  const { data: modelConfig } = useSWR('model.config.shared', () => ipcBridge.mode.getModelConfig.invoke());
+  const pollGoogleSidecar = useMemo(() => anyProviderNeedsGoogleSidecar(modelConfig), [modelConfig]);
+
+  // Only touch Google OAuth when a provider actually needs Vertex / Google-auth CLI flows.
+  // Pure OpenAI-protocol gateways (LiteLLM, etc.) must not invoke googleAuth.status (no log noise, no ~/.gemini reads).
+  const googleAuthSwrKey = pollGoogleSidecar ? `google.auth.status|${proxyKey}` : null;
+  const { data: isGoogleAuth } = useSWR(googleAuthSwrKey, async () => {
     const data = await ipcBridge.googleAuth.status.invoke({ proxy: geminiConfig?.proxy });
     return data.success;
   });
 
-  const shouldCheckSubscription = Boolean(isGoogleAuth);
+  const shouldCheckSubscription = pollGoogleSidecar && Boolean(isGoogleAuth);
 
   // 仅在通过认证后才触发订阅状态查询。Only hit CLI subscription API when authenticated.
   const subscriptionKey = shouldCheckSubscription ? 'gemini.subscription.status' + proxyKey : null;

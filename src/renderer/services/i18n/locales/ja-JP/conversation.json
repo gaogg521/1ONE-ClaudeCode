@@ -200,6 +200,7 @@
     "noModelSelected": "現在のセッションでモデルが選択されていないため、メッセージを送信できません",
     "sendMessageTo": "{{model}}にメッセージを送信",
     "processing": "処理中……",
+    "streamStarting": "リクエストを送信しました。モデルの応答を待っています…",
     "quotaExceededTitle": "モデルの上限に達しました",
     "quotaExceededBody": "現在のモデルの上限に達しました。{{model}}に切り替えて続行しますか？",
     "quotaExceededNoFallback": "現在のモデルの上限に達しました。別の利用可能なモデルに切り替えてください。",
@@ -267,6 +268,12 @@
   },
   "contextUsage": {
     "contextUsed": "コンテキスト使用量"
+  },
+  "gemini": {
+    "viewSessionLogs": "セッションの詳細ログ",
+    "viewSessionLogsTooltip": "ワークスペース内の .gemini/logs をファイルマネージャーで開きます（リクエスト要約とエラー dump）",
+    "openLogsFailed": "ログフォルダを開けませんでした",
+    "noWorkspaceForLogs": "ワークスペースが未設定のためログを特定できません"
   },
   "skill_generator": {
     "title": "Generate Skill/Rule",

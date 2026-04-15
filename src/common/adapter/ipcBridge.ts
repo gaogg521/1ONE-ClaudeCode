@@ -26,6 +26,8 @@ import type { SpeechToTextRequest, SpeechToTextResult } from '../types/speech';
 export const shell = {
   openFile: bridge.buildProvider<void, string>('open-file'), // 使用系统默认程序打开文件
   showItemInFolder: bridge.buildProvider<void, string>('show-item-in-folder'), // 打开文件夹
+  /** Create folder (recursive) if missing, then open it in the system file manager. */
+  openFolderEnsure: bridge.buildProvider<void, string>('shell.open-folder-ensure'),
   openExternal: bridge.buildProvider<void, string>('open-external'), // 使用系统默认程序打开外部链接
   checkToolInstalled: bridge.buildProvider<boolean, { tool: string }>('shell.check-tool-installed'), // 检查工具是否安装
   openFolderWith: bridge.buildProvider<void, { folderPath: string; tool: 'vscode' | 'terminal' | 'explorer' }>(

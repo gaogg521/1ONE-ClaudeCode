@@ -195,6 +195,7 @@
     "noModelSelected": "Mevcut oturum için model seçilmedi, mesaj gönderilemiyor",
     "sendMessageTo": "{{model}} modeline mesaj gönder",
     "processing": "İşleniyor...",
+    "streamStarting": "İstek gönderildi, model yanıtı bekleniyor…",
     "quotaExceededTitle": "Model kotasına ulaşıldı",
     "quotaExceededBody": "Mevcut model kotası tükendi. Devam etmek için {{model}} modeline geçilsin mi?",
     "quotaExceededNoFallback": "Model kotasına ulaşıldı. Lütfen başka bir uygun modele geçin.",
@@ -262,6 +263,12 @@
   },
   "contextUsage": {
     "contextUsed": "bağlam kullanıldı"
+  },
+  "gemini": {
+    "viewSessionLogs": "Oturum günlükleri",
+    "viewSessionLogsTooltip": "Dosya yöneticisinde çalışma alanı/.gemini/logs klasörünü açar (istek özetleri ve hata dökümleri)",
+    "openLogsFailed": "Günlük klasörü açılamadı",
+    "noWorkspaceForLogs": "Çalışma alanı bağlı değil; günlükler bulunamıyor"
   },
   "skill_generator": {
     "title": "Yetenek/Kural Oluştur",

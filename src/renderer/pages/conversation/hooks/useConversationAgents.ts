@@ -10,6 +10,7 @@ import { ipcBridge } from '@/common';
 import type { AvailableAgent } from '@/renderer/utils/model/agentTypes';
 import {
   AVAILABLE_AGENTS_SWR_KEY,
+  AVAILABLE_AGENTS_SWR_OPTIONS,
   filterAvailableAgentsForUi,
   splitConversationDropdownAgents,
 } from '@/renderer/utils/model/availableAgents';
@@ -34,13 +35,17 @@ export const useConversationAgents = (): UseConversationAgentsResult => {
     data: availableAgents,
     isLoading,
     mutate,
-  } = useSWR(AVAILABLE_AGENTS_SWR_KEY, async () => {
-    const result = await ipcBridge.acpConversation.getAvailableAgents.invoke();
-    if (result.success) {
-      return filterAvailableAgentsForUi(result.data);
-    }
-    return [];
-  });
+  } = useSWR(
+    AVAILABLE_AGENTS_SWR_KEY,
+    async () => {
+      const result = await ipcBridge.acpConversation.getAvailableAgents.invoke();
+      if (result.success) {
+        return filterAvailableAgentsForUi(result.data);
+      }
+      return [];
+    },
+    AVAILABLE_AGENTS_SWR_OPTIONS
+  );
 
   const { cliAgents, presetAssistants } = useMemo(() => {
     if (!availableAgents) {

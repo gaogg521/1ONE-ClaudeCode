@@ -30,6 +30,9 @@ vi.mock('child_process', () => ({
 // Mock fs
 vi.mock('fs', () => ({
   existsSync: vi.fn(),
+  promises: {
+    mkdir: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 // Mock @/common ipcBridge - capture the registered functions
@@ -59,6 +62,11 @@ vi.mock('@/common', () => ({
       openFolderWith: {
         provider: vi.fn((fn: Function) => {
           registeredProviders['openFolderWith'] = fn;
+        }),
+      },
+      openFolderEnsure: {
+        provider: vi.fn((fn: Function) => {
+          registeredProviders['openFolderEnsure'] = fn;
         }),
       },
     },
@@ -335,6 +343,15 @@ describe('shellBridge with actual providers', () => {
 
       expect(fs.existsSync).toHaveBeenCalledWith('/usr/bin/code');
       expect(spawn).toHaveBeenCalled();
+    });
+  });
+
+  describe('openFolderEnsure provider', () => {
+    it('creates folder then opens it with shell.openPath', async () => {
+      vi.mocked(shell.openPath).mockResolvedValue('');
+      await registeredProviders['openFolderEnsure']('/tmp/ws/.gemini/logs');
+      expect(fs.promises.mkdir).toHaveBeenCalledWith('/tmp/ws/.gemini/logs', { recursive: true });
+      expect(shell.openPath).toHaveBeenCalledWith('/tmp/ws/.gemini/logs');
     });
   });
 });

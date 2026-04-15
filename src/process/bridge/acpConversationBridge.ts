@@ -54,7 +54,6 @@ export function initAcpConversationBridge(workerTaskManager: IWorkerTaskManager)
         ((await ProcessConfig.get('acp.disabledDetectedAgents').catch((): string[] => [])) || []) as string[];
 
       const agents = acpDetector.getDetectedAgents();
-      mainLog('[getAvailableAgents]', `Total detected: ${agents.length}, disabled: [${disabledDetectedAgents.join(',')}]`);
 
       const enriched = agents
         .filter((agent) => !disabledDetectedAgents.includes(agent.backend))
@@ -62,8 +61,6 @@ export function initAcpConversationBridge(workerTaskManager: IWorkerTaskManager)
           ...agent,
           supportedTransports: mcpService.getSupportedTransportsForAgent(agent),
         }));
-
-      mainLog('[getAvailableAgents]', `After filter: ${enriched.length} agents remain`);
 
       // Detect aionrs binary (non-ACP, uses JSON Lines protocol)
       // Insert at front so 1ONE appears before other agents (including Gemini)
@@ -75,7 +72,6 @@ export function initAcpConversationBridge(workerTaskManager: IWorkerTaskManager)
           ...aionrsAgent,
           supportedTransports: mcpService.getSupportedTransportsForAgent(aionrsAgent),
         } as (typeof enriched)[number]);
-        mainLog('[getAvailableAgents]', 'Added aionrs agent to front');
       }
 
       return { success: true, data: enriched };

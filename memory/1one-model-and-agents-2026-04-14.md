@@ -25,6 +25,7 @@
 
 - `OneAgent.ts`：上游不支持 `max_tokens` 时的重试逻辑。
 - `aionrs/envBuilder.ts`：`buildProjectConfig` 中对 `gpt-5*`、`o1/o3`、含 `codex` 等启发式使用 `max_completion_tokens` 字段名。
+- **网关 HTTP 头与 LiteLLM 配置示例**：见 [litellm-new-api-gateway-2026-04-14.md](./litellm-new-api-gateway-2026-04-14.md)（`Api` + `Protocol` 双头、`LITELLM_OPENAI_WRAPPER_CONFIG_EXAMPLE` 等）。
 
 ## Aionrs：模型身份与 system-reminder
 

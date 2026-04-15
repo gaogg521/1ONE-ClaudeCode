@@ -13,6 +13,7 @@ import type { AcpBackend, AcpBackendConfig, AcpModelInfo, AvailableAgent, Effect
 import { getAgentModes } from '@/renderer/utils/model/agentModes';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
+import { AVAILABLE_AGENTS_SWR_OPTIONS } from '@/renderer/utils/model/availableAgents';
 import { savePreferredMode, savePreferredModelId, getAgentKey as getAgentKeyUtil } from './agentSelectionUtils';
 import { usePresetAssistantResolver } from './usePresetAssistantResolver';
 import { useAgentAvailability } from './useAgentAvailability';
@@ -189,13 +190,17 @@ export const useGuidAgentSelection = ({
   const isPresetAgent = Boolean(selectedAgentInfo?.isPreset);
 
   // --- SWR: Fetch available agents ---
-  const { data: availableAgentsData } = useSWR('acp.agents.available', async () => {
-    const result = await ipcBridge.acpConversation.getAvailableAgents.invoke();
-    if (result.success) {
-      return result.data.filter((agent) => !(agent.backend === 'gemini' && agent.cliPath));
-    }
-    return [];
-  });
+  const { data: availableAgentsData } = useSWR(
+    'acp.agents.available',
+    async () => {
+      const result = await ipcBridge.acpConversation.getAvailableAgents.invoke();
+      if (result.success) {
+        return result.data.filter((agent) => !(agent.backend === 'gemini' && agent.cliPath));
+      }
+      return [];
+    },
+    AVAILABLE_AGENTS_SWR_OPTIONS
+  );
 
   // Fetch remote agents from DB and merge into available agents
   const { data: remoteAgentsData } = useSWR('remote-agents.list', () => ipcBridge.remoteAgent.list.invoke());

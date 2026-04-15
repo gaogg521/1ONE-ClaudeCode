@@ -200,6 +200,7 @@
     "noModelSelected": "현재 세션에 선택된 모델이 없어 메시지를 보낼 수 없습니다",
     "sendMessageTo": "{{model}}에게 메시지 보내기",
     "processing": "처리 중...",
+    "streamStarting": "요청을 보냈습니다. 모델 응답을 기다리는 중…",
     "quotaExceededTitle": "모델 할당량 도달",
     "quotaExceededBody": "현재 모델 할당량이 소진되었습니다. {{model}}(으)로 전환하여 계속하시겠습니까?",
     "quotaExceededNoFallback": "모델 할당량에 도달했습니다. 다른 사용 가능한 모델로 전환하세요.",
@@ -267,6 +268,12 @@
   },
   "contextUsage": {
     "contextUsed": "사용된 컨텍스트"
+  },
+  "gemini": {
+    "viewSessionLogs": "세션 상세 로그",
+    "viewSessionLogsTooltip": "파일 관리자에서 워크스페이스/.gemini/logs 폴더를 엽니다(요약 및 오류 덤프)",
+    "openLogsFailed": "로그 폴더를 열 수 없습니다",
+    "noWorkspaceForLogs": "연결된 워크스페이스가 없어 로그 위치를 찾을 수 없습니다"
   },
   "skill_generator": {
     "title": "스킬/규칙 생성",

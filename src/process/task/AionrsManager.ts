@@ -125,9 +125,12 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   }
 
   /**
-   * Determine new vs resume session, then start the worker.
-   * If the conversation already has messages in the DB, pass --resume;
-   * otherwise pass --session-id for a new session.
+   * Start the worker with correct aionrs session keys.
+   *
+   * aionrs `--resume` must receive the **binary's** `session_id` from a prior `ready` event
+   * (short id like `16a3dd1a`), not 1ONE's `conversation_id` UUID — the latter causes
+   * "Session not found", exit code 1 during init, and a slow double-start fallback.
+   * We persist `extra.aionrsSessionId` when `ready` fires; only then use `--resume`.
    */
   override async start() {
     try {
@@ -135,7 +138,17 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       const result = db.getConversationMessages(this.conversation_id, 0, 1);
       const hasMessages = (result.data?.length ?? 0) > 0;
 
-      const sessionArgs = hasMessages ? { resume: this.conversation_id } : { sessionId: this.conversation_id };
+      const conv = db.getConversation(this.conversation_id);
+      let storedAionrsSession: string | undefined;
+      if (conv.success && conv.data?.extra) {
+        const raw = (conv.data.extra as Record<string, unknown>).aionrsSessionId;
+        if (typeof raw === 'string' && raw.trim()) storedAionrsSession = raw.trim();
+      }
+
+      const sessionArgs =
+        hasMessages && storedAionrsSession
+          ? { resume: storedAionrsSession }
+          : { sessionId: this.conversation_id };
 
       const res = await super.start({ ...this.data.data, ...sessionArgs } as AionrsManagerData);
 
@@ -433,9 +446,31 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     }
   }
 
+  private async persistAionrsSessionId(sessionId: string): Promise<void> {
+    const sid = sessionId.trim();
+    if (!sid) return;
+    try {
+      const db = await getDatabase();
+      const result = db.getConversation(this.conversation_id);
+      if (!result.success || !result.data || result.data.type !== 'aionrs') return;
+      const conversation = result.data;
+      db.updateConversation(this.conversation_id, {
+        extra: { ...conversation.extra, aionrsSessionId: sid },
+      } as Partial<typeof conversation>);
+    } catch (error) {
+      mainError('[AionrsManager]', 'Failed to persist aionrs session id', error);
+    }
+  }
+
   init() {
     super.init();
     this.on('aionrs.message', (data) => {
+      if ((data as { type?: string }).type === 'aionrs_session_bound') {
+        const sid = String((data as { data?: unknown }).data ?? '').trim();
+        if (sid) void this.persistAionrsSessionId(sid);
+        return;
+      }
+
       const contentTypes = ['content', 'tool_group'];
       if (contentTypes.includes(data.type)) {
         this.status = 'finished';
@@ -480,7 +515,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
         }
       }
 
-      ipcBridge.conversation.responseStream.emit(data);
+      ipcBridge.conversation.responseStream.emit(data as IResponseMessage);
     });
   }
 

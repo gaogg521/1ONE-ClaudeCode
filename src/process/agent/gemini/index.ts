@@ -12,6 +12,7 @@ import { ONE_FILES_MARKER } from '@/common/config/constants';
 import { NavigationInterceptor } from '@/common/chat/navigation';
 import type { TProviderWithModel } from '@/common/config/storage';
 import { uuid } from '@/common/utils';
+import { isProviderLiteLlmProxy } from '@/common/utils/litellmGateway';
 import { getProviderAuthType } from '@/common/utils/platformAuthType';
 import { isNewApiPlatform } from '@/common/utils/platformConstants';
 import { normalizeNewApiBaseUrl, normalizeOpenAiCompatBaseUrl } from '@/common/api/ClientFactory';
@@ -122,6 +123,10 @@ export class GeminiAgent {
   private toolConfig: ConversationToolConfig; // 对话级别的工具配置
   private apiKeyManager: ApiKeyManager | null = null; // 多API Key管理器
   private settings: Settings | null = null;
+  private enableRequestLogging: boolean = false;
+  private logWriteChain: Promise<void> = Promise.resolve();
+  private lastPromptId: string | null = null;
+  private lastQueryPreview: string | null = null;
   private historyPrefix: string | null = null;
   private historyUsedOnce = false;
   private skillsIndexPrependedOnce = false; // Track if we've prepended skills index to first message
@@ -140,6 +145,10 @@ export class GeminiAgent {
    * Must match {@link getProviderAuthType} / platform strings (incl. gemini-with-google-auth).
    */
   static resolveAuthType(model: TProviderWithModel): AuthType {
+    // LiteLLM (and identical gateways) expose Gemini/Vertex via OpenAI-compatible API + proxy API key.
+    if (isProviderLiteLlmProxy(model)) {
+      return AuthType.USE_OPENAI;
+    }
     const platformLower = (model.platform || '').toLowerCase();
     if (platformLower.includes('gemini-with-google-auth')) {
       return AuthType.LOGIN_WITH_GOOGLE;
@@ -171,6 +180,26 @@ export class GeminiAgent {
     this.contextFileName = options.contextFileName;
     // Map persisted provider auth → aioncli AuthType (must not collapse to USE_GEMINI only).
     this.authType = GeminiAgent.resolveAuthType(options.model);
+    // Gemini CLI worker is designed for native Gemini/Vertex/OAuth flows.
+    // When a non-Gemini OpenAI-compatible model is selected here, aioncli-core will
+    // route through its OpenAI streaming adapter, which is sensitive to gateway/SSE framing.
+    // In practice this frequently results in "Unexpected non-whitespace character after JSON"
+    // (multiple JSON objects concatenated in a single chunk) and causes repeated reconnects.
+    //
+    // To avoid the "very laggy / endless reconnect" UX in the Gemini CLI conversation window,
+    // we fail fast with an actionable message.
+    if (this.authType === AuthType.USE_OPENAI && !isProviderLiteLlmProxy(options.model)) {
+      throw new Error(
+        [
+          '当前会话使用的是 Gemini CLI 运行时，但你选择了 OpenAI 兼容的模型/平台。',
+          '该组合会导致流式响应分帧解析失败并反复重连（常见报错：Unexpected non-whitespace character after JSON）。',
+          '',
+          '解决方法：',
+          '- 在此会话切换到 Gemini / Vertex / Google OAuth 相关模型；或',
+          '- 新建一个非 Gemini CLI 的会话（如 1ONE / ACP）来使用 OpenAI 兼容模型。',
+        ].join('\n')
+      );
+    }
     this.onStreamEvent = options.onStreamEvent;
     this.presetRules = options.presetRules;
     this.skillsDir = options.skillsDir;
@@ -191,6 +220,106 @@ export class GeminiAgent {
     // Prevent unhandled rejection when initialize fails (e.g. missing OAuth credentials).
     // The error still propagates when callers `await this.bootstrap` in send().
     this.bootstrap.catch(() => {});
+  }
+
+  private shouldLogRequests(): boolean {
+    // Prefer explicit setting; allow env override for quick debugging in dev.
+    // - settings.enableOpenAILogging: mirrors upstream Gemini CLI naming.
+    // - ONE_GEMINI_REQUEST_LOG: 1/true enables regardless of settings.
+    if (this.enableRequestLogging) return true;
+    const v = (process.env.ONE_GEMINI_REQUEST_LOG || '').toLowerCase().trim();
+    return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+  }
+
+  private previewQueryForLog(query: unknown): string {
+    try {
+      if (typeof query === 'string') return query;
+      if (Array.isArray(query)) {
+        const first = query[0] as unknown;
+        if (first && typeof first === 'object' && 'text' in (first as Record<string, unknown>)) {
+          const t = (first as { text?: unknown }).text;
+          if (typeof t === 'string') return t;
+        }
+        return JSON.stringify(query);
+      }
+      return JSON.stringify(query);
+    } catch {
+      return '[unserializable query]';
+    }
+  }
+
+  private emitRequestLog(line: string, echoToUser: boolean): void {
+    console.log(line);
+    // Append to file (best-effort) for easier debugging by end-users.
+    // File path: <workspace>/.gemini/logs/requests-YYYY-MM-DD.log
+    if (this.workspace && this.shouldLogRequests()) {
+      const logDir = path.join(this.workspace, '.gemini', 'logs');
+      const date = new Date().toISOString().slice(0, 10);
+      const logPath = path.join(logDir, `requests-${date}.log`);
+      const entry = `${new Date().toISOString()} ${line}\n`;
+      this.logWriteChain = this.logWriteChain
+        .then(async () => {
+          await fs.promises.mkdir(logDir, { recursive: true });
+          await fs.promises.appendFile(logPath, entry, 'utf-8');
+        })
+        .catch(() => {});
+    }
+    if (echoToUser) {
+      this.onStreamEvent({
+        type: 'info',
+        data: line,
+        msg_id: uuid(),
+      });
+    }
+  }
+
+  private extractJsonStringFromParseError(text: string): string | null {
+    // Common aioncli-core log shape:
+    //   jsonString: '{}{"dir_path": "D:\\\\oneone"}'
+    // Sometimes wrapped in double quotes.
+    const single = text.match(/jsonString:\s*'([^']*)'/);
+    if (single?.[1]) return single[1];
+    const dbl = text.match(/jsonString:\s*"([^"]*)"/);
+    if (dbl?.[1]) return dbl[1];
+    return null;
+  }
+
+  private dumpStreamErrorToFile(errorText: string): void {
+    if (!this.workspace) return;
+    const logDir = path.join(this.workspace, '.gemini', 'logs');
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const safeMsg = (this.activeMsgId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filePath = path.join(logDir, `error-${ts}-${safeMsg}.log`);
+
+    const modelId =
+      (typeof this.config?.getModel === 'function' ? this.config.getModel() : '') || this.model?.useModel || '';
+    const baseUrl = this.model?.baseUrl || '';
+    const authType = String(this.authType || '');
+    const jsonString = this.extractJsonStringFromParseError(errorText);
+
+    const content = [
+      `time=${new Date().toISOString()}`,
+      `msg_id=${this.activeMsgId || ''}`,
+      `prompt_id=${this.lastPromptId || ''}`,
+      `model=${modelId}`,
+      `authType=${authType}`,
+      `baseUrl=${baseUrl}`,
+      `query="${(this.lastQueryPreview || '').slice(0, 4000)}"`,
+      jsonString ? `jsonString="${jsonString}"` : '',
+      '',
+      '--- error ---',
+      errorText,
+      '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    this.logWriteChain = this.logWriteChain
+      .then(async () => {
+        await fs.promises.mkdir(logDir, { recursive: true });
+        await fs.promises.writeFile(filePath, content, 'utf-8');
+      })
+      .catch(() => {});
   }
 
   private initClientEnv() {
@@ -384,6 +513,7 @@ export class GeminiAgent {
       settings.contextFileName = this.contextFileName;
     }
     this.settings = settings;
+    this.enableRequestLogging = !!settings?.enableOpenAILogging;
 
     // 使用传入的 YOLO 设置
     const yoloMode = this.yoloMode;
@@ -704,6 +834,11 @@ export class GeminiAgent {
       .catch((e: unknown) => {
         const rawMessage = e instanceof Error ? e.message : JSON.stringify(e);
         const errorMessage = this.enrichErrorMessage(rawMessage);
+        // Persist a dedicated dump file for common stream parse failures so users can report it easily.
+        // This is especially useful when OpenAI-compatible gateways return concatenated JSON chunks.
+        if (this.shouldLogRequests()) {
+          this.dumpStreamErrorToFile(rawMessage);
+        }
         // 清理受保护的工具调用
         // Clean up protected tool calls on error
         for (const req of toolCallRequests) {
@@ -781,6 +916,20 @@ export class GeminiAgent {
       }
       if (!options?.isContinuation) {
         startNewPrompt();
+      }
+
+      if (this.shouldLogRequests()) {
+        const modelId =
+          (typeof this.config?.getModel === 'function' ? this.config.getModel() : '') || this.model?.useModel || '';
+        const baseUrl = this.model?.baseUrl || '';
+        const authType = String(this.authType || '');
+        const queryPreview = this.previewQueryForLog(query).replace(/\s+/g, ' ').slice(0, 2000);
+        this.lastPromptId = prompt_id;
+        this.lastQueryPreview = queryPreview;
+        this.emitRequestLog(
+          `[GeminiRequest] msg_id=${msg_id} prompt_id=${prompt_id} model=${modelId} authType=${authType} baseUrl=${baseUrl} continuation=${!!options?.isContinuation} query="${queryPreview}"`,
+          true
+        );
       }
 
       const stream = this.geminiClient.sendMessageStream(query, abortController.signal, prompt_id);

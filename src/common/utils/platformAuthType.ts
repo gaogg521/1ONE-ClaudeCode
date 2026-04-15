@@ -5,6 +5,7 @@
  */
 
 import type { ProviderAuthType, ProviderAuthTypeChoice } from '@/common/types/providerAuthType';
+import { isProviderLiteLlmProxy } from '@/common/utils/litellmGateway';
 import { isNewApiPlatform } from './platformConstants';
 
 /**
@@ -16,6 +17,9 @@ export function getAuthTypeFromPlatform(platform: string): ProviderAuthType {
   const platformLower = platform?.toLowerCase() || '';
 
   // Gemini 相关平台
+  if (platformLower === 'openai-completions' || platformLower === 'openai/chat/completions') {
+    return 'openai';
+  }
   if (platformLower.includes('gemini-with-google-auth')) {
     return 'gemini';
   }
@@ -57,24 +61,39 @@ export function getProviderAuthType(provider: {
   authTypeCustom?: string;
   modelProtocols?: Record<string, string>;
   useModel?: string;
+  model?: string[];
+  baseUrl?: string;
+  name?: string;
+  litellmProxy?: boolean;
 }): ProviderAuthType {
+  let resolved: ProviderAuthType;
+
   // 如果明确指定了authType，直接使用
   if (provider.authType) {
-    if (provider.authType === 'custom') {
-      return getAuthTypeFromPlatform(provider.authTypeCustom || 'openai');
+    if (provider.authType === 'openai-completions') {
+      resolved = 'openai';
+    } else if (provider.authType === 'custom') {
+      resolved = getAuthTypeFromPlatform(provider.authTypeCustom || 'openai');
+    } else {
+      resolved = provider.authType;
     }
-    return provider.authType;
-  }
-
-  // new-api 平台：根据模型名称查找协议覆盖
-  // new-api platform: look up per-model protocol override
-  if (isNewApiPlatform(provider.platform) && provider.useModel && provider.modelProtocols) {
+  } else if (isNewApiPlatform(provider.platform) && provider.useModel && provider.modelProtocols) {
+    // new-api 平台：根据模型名称查找协议覆盖
+    // new-api platform: look up per-model protocol override
     const protocol = provider.modelProtocols[provider.useModel];
     if (protocol) {
-      return getAuthTypeFromPlatform(protocol);
+      resolved = getAuthTypeFromPlatform(protocol);
+    } else {
+      resolved = getAuthTypeFromPlatform(provider.platform);
     }
+  } else {
+    // 否则根据platform推断
+    resolved = getAuthTypeFromPlatform(provider.platform);
   }
 
-  // 否则根据platform推断
-  return getAuthTypeFromPlatform(provider.platform);
+  // LiteLLM is always OpenAI-compatible HTTP; never use Anthropic/Gemini/Vertex native client paths.
+  if (isProviderLiteLlmProxy(provider) && (resolved === 'gemini' || resolved === 'vertex' || resolved === 'anthropic')) {
+    return 'openai';
+  }
+  return resolved;
 }

@@ -26,6 +26,7 @@ import OpenClawChat from '../platforms/openclaw/OpenClawChat';
 import { OpenClawModelSelector } from '../platforms/openclaw/OpenClawModelSelector';
 import RemoteChat from '../platforms/remote/RemoteChat';
 import GeminiChat from '../platforms/gemini/GeminiChat';
+import { GeminiSessionLogsLink } from '../platforms/gemini/GeminiSessionLogsLink';
 import AcpModelSelector from '@/renderer/components/agent/AcpModelSelector';
 import GeminiModelSelector from '../platforms/gemini/GeminiModelSelector';
 import { useGeminiModelSelection } from '../platforms/gemini/useGeminiModelSelection';
@@ -173,10 +174,13 @@ const GeminiConversationPanel: React.FC<{
     sider: <ChatSider conversation={conversation} />,
     headerLeft: <GeminiModelSelector selection={modelSelection} />,
     headerExtra: (
-      <CronJobManager
-        conversationId={conversation.id}
-        cronJobId={conversation.extra?.cronJobId as string | undefined}
-      />
+      <>
+        <GeminiSessionLogsLink workspace={conversation.extra?.workspace} />
+        <CronJobManager
+          conversationId={conversation.id}
+          cronJobId={conversation.extra?.cronJobId as string | undefined}
+        />
+      </>
     ),
     workspaceEnabled,
     backend: 'gemini' as const,

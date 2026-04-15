@@ -200,6 +200,7 @@
     "noModelSelected": "當前會話未選擇模型，無法發送訊息",
     "sendMessageTo": "發送訊息到 {{model}}",
     "processing": "正在處理中……",
+    "streamStarting": "已送出請求，正在等待模型回應…",
     "quotaExceededTitle": "模型額度已用盡",
     "quotaExceededBody": "當前模型額度已用盡，是否切換到 {{model}}？",
     "quotaExceededNoFallback": "當前模型額度已用盡，請切換到其他可用模型。",
@@ -267,6 +268,12 @@
   },
   "contextUsage": {
     "contextUsed": "上下文已使用"
+  },
+  "gemini": {
+    "viewSessionLogs": "查看此工作階段詳細日誌",
+    "viewSessionLogsTooltip": "在檔案總管中開啟工作區下的 .gemini/logs（請求摘要與錯誤 dump）",
+    "openLogsFailed": "無法開啟日誌目錄",
+    "noWorkspaceForLogs": "未關聯工作區，無法定位日誌目錄"
   },
   "skill_generator": {
     "title": "Generate Skill/Rule",

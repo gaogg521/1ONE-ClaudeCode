@@ -15,6 +15,7 @@ import { ExtensionRegistry } from '@process/extensions';
 import { buildSystemInstructionsWithSkillsIndex } from './agentUtils';
 import { detectSkillLoadRequest, AcpSkillManager, buildSkillContentText } from './AcpSkillManager';
 import { uuid } from '@/common/utils';
+import { isProviderLiteLlmProxy } from '@/common/utils/litellmGateway';
 import { getProviderAuthType } from '@/common/utils/platformAuthType';
 import { AuthType, getOauthInfoWithCache, Storage } from '@office-ai/aioncli-core';
 import { GeminiApprovalStore } from '../agent/gemini/GeminiApprovalStore';
@@ -188,7 +189,8 @@ export class GeminiAgentManager extends BaseAgentManager<
         let projectId: string | undefined;
         const authType = getProviderAuthType(this.model);
         const needsGoogleOAuth =
-          this.model.platform?.toLowerCase().includes('gemini-with-google-auth') || authType === 'vertex';
+          !isProviderLiteLlmProxy(this.model) &&
+          (this.model.platform?.toLowerCase().includes('gemini-with-google-auth') || authType === 'vertex');
 
         if (needsGoogleOAuth) {
           try {
@@ -257,9 +259,10 @@ export class GeminiAgentManager extends BaseAgentManager<
 
   /**
    * Compute a fingerprint of ALL MCP servers for change detection.
-   * Includes name, enabled, status and transport key for every server so that
-   * any add / remove / toggle / reconnect / config-change is detected —
-   * even when a server is deleted and re-added with the same name.
+   * Uses name, enabled, and transport identity only — **excludes `status`** so runtime
+   * health updates (connected / disconnected / checking) do not kill the worker between
+   * user turns (that caused "second message spins forever" when combined with fork issues).
+   * Add/remove/toggle/command/url changes still change the fingerprint.
    */
   private static computeMcpFingerprint(mcpServers: IMcpServer[] | undefined | null): string {
     if (!mcpServers || !Array.isArray(mcpServers)) return '[]';
@@ -272,7 +275,7 @@ export class GeminiAgentManager extends BaseAgentManager<
             : 'url' in s.transport
               ? s.transport.url
               : '';
-        return { n: s.name, e: s.enabled, st: s.status, t: transportKey };
+        return { n: s.name, e: s.enabled, t: transportKey };
       })
       .toSorted((a, b) => a.n.localeCompare(b.n));
     return JSON.stringify(entries);

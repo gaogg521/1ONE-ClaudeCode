@@ -31,16 +31,25 @@ export class ForkTask<Data> extends Pipe {
     this.killFn = () => {
       this.kill();
     };
-    process.on('exit', this.killFn);
+    // process.on('exit') is registered in init() so respawned workers are cleaned up correctly
     if (this.enableFork) this.init();
   }
   kill() {
     if (this.fcp) {
-      this.fcp.kill();
+      try {
+        this.fcp.kill();
+      } catch {
+        // Child may already be dead (e.g. after MCP re-bootstrap)
+      }
+      this.fcp = undefined;
     }
     process.off('exit', this.killFn);
   }
   protected init() {
+    if (this.fcp) {
+      return;
+    }
+    process.on('exit', this.killFn);
     const platform = getPlatformServices();
     // In packaged Electron builds, resolve to app.asar.unpacked for WASM files.
     const workerCwd = platform.paths.isPackaged()
@@ -58,10 +67,10 @@ export class ForkTask<Data> extends Pipe {
     fcp.on('message', (...args: unknown[]) => {
       const e = args[0] as IForkData;
       if (e.type === 'complete') {
-        fcp.kill();
+        this.kill();
         this.emit('complete', e.data);
       } else if (e.type === 'error') {
-        fcp.kill();
+        this.kill();
         this.emit('error', e.data);
       } else {
         // clientId约束为主/子进程间通信钥匙
@@ -83,6 +92,10 @@ export class ForkTask<Data> extends Pipe {
   }
   start() {
     if (!this.enableFork) return Promise.resolve();
+    // After kill() (e.g. MCP config refresh), fork a new child before postMessagePromise.
+    if (!this.fcp) {
+      this.init();
+    }
     const { data } = this;
     return this.postMessagePromise('start', data);
   }

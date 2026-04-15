@@ -663,6 +663,58 @@ export function resolveNpxPath(env: Record<string, string | undefined>): string 
 }
 
 /**
+ * Prepend directories to PATH so child processes that spawn the bare command `npx`
+ * (e.g. aionrs MCP stdio with `command: "npx"`) resolve to `npx` / `npx.cmd` on Windows.
+ *
+ * Uses {@link resolveNpxPath}; if it returns an absolute path, that directory is merged first.
+ * Otherwise prepends {@link findSuitableNodeBin} (Node 18+) when found (nvm/fnm installs).
+ */
+function pushDirIfNpxPresent(segments: string[], dir: string | undefined): void {
+  if (!dir) return;
+  const normalized = dir.trim();
+  if (!normalized || segments.includes(normalized)) return;
+  const npxName = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  if (existsSync(path.join(normalized, npxName))) {
+    segments.push(normalized);
+  }
+}
+
+export function withNpxCommandOnPath(env: Record<string, string>): Record<string, string> {
+  const npxResolved = resolveNpxPath(env as Record<string, string | undefined>);
+  const segments: string[] = [];
+
+  if (path.isAbsolute(npxResolved)) {
+    segments.push(path.dirname(npxResolved));
+  }
+
+  // Windows: IDE-launched Electron often lacks nvm/fnm shims on PATH, but NVM_SYMLINK / FNM_MULTISHELL_PATH may still be set.
+  if (process.platform === 'win32') {
+    pushDirIfNpxPresent(segments, process.env.NVM_SYMLINK);
+    pushDirIfNpxPresent(segments, process.env.FNM_MULTISHELL_PATH);
+  }
+
+  const nodeBinDir = findSuitableNodeBin(18, 0);
+  if (nodeBinDir && !segments.includes(nodeBinDir)) {
+    segments.push(nodeBinDir);
+  }
+
+  if (segments.length === 0) {
+    return env;
+  }
+
+  let combined = segments[0]!;
+  for (let i = 1; i < segments.length; i++) {
+    const next = segments[i]!;
+    combined = mergePaths(combined, next);
+  }
+
+  return {
+    ...env,
+    PATH: mergePaths(combined, env.PATH || ''),
+  };
+}
+
+/**
  * Promise-based dedup guard so concurrent callers share one spawn.
  * Without this, a second caller arriving before the first await resolves
  * would see cachedFullShellEnv as {} and return an empty env.

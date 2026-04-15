@@ -5,6 +5,7 @@
  */
 
 import type { TProviderWithModel } from '@/common/config/storage';
+import { isProviderLiteLlmProxy } from '@/common/utils/litellmGateway';
 import { isOpenAIHost } from '@/common/utils/urlValidation';
 import type { ProviderAuthTypeChoice } from '@/common/types/providerAuthType';
 
@@ -16,11 +17,15 @@ type AionrsProvider = 'anthropic' | 'openai' | 'bedrock' | 'vertex';
  * 1ONE PlatformType values: 'custom' | 'new-api' | 'gemini' | 'gemini-vertex-ai' | 'anthropic' | 'bedrock'
  */
 function mapProvider(model: TProviderWithModel): AionrsProvider {
+  if (isProviderLiteLlmProxy(model)) {
+    return 'openai';
+  }
   // Respect explicit authType override (protocol selection in UI).
   // This is critical for gateway endpoints (LiteLLM/new-api) where the same baseUrl can host
   // multiple upstream protocols.
   const authType = (model as { authType?: ProviderAuthTypeChoice }).authType;
   if (authType) {
+    if (authType === 'openai-completions') return 'openai';
     if (authType === 'anthropic') return 'anthropic';
     if (authType === 'bedrock') return 'bedrock';
     if (authType === 'vertex') return 'vertex';
@@ -48,7 +53,7 @@ const GEMINI_OPENAI_COMPAT_PATH = '/v1beta/openai';
  * For Gemini, ensure the URL includes the `/v1beta/openai` path suffix.
  */
 function resolveOpenAIBaseUrl(model: TProviderWithModel): string {
-  if (model.platform === 'gemini') {
+  if (model.platform === 'gemini' && !isProviderLiteLlmProxy(model)) {
     const raw = (model.baseUrl || 'https://generativelanguage.googleapis.com').replace(/\/+$/, '');
     return raw.endsWith(GEMINI_OPENAI_COMPAT_PATH) ? raw : `${raw}${GEMINI_OPENAI_COMPAT_PATH}`;
   }
@@ -108,7 +113,13 @@ export function buildSpawnConfig(
   // unprompted, leading to tool_call_id errors.
   const neutralSystemPrompt =
     provider !== 'anthropic'
-      ? 'You are a helpful AI assistant. Answer questions directly. Only use file system tools when the user explicitly asks you to read, write, or execute files — never run tools just to explore the environment.'
+      ? [
+          'You are a helpful AI assistant. Answer questions directly.',
+          'Only use file system tools when the user explicitly asks you to read, write, or execute files.',
+          'For project/directory structure: ALWAYS use `git ls-files` first (fastest). If git is not available, run shallow one-level listings like `dir /b` or `ls` on specific subdirs — NEVER run `dir /s /b`, `dir /s`, `find` or any unbounded recursive command on the workspace root; these time out at 120 s and block all work.',
+          'Do NOT try to read binary or image files with file_read or bash — they contain binary data that cannot be interpreted as text.',
+          'Do NOT make up information. If you cannot retrieve real-time data (weather, stock prices, live URLs) because you have no web-search tool, tell the user clearly instead of guessing.',
+        ].join(' ')
       : undefined;
   const effectiveSystemPrompt = options.systemPrompt ?? neutralSystemPrompt;
   if (effectiveSystemPrompt) {
@@ -169,44 +180,45 @@ export function buildSpawnConfig(
 }
 
 /**
- * Build `.aionrs.toml` project config content for provider compat overrides.
- * Returns non-empty string only when overrides are needed.
+ * Build `.aionrs.toml` project config for the OpenAI provider path.
  *
- * - Gemini's OpenAI-compatible endpoint already includes version in the base URL
- *   (`/v1beta/openai`), so we override api_path to `/chat/completions` to avoid
- *   the default `/v1/chat/completions` which would produce a 404.
- * - OpenAI official API requires `max_completion_tokens` instead of `max_tokens`
- *   for newer models (gpt-5.x, o-series, etc.).
+ * - **api = "openai-completions"** — forces aionrs to use OpenAI `/v1/chat/completions` wire format.
+ *   Aligns with LiteLLM “工具封装”建议里的 `protocol: "openai"` + `endpoint: "/v1/chat/completions"`.
+ *   Gateways (LiteLLM/new-api) often reject `anthropic` / `claude_code` style protocols; this must not
+ *   be inferred as Anthropic when the HTTP surface is OpenAI-compatible.
+ * - `[providers.openai.compat]` — Gemini path segment, `max_completion_tokens`, etc.
  */
 function buildProjectConfig(model: TProviderWithModel, provider: AionrsProvider): string {
   if (provider !== 'openai') return '';
 
-  // Collect compat overrides as key-value pairs
-  const overrides: string[] = [];
+  const chunks: string[] = [
+    '[providers.openai]',
+    'api = "openai-completions"',
+    '',
+  ];
+
+  const compat: string[] = [];
 
   // Gemini uses /v1beta/openai as base URL — skip the default /v1 prefix
-  if (model.platform === 'gemini') {
-    overrides.push('api_path = "/chat/completions"');
+  if (model.platform === 'gemini' && !isProviderLiteLlmProxy(model)) {
+    compat.push('api_path = "/chat/completions"');
   }
 
-  // OpenAI official API needs max_completion_tokens for newer models.
-  // Only apply when the host is actually OpenAI (not Gemini or other providers).
   const baseUrl = model.baseUrl || '';
   const useModelLower = (model.useModel ?? '').toLowerCase();
   const needsMaxCompletionTokens =
-    // Newer OpenAI model families and many Azure/LiteLLM routes require `max_completion_tokens`
-    // and reject `max_tokens` (e.g. gpt-5.*, o1/o3, some "codex" variants).
     useModelLower.startsWith('gpt-5') ||
     useModelLower.startsWith('o1') ||
     useModelLower.startsWith('o3') ||
     useModelLower.includes('codex');
 
-  // OpenAI host: always apply for the affected families.
-  // Non-OpenAI (LiteLLM/new-api/custom gateways): apply only when model name strongly suggests it.
   if ((baseUrl && isOpenAIHost(baseUrl)) || needsMaxCompletionTokens) {
-    overrides.push('max_tokens_field = "max_completion_tokens"');
+    compat.push('max_tokens_field = "max_completion_tokens"');
   }
 
-  if (overrides.length === 0) return '';
-  return ['[providers.openai.compat]', ...overrides, ''].join('\n');
+  if (compat.length > 0) {
+    chunks.push('[providers.openai.compat]', ...compat, '');
+  }
+
+  return chunks.join('\n');
 }

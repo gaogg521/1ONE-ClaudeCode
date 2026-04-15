@@ -23,6 +23,14 @@
       "model": "qwen-3-6-plus",
       "summary": "",
       "message_count": 0
+    },
+    {
+      "id": "07fd48a2",
+      "created_at": "2026-04-15T04:36:36.347654Z",
+      "updated_at": "2026-04-15T04:36:50.823872100Z",
+      "model": "glm-5",
+      "summary": "读取一下这个文件",
+      "message_count": 2
     }
   ]
 }

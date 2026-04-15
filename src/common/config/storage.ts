@@ -461,6 +461,12 @@ export interface IProvider {
   baseUrl: string;
   apiKey: string;
   /**
+   * When true, treat this provider as a LiteLLM (or same-shape) OpenAI gateway: use OpenAI wire
+   * format only, skip native Google OAuth / Vertex checks even if the model name looks like Gemini.
+   * You can also name models `litellm/<upstream>` (e.g. `litellm/gemini-3.1-pro-preview`) — same effect without this flag.
+   */
+  litellmProxy?: boolean;
+  /**
    * Optional protocol/auth override for this provider.
    * When set, it takes precedence over `platform` inference.
    *

@@ -124,6 +124,7 @@ const EditModeModal = ModalHOC<{ data?: IProvider; onChange(data: IProvider): vo
       () =>
         [
           { label: 'OpenAI (chat/completions)', value: 'openai' },
+          { label: 'OpenAI (Protocol: openai / chat completions)', value: 'openai-completions' },
           { label: 'Anthropic (messages)', value: 'anthropic' },
           { label: 'Gemini', value: 'gemini' },
           { label: t('settings.custom', { defaultValue: '自定义' }), value: 'custom' },

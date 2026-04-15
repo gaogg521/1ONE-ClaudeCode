@@ -11,6 +11,10 @@ import { GeminiRotatingClient, type GeminiClientConfig } from './GeminiRotatingC
 import { AnthropicRotatingClient, type AnthropicClientConfig } from './AnthropicRotatingClient';
 import type { RotatingApiClientOptions } from './RotatingApiClient';
 import { getProviderAuthType } from '../utils/platformAuthType';
+import {
+  liteLlmOpenAiProtocolHeaders,
+  shouldAttachLiteLlmOpenAiProtocolHeader,
+} from '../utils/litellmGateway';
 import { isNewApiPlatform } from '../utils/platformConstants';
 import type { ProviderAuthType } from '@/common/types/providerAuthType';
 
@@ -126,6 +130,7 @@ export class ClientFactory {
           defaultHeaders: {
             'HTTP-Referer': 'https://1one.ai',
             'X-Title': '1ONE ClaudeCode',
+            ...(shouldAttachLiteLlmOpenAiProtocolHeader(provider) ? liteLlmOpenAiProtocolHeaders() : {}),
           },
           ...(options.baseConfig as OpenAIClientConfig),
         };
@@ -178,6 +183,7 @@ export class ClientFactory {
           defaultHeaders: {
             'HTTP-Referer': 'https://1one.ai',
             'X-Title': '1ONE ClaudeCode',
+            ...(shouldAttachLiteLlmOpenAiProtocolHeader(provider) ? liteLlmOpenAiProtocolHeaders() : {}),
           },
           ...(options.baseConfig as OpenAIClientConfig),
         };

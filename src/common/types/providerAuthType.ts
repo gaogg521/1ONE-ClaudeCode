@@ -17,7 +17,8 @@ export type ProviderAuthType =
  * - `custom`: user enters a vendor/gateway specific protocol/mode string (e.g. "compatible-mode")
  *   which will be resolved at runtime to a supported protocol (usually openai) for routing.
  */
-export type ProviderAuthTypeChoice = ProviderAuthType | 'custom';
+/** Explicit OpenAI chat/completions wire format (LiteLLM doc: `protocol: "openai"`; HTTP: `liteLlmOpenAiProtocolHeaders`). */
+export type ProviderAuthTypeChoice = ProviderAuthType | 'openai-completions' | 'custom';
 
 export const PROVIDER_AUTH_TYPE_LABELS: Record<ProviderAuthType, string> = {
   openai: 'OpenAI (chat/completions)',

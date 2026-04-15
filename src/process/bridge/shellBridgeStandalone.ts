@@ -13,6 +13,7 @@
 
 import { ipcBridge } from '@/common';
 import { execFile } from 'node:child_process';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 
 function runOpen(args: string[]): Promise<void> {
@@ -32,6 +33,11 @@ function runOpen(args: string[]): Promise<void> {
 
 export function initShellBridgeStandalone(): void {
   ipcBridge.shell.openFile.provider((filePath) => runOpen([filePath]));
+
+  ipcBridge.shell.openFolderEnsure.provider(async (folderPath) => {
+    await fs.mkdir(folderPath, { recursive: true });
+    await runOpen([folderPath]);
+  });
 
   ipcBridge.shell.showItemInFolder.provider((filePath) => runOpen([path.dirname(filePath)]));
 

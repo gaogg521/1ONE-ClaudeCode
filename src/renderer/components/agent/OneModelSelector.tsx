@@ -53,7 +53,17 @@ export const OneModelSelector: React.FC<{ conversationId: string }> = ({ convers
       if (p.enabled === false) continue;
       for (const m of p.model || []) {
         if (p.modelEnabled?.[m] === false) continue;
-        const authType = getProviderAuthType({ platform: p.platform, authType: (p as any).authType, modelProtocols: p.modelProtocols, useModel: m });
+        const authType = getProviderAuthType({
+          platform: p.platform,
+          authType: p.authType,
+          authTypeCustom: p.authTypeCustom,
+          modelProtocols: p.modelProtocols,
+          useModel: m,
+          model: p.model,
+          baseUrl: p.baseUrl,
+          name: p.name,
+          litellmProxy: p.litellmProxy,
+        });
         if (authType !== 'openai') continue;
         out.push({
           id: buildId(p.id, m),

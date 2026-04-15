@@ -521,13 +521,16 @@ export function initConversationBridge(
     }
 
     // Handle file paths based on agent type
-    // Gemini requires files in workspace; other agents can use cache directory directly
+    // Gemini and aionrs require files copied into the workspace directory.
+    // aionrs binary reads files from the workspace cwd; raw cache paths work for text, but
+    // binary/image files (PNG, JPG, …) must live inside the workspace so the binary can pass
+    // them as vision attachments rather than leaving the model to call file_read on binary data.
     let workspaceFiles: string[];
     const isGeminiAgent = task.type === 'gemini';
+    const isAionrsAgent = task.type === 'aionrs';
 
-    if (isGeminiAgent) {
-      // Gemini: Copy files to workspace (required for gemini CLI)
-      // Wrap in try-catch to prevent unhandled rejection when workspace directory is missing
+    if (isGeminiAgent || isAionrsAgent) {
+      // Copy files to workspace (required for gemini CLI; prevents aionrs from reading binary files as text)
       try {
         workspaceFiles = await copyFilesToDirectory(task.workspace, files, false, getSystemDir().cacheDir);
       } catch (error) {
@@ -535,7 +538,7 @@ export function initConversationBridge(
         workspaceFiles = [];
       }
     } else {
-      // Non-Gemini agents (ACP, Codex, NanoBot, OpenClaw, Remote): Use cache directory paths directly
+      // Non-binary agents (ACP, Codex, NanoBot, OpenClaw, Remote): Use cache directory paths directly
       // Filter to only include absolute paths that exist
       workspaceFiles = (files ?? []).filter((f) => path.isAbsolute(f));
     }

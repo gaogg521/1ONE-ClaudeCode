@@ -5,13 +5,14 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import type { TProviderWithModel } from '@/common/config/storage';
 import { resolveAionrsBinary } from './binaryResolver';
 import { buildSpawnConfig } from './envBuilder';
 import type { AionrsEvent, AionrsCommand } from './protocol';
+import { getEnhancedEnv, withNpxCommandOnPath } from '@process/utils/shellEnv';
 
 const AIONRS_PROJECT_CONFIG = '.aionrs.toml';
 
@@ -20,6 +21,8 @@ type StreamEventHandler = (event: { type: string; data: unknown; msg_id: string 
 export type AionrsAgentOptions = {
   workspace: string;
   model: TProviderWithModel;
+  /** 1ONE conversation id — used when resume fails to start a fresh aionrs session with a stable key. */
+  conversation_id?: string;
   proxy?: string;
   yoloMode?: boolean;
   presetRules?: string;
@@ -31,8 +34,25 @@ export type AionrsAgentOptions = {
 };
 
 export class AionrsAgent {
-  /** Sliding window: no JSON event from aionrs for this long → synthetic error + finish. */
-  private static readonly RESPONSE_STALL_MS = 120_000;
+  /**
+   * Sliding window: no JSON event from aionrs binary for this long → synthetic error + finish.
+   *
+   * - Plain chat / first token: upstream should return first chunk within 90 s even for slow models.
+   *   If nothing comes back in 90 s the API connection is almost certainly broken (context overflow,
+   *   rate limit, network loss).  Previously 5 min — that made a stuck turn feel like a 7-min hang.
+   */
+  private static readonly RESPONSE_STALL_MS = 90_000; // 90 s — first token timeout
+  /**
+   * While a tool is waiting for approval or executing locally, aionrs may emit nothing to stdout
+   * (e.g. a slow build, npm install, git clone). Keep generous to avoid killing real work.
+   */
+  private static readonly STALL_DURING_TOOL_MS = 900_000; // 15 minutes
+  /**
+   * After a tool result the model must decide what to do next.  Even with a large context (e.g.
+   * large partial output from a timed-out dir), the upstream API should respond within 90 s.
+   * Reduced from 5 min — main culprit for 7-min frozen turns after tool timeouts.
+   */
+  private static readonly STALL_AFTER_TOOL_RESULT_MS = 90_000; // 90 s
 
   private childProcess: ChildProcess | null = null;
   private ready = false;
@@ -81,8 +101,14 @@ export class AionrsAgent {
       this.writeProjectConfig(projectConfig);
     }
 
+    // Merge shell-like PATH (Program Files\nodejs, npm global, Git, etc.) so MCP stdio
+    // (e.g. chrome-devtools via `npx`) can spawn — raw process.env is often too thin on
+    // Windows when Electron is launched from an IDE.
+    // Ensure `npx` is on PATH: aionrs spawns MCP with bare `npx` (not absolute); Windows IDE launches
+    // often miss Node's directory even when getEnhancedEnv() merged common paths.
+    const childEnv = withNpxCommandOnPath(getEnhancedEnv());
     this.childProcess = spawn(binaryPath, args, {
-      env: { ...process.env, ...env },
+      env: { ...childEnv, ...env },
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: this.options.workspace,
     });
@@ -107,9 +133,26 @@ export class AionrsAgent {
     this.childProcess.on('exit', (code) => {
       this.clearResponseStallTimer();
       this.restoreProjectConfig();
+
       if (!this.ready) {
+        // Exited before emitting ready — reject the bootstrap promise
         this.readyReject(new Error(`aionrs exited with code ${code} during init`));
+      } else {
+        // Exited mid-conversation (context overflow, upstream crash, API auth failure, etc.).
+        // Unblock the UI immediately so the user sees an error rather than an infinite spinner.
+        const msgId = this.activeMsgId || this.pendingTurnMsgId || '';
+        if (msgId) {
+          this.onStreamEvent({
+            type: 'error',
+            data: `[aionrs] 进程意外退出（exit code ${code}）。可能原因：上下文超过模型限制、API 认证失败或上游服务异常。请重试或检查模型配置。`,
+            msg_id: msgId,
+          });
+          this.onStreamEvent({ type: 'finish', data: '', msg_id: msgId });
+          this.activeMsgId = null;
+          this.pendingTurnMsgId = null;
+        }
       }
+
       this.childProcess = null;
     });
 
@@ -124,7 +167,8 @@ export class AionrsAgent {
       // If resume failed (session not found), fallback to a new session
       if (this.options.resume) {
         console.error('[AionrsAgent] Resume failed, falling back to new session:', err);
-        this.options = { ...this.options, resume: undefined, sessionId: this.options.resume };
+        const stableId = this.options.conversation_id ?? this.options.sessionId;
+        this.options = { ...this.options, resume: undefined, sessionId: stableId };
         this.ready = false;
         this.readyPromise = new Promise((resolve, reject) => {
           this.readyResolve = resolve;
@@ -155,22 +199,25 @@ export class AionrsAgent {
    * If the aionrs binary emits nothing for too long after a user send, unblock the UI
    * (otherwise the renderer stays on "processing" forever).
    */
-  private slideResponseStallWatchdog(msgId: string): void {
+  private slideResponseStallWatchdog(msgId: string, stallMs: number = AionrsAgent.RESPONSE_STALL_MS): void {
     this.clearResponseStallTimer();
     if (!msgId) return;
     this.responseStallTimer = setTimeout(() => {
       this.responseStallTimer = null;
       const id = this.activeMsgId || this.pendingTurnMsgId || msgId;
+      const minutes = Math.round(stallMs / 60_000);
       this.onStreamEvent({
         type: 'error',
         data:
-          '[aionrs] No events from the model within 2 minutes (upstream may be hung or unreachable). Check base URL, API key, proxy, and provider status.',
+          stallMs >= AionrsAgent.STALL_DURING_TOOL_MS
+            ? `[aionrs] 已超过 ${minutes} 分钟未收到工具执行事件。若正在执行大目录扫描等耗时命令，请缩小路径范围后重试。`
+            : `[aionrs] ${Math.round(stallMs / 1000)} 秒内未收到模型响应，连接可能已断开。常见原因：上下文超限、API Key 失效、网络或代理异常、上游服务不可用。请检查配置后重试。`,
         msg_id: id,
       });
       this.onStreamEvent({ type: 'finish', data: '', msg_id: id });
       this.activeMsgId = null;
       this.pendingTurnMsgId = null;
-    }, AionrsAgent.RESPONSE_STALL_MS);
+    }, stallMs);
   }
 
   private handleEvent(event: AionrsEvent): void {
@@ -178,6 +225,13 @@ export class AionrsAgent {
       case 'ready':
         this.ready = true;
         this.sessionId = event.session_id;
+        if (event.session_id) {
+          this.onStreamEvent({
+            type: 'aionrs_session_bound',
+            data: event.session_id,
+            msg_id: '',
+          });
+        }
         this.readyResolve();
         break;
 
@@ -198,7 +252,7 @@ export class AionrsAgent {
         break;
 
       case 'tool_request':
-        this.slideResponseStallWatchdog(event.msg_id);
+        this.slideResponseStallWatchdog(event.msg_id, AionrsAgent.STALL_DURING_TOOL_MS);
         this.onStreamEvent({
           type: 'tool_group',
           data: [
@@ -216,7 +270,7 @@ export class AionrsAgent {
         break;
 
       case 'tool_running':
-        this.slideResponseStallWatchdog(event.msg_id);
+        this.slideResponseStallWatchdog(event.msg_id, AionrsAgent.STALL_DURING_TOOL_MS);
         this.onStreamEvent({
           type: 'tool_group',
           data: [
@@ -233,7 +287,7 @@ export class AionrsAgent {
         break;
 
       case 'tool_result':
-        this.slideResponseStallWatchdog(event.msg_id);
+        this.slideResponseStallWatchdog(event.msg_id, AionrsAgent.STALL_AFTER_TOOL_RESULT_MS);
         this.onStreamEvent({
           type: 'tool_group',
           data: [
@@ -414,6 +468,7 @@ export class AionrsAgent {
 
   /**
    * Restore or remove the .aionrs.toml written by writeProjectConfig.
+   * Also cleans up any `aionrs_ONE_*.toml` session files left behind by the binary.
    */
   private restoreProjectConfig(): void {
     if (!this.configBackup) return;
@@ -428,6 +483,17 @@ export class AionrsAgent {
       }
     } catch {
       // Best-effort cleanup; file may already be removed
+    }
+
+    // Clean up `aionrs_ONE_*.toml` session state files the binary writes to the workspace.
+    try {
+      const dir = join(path, '..');
+      const stale = readdirSync(dir).filter((f) => /^aionrs_ONE_.*\.toml$/.test(f));
+      for (const f of stale) {
+        try { unlinkSync(join(dir, f)); } catch { /* ignore */ }
+      }
+    } catch {
+      // Workspace may not be accessible; skip
     }
   }
 }

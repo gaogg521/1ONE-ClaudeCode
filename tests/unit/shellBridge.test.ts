@@ -14,6 +14,7 @@ const {
   openExternalProvider,
   checkToolInstalledProvider,
   openFolderWithProvider,
+  openFolderEnsureProvider,
   shellMock,
   execMock,
   spawnMock,
@@ -24,6 +25,7 @@ const {
   openExternalProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
   checkToolInstalledProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
   openFolderWithProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+  openFolderEnsureProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
   shellMock: {
     openPath: vi.fn().mockResolvedValue(''),
     showItemInFolder: vi.fn(),
@@ -36,6 +38,9 @@ const {
   }),
   fsMock: {
     existsSync: vi.fn(),
+    promises: {
+      mkdir: vi.fn().mockResolvedValue(undefined),
+    },
   },
 }));
 
@@ -67,6 +72,11 @@ vi.mock('@/common', () => ({
           openFolderWithProvider.fn = fn;
         }),
       },
+      openFolderEnsure: {
+        provider: vi.fn((fn: (...args: any[]) => any) => {
+          openFolderEnsureProvider.fn = fn;
+        }),
+      },
     },
   },
 }));
@@ -82,6 +92,9 @@ vi.mock('child_process', () => ({
 
 vi.mock('fs', () => ({
   existsSync: fsMock.existsSync,
+  promises: {
+    mkdir: fsMock.promises.mkdir,
+  },
 }));
 
 // --- Tests ---
@@ -96,6 +109,7 @@ beforeEach(async () => {
   openExternalProvider.fn = undefined;
   checkToolInstalledProvider.fn = undefined;
   openFolderWithProvider.fn = undefined;
+  openFolderEnsureProvider.fn = undefined;
 
   // Default mocks
   Object.defineProperty(process, 'platform', { value: 'win32' });
@@ -106,13 +120,27 @@ beforeEach(async () => {
 
 describe('shellBridge', () => {
   describe('initShellBridge', () => {
-    it('registers all five shell providers', () => {
+    it('registers all six shell providers', () => {
       initShellBridge();
       expect(openFileProvider.fn).toBeDefined();
       expect(showItemInFolderProvider.fn).toBeDefined();
       expect(openExternalProvider.fn).toBeDefined();
       expect(checkToolInstalledProvider.fn).toBeDefined();
       expect(openFolderWithProvider.fn).toBeDefined();
+      expect(openFolderEnsureProvider.fn).toBeDefined();
+    });
+  });
+
+  describe('openFolderEnsure', () => {
+    beforeEach(() => {
+      initShellBridge();
+      shellMock.openPath.mockResolvedValue('');
+    });
+
+    it('creates directory recursively then opens it', async () => {
+      await openFolderEnsureProvider.fn!('C:\\ws\\.gemini\\logs');
+      expect(fsMock.promises.mkdir).toHaveBeenCalledWith('C:\\ws\\.gemini\\logs', { recursive: true });
+      expect(shellMock.openPath).toHaveBeenCalledWith('C:\\ws\\.gemini\\logs');
     });
   });
 

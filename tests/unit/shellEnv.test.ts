@@ -478,6 +478,47 @@ describe('resolveNpxPath', () => {
   });
 });
 
+describe('withNpxCommandOnPath', () => {
+  const originalPlatform = process.platform;
+
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform });
+  });
+
+  it('prepends directory of resolved npx when path is absolute (win32)', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+
+    const execFileSync = vi
+      .fn()
+      .mockReturnValueOnce(`${path.join('/tooling', 'node.exe')}\n`)
+      .mockReturnValueOnce('10.9.0\n');
+
+    vi.doMock('fs', async () => {
+      const actual = await vi.importActual<typeof import('fs')>('fs');
+      return {
+        ...actual,
+        existsSync: vi.fn(() => true),
+      };
+    });
+
+    vi.doMock('child_process', () => ({
+      execFileSync,
+      execFile: vi.fn(),
+    }));
+
+    const { withNpxCommandOnPath } = await import('@process/utils/shellEnv');
+    const out = withNpxCommandOnPath({ PATH: 'C:\\Windows', KEEP: '1' } as Record<string, string>);
+    expect(out.KEEP).toBe('1');
+    const parts = out.PATH.split(';');
+    expect(parts[0]).toBe(path.dirname(path.join('/tooling', 'npx.cmd')));
+    expect(parts).toContain('C:\\Windows');
+  });
+});
+
 // -------------------------------------------------------------------
 // 5. loadFullShellEnvironment — async, detached, with -i flag
 // -------------------------------------------------------------------

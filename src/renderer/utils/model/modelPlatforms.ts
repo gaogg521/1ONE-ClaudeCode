@@ -226,6 +226,7 @@ export const MODEL_PLATFORMS: PlatformConfig[] = [
  */
 export const NEW_API_PROTOCOL_OPTIONS = [
   { label: 'OpenAI', value: 'openai' },
+  { label: 'OpenAI (Protocol: openai / chat completions)', value: 'openai-completions' },
   { label: 'Gemini', value: 'gemini' },
   { label: 'Anthropic', value: 'anthropic' },
 ];

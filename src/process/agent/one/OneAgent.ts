@@ -5,7 +5,11 @@
  */
 
 import type { TProviderWithModel } from '@/common/config/storage';
-import type { AionrsEvent, AionrsCommand, OneAgentConfig, OpenAIMessage } from './types';
+import {
+  liteLlmOpenAiProtocolHeaders,
+  shouldAttachLiteLlmOpenAiProtocolHeader,
+} from '@/common/utils/litellmGateway';
+import type { AionrsEvent, AionrsCommand, OneAgentConfig, OpenAIMessage, OpenAIToolCall } from './types';
 import { EventEmitter } from 'events';
 import { OneToolExecutor } from './tools/OneToolExecutor';
 
@@ -201,37 +205,78 @@ export class OneAgent extends EventEmitter {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
+          ...(shouldAttachLiteLlmOpenAiProtocolHeader(model) ? liteLlmOpenAiProtocolHeaders() : {}),
         },
         body: JSON.stringify(buildBody(useMaxCompletionTokens)),
         signal: this.abortController?.signal,
       });
     };
 
-    let response = await doFetch(false);
+    const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
-    if (!response.ok) {
+    let useMaxCompletionTokens = false;
+    let response = await doFetch(useMaxCompletionTokens);
+    let transientAttempt = 0;
+    const maxTransientRetries = 2; // 502/503/504: up to 3 total tries (common with LiteLLM → Azure cold paths)
+
+    while (!response.ok) {
       const errorText = await response.text();
-      // Some OpenAI/Azure/LiteLLM routes reject `max_tokens` and require `max_completion_tokens`.
-      // Best-effort retry with the alternative parameter to improve compatibility.
       const lower = errorText.toLowerCase();
+
+      // Some OpenAI/Azure/LiteLLM routes reject `max_tokens` and require `max_completion_tokens`.
       const shouldRetryWithMaxCompletionTokens =
+        !useMaxCompletionTokens &&
         lower.includes("unsupported parameter") &&
         lower.includes("'max_tokens'") &&
         lower.includes('max_completion_tokens');
       if (shouldRetryWithMaxCompletionTokens) {
-        response = await doFetch(true);
-        if (response.ok) {
-          // continue to streaming handling below
-        } else {
-          const retryErrorText = await response.text();
-          throw new Error(`API error ${response.status}: ${retryErrorText}`);
-        }
-      } else {
-        throw new Error(`API error ${response.status}: ${errorText}`);
+        useMaxCompletionTokens = true;
+        response = await doFetch(useMaxCompletionTokens);
+        continue;
       }
+
+      // Gateway upstream timeouts (e.g. LiteLLM wrapping Azure 503 as 502) — short backoff retry.
+      const isTransientHttp =
+        response.status === 502 || response.status === 503 || response.status === 504;
+      if (isTransientHttp && transientAttempt < maxTransientRetries) {
+        transientAttempt++;
+        await sleep(400 * transientAttempt);
+        response = await doFetch(useMaxCompletionTokens);
+        continue;
+      }
+
+      throw new Error(`API error ${response.status}: ${errorText}`);
     }
 
-    // Process streaming response
+    // Gateways / "Unary" debug paths often return a single JSON `chat.completion` (not SSE) even when
+    // the client sends `stream: true`. Match the OpenAI spec shape from the user's LiteLLM example.
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    if (contentType.includes('application/json') && !contentType.includes('text/event-stream')) {
+      const raw = await response.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        throw new Error(`Expected JSON chat completion, parse failed: ${(e as Error).message}`);
+      }
+      const root = parsed as Record<string, unknown>;
+      if (root.object === 'chat.completion') {
+        return this.applyUnaryChatCompletion(root, msgId);
+      }
+      const apiErr = root.error as Record<string, unknown> | undefined;
+      const detail =
+        typeof apiErr?.message === 'string'
+          ? apiErr.message
+          : typeof root.message === 'string'
+            ? root.message
+            : raw.slice(0, 500);
+      throw new Error(`Unexpected JSON response (expected chat.completion): ${detail}`);
+    }
+
+    // Process streaming response (SSE) — OpenAI `chat.completion.chunk` lines:
+    // - optional empty sentinel: choices: []
+    // - deltas with delta.content (possibly "")
+    // - final usage may arrive on a chunk with choices: [] (LiteLLM / gateway pattern)
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error('No response body');
@@ -242,54 +287,77 @@ export class OneAgent extends EventEmitter {
     let inputTokens = 0;
     let outputTokens = 0;
 
+    const applySseJsonPayload = (payload: string) => {
+      if (payload === '[DONE]') return;
+      try {
+        const parsed = JSON.parse(payload) as Record<string, unknown>;
+        const choice0 = (parsed.choices as Array<Record<string, unknown>> | undefined)?.[0];
+        const delta = choice0?.delta as Record<string, unknown> | undefined;
+
+        const piece = delta?.content;
+        if (typeof piece === 'string' && piece.length > 0) {
+          fullContent += piece;
+          this.options.onEvent({
+            type: 'text_delta',
+            text: piece,
+            msg_id: msgId,
+          });
+        }
+
+        const deltaToolCalls = delta?.tool_calls;
+        if (Array.isArray(deltaToolCalls)) {
+          for (const tc of deltaToolCalls as Array<Record<string, unknown>>) {
+            const existing = toolCalls.find(t => t.id === tc.id);
+            if (existing) {
+              existing.arguments = JSON.parse(
+                (tc.function as Record<string, unknown> | undefined)?.arguments || '{}'
+              ) as Record<string, unknown>;
+            } else {
+              toolCalls.push({
+                id: String(tc.id ?? ''),
+                name: String((tc.function as Record<string, unknown> | undefined)?.name || ''),
+                arguments: JSON.parse(
+                  (tc.function as Record<string, unknown> | undefined)?.arguments || '{}'
+                ) as Record<string, unknown>,
+              });
+            }
+          }
+        }
+
+        const usage = parsed.usage as Record<string, unknown> | undefined;
+        if (usage) {
+          inputTokens = Number(usage.prompt_tokens) || 0;
+          outputTokens = Number(usage.completion_tokens) || 0;
+        }
+      } catch {
+        // Ignore parse errors for malformed chunks
+      }
+    };
+
+    let sseBuffer = '';
+    const decoder = new TextDecoder();
+
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        sseBuffer += decoder.decode(value ?? new Uint8Array(0), { stream: !done });
 
-        const chunk = new TextDecoder().decode(value);
-        const lines = chunk.split('\n').filter(line => line.trim());
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(data);
-            const delta = parsed.choices?.[0]?.delta;
-
-            if (delta?.content) {
-              fullContent += delta.content;
-              this.options.onEvent({
-                type: 'text_delta',
-                text: delta.content,
-                msg_id: msgId,
-              });
-            }
-
-            if (delta?.tool_calls) {
-              for (const tc of delta.tool_calls) {
-                const existing = toolCalls.find(t => t.id === tc.id);
-                if (existing) {
-                  existing.arguments = JSON.parse(tc.function?.arguments || '{}');
-                } else {
-                  toolCalls.push({
-                    id: tc.id,
-                    name: tc.function?.name || '',
-                    arguments: JSON.parse(tc.function?.arguments || '{}'),
-                  });
-                }
-              }
-            }
-
-            if (parsed.usage) {
-              inputTokens = parsed.usage.prompt_tokens || 0;
-              outputTokens = parsed.usage.completion_tokens || 0;
-            }
-          } catch {
-            // Ignore parse errors for malformed chunks
+        if (done) {
+          const lines = sseBuffer.split('\n');
+          for (const rawLine of lines) {
+            const line = rawLine.replace(/\r$/, '').trim();
+            if (!line.startsWith('data: ')) continue;
+            applySseJsonPayload(line.slice(6).trim());
           }
+          break;
+        }
+
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop() ?? '';
+        for (const rawLine of lines) {
+          const line = rawLine.replace(/\r$/, '').trim();
+          if (!line.startsWith('data: ')) continue;
+          applySseJsonPayload(line.slice(6).trim());
         }
       }
     } finally {
@@ -303,6 +371,72 @@ export class OneAgent extends EventEmitter {
     });
 
     return { content: fullContent, toolCalls: toolCalls.length > 0 ? toolCalls : undefined, inputTokens, outputTokens };
+  }
+
+  /**
+   * Handle non-streaming `chat.completion` JSON (OpenAI spec), including optional `message.tool_calls`.
+   */
+  private applyUnaryChatCompletion(
+    obj: Record<string, unknown>,
+    msgId: string
+  ): {
+    content: string;
+    toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
+    inputTokens: number;
+    outputTokens: number;
+  } {
+    const choices = obj.choices as Array<Record<string, unknown>> | undefined;
+    const message = choices?.[0]?.message as Record<string, unknown> | undefined;
+    const content = typeof message?.content === 'string' ? message.content : '';
+    if (content) {
+      this.options.onEvent({
+        type: 'text_delta',
+        text: content,
+        msg_id: msgId,
+      });
+    }
+
+    const rawToolCalls = message?.tool_calls as Array<Record<string, unknown>> | undefined;
+    const toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }> = [];
+    const historyToolCalls: OpenAIToolCall[] = [];
+
+    if (Array.isArray(rawToolCalls)) {
+      for (const tc of rawToolCalls) {
+        const fn = tc.function as Record<string, unknown> | undefined;
+        const name = typeof fn?.name === 'string' ? fn.name : '';
+        const argStr = typeof fn?.arguments === 'string' ? fn.arguments : '{}';
+        let args: Record<string, unknown> = {};
+        try {
+          args = JSON.parse(argStr) as Record<string, unknown>;
+        } catch {
+          args = {};
+        }
+        const id = String(tc.id ?? '');
+        toolCalls.push({ id, name, arguments: args });
+        historyToolCalls.push({
+          id,
+          type: 'function',
+          function: { name, arguments: argStr },
+        });
+      }
+    }
+
+    const usage = obj.usage as Record<string, unknown> | undefined;
+    const inputTokens = Number(usage?.prompt_tokens) || 0;
+    const outputTokens = Number(usage?.completion_tokens) || 0;
+
+    const assistantMsg: OpenAIMessage =
+      toolCalls.length > 0
+        ? { role: 'assistant', content: content || '', tool_calls: historyToolCalls }
+        : { role: 'assistant', content };
+    this.messageHistory.push(assistantMsg);
+
+    return {
+      content,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      inputTokens,
+      outputTokens,
+    };
   }
 
   private async handleToolCalls(

@@ -8,12 +8,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // --- Mocks (vi.hoisted so factories can reference them) ---
 
-const { openFileProvider, showItemInFolderProvider, openExternalProvider, execFileMock } = vi.hoisted(() => ({
-  openFileProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
-  showItemInFolderProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
-  openExternalProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
-  execFileMock: vi.fn(),
-}));
+const { openFileProvider, showItemInFolderProvider, openExternalProvider, openFolderEnsureProvider, execFileMock, mkdirMock } =
+  vi.hoisted(() => ({
+    openFileProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+    showItemInFolderProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+    openExternalProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+    openFolderEnsureProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+    execFileMock: vi.fn(),
+    mkdirMock: vi.fn().mockResolvedValue(undefined),
+  }));
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -33,7 +36,18 @@ vi.mock('@/common', () => ({
           openExternalProvider.fn = fn;
         }),
       },
+      openFolderEnsure: {
+        provider: vi.fn((fn: (...args: any[]) => any) => {
+          openFolderEnsureProvider.fn = fn;
+        }),
+      },
     },
+  },
+}));
+
+vi.mock('node:fs/promises', () => ({
+  default: {
+    mkdir: mkdirMock,
   },
 }));
 
@@ -51,6 +65,7 @@ beforeEach(async () => {
   openFileProvider.fn = undefined;
   showItemInFolderProvider.fn = undefined;
   openExternalProvider.fn = undefined;
+  openFolderEnsureProvider.fn = undefined;
 
   const mod = await import('../../src/process/bridge/shellBridgeStandalone');
   initShellBridgeStandalone = mod.initShellBridgeStandalone;
@@ -58,11 +73,12 @@ beforeEach(async () => {
 
 describe('shellBridgeStandalone', () => {
   describe('initShellBridgeStandalone', () => {
-    it('registers all three shell providers', () => {
+    it('registers all four shell providers', () => {
       initShellBridgeStandalone();
       expect(openFileProvider.fn).toBeDefined();
       expect(showItemInFolderProvider.fn).toBeDefined();
       expect(openExternalProvider.fn).toBeDefined();
+      expect(openFolderEnsureProvider.fn).toBeDefined();
     });
   });
 
@@ -86,6 +102,12 @@ describe('shellBridgeStandalone', () => {
     it('openExternal calls open with the URL', async () => {
       await openExternalProvider.fn!('https://example.com');
       expect(execFileMock).toHaveBeenCalledWith('open', ['https://example.com'], expect.any(Function));
+    });
+
+    it('openFolderEnsure mkdir then opens folder', async () => {
+      await openFolderEnsureProvider.fn!('/ws/.gemini/logs');
+      expect(mkdirMock).toHaveBeenCalledWith('/ws/.gemini/logs', { recursive: true });
+      expect(execFileMock).toHaveBeenCalledWith('open', ['/ws/.gemini/logs'], expect.any(Function));
     });
   });
 

@@ -204,6 +204,18 @@ async function findVSCodeExecutable(): Promise<string | null> {
 }
 
 export function initShellBridge(): void {
+  ipcBridge.shell.openFolderEnsure.provider(async (folderPath) => {
+    try {
+      await fs.promises.mkdir(folderPath, { recursive: true });
+      const err = await shell.openPath(folderPath);
+      if (err) {
+        console.warn(`[shellBridge] openPath after mkdir failed: ${err}`);
+      }
+    } catch (error) {
+      console.warn(`[shellBridge] openFolderEnsure failed:`, (error as Error).message);
+    }
+  });
+
   ipcBridge.shell.openFile.provider(async (path) => {
     try {
       const errorMessage = await shell.openPath(path);

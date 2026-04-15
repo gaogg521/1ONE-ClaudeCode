@@ -5,8 +5,10 @@ import type { TChatConversation, TokenUsageData } from '@/common/config/storage'
 import type { ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export const useGeminiMessage = (conversation_id: string, onError?: (message: IResponseMessage) => void) => {
+  const { t } = useTranslation();
   const addOrUpdateMessage = useAddOrUpdateMessage();
   const [streamRunning, setStreamRunning] = useState(false); // API 流是否在运行
   const [hasActiveTools, setHasActiveTools] = useState(false); // 是否有工具在执行或等待确认
@@ -141,7 +143,10 @@ export const useGeminiMessage = (conversation_id: string, onError?: (message: IR
         case 'start':
           setStreamRunning(true);
           streamRunningRef.current = true;
-          // Don't reset waitingResponse here - let tool completion flow handle it
+          // End "send box only spinner" as soon as the worker signals stream start — user sees Thought + stream state.
+          setWaitingResponse(false);
+          waitingResponseRef.current = false;
+          setThought({ subject: '', description: t('conversation.chat.processing') });
           break;
         case 'finish':
           {
@@ -186,9 +191,10 @@ export const useGeminiMessage = (conversation_id: string, onError?: (message: IR
             setHasActiveTools(hasActive);
             hasActiveToolsRef.current = hasActive; // Sync update ref immediately
 
-            // When tools transition from active to inactive, set waitingResponse=true
-            // because backend needs to continue sending requests to model
-            if (wasActive && !hasActive && tools.length > 0) {
+            // When tools transition from active to inactive, the model may continue the same stream.
+            // Only bump waitingResponse while the stream is still considered running — otherwise we
+            // orphan the UI in "processing" forever if no further events arrive (e.g. worker stall).
+            if (wasActive && !hasActive && tools.length > 0 && streamRunningRef.current) {
               setWaitingResponse(true);
               waitingResponseRef.current = true;
             }
@@ -266,11 +272,18 @@ export const useGeminiMessage = (conversation_id: string, onError?: (message: IR
               'color: inherit',
               trace
             );
+            // Immediate UI feedback while the model connection is establishing (before first token).
+            setThought({ subject: '', description: t('conversation.chat.streamStarting') });
           }
           break;
         default: {
           if (message.type === 'error') {
             setWaitingResponse(false);
+            waitingResponseRef.current = false;
+            setStreamRunning(false);
+            streamRunningRef.current = false;
+            setHasActiveTools(false);
+            hasActiveToolsRef.current = false;
             onError?.(message as IResponseMessage);
             // Log request error
             if (requestTraceRef.current) {
@@ -304,7 +317,7 @@ export const useGeminiMessage = (conversation_id: string, onError?: (message: IR
       }
     });
     // Note: hasActiveTools and streamRunning are accessed via refs to avoid re-subscription
-  }, [conversation_id, addOrUpdateMessage, onError]);
+  }, [conversation_id, addOrUpdateMessage, onError, t]);
 
   useEffect(() => {
     let cancelled = false;

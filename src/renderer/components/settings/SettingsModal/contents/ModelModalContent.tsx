@@ -34,6 +34,7 @@ const getProtocolColor = (protocol: string): string => {
     case 'anthropic':
       return 'orange';
     case 'openai':
+    case 'openai-completions':
     default:
       return 'green';
   }
