@@ -50,6 +50,13 @@ Three process types — never mix their APIs:
 Cross-process communication must go through the IPC bridge (`src/preload.ts`).
 See [docs/tech/architecture.md](docs/tech/architecture.md) for details.
 
+## Memory Conventions (Critical)
+
+- **Memory = 摘要 + 路由**：记忆文件只记录“结论/约束/决策/常用入口”，并给出原始文档路径；不要把整份设计文档粘进记忆。
+- **Source of truth**：需要细节时，按路由去读仓库内 `docs/**`（或业务仓库内的真实文档）；记忆只作为索引与缓存。
+- **Where memory lives**：Claude Code 的自动记忆在 `~/.claude/projects/{project}/memory/*.md`；项目指令在 `.claude/CLAUDE.md`（优先）或仓库根 `CLAUDE.md`。
+- **Project routing file**：每个项目都应有一个 `.claude/CLAUDE.md`，专门维护“关键文档入口表（路径 + 何时阅读）”。
+
 ## Testing
 
 **Framework**: Vitest 4 (`vitest.config.ts`). Run `bun run test` before every commit. Coverage target ≥ 80%.
