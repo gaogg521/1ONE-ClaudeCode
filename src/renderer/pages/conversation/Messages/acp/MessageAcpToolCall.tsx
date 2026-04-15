@@ -12,6 +12,15 @@ import { Card, Tag } from '@arco-design/web-react';
 import { createTwoFilesPatch } from 'diff';
 import React, { useMemo } from 'react';
 import MarkdownView from '@renderer/components/Markdown';
+import LocalImageView from '@renderer/components/media/LocalImageView';
+
+const safeDecodeUriComponent = (value: string): string => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
 
 const StatusTag: React.FC<{ status: string }> = ({ status }) => {
   const getTagProps = () => {
@@ -68,6 +77,34 @@ const ContentView: React.FC<{ content: IMessageAcpToolCall['content']['update'][
         <div className='bg-1 p-3 rounded border overflow-hidden'>
           <div className='overflow-x-auto break-words'>
             <MarkdownView>{content.content.text}</MarkdownView>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (content.type === 'content' && content.content && content.content.type === 'image') {
+    const imageSrc = content.content.data
+      ? `data:${content.content.mimeType || 'image/png'};base64,${content.content.data}`
+      : (content.content.uri || '').replace(/^file:\/\//, '');
+
+    if (!imageSrc) {
+      return null;
+    }
+
+    return (
+      <div className='mt-3'>
+        <div className='bg-1 p-3 rounded border overflow-hidden'>
+          <div className='max-w-220px'>
+            {imageSrc.startsWith('data:') || imageSrc.startsWith('http') ? (
+              <img src={imageSrc} alt='Tool result image' className='max-w-full max-h-320px object-contain rd-8px' />
+            ) : (
+              <LocalImageView
+                src={safeDecodeUriComponent(imageSrc)}
+                alt='Tool result image'
+                className='max-w-full max-h-320px object-contain rd-8px'
+              />
+            )}
           </div>
         </div>
       </div>

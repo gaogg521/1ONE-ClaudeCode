@@ -18,6 +18,7 @@ const { fsPromisesMock } = vi.hoisted(() => ({
 
 vi.mock('fs', () => ({
   promises: fsPromisesMock,
+  existsSync: vi.fn(() => true),
 }));
 
 vi.mock('child_process', () => ({
@@ -59,6 +60,7 @@ import {
   createGenericSpawnConfig,
   spawnGenericBackend,
   spawnNpxBackend,
+  spawnNpxBackendViaNode,
 } from '../../src/process/agent/acp/acpConnectors';
 
 const mockExecFile = vi.mocked(execFileCb);
@@ -135,6 +137,51 @@ describe('spawnNpxBackend - Windows UTF-8 fix', () => {
     spawnNpxBackend('claude', '@pkg/cli@1.0.0', 'npx', {}, '/cwd', false, false, { detached: false });
 
     expect(mockChild.unref).not.toHaveBeenCalled();
+  });
+});
+
+describe('connectClaude - Windows fallback to node+npx-cli', () => {
+  let originalPlatform: PropertyDescriptor | undefined;
+  const mockChild = { unref: vi.fn() };
+
+  beforeEach(() => {
+    originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    mockSpawn.mockReturnValue(mockChild as unknown as ReturnType<typeof spawn>);
+    // `where node` used by spawnNpxBackendViaNode
+    mockExecFileSync.mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'where' && args[0] === 'node') {
+        return 'C:\\\\Program Files\\\\nodejs\\\\node.exe\r\n';
+      }
+      return 'v20.10.0\n';
+    });
+  });
+
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform);
+    }
+    vi.clearAllMocks();
+  });
+
+  it('falls back when initial setup reports claude-agent-acp command not found', async () => {
+    let setupCalls = 0;
+    const hooks = {
+      setup: vi.fn(async () => {
+        setupCalls += 1;
+        if (setupCalls <= 2) {
+          // Fail both prefer-offline and fresh-registry attempts to force connectClaude fallback.
+          throw new Error("'claude-agent-acp' is not recognized as an internal or external command");
+        }
+      }),
+      cleanup: vi.fn(async () => undefined),
+    };
+
+    await connectClaude('C:\\\\cwd', hooks);
+
+    // The fallback should spawn via node with npx-cli.js as first arg.
+    const calls = mockSpawn.mock.calls.map((c) => String(c[0]));
+    expect(calls.some((c) => c.includes('node.exe'))).toBe(true);
   });
 });
 

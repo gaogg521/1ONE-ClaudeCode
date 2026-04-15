@@ -9,7 +9,7 @@ import { POTENTIAL_ACP_CLIS } from '@/common/types/acpTypes';
 import { ExtensionRegistry } from '@process/extensions';
 import { ProcessConfig } from '@process/utils/initStorage';
 import { getEnhancedEnv } from '@process/utils/shellEnv';
-import { execSync } from 'child_process';
+import { execFile, execSync } from 'child_process';
 
 interface DetectedAgent {
   backend: AcpBackendAll;
@@ -53,17 +53,120 @@ class AcpDetector {
   private detectedAgents: DetectedAgent[] = [];
   private isDetected = false;
   private enhancedEnv: NodeJS.ProcessEnv | undefined;
+  private initializing: Promise<void> | null = null;
+  private backgroundRefreshStarted = false;
+
+  private static readonly CACHE_KEY = 'acp.detectedAgentsCache';
+  private static readonly CACHE_VERSION = 1;
+  private static readonly CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+  private loadCache(): DetectedAgent[] | null {
+    try {
+      const cached = ProcessConfig.getSync?.(AcpDetector.CACHE_KEY as never) as
+        | {
+            version: number;
+            platform: string;
+            arch: string;
+            createdAt: number;
+            agents: DetectedAgent[];
+          }
+        | undefined;
+      if (!cached) return null;
+      if (cached.version !== AcpDetector.CACHE_VERSION) return null;
+      if (cached.platform !== process.platform || cached.arch !== process.arch) return null;
+      if (!cached.createdAt || Date.now() - cached.createdAt > AcpDetector.CACHE_MAX_AGE_MS) return null;
+      if (!Array.isArray(cached.agents) || cached.agents.length === 0) return null;
+      return cached.agents;
+    } catch {
+      return null;
+    }
+  }
+
+  private persistCache(agents: DetectedAgent[]): void {
+    try {
+      // Best-effort, never block UI/startup for caching failures.
+      void ProcessConfig.set?.(AcpDetector.CACHE_KEY as never, {
+        version: AcpDetector.CACHE_VERSION,
+        platform: process.platform,
+        arch: process.arch,
+        createdAt: Date.now(),
+        agents,
+      } as never).catch(() => {});
+    } catch {
+      // ignore
+    }
+  }
+
+  private async mapLimit<T, R>(items: readonly T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
+    const results: R[] = new Array(items.length) as R[];
+    let nextIndex = 0;
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (true) {
+        const idx = nextIndex;
+        nextIndex += 1;
+        if (idx >= items.length) return;
+        results[idx] = await mapper(items[idx]);
+      }
+    });
+    await Promise.all(workers);
+    return results;
+  }
+
+  private execFileOk(file: string, args: string[], timeoutMs: number): Promise<boolean> {
+    if (!this.enhancedEnv) {
+      this.enhancedEnv = getEnhancedEnv();
+    }
+    return new Promise<boolean>((resolve) => {
+      const child = execFile(file, args, { env: this.enhancedEnv }, (error) => resolve(!error));
+      const timer = setTimeout(() => {
+        try {
+          child.kill();
+        } catch {
+          // ignore
+        }
+        resolve(false);
+      }, timeoutMs);
+      timer.unref?.();
+    });
+  }
 
   /**
    * Check if a CLI command is available on the system PATH.
    */
-  private isCliAvailable(cliCommand: string): boolean {
+  private async isCliAvailable(cliCommand: string): Promise<boolean> {
     const isWindows = process.platform === 'win32';
     const whichCommand = isWindows ? 'where' : 'which';
 
     if (!this.enhancedEnv) {
       this.enhancedEnv = getEnhancedEnv();
     }
+
+    // Fast non-blocking path: execFile with a hard timeout.
+    const primaryOk = await this.execFileOk(whichCommand, [cliCommand], 1000);
+    if (primaryOk) return true;
+    if (!isWindows) return false;
+
+    // Windows fallback: PowerShell Get-Command (covers some PATHEXT/alias cases)
+    return this.execFileOk(
+      'powershell',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Get-Command -All ${cliCommand} | Select-Object -First 1 | Out-Null`,
+      ],
+      1000
+    );
+  }
+
+  /**
+   * Legacy sync path (kept for compatibility / troubleshooting).
+   * Not used by detection anymore.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private isCliAvailableSync(cliCommand: string): boolean {
+    const isWindows = process.platform === 'win32';
+    const whichCommand = isWindows ? 'where' : 'which';
 
     try {
       execSync(`${whichCommand} ${cliCommand}`, {
@@ -105,18 +208,14 @@ class AcpDetector {
    * Source 1: Built-in POTENTIAL_ACP_CLIS — parallel CLI availability check.
    */
   private async detectBuiltinAgents(): Promise<DetectedAgent[]> {
-    const promises = POTENTIAL_ACP_CLIS.map((cli) =>
-      Promise.resolve().then((): DetectedAgent | null =>
-        this.isCliAvailable(cli.cmd)
-          ? { backend: cli.backendId, name: cli.name, cliPath: cli.cmd, acpArgs: cli.args }
-          : null
-      )
-    );
-
-    const results = await Promise.allSettled(promises);
-    return results
-      .filter((r): r is PromiseFulfilledResult<DetectedAgent> => r.status === 'fulfilled' && r.value !== null)
-      .map((r) => r.value);
+    const limit = process.platform === 'win32' ? 4 : 6;
+    const results = await this.mapLimit(POTENTIAL_ACP_CLIS, limit, async (cli) => {
+      const ok = await this.isCliAvailable(cli.cmd);
+      return ok
+        ? ({ backend: cli.backendId, name: cli.name, cliPath: cli.cmd, acpArgs: cli.args } as DetectedAgent)
+        : null;
+    });
+    return results.filter((r): r is DetectedAgent => r !== null);
   }
 
   /**
@@ -160,7 +259,7 @@ class AcpDetector {
       }
 
       const promises = candidates.map((c) =>
-        Promise.resolve().then((): DetectedAgent | null => (this.isCliAvailable(c.cliCommand) ? c.agent : null))
+        Promise.resolve().then(async (): Promise<DetectedAgent | null> => ((await this.isCliAvailable(c.cliCommand)) ? c.agent : null))
       );
 
       const results = await Promise.allSettled(promises);
@@ -235,6 +334,22 @@ class AcpDetector {
 
   async initialize(): Promise<void> {
     if (this.isDetected) return;
+    if (this.initializing) return this.initializing;
+
+    // Fast path: hydrate from cache so UI can render instantly.
+    const cached = this.loadCache();
+    if (cached) {
+      this.detectedAgents = cached;
+      this.isDetected = true;
+      // Refresh in background to keep cache accurate, but do not block navigation.
+      if (!this.backgroundRefreshStarted) {
+        this.backgroundRefreshStarted = true;
+        setTimeout(() => {
+          void this.refreshAll().then(() => this.persistCache(this.detectedAgents)).catch(() => {});
+        }, 0);
+      }
+      return;
+    }
 
     console.log('[ACP] Starting agent detection...');
     const startTime = Date.now();
@@ -258,6 +373,7 @@ class AcpDetector {
     this.isDetected = true;
     const elapsed = Date.now() - startTime;
     console.log(`[ACP] Detection completed in ${elapsed}ms, found ${this.detectedAgents.length} agents`);
+    this.persistCache(this.detectedAgents);
   }
 
   getDetectedAgents(): DetectedAgent[] {
@@ -339,6 +455,7 @@ class AcpDetector {
     };
 
     this.detectedAgents = this.deduplicate([gemini, ...builtinAgents, ...extensionAgents, ...customAgents]);
+    this.persistCache(this.detectedAgents);
   }
 }
 

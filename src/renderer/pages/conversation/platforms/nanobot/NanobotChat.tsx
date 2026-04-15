@@ -43,4 +43,4 @@ const NanobotChat: React.FC<{
   );
 };
 
-export default HOC(MessageListProvider)(NanobotChat);
+export default HOC.Wrapper(MessageListProvider, LocalImageView.Provider)(NanobotChat);

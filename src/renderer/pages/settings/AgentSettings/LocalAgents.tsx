@@ -34,7 +34,8 @@ const LocalAgents: React.FC = () => {
       }
       return [];
     },
-    { revalidateOnMount: true, dedupingInterval: 500, revalidateOnFocus: false }
+    // Avoid tight dedupe intervals here: opening Settings should not spam main-process IPC.
+    { revalidateOnMount: true, dedupingInterval: 15_000, revalidateOnFocus: false }
   );
 
   // ACP agent detection runs asynchronously at startup; retry a few times until we get results.
@@ -43,18 +44,36 @@ const LocalAgents: React.FC = () => {
   useEffect(() => {
     if (detectedAgents && detectedAgents.length > 0) return;
     let cancelled = false;
+    // Backoff schedule (ms). Keep it short but ensure we never overlap requests.
     const attempts = [800, 1600, 2500, 4000, 6500];
     let idx = 0;
+    let inFlight = false;
 
-    const tick = () => {
+    const tick = async (): Promise<void> => {
       if (cancelled) return;
-      void mutateDetectedAgents();
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        await mutateDetectedAgents();
+      } finally {
+        inFlight = false;
+      }
       idx += 1;
       if (idx >= attempts.length) return;
-      window.setTimeout(tick, attempts[idx]);
+      window.setTimeout(
+        (): void => {
+          void tick();
+        },
+        attempts[idx]
+      );
     };
 
-    window.setTimeout(tick, attempts[idx]);
+    window.setTimeout(
+      (): void => {
+        void tick();
+      },
+      attempts[idx]
+    );
     return () => {
       cancelled = true;
     };

@@ -11,6 +11,7 @@ import {
   BUILTIN_IMAGE_GEN_ID,
 } from '@/common/config/storage';
 import type { SpeechToTextConfig, SpeechToTextProvider } from '@/common/types/speech';
+import { NEW_API_PLATFORM_ID } from '@/common/utils/platformConstants';
 import { Divider, Form, Message, Button, Modal, Switch, Input } from '@arco-design/web-react';
 import { Plus } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -88,15 +89,46 @@ type ImageGenPreset = {
   label: string;
   baseUrl: string;
   defaultModel: string;
+  platform: string;
 };
 
 const IMAGE_GEN_PRESETS: ImageGenPreset[] = [
-  { id: 'dall-e-3', label: 'DALL-E 3 (OpenAI)', baseUrl: 'https://api.openai.com/v1', defaultModel: 'dall-e-3' },
-  { id: 'dall-e-2', label: 'DALL-E 2 (OpenAI)', baseUrl: 'https://api.openai.com/v1', defaultModel: 'dall-e-2' },
-  { id: 'stability', label: 'Stability AI', baseUrl: 'https://api.stability.ai/v2beta', defaultModel: 'stable-image/generate/ultra' },
-  { id: 'gemini-image', label: 'Google Gemini Image', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', defaultModel: 'gemini-2.5-flash-image-preview' },
-  { id: 'doubao', label: '豆包 (Doubao)', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', defaultModel: 'doubao-seedream-3-0' },
-  { id: 'custom', label: '自定义 (Custom)', baseUrl: '', defaultModel: '' },
+  {
+    id: 'dall-e-3',
+    label: 'DALL-E 3 (OpenAI)',
+    baseUrl: 'https://api.openai.com/v1',
+    defaultModel: 'dall-e-3',
+    platform: NEW_API_PLATFORM_ID,
+  },
+  {
+    id: 'dall-e-2',
+    label: 'DALL-E 2 (OpenAI)',
+    baseUrl: 'https://api.openai.com/v1',
+    defaultModel: 'dall-e-2',
+    platform: NEW_API_PLATFORM_ID,
+  },
+  {
+    id: 'stability',
+    label: 'Stability AI',
+    baseUrl: 'https://api.stability.ai/v2beta',
+    defaultModel: 'stable-image/generate/ultra',
+    platform: NEW_API_PLATFORM_ID,
+  },
+  {
+    id: 'gemini-image',
+    label: 'Google Gemini Image',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    defaultModel: 'gemini-2.5-flash-image-preview',
+    platform: 'gemini',
+  },
+  {
+    id: 'doubao',
+    label: '豆包 (Doubao)',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    defaultModel: 'doubao-seedream-3-0',
+    platform: NEW_API_PLATFORM_ID,
+  },
+  { id: 'custom', label: '自定义 (Custom)', baseUrl: '', defaultModel: '', platform: NEW_API_PLATFORM_ID },
 ];
 
 function detectPreset(baseUrl?: string, model?: string): string {
@@ -106,6 +138,10 @@ function detectPreset(baseUrl?: string, model?: string): string {
     if (p.baseUrl && baseUrl?.startsWith(p.baseUrl) && model === p.defaultModel) return p.id;
   }
   return 'custom';
+}
+
+function getImageGenPlatformForPreset(presetId: string): string {
+  return IMAGE_GEN_PRESETS.find((p) => p.id === presetId)?.platform || NEW_API_PLATFORM_ID;
 }
 
 const ImageGenerationSettingsSection: React.FC<{
@@ -118,6 +154,7 @@ const ImageGenerationSettingsSection: React.FC<{
   onToggle: (checked: boolean) => Promise<void>;
 }> = ({ imageGenerationModel, builtinImageGenServer, agentInstallStatus, isServerLoading, isUpdating, onModelChange, onToggle }) => {
   const { t } = useTranslation();
+  const noDragStyle = useMemo(() => ({ WebkitAppRegion: 'no-drag' } as React.CSSProperties), []);
 
   const initPreset = detectPreset(imageGenerationModel?.baseUrl, imageGenerationModel?.useModel);
   const [selectedPresetId, setSelectedPresetId] = React.useState<string>(initPreset);
@@ -154,7 +191,7 @@ const ImageGenerationSettingsSection: React.FC<{
       const newModel = preset.defaultModel;
       setBaseUrl(newBaseUrl);
       setModel(newModel);
-      onModelChange({ baseUrl: newBaseUrl, useModel: newModel });
+      onModelChange({ platform: preset.platform, baseUrl: newBaseUrl, useModel: newModel });
     },
     [onModelChange]
   );
@@ -162,25 +199,25 @@ const ImageGenerationSettingsSection: React.FC<{
   const handleApiKeyChange = useCallback(
     (value: string) => {
       setApiKey(value);
-      onModelChange({ apiKey: value });
+      onModelChange({ platform: getImageGenPlatformForPreset(selectedPresetId), apiKey: value });
     },
-    [onModelChange]
+    [onModelChange, selectedPresetId]
   );
 
   const handleBaseUrlChange = useCallback(
     (value: string) => {
       setBaseUrl(value);
-      onModelChange({ baseUrl: value });
+      onModelChange({ platform: getImageGenPlatformForPreset(selectedPresetId), baseUrl: value });
     },
-    [onModelChange]
+    [onModelChange, selectedPresetId]
   );
 
   const handleModelChange = useCallback(
     (value: string) => {
       setModel(value);
-      onModelChange({ useModel: value });
+      onModelChange({ platform: getImageGenPlatformForPreset(selectedPresetId), useModel: value });
     },
-    [onModelChange]
+    [onModelChange, selectedPresetId]
   );
 
   const imageGenerationInstalledAgents = builtinImageGenServer?.name
@@ -188,7 +225,11 @@ const ImageGenerationSettingsSection: React.FC<{
     : [];
 
   return (
-    <div className='px-[12px] md:px-[32px] py-[24px] bg-2 rd-12px md:rd-16px border border-border-2'>
+    <div
+      className='px-[12px] md:px-[32px] py-[24px] bg-2 rd-12px md:rd-16px border border-border-2'
+      // Electron frameless windows can inherit a draggable region; ensure form controls are interactive.
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+    >
       <div className='flex items-center justify-between mb-16px'>
         <div className='flex flex-col gap-4px'>
           <span className='text-14px text-t-primary'>{t('settings.imageGeneration')}</span>
@@ -215,11 +256,13 @@ const ImageGenerationSettingsSection: React.FC<{
 
       <Form layout='horizontal' labelAlign='left' className='space-y-12px'>
         <Form.Item label={'提供商 / 预设'}>
-          <AionSelect value={selectedPresetId} onChange={handlePresetChange}>
-            {IMAGE_GEN_PRESETS.map((p) => (
-              <AionSelect.Option key={p.id} value={p.id}>{p.label}</AionSelect.Option>
-            ))}
-          </AionSelect>
+          <div style={noDragStyle}>
+            <AionSelect value={selectedPresetId} onChange={handlePresetChange}>
+              {IMAGE_GEN_PRESETS.map((p) => (
+                <AionSelect.Option key={p.id} value={p.id}>{p.label}</AionSelect.Option>
+              ))}
+            </AionSelect>
+          </div>
         </Form.Item>
 
         <Form.Item label={renderLabel('API Key', 'required')}>
@@ -228,6 +271,7 @@ const ImageGenerationSettingsSection: React.FC<{
             visibilityToggle
             placeholder={selectedPresetId === 'gemini-image' ? 'Google API Key' : 'sk-...'}
             onChange={handleApiKeyChange}
+            style={noDragStyle}
           />
         </Form.Item>
 
@@ -236,6 +280,7 @@ const ImageGenerationSettingsSection: React.FC<{
             value={baseUrl}
             placeholder='https://api.openai.com/v1'
             onChange={handleBaseUrlChange}
+            style={noDragStyle}
           />
         </Form.Item>
 
@@ -244,6 +289,7 @@ const ImageGenerationSettingsSection: React.FC<{
             value={model}
             placeholder={IMAGE_GEN_PRESETS.find(p => p.id === selectedPresetId)?.defaultModel ?? 'dall-e-3'}
             onChange={handleModelChange}
+            style={noDragStyle}
           />
         </Form.Item>
 
@@ -741,7 +787,16 @@ const ToolsModalContent: React.FC = () => {
         const storedModel = await ConfigStorage.get('tools.imageGenerationModel');
         const storedSpeechToTextConfig = await ConfigStorage.get('tools.speechToText');
         if (storedModel) {
-          setImageGenerationModel(storedModel);
+          const presetId = detectPreset(storedModel.baseUrl, storedModel.useModel);
+          const normalizedModel = storedModel.platform
+            ? storedModel
+            : { ...storedModel, platform: getImageGenPlatformForPreset(presetId) };
+          setImageGenerationModel(normalizedModel);
+          if (!storedModel.platform) {
+            void ConfigStorage.set('tools.imageGenerationModel', normalizedModel).catch((error) => {
+              console.error('Failed to normalize image generation model platform:', error);
+            });
+          }
         } else if (builtinImageGenServer?.transport.type === 'stdio') {
           // Fallback: derive config from the built-in MCP server env so the toggle is usable
           // even when tools.imageGenerationModel has not been initialized yet.
@@ -846,6 +901,7 @@ const ToolsModalContent: React.FC = () => {
   // Sync imageGenerationModel apiKey when provider apiKey changes
   useEffect(() => {
     if (!imageGenerationModel || !data) return;
+    if (!imageGenerationModel.id) return;
 
     const currentProvider = data.find((p) => p.id === imageGenerationModel.id);
 
@@ -860,19 +916,17 @@ const ToolsModalContent: React.FC = () => {
         console.error('Failed to save image generation model config:', error);
       });
       void syncMcpServerEnv(updatedModel);
-    } else if (!currentProvider) {
-      setImageGenerationModel(undefined);
-      ConfigStorage.remove('tools.imageGenerationModel').catch((error) => {
-        console.error('Failed to remove image generation model config:', error);
-      });
-      void syncMcpServerEnv({});
     }
   }, [data, imageGenerationModel?.id, imageGenerationModel?.apiKey, syncMcpServerEnv]);
 
   const handleImageGenerationModelChange = useCallback(
     (value: Partial<IConfigStorageRefer['tools.imageGenerationModel']>) => {
       setImageGenerationModel((prev) => {
-        const newImageGenerationModel = { ...prev, ...value };
+        const newImageGenerationModel = {
+          ...prev,
+          platform: value.platform || prev?.platform || getImageGenPlatformForPreset(detectPreset(prev?.baseUrl, prev?.useModel)),
+          ...value,
+        };
         ConfigStorage.set('tools.imageGenerationModel', newImageGenerationModel).catch((error) => {
           console.error('Failed to update image generation model config:', error);
         });

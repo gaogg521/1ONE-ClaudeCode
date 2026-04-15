@@ -308,17 +308,15 @@ export class OneAgent extends EventEmitter {
         if (Array.isArray(deltaToolCalls)) {
           for (const tc of deltaToolCalls as Array<Record<string, unknown>>) {
             const existing = toolCalls.find(t => t.id === tc.id);
+            const rawArgs = (tc.function as Record<string, unknown> | undefined)?.arguments;
+            const argText = typeof rawArgs === 'string' ? rawArgs : '{}';
             if (existing) {
-              existing.arguments = JSON.parse(
-                (tc.function as Record<string, unknown> | undefined)?.arguments || '{}'
-              ) as Record<string, unknown>;
+              existing.arguments = JSON.parse(argText) as Record<string, unknown>;
             } else {
               toolCalls.push({
                 id: String(tc.id ?? ''),
                 name: String((tc.function as Record<string, unknown> | undefined)?.name || ''),
-                arguments: JSON.parse(
-                  (tc.function as Record<string, unknown> | undefined)?.arguments || '{}'
-                ) as Record<string, unknown>,
+                arguments: JSON.parse(argText) as Record<string, unknown>,
               });
             }
           }

@@ -43,4 +43,4 @@ const OpenClawChat: React.FC<{
   );
 };
 
-export default HOC(MessageListProvider)(OpenClawChat);
+export default HOC.Wrapper(MessageListProvider, LocalImageView.Provider)(OpenClawChat);

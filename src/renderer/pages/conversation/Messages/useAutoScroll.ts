@@ -197,6 +197,8 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const target = e.target as HTMLDivElement;
     const currentScrollTop = target.scrollTop;
+    const nativeEvent = e.nativeEvent as Event & { isTrusted?: boolean };
+    const isTrusted = nativeEvent?.isTrusted !== false;
 
     // Ignore scroll events shortly after a programmatic scroll or container resize
     const timeSinceGuard = Date.now() - lastProgrammaticScrollTimeRef.current;
@@ -206,7 +208,10 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     }
 
     const delta = currentScrollTop - lastScrollTopRef.current;
-    if (delta < -10) {
+    // Only treat trusted (user-initiated) scroll-up as "user scrolled".
+    // Virtuoso/layout-driven adjustments can emit scroll events that would
+    // otherwise freeze followOutput and make new messages appear "hidden".
+    if (isTrusted && delta < -10) {
       userScrolledRef.current = true;
     }
 

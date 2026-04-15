@@ -86,7 +86,12 @@ class OpenClawAgentManager extends BaseAgentManager<OpenClawAgentManagerData> {
       return this.agent;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      this.emitErrorMessage(`Failed to start OpenClaw agent: ${errorMsg}`);
+      // Pairing required is already surfaced to the user by OpenClawAgent.handleConnectError()
+      // with a stable "disconnect" tip. Avoid emitting an extra generic startup error that
+      // would duplicate the message in the UI.
+      if (!/pairing required/i.test(errorMsg) && !(errorMsg as string).includes('PAIRING_REQUIRED')) {
+        this.emitErrorMessage(`Failed to start OpenClaw agent: ${errorMsg}`);
+      }
       throw error;
     }
   }

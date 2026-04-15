@@ -22,6 +22,8 @@ import { ToolConfirmationOutcome } from '@renderer/utils/common';
 import { ImagePreviewContext } from '../MessageList';
 import { COLLAPSE_CONFIG, TEXT_CONFIG } from '../constants';
 import type { ImageGenerationResult, WriteFileResult } from '../types';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { joinPath } from '@/common/chat/chatLib';
 
 // Alert 组件样式常量 Alert component style constant
 // 顶部对齐图标与内容，避免多行文本时图标垂直居中
@@ -230,17 +232,38 @@ const ImageDisplay: React.FC<{
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const { inPreviewGroup } = useContext(ImagePreviewContext);
+  const conversation = useConversationContextSafe();
+  const resolvedImgUrl = useMemo(() => {
+    if (
+      imgUrl.startsWith('data:') ||
+      imgUrl.startsWith('http://') ||
+      imgUrl.startsWith('https://') ||
+      imgUrl.startsWith('blob:') ||
+      imgUrl.startsWith('/') ||
+      imgUrl.startsWith('file:') ||
+      imgUrl.startsWith('\\') ||
+      /^[A-Za-z]:/.test(imgUrl)
+    ) {
+      return imgUrl;
+    }
+    return conversation?.workspace ? joinPath(conversation.workspace, imgUrl) : imgUrl;
+  }, [conversation?.workspace, imgUrl]);
 
   // 如果是本地路径，需要加载为 base64 Load local paths as base64
   React.useEffect(() => {
-    if (imgUrl.startsWith('data:') || imgUrl.startsWith('http')) {
-      setImageUrl(imgUrl);
+    if (
+      resolvedImgUrl.startsWith('data:') ||
+      resolvedImgUrl.startsWith('http://') ||
+      resolvedImgUrl.startsWith('https://') ||
+      resolvedImgUrl.startsWith('blob:')
+    ) {
+      setImageUrl(resolvedImgUrl);
       setLoading(false);
     } else {
       setLoading(true);
       setError(false);
       ipcBridge.fs.getImageBase64
-        .invoke({ path: imgUrl })
+        .invoke({ path: resolvedImgUrl })
         .then((base64) => {
           setImageUrl(base64);
           setLoading(false);
@@ -251,7 +274,7 @@ const ImageDisplay: React.FC<{
           setLoading(false);
         });
     }
-  }, [imgUrl]);
+  }, [resolvedImgUrl]);
 
   // 获取图片 blob（复用逻辑）Get image blob (reusable logic)
   const getImageBlob = useCallback(async (): Promise<Blob> => {

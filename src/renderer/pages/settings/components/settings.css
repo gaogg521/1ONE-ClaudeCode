@@ -48,3 +48,23 @@
     font-weight: 500;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Electron frameless: ensure settings inputs are always interactive           */
+/* -------------------------------------------------------------------------- */
+
+.settings-page-wrapper,
+.settings-page-wrapper * {
+  -webkit-app-region: no-drag;
+}
+
+.settings-page-wrapper input,
+.settings-page-wrapper textarea,
+.settings-page-wrapper select,
+.settings-page-wrapper button,
+.settings-page-wrapper [role='button'],
+.settings-page-wrapper .arco-input,
+.settings-page-wrapper .arco-input-inner-wrapper,
+.settings-page-wrapper .arco-select-view {
+  pointer-events: auto !important;
+}

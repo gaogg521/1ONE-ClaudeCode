@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ---------------------------------------------------------------------------
 
 vi.mock('child_process', () => ({
+  execFile: vi.fn(),
   execSync: vi.fn(),
 }));
 
@@ -17,7 +18,7 @@ vi.mock('@/common/types/acpTypes', () => ({
 }));
 
 vi.mock('@process/utils/initStorage', () => ({
-  ProcessConfig: { get: vi.fn(async () => []) },
+  ProcessConfig: { get: vi.fn(async () => []), set: vi.fn(async () => undefined), getSync: vi.fn(() => undefined) },
 }));
 
 const mockGetAcpAdapters = vi.fn((): Record<string, unknown>[] => []);
@@ -35,13 +36,25 @@ vi.mock('@process/utils/shellEnv', () => ({
   getEnhancedEnv: vi.fn(() => ({ ...process.env })),
 }));
 
-import { execSync } from 'child_process';
+import { execFile, execSync } from 'child_process';
 import { ProcessConfig } from '@process/utils/initStorage';
 
+const mockedExecFile = vi.mocked(execFile);
 const mockedExecSync = vi.mocked(execSync);
 
-// Helper: make execSync succeed for given commands, throw for others
+// Helper: make execFile succeed for given commands, fail for others
 function setAvailableClis(clis: string[]): void {
+  mockedExecFile.mockImplementation((file: unknown, args: unknown, options: unknown, callback: unknown) => {
+    const argv = Array.isArray(args) ? (args as unknown[]) : [];
+    const cli = typeof argv[0] === 'string' ? (argv[0] as string) : '';
+    const cb = (typeof options === 'function' ? options : callback) as (err: Error | null) => void;
+    const ok = clis.includes(cli);
+    queueMicrotask(() => cb(ok ? null : new Error('not found')));
+    // Minimal child process shape for AcpDetector.kill() path.
+    return { kill: vi.fn() } as unknown as ReturnType<typeof execFile>;
+  });
+
+  // Keep execSync behavior deterministic in case legacy path is used.
   mockedExecSync.mockImplementation((cmd: string) => {
     const command = typeof cmd === 'string' ? cmd : '';
     for (const cli of clis) {

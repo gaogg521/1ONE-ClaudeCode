@@ -89,6 +89,18 @@ const getUnhandledMessageType = (_message: never): string => 'unknown';
 // Image preview context
 export const ImagePreviewContext = createContext<{ inPreviewGroup: boolean }>({ inPreviewGroup: false });
 
+const VirtuosoScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div
+      {...props}
+      ref={ref}
+      className={classNames('conversation-message-scroller', className)}
+    />
+  )
+);
+
+VirtuosoScroller.displayName = 'VirtuosoScroller';
+
 const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean }> = React.memo(
   HOC((props) => {
     const { message, highlighted } = props as { message: TMessage; highlighted?: boolean };
@@ -372,6 +384,7 @@ const MessageList: React.FC<{ className?: string }> = () => {
             onScroll={handleScroll}
             atBottomStateChange={handleAtBottomStateChange}
             components={{
+              Scroller: VirtuosoScroller,
               Header: () => <div className='h-10px' />,
               Footer: () => <div className='h-20px' />,
             }}
@@ -386,12 +399,15 @@ const MessageList: React.FC<{ className?: string }> = () => {
           {/* Scroll button */}
           <div className='absolute bottom-20px left-50% transform -translate-x-50% z-100'>
             <div
-              className='flex items-center justify-center w-40px h-40px rd-full bg-base shadow-lg cursor-pointer hover:bg-1 transition-all hover:scale-110 border-1 border-solid border-3'
+              className='flex items-center gap-6px justify-center min-w-96px h-40px px-12px rd-full bg-base shadow-lg cursor-pointer hover:bg-1 transition-all hover:scale-105 border-1 border-solid border-3'
               onClick={handleScrollButtonClick}
               title={t('messages.scrollToBottom')}
               style={{ lineHeight: 0 }}
             >
               <Down theme='filled' size='20' fill={iconColors.secondary} style={{ display: 'block' }} />
+              <span className='text-12px text-t-primary leading-none whitespace-nowrap'>
+                {t('messages.scrollToBottom', { defaultValue: '有新内容，回到底部' })}
+              </span>
             </div>
           </div>
         </>

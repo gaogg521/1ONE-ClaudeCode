@@ -26,13 +26,14 @@ function anyProviderNeedsGoogleSidecar(providers: unknown): boolean {
     if (isProviderLiteLlmProxy(p)) return false;
     const pl = (p.platform || '').toLowerCase();
     if (pl.includes('gemini-with-google-auth')) return true;
+    const maybeUseModel = (p as unknown as { useModel?: string }).useModel;
     return (
       getProviderAuthType({
         platform: p.platform,
         authType: p.authType,
         authTypeCustom: p.authTypeCustom,
         modelProtocols: p.modelProtocols,
-        useModel: p.useModel,
+        useModel: maybeUseModel,
         model: p.model,
         baseUrl: p.baseUrl,
         name: p.name,

@@ -43,4 +43,4 @@ const RemoteChat: React.FC<{
   );
 };
 
-export default HOC(MessageListProvider)(RemoteChat);
+export default HOC.Wrapper(MessageListProvider, LocalImageView.Provider)(RemoteChat);

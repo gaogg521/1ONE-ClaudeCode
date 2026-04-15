@@ -18,6 +18,73 @@ const AIONRS_PROJECT_CONFIG = '.aionrs.toml';
 
 type StreamEventHandler = (event: { type: string; data: unknown; msg_id: string }) => void;
 
+type AionrsToolResultEvent = Extract<AionrsEvent, { type: 'tool_result' }>;
+
+const IMAGE_FILE_REGEX =
+  /([A-Za-z]:[^\s"'`]+?\.(?:png|jpe?g|gif|webp|bmp|svg)|(?:^|[\s:(])([^\s"'`]*img-\d+\.(?:png|jpe?g|gif|webp|bmp|svg)))/i;
+
+const tryParseJsonRecord = (value: string): Record<string, unknown> | null => {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+};
+
+export function mapAionrsToolResultDisplay(event: AionrsToolResultEvent): unknown {
+  const metadata = (event.metadata as Record<string, unknown> | undefined) ?? {};
+
+  if (event.output_type === 'diff') {
+    return {
+      fileDiff: event.output,
+      fileName: typeof metadata.file_path === 'string' ? metadata.file_path : '',
+    };
+  }
+
+  if (event.output_type !== 'image') {
+    return event.output;
+  }
+
+  const parsedOutput = tryParseJsonRecord(event.output);
+  const outputRecord = parsedOutput ?? {};
+  const candidateImgUrl =
+    [outputRecord.img_url, outputRecord.image_url, metadata.img_url, metadata.image_url, metadata.file_path, metadata.path, metadata.uri].find(
+      (value) => typeof value === 'string' && value.trim().length > 0
+    ) ?? null;
+  const candidateRelativePath =
+    [outputRecord.relative_path, metadata.relative_path, metadata.relativePath].find(
+      (value) => typeof value === 'string' && value.trim().length > 0
+    ) ?? null;
+
+  if (typeof candidateImgUrl === 'string') {
+    return {
+      img_url: candidateImgUrl,
+      relative_path: typeof candidateRelativePath === 'string' ? candidateRelativePath : undefined,
+    };
+  }
+
+  const markdownMatch = event.output.match(/!\[[^\]]*\]\(([^)]+)\)/);
+  if (markdownMatch?.[1]) {
+    return {
+      img_url: markdownMatch[1],
+      relative_path: typeof candidateRelativePath === 'string' ? candidateRelativePath : undefined,
+    };
+  }
+
+  const pathMatch = event.output.match(IMAGE_FILE_REGEX);
+  const extractedPath = pathMatch?.[1] || pathMatch?.[2];
+  if (extractedPath) {
+    const normalizedPath = extractedPath.trim();
+    return {
+      img_url: normalizedPath,
+      relative_path: typeof candidateRelativePath === 'string' ? candidateRelativePath : normalizedPath,
+    };
+  }
+
+  return event.output;
+}
+
 export type AionrsAgentOptions = {
   workspace: string;
   model: TProviderWithModel;
@@ -296,10 +363,7 @@ export class AionrsAgent {
               name: event.tool_name,
               description: '',
               status: event.status === 'success' ? 'Success' : 'Error',
-              resultDisplay:
-                event.output_type === 'diff'
-                  ? { fileDiff: event.output, fileName: (event.metadata as Record<string, string>)?.file_path ?? '' }
-                  : event.output,
+              resultDisplay: mapAionrsToolResultDisplay(event),
               renderOutputAsMarkdown: event.output_type === 'text',
             },
           ],

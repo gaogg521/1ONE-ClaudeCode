@@ -17,6 +17,10 @@ import { ProcessConfig } from '@process/utils/initStorage';
 type OpenAITranscriptionResponse = {
   language?: string;
   text?: string;
+  data?: {
+    language?: string;
+    text?: string;
+  };
 };
 
 type DeepgramTranscriptionResponse = {
@@ -35,6 +39,7 @@ const DEFAULT_OPENAI_MODEL = 'whisper-1';
 const DEFAULT_DEEPGRAM_BASE_URL = 'https://api.deepgram.com/v1/listen';
 const DEFAULT_DEEPGRAM_MODEL = 'nova-2';
 const STT_LOG_TAG = '[SpeechToText]';
+const DEFAULT_TRANSCRIBE_TIMEOUT_MS = 60_000;
 
 const createRequestId = () => `stt-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 8)}`;
 
@@ -98,6 +103,61 @@ const buildOpenAIUrl = (baseUrl?: string) => {
   return normalized.endsWith('/audio/transcriptions') ? normalized : `${normalized}/audio/transcriptions`;
 };
 
+const appendCommonOpenAITranscriptionFields = (
+  formData: FormData,
+  options: {
+    model: string;
+    language?: string;
+    prompt?: string;
+    temperature?: number;
+  }
+) => {
+  formData.append('model', options.model);
+  formData.append('response_format', 'verbose_json');
+
+  if (options.language) {
+    // OpenAI Whisper requires ISO 639-1 codes (e.g. "en"), not BCP 47 (e.g. "en-us")
+    formData.append('language', options.language.split('-')[0].toLowerCase());
+  }
+  if (options.prompt) {
+    formData.append('prompt', options.prompt);
+  }
+  if (typeof options.temperature === 'number') {
+    formData.append('temperature', String(options.temperature));
+  }
+};
+
+const parseOpenAITranscriptionPayload = async (response: Response): Promise<OpenAITranscriptionResponse | string> => {
+  const contentType = response.headers?.get?.('content-type')?.toLowerCase() || '';
+  if (contentType.includes('application/json') || typeof response.text !== 'function') {
+    return (await response.json()) as OpenAITranscriptionResponse;
+  }
+
+  const text = await response.text();
+  try {
+    return JSON.parse(text) as OpenAITranscriptionResponse;
+  } catch {
+    return text;
+  }
+};
+
+const normalizeOpenAITranscriptionResult = (
+  payload: OpenAITranscriptionResponse | string,
+  fallbackLanguage?: string
+): { text: string; language?: string } => {
+  if (typeof payload === 'string') {
+    return {
+      language: fallbackLanguage,
+      text: payload.trim(),
+    };
+  }
+
+  return {
+    language: payload.language || payload.data?.language || fallbackLanguage,
+    text: payload.text?.trim() || payload.data?.text?.trim() || '',
+  };
+};
+
 const buildDeepgramUrl = (config: SpeechToTextConfig['deepgram'], languageHint?: string) => {
   const normalized = normalizeBaseUrl(config?.baseUrl, DEFAULT_DEEPGRAM_BASE_URL);
   const url = new URL(normalized);
@@ -124,11 +184,34 @@ const resolveSpeechToTextConfig = async (): Promise<SpeechToTextConfig> => {
   return config;
 };
 
+const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit, timeoutMs: number): Promise<Response> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('STT_NETWORK_ERROR:timeout');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const resolveProviderApiKey = (provider: SpeechToTextProvider, config: SpeechToTextConfig): string => {
   if (provider === 'openai') {
     const apiKey = config.openai?.apiKey?.trim();
     if (!apiKey) {
       throw new Error('STT_OPENAI_NOT_CONFIGURED');
+    }
+    return apiKey;
+  }
+
+  if (provider === 'custom') {
+    const apiKey = config.custom?.apiKey?.trim();
+    if (!apiKey) {
+      throw new Error('STT_CUSTOM_NOT_CONFIGURED');
     }
     return apiKey;
   }
@@ -154,12 +237,19 @@ export class SpeechToTextService {
       mainLog(STT_LOG_TAG, 'Resolved speech-to-text provider', {
         requestId,
         provider: config.provider,
-        model: config.provider === 'openai' ? config.openai?.model || DEFAULT_OPENAI_MODEL : config.deepgram?.model,
+        model:
+          config.provider === 'openai'
+            ? config.openai?.model || DEFAULT_OPENAI_MODEL
+            : config.provider === 'custom'
+              ? config.custom?.model || DEFAULT_OPENAI_MODEL
+              : config.deepgram?.model,
       });
 
       const result =
         config.provider === 'openai'
           ? await this.transcribeWithOpenAI(config, request)
+          : config.provider === 'custom'
+            ? await this.transcribeWithCustom(config, request)
           : await this.transcribeWithDeepgram(config, request);
 
       mainLog(STT_LOG_TAG, 'Transcription completed', {
@@ -194,38 +284,37 @@ export class SpeechToTextService {
     });
     const formData = new FormData();
     formData.append('file', blob, request.fileName);
-    formData.append('model', config.openai?.model || DEFAULT_OPENAI_MODEL);
 
     const language = request.languageHint || config.openai?.language;
-    if (language) {
-      // OpenAI Whisper requires ISO 639-1 codes (e.g. "en"), not BCP 47 (e.g. "en-us")
-      formData.append('language', language.split('-')[0].toLowerCase());
-    }
-    if (config.openai?.prompt) {
-      formData.append('prompt', config.openai.prompt);
-    }
-    if (typeof config.openai?.temperature === 'number') {
-      formData.append('temperature', String(config.openai.temperature));
-    }
-
-    const response = await fetch(buildOpenAIUrl(config.openai?.baseUrl), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: formData,
+    appendCommonOpenAITranscriptionFields(formData, {
+      model: config.openai?.model || DEFAULT_OPENAI_MODEL,
+      language,
+      prompt: config.openai?.prompt,
+      temperature: config.openai?.temperature,
     });
+
+    const response = await fetchWithTimeout(
+      buildOpenAIUrl(config.openai?.baseUrl),
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: formData,
+      },
+      DEFAULT_TRANSCRIBE_TIMEOUT_MS
+    );
 
     if (!response.ok) {
       throw new Error(`STT_REQUEST_FAILED:${await toErrorMessage(response)}`);
     }
 
-    const payload = (await response.json()) as OpenAITranscriptionResponse;
+    const payload = normalizeOpenAITranscriptionResult(await parseOpenAITranscriptionPayload(response), language);
     return {
-      language: payload.language || language,
+      language: payload.language,
       model: config.openai?.model || DEFAULT_OPENAI_MODEL,
       provider: 'openai',
-      text: payload.text?.trim() || '',
+      text: payload.text,
     };
   }
 
@@ -234,14 +323,18 @@ export class SpeechToTextService {
     request: SpeechToTextRequest
   ): Promise<SpeechToTextResult> {
     const apiKey = resolveProviderApiKey('deepgram', config);
-    const response = await fetch(buildDeepgramUrl(config.deepgram, request.languageHint), {
-      method: 'POST',
-      headers: {
-        Authorization: `Token ${apiKey}`,
-        'Content-Type': request.mimeType || 'application/octet-stream',
+    const response = await fetchWithTimeout(
+      buildDeepgramUrl(config.deepgram, request.languageHint),
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Token ${apiKey}`,
+          'Content-Type': request.mimeType || 'application/octet-stream',
+        },
+        body: Buffer.from(normalizeAudioBuffer(request.audioBuffer)),
       },
-      body: Buffer.from(normalizeAudioBuffer(request.audioBuffer)),
-    });
+      DEFAULT_TRANSCRIBE_TIMEOUT_MS
+    );
 
     if (!response.ok) {
       throw new Error(`STT_REQUEST_FAILED:${await toErrorMessage(response)}`);
@@ -255,6 +348,53 @@ export class SpeechToTextService {
       model: config.deepgram?.model || DEFAULT_DEEPGRAM_MODEL,
       provider: 'deepgram',
       text: transcript,
+    };
+  }
+
+  private static async transcribeWithCustom(
+    config: SpeechToTextConfig,
+    request: SpeechToTextRequest
+  ): Promise<SpeechToTextResult> {
+    const apiKey = resolveProviderApiKey('custom', config);
+    const baseUrl = config.custom?.baseUrl?.trim();
+    if (!baseUrl) {
+      throw new Error('STT_CUSTOM_NOT_CONFIGURED');
+    }
+    const audioBuffer = Buffer.from(normalizeAudioBuffer(request.audioBuffer));
+    const blob = new Blob([audioBuffer], {
+      type: request.mimeType || 'application/octet-stream',
+    });
+    const formData = new FormData();
+    formData.append('file', blob, request.fileName);
+
+    const language = request.languageHint || config.custom?.language;
+    appendCommonOpenAITranscriptionFields(formData, {
+      model: config.custom?.model || DEFAULT_OPENAI_MODEL,
+      language,
+    });
+
+    const response = await fetchWithTimeout(
+      buildOpenAIUrl(baseUrl),
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: formData,
+      },
+      DEFAULT_TRANSCRIBE_TIMEOUT_MS
+    );
+
+    if (!response.ok) {
+      throw new Error(`STT_REQUEST_FAILED:${await toErrorMessage(response)}`);
+    }
+
+    const payload = normalizeOpenAITranscriptionResult(await parseOpenAITranscriptionPayload(response), language);
+    return {
+      language: payload.language,
+      model: config.custom?.model || DEFAULT_OPENAI_MODEL,
+      provider: 'custom',
+      text: payload.text,
     };
   }
 }

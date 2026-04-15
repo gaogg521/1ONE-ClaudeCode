@@ -178,7 +178,7 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
 
   return (
     <SettingsViewModeProvider value='page'>
-      <div className={containerClass}>
+      <div className={containerClass} style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {isMobile && (
           <div className='settings-mobile-top-nav'>
             {menuItems.map((item) => {

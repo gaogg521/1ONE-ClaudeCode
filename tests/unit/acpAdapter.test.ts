@@ -281,17 +281,34 @@ describe('AcpAdapter - agent_message_chunk extraction', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it('drops non-text chunks and emits diagnostics', () => {
+  it('converts image chunks with base64 data into markdown images', () => {
     const messages = adapter.convertSessionUpdate({
       sessionId: 'test-session',
       update: {
         sessionUpdate: 'agent_message_chunk',
-        content: { type: 'image', uri: 'file://test.png' },
+        content: { type: 'image', data: 'ZmFrZS1pbWFnZQ==', mimeType: 'image/png' },
       },
     } as any);
 
-    expect(messages).toHaveLength(0);
-    expect(warnSpy).toHaveBeenCalledWith('[AcpAdapter] Dropped non-text chunk: content.type=image');
+    expect(messages).toHaveLength(1);
+    expect(messages[0].type).toBe('text');
+    expect((messages[0] as any).content.content).toContain('![Generated Image](data:image/png;base64,ZmFrZS1pbWFnZQ==)');
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('converts image chunks with uri into markdown images', () => {
+    const messages = adapter.convertSessionUpdate({
+      sessionId: 'test-session',
+      update: {
+        sessionUpdate: 'agent_message_chunk',
+        content: { type: 'image', uri: 'file://C:/temp/test image.png' },
+      },
+    } as any);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].type).toBe('text');
+    expect((messages[0] as any).content.content).toContain('![Generated Image](C:/temp/test%20image.png)');
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('drops malformed text chunk and emits diagnostics', () => {

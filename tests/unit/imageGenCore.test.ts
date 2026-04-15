@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fsModule from 'fs';
+import { OpenAIRotatingClient } from '../../src/common/api/OpenAIRotatingClient';
 import {
   safeJsonParse,
   isImageFile,
@@ -14,6 +15,14 @@ import {
   processImageUri,
   executeImageGeneration,
 } from '../../src/common/chat/imageGenCore';
+
+vi.mock('../../src/common/api/ClientFactory', () => ({
+  ClientFactory: {
+    createRotatingClient: vi.fn(),
+  },
+}));
+
+import { ClientFactory } from '../../src/common/api/ClientFactory';
 
 // ---------------------------------------------------------------------------
 // safeJsonParse
@@ -207,5 +216,95 @@ describe('executeImageGeneration — aborted signal', () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe('cancelled');
     expect(result.text).toContain('cancelled');
+  });
+});
+
+describe('executeImageGeneration — OpenAI image endpoint', () => {
+  beforeEach(() => {
+    vi.spyOn(fsModule.promises, 'writeFile').mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  it('uses images.generate for image models on openai-compatible providers', async () => {
+    const createImage = vi.fn().mockResolvedValue({
+      data: [{ b64_json: Buffer.from('fake-image').toString('base64'), revised_prompt: 'revised tiger prompt' }],
+    });
+    const createChatCompletion = vi.fn();
+    const mockClient = Object.create(OpenAIRotatingClient.prototype) as OpenAIRotatingClient & {
+      createImage: typeof createImage;
+      createChatCompletion: typeof createChatCompletion;
+    };
+    mockClient.createImage = createImage;
+    mockClient.createChatCompletion = createChatCompletion;
+    vi.mocked(ClientFactory.createRotatingClient).mockResolvedValue(mockClient as never);
+
+    const result = await executeImageGeneration(
+      { prompt: 'a tiger sitting in the clouds' },
+      {
+        id: 'test',
+        name: 'test',
+        platform: 'new-api',
+        baseUrl: 'https://example.com/v1',
+        apiKey: 'k',
+        useModel: 'gemini-3.1-flash-image',
+      },
+      '/workspace'
+    );
+
+    expect(createImage).toHaveBeenCalled();
+    expect(createChatCompletion).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(result.text).toContain('revised tiger prompt');
+  });
+
+  it('uses Gemini native generateContent endpoint for LiteLLM Gemini image routes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                { text: 'gemini native image result' },
+                {
+                  inlineData: {
+                    mimeType: 'image/png',
+                    data: Buffer.from('gemini-native-image').toString('base64'),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await executeImageGeneration(
+      { prompt: 'a cat sitting in the clouds' },
+      {
+        id: 'test',
+        name: 'LiteLLM Gemini',
+        platform: 'new-api',
+        baseUrl: 'https://litellm-internal.123u.com/v1',
+        apiKey: 'k',
+        useModel: 'gemini-3.1-flash-image',
+      },
+      '/workspace'
+    );
+
+    expect(vi.mocked(ClientFactory.createRotatingClient)).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://litellm-internal.123u.com/gemini/v1beta/models/gemini-3.1-flash-image:generateContent?key=k',
+      expect.objectContaining({
+        method: 'POST',
+      })
+    );
+    expect(result.success).toBe(true);
+    expect(result.text).toContain('gemini native image result');
   });
 });

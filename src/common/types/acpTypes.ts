@@ -699,8 +699,11 @@ export interface AgentThoughtChunkUpdate extends BaseSessionUpdate {
 export interface ToolCallContentItem {
   type: 'content' | 'diff';
   content?: {
-    type: 'text';
+    type: 'text' | 'image';
     text: string;
+    data?: string;
+    mimeType?: string;
+    uri?: string;
   };
   path?: string;
   oldText?: string | null;
@@ -735,13 +738,7 @@ export interface ToolCallUpdateStatus extends BaseSessionUpdate {
     // rawInput may arrive in tool_call_update with complete data (after streaming completes)
     // This happens when input_json_delta finishes and the full input is available
     rawInput?: Record<string, unknown>;
-    content?: Array<{
-      type: 'content';
-      content: {
-        type: 'text';
-        text: string;
-      };
-    }>;
+    content?: ToolCallContentItem[];
   };
 }
 

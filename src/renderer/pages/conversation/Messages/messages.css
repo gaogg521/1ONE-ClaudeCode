@@ -1,4 +1,29 @@
 /* Mobile typography tuning: conversation readability */
+.conversation-message-scroller {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-fill-4) transparent;
+}
+
+.conversation-message-scroller::-webkit-scrollbar {
+  width: 10px;
+}
+
+.conversation-message-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.conversation-message-scroller::-webkit-scrollbar-thumb {
+  background: var(--color-fill-4);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.conversation-message-scroller::-webkit-scrollbar-thumb:hover {
+  background: var(--color-fill-5);
+  background-clip: content-box;
+}
+
 @media (max-width: 767px) {
   /* Message body */
   .message-item .markdown-shadow-body {

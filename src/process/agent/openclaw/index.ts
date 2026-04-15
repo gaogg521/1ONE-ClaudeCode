@@ -687,7 +687,25 @@ export class OpenClawAgent {
 
   private handleConnectError(err: Error): void {
     console.error('[OpenClawAgent] Connection error:', err);
-    this.emitErrorMessage(`Connection error: ${err.message}`);
+    const details = (err as Error & { details?: { code?: string } }).details;
+    const isPairing = details?.code === 'PAIRING_REQUIRED' || /pairing.required/i.test(err?.message ?? '');
+    if (isPairing) {
+      // Use a stable message id so repeated connection attempts update the same tip instead of spamming.
+      this.emitErrorMessage(
+        [
+          'Connection error: pairing required',
+          '',
+          '请先完成 OpenClaw 配对：',
+          '- 终端运行 `openclaw pair`（或按你的安装方式完成配对）；或',
+          '- 打开 OpenClaw 应用/CLI 按提示完成 pairing。',
+          '',
+          '配对完成后，回到 1ONE Code 再次发送消息即可重试连接。',
+        ].join('\n'),
+        'disconnect'
+      );
+      return;
+    }
+    this.emitErrorMessage(`Connection error: ${err.message}`, 'disconnect');
   }
 
   private handleClose(_code: number, reason: string): void {

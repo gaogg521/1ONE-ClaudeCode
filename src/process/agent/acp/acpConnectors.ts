@@ -13,7 +13,7 @@
 import type { ChildProcess, SpawnOptions } from 'child_process';
 import { execFile as execFileCb, execFileSync, spawn } from 'child_process';
 import { promisify } from 'util';
-import { promises as fs } from 'fs';
+import { existsSync, promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
 import {
@@ -331,6 +331,60 @@ export function spawnNpxBackend(
   return { child, isDetached: detached };
 }
 
+/**
+ * Windows fallback: run npx via `node <npx-cli.js>` instead of `npx.cmd`.
+ * This is useful when cmd shim resolution is broken but node itself is available.
+ */
+export function spawnNpxBackendViaNode(
+  backend: string,
+  npxPackage: string,
+  cleanEnv: Record<string, string | undefined>,
+  workingDir: string,
+  preferOffline: boolean,
+  { extraArgs = [] }: { extraArgs?: string[] } = {}
+): SpawnResult {
+  const isWindows = process.platform === 'win32';
+  if (!isWindows) {
+    throw new Error('spawnNpxBackendViaNode is only supported on Windows');
+  }
+
+  const spawnArgs = ['--yes', ...(preferOffline ? ['--prefer-offline'] : []), npxPackage, ...extraArgs];
+  const execOptions = {
+    env: cleanEnv,
+    encoding: 'utf-8' as const,
+    timeout: 5000,
+    stdio: ['pipe', 'pipe', 'pipe'] as ['pipe', 'pipe', 'pipe'],
+    ...getWindowsShellExecutionOptions(),
+  };
+
+  const stdout = execFileSync('where', ['node'], execOptions).trim();
+  const nodePath = stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)[0];
+  if (!nodePath) {
+    throw new Error('Node.js not found for npx fallback');
+  }
+
+  const npmBinDir = path.join(path.dirname(nodePath), 'node_modules', 'npm', 'bin');
+  const npxCliJs = path.join(npmBinDir, 'npx-cli.js');
+  if (!existsSync(npxCliJs)) {
+    throw new Error(`npx-cli.js not found next to node: ${npxCliJs}`);
+  }
+
+  const effectiveCommand = `chcp 65001 >nul && "${nodePath}"`;
+  const child = spawn(effectiveCommand, [npxCliJs, ...spawnArgs], {
+    cwd: workingDir,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: cleanEnv,
+    shell: true,
+    detached: false,
+  });
+
+  if (ACP_PERF_LOG) {
+    console.log(`[ACP-PERF] ${backend}: fallback node+npx-cli spawned (preferOffline=${preferOffline})`);
+  }
+
+  return { child, isDetached: false };
+}
+
 /** Prepare clean env + resolve npx for Claude ACP bridge. */
 async function prepareClaude(): Promise<NpxPrepareResult> {
   const cleanEnv = await prepareCleanEnv();
@@ -553,14 +607,42 @@ async function connectNpxBackend(config: {
 
 /** Connect to Claude ACP bridge via npx. */
 export function connectClaude(workingDir: string, hooks: NpxConnectHooks): Promise<void> {
-  return connectNpxBackend({
-    backend: 'claude',
-    npxPackage: CLAUDE_ACP_NPX_PACKAGE,
-    prepareFn: prepareClaude,
-    workingDir,
-    ...hooks,
-    detached: process.platform !== 'win32',
-  });
+  return (async () => {
+    try {
+      await connectNpxBackend({
+        backend: 'claude',
+        npxPackage: CLAUDE_ACP_NPX_PACKAGE,
+        prepareFn: prepareClaude,
+        workingDir,
+        ...hooks,
+        detached: process.platform !== 'win32',
+      });
+      return;
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const shouldFallbackToNodeNpx =
+        process.platform === 'win32' &&
+        (/claude-agent-acp/i.test(errMsg) && /(not recognized|CommandNotFound|ENOENT)/i.test(errMsg));
+      if (!shouldFallbackToNodeNpx) {
+        throw error;
+      }
+
+      mainWarn('[ACP claude]', 'npx.cmd path failed, falling back to node + npx-cli.js', errMsg);
+
+      const { cleanEnv, extraArgs: prepExtraArgs = [] } = await prepareClaude();
+      const opts = { extraArgs: [...prepExtraArgs] };
+
+      // Retry twice: prefer-offline first, then fresh registry lookup.
+      try {
+        await hooks.setup(spawnNpxBackendViaNode('claude', CLAUDE_ACP_NPX_PACKAGE, cleanEnv, workingDir, true, opts));
+      } catch (firstError) {
+        await hooks.cleanup();
+        await hooks.setup(
+          spawnNpxBackendViaNode('claude', CLAUDE_ACP_NPX_PACKAGE, cleanEnv, workingDir, false, opts)
+        );
+      }
+    }
+  })();
 }
 
 /** Connect to Codex ACP bridge via npx. */

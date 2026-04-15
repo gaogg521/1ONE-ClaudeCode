@@ -84,6 +84,7 @@ describe('SpeechToTextService', () => {
     expect(request.body).toBeInstanceOf(FormData);
     expect(request.body.get('model')).toBe('whisper-1');
     expect(request.body.get('language')).toBe('en');
+    expect(request.body.get('response_format')).toBe('verbose_json');
     expect(result).toEqual({
       language: 'en',
       model: 'whisper-1',
@@ -193,5 +194,69 @@ describe('SpeechToTextService', () => {
         provider: 'deepgram',
       })
     );
+  });
+
+  it('sends custom transcription requests with verbose_json and accepts nested data payloads', async () => {
+    vi.mocked(ProcessConfig.get).mockResolvedValue({
+      enabled: true,
+      provider: 'custom',
+      custom: {
+        apiKey: 'custom-key',
+        baseUrl: 'https://litellm-internal.123u.com/v1',
+        model: 'whisper-1',
+        language: 'zh-CN',
+      },
+    });
+
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ data: { language: 'zh', text: ' 你好，世界 ' } }))
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await SpeechToTextService.transcribe({
+      audioBuffer: new Uint8Array([1, 2, 3]),
+      fileName: 'sample.webm',
+      mimeType: 'audio/webm',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://litellm-internal.123u.com/v1/audio/transcriptions',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer custom-key',
+        }),
+      })
+    );
+
+    const [, request] = fetchMock.mock.calls[0] as [string, { body: FormData }];
+    expect(request.body.get('model')).toBe('whisper-1');
+    expect(request.body.get('language')).toBe('zh');
+    expect(request.body.get('response_format')).toBe('verbose_json');
+    expect(result).toEqual({
+      language: 'zh',
+      model: 'whisper-1',
+      provider: 'custom',
+      text: '你好，世界',
+    });
+  });
+
+  it('rejects custom transcription when baseUrl is missing', async () => {
+    vi.mocked(ProcessConfig.get).mockResolvedValue({
+      enabled: true,
+      provider: 'custom',
+      custom: {
+        apiKey: 'custom-key',
+        model: 'whisper-1',
+      },
+    });
+
+    await expect(
+      SpeechToTextService.transcribe({
+        audioBuffer: new Uint8Array([1, 2, 3]),
+        fileName: 'sample.webm',
+        mimeType: 'audio/webm',
+      })
+    ).rejects.toThrow('STT_CUSTOM_NOT_CONFIGURED');
   });
 });

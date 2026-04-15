@@ -188,7 +188,19 @@ export class AcpAdapter {
       return null;
     }
 
-    // Non-text chunks (e.g. image) are currently not rendered in chat stream.
+    if (content.type === 'image') {
+      if (typeof content.data === 'string' && content.data.length > 0) {
+        const mimeType = content.mimeType || 'image/png';
+        return `\n![Generated Image](data:${mimeType};base64,${content.data})\n`;
+      }
+      if (typeof content.uri === 'string' && content.uri.length > 0) {
+        const normalizedUri = content.uri.replace(/^file:\/\//, '');
+        return `\n![Generated Image](${encodeURI(normalizedUri)})\n`;
+      }
+      console.warn('[AcpAdapter] Dropped image chunk: missing data and uri');
+      return null;
+    }
+
     console.warn(`[AcpAdapter] Dropped non-text chunk: content.type=${String(content.type)}`);
     return null;
   }

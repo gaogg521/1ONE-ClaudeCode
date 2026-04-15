@@ -10,6 +10,7 @@ import { isElectronDesktop } from '@/renderer/utils/platform';
 
 const MAX_AUDIO_FILE_SIZE_MB = 30;
 const MAX_AUDIO_FILE_SIZE_BYTES = MAX_AUDIO_FILE_SIZE_MB * 1024 * 1024;
+const TRANSCRIBE_TIMEOUT_MS = 65_000;
 
 const getAudioExtension = (mimeType: string) => {
   switch (mimeType) {
@@ -53,6 +54,32 @@ const parseWebResponse = async (response: XMLHttpRequest): Promise<SpeechToTextR
   return payload.data;
 };
 
+const parseWebError = (response: XMLHttpRequest): Error => {
+  try {
+    const payload = JSON.parse(response.responseText) as { msg?: string };
+    if (payload.msg) {
+      return new Error(payload.msg);
+    }
+  } catch {
+    // ignore json parse failure
+  }
+  return new Error(`STT_REQUEST_FAILED:${response.status} ${response.statusText}`);
+};
+
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  let timer: number | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = window.setTimeout(() => reject(new Error('STT_NETWORK_ERROR:timeout')), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+    }
+  }
+};
+
 export async function transcribeAudioBlob(blob: Blob, languageHint?: string): Promise<SpeechToTextResult> {
   ensureAudioSize(blob);
 
@@ -61,12 +88,15 @@ export async function transcribeAudioBlob(blob: Blob, languageHint?: string): Pr
 
   if (isElectronDesktop()) {
     const audioBuffer = new Uint8Array(await blob.arrayBuffer());
-    return ipcBridge.speechToText.transcribe.invoke({
-      audioBuffer: Array.from(audioBuffer),
-      fileName,
-      languageHint,
-      mimeType,
-    });
+    return withTimeout(
+      ipcBridge.speechToText.transcribe.invoke({
+        audioBuffer: Array.from(audioBuffer),
+        fileName,
+        languageHint,
+        mimeType,
+      }),
+      TRANSCRIBE_TIMEOUT_MS
+    );
   }
 
   const formData = new FormData();
@@ -76,7 +106,8 @@ export async function transcribeAudioBlob(blob: Blob, languageHint?: string): Pr
     formData.append('languageHint', languageHint);
   }
 
-  return new Promise<SpeechToTextResult>((resolve, reject) => {
+  return withTimeout(
+    new Promise<SpeechToTextResult>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/stt');
     xhr.withCredentials = true;
@@ -87,7 +118,7 @@ export async function transcribeAudioBlob(blob: Blob, languageHint?: string): Pr
         return;
       }
       if (xhr.status < 200 || xhr.status >= 300) {
-        reject(new Error(`STT_REQUEST_FAILED:${xhr.status} ${xhr.statusText}`));
+        reject(parseWebError(xhr));
         return;
       }
 
@@ -103,5 +134,7 @@ export async function transcribeAudioBlob(blob: Blob, languageHint?: string): Pr
     });
 
     xhr.send(formData);
-  });
+    }),
+    TRANSCRIBE_TIMEOUT_MS
+  );
 }

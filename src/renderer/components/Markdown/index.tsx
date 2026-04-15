@@ -27,6 +27,8 @@ import ShadowView from './ShadowView';
 const isLocalFilePath = (src: string): boolean => {
   if (src.startsWith('http://') || src.startsWith('https://')) return false;
   if (src.startsWith('data:')) return false;
+  if (src.startsWith('blob:')) return false;
+  if (src.startsWith('aion-asset://')) return false;
   return true;
 };
 

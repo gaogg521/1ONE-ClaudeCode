@@ -258,7 +258,7 @@ class ImageGenerationInvocation extends BaseToolInvocation<ImageGenerationToolPa
       return {
         llmContent: result.text,
         returnDisplay: {
-          img_url: result.imagePath,
+          img_url: result.imageDataUrl || result.imagePath,
           relative_path: result.relativeImagePath,
         } as unknown as ToolResultDisplay,
       };

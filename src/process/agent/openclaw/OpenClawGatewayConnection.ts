@@ -59,6 +59,7 @@ export class OpenClawGatewayConnection {
   private readonly maxReconnectAttempts = 10;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
+  private pairingRequired = false;
   private lastSeq: number | null = null;
   private connectNonce: string | null = null;
   private connectSent = false;
@@ -109,6 +110,8 @@ export class OpenClawGatewayConnection {
     });
 
     this.ws.on('open', () => {
+      // New socket: reset pairing state so a manual retry can proceed.
+      this.pairingRequired = false;
       this.queueConnect();
     });
 
@@ -119,7 +122,10 @@ export class OpenClawGatewayConnection {
       this.ws = null;
       this._isConnected = false;
       this.flushPendingErrors(new Error(`Gateway closed (${code}): ${reasonText}`));
-      this.scheduleReconnect();
+      // Pairing-required is not a transient connectivity problem; do not auto-reconnect.
+      if (!this.pairingRequired) {
+        this.scheduleReconnect();
+      }
       this.opts.onClose?.(code, reasonText);
     });
 
@@ -153,6 +159,11 @@ export class OpenClawGatewayConnection {
     this._isConnected = false;
     this._sessionKey = null;
     this.flushPendingErrors(new Error('Gateway client stopped'));
+  }
+
+  /** True when the Gateway requires out-of-band pairing before allowing connect(). */
+  get isPairingRequired(): boolean {
+    return this.pairingRequired;
   }
 
   /**
@@ -340,6 +351,13 @@ export class OpenClawGatewayConnection {
         const isPairing = details?.code === 'PAIRING_REQUIRED' || /pairing.required/i.test(err?.message ?? '');
         if (isPairing) {
           console.log('[OpenClawGateway] Pairing required, awaiting approval');
+          // Mark as non-retryable until user completes pairing.
+          this.pairingRequired = true;
+          // Stop the client so we don't enter reconnect loops that spam UI.
+          // The user can retry start() after pairing is completed.
+          this.opts.onConnectError?.(err instanceof Error ? err : new Error(String(err)));
+          this.stop();
+          return;
         } else {
           console.error('[OpenClawGateway] Connect failed:', err);
         }

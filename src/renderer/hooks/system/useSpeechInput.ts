@@ -38,6 +38,7 @@ type UseSpeechInputOptions = {
 
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
 const RECORDING_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+const RECORDING_TIMESLICE_MS = 250;
 
 export const appendSpeechTranscript = (base: string, transcript: string): string => {
   const normalizedTranscript = transcript.trim();
@@ -127,6 +128,7 @@ const mapSpeechInputError = (error: unknown): SpeechInputErrorCode => {
   if (
     message.includes('STT_OPENAI_NOT_CONFIGURED') ||
     message.includes('STT_DEEPGRAM_NOT_CONFIGURED') ||
+    message.includes('STT_CUSTOM_NOT_CONFIGURED') ||
     message.includes('STT_DISABLED')
   ) {
     return 'not-configured';
@@ -153,12 +155,18 @@ export const useSpeechInput = ({ locale, onTranscript }: UseSpeechInputOptions) 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const stopWatchdogRef = useRef<number | null>(null);
+  const finalizeRecordingRef = useRef<(() => void) | null>(null);
   const onTranscriptRef = useLatestRef(onTranscript);
   const availability = useMemo(() => getSpeechInputAvailability(), []);
 
   const recognitionLocale = locale?.trim() || 'en-US';
 
   const cleanupRecorder = useCallback(() => {
+    if (stopWatchdogRef.current !== null) {
+      window.clearTimeout(stopWatchdogRef.current);
+      stopWatchdogRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -191,6 +199,9 @@ export const useSpeechInput = ({ locale, onTranscript }: UseSpeechInputOptions) 
   );
 
   const startRecording = useCallback(async () => {
+    if (status === 'recording' || status === 'transcribing' || recorderRef.current) {
+      return;
+    }
     if (availability !== 'record') {
       setErrorCode('recording-unsupported');
       setStatus('error');
@@ -201,10 +212,39 @@ export const useSpeechInput = ({ locale, onTranscript }: UseSpeechInputOptions) 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = pickRecordingMimeType();
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      let finalized = false;
 
       streamRef.current = stream;
       recorderRef.current = recorder;
       chunksRef.current = [];
+
+      const finalizeRecording = () => {
+        if (finalized) {
+          return;
+        }
+        finalized = true;
+        finalizeRecordingRef.current = null;
+
+        if (stopWatchdogRef.current !== null) {
+          window.clearTimeout(stopWatchdogRef.current);
+          stopWatchdogRef.current = null;
+        }
+
+        const collectedChunks = [...chunksRef.current];
+        const audioBlob = new Blob(collectedChunks, {
+          type: recorder.mimeType || mimeType || 'audio/webm',
+        });
+        cleanupRecorder();
+
+        if (audioBlob.size <= 0) {
+          setErrorCode('audio-capture');
+          setStatus('error');
+          return;
+        }
+
+        void transcribeBlob(audioBlob);
+      };
+      finalizeRecordingRef.current = finalizeRecording;
 
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -219,16 +259,14 @@ export const useSpeechInput = ({ locale, onTranscript }: UseSpeechInputOptions) 
       };
 
       recorder.onstop = () => {
-        const audioBlob = new Blob(chunksRef.current, {
-          type: recorder.mimeType || mimeType || 'audio/webm',
-        });
-        cleanupRecorder();
-        void transcribeBlob(audioBlob);
+        finalizeRecording();
       };
 
       setErrorCode(null);
       setStatus('recording');
-      recorder.start();
+      // Collect audio in small chunks during recording so stop() does not depend on
+      // a single final dataavailable event, which is flaky in some Chromium builds.
+      recorder.start(RECORDING_TIMESLICE_MS);
     } catch (error) {
       cleanupRecorder();
       setErrorCode(mapSpeechInputError(error));
@@ -243,7 +281,38 @@ export const useSpeechInput = ({ locale, onTranscript }: UseSpeechInputOptions) 
     }
 
     setStatus('transcribing');
-    recorder.stop();
+    // Some Chromium builds may fail to emit `onstop` (or final `dataavailable`) promptly,
+    // leaving the UI stuck in "transcribing". Force a flush + add a short watchdog.
+    try {
+      recorder.requestData?.();
+    } catch {
+      // ignore
+    }
+
+    if (stopWatchdogRef.current !== null) {
+      window.clearTimeout(stopWatchdogRef.current);
+      stopWatchdogRef.current = null;
+    }
+    stopWatchdogRef.current = window.setTimeout(() => {
+      // Some Chromium builds flush audio chunks but still miss `onstop`.
+      // If we already have audio data, proceed with transcription instead of treating it as a cancel.
+      if (chunksRef.current.some((chunk) => chunk.size > 0)) {
+        finalizeRecordingRef.current?.();
+        return;
+      }
+      cleanupRecorder();
+      setErrorCode('aborted');
+      setStatus('error');
+    }, 6000);
+
+    // Stop on next tick to give requestData() a chance to flush.
+    window.setTimeout(() => {
+      try {
+        recorder.stop();
+      } catch {
+        // ignore
+      }
+    }, 0);
   }, [status]);
 
   const transcribeFile = useCallback(

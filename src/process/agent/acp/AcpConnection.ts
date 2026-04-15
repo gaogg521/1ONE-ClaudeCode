@@ -40,6 +40,9 @@ import { killChild, readTextFile, writeJsonRpcMessage, writeTextFile } from './u
 
 const execFile = promisify(execFileCb);
 
+/** Backends that rely on npx bridge packages (require node/npm/npx). */
+const NPX_BRIDGE_BACKENDS: ReadonlySet<string> = new Set(['claude', 'codex', 'codebuddy']);
+
 // Re-export for unit tests that import from this module
 export { createGenericSpawnConfig } from './acpConnectors';
 
@@ -78,6 +81,25 @@ export function buildStartupErrorMessage(
   ) {
     const cliHint = resolvedBackend ?? backend;
     errMsg = `'${cliHint}' CLI not found. Please install it or update the CLI path in Settings.\n${stderrCombined}`;
+  }
+
+  // Windows new-user case: npx-based bridges (claude/codex/codebuddy) require a working Node.js + npm.
+  // When Node.js is not installed, not on PATH, or blocked by corporate policy, the spawned npx.cmd
+  // fails early with confusing output. Provide an actionable hint.
+  if (
+    process.platform === 'win32' &&
+    NPX_BRIDGE_BACKENDS.has(backend) &&
+    /npx(\.cmd)?/i.test(stderrCombined + (spawnErrorMessage ?? '')) &&
+    /not recognized|not found|No such file|command not found|ENOENT/i.test(stderrCombined + (spawnErrorMessage ?? ''))
+  ) {
+    errMsg =
+      `${backend} 需要 Node.js（包含 npm/npx）才能在 Windows 上启动。\n` +
+      `当前系统没有可用的 node/npx（或未加入 PATH）。\n\n` +
+      `解决方法：\n` +
+      `1) 安装 Node.js LTS：https://nodejs.org/\n` +
+      `2) 安装后重启 1ONE Code（必要时重启电脑）\n` +
+      `3) 在终端验证：where node && where npx && node -v && npx -v\n\n` +
+      (stderrCombined ? `原始错误：\n${stderrCombined}` : '');
   }
 
   // Cursor Windows shim issue: `agent` resolves to a PowerShell wrapper that points to a missing *.ps1.
@@ -340,6 +362,28 @@ export class AcpConnection {
         this.isSetupComplete = false;
       },
     };
+
+    // Preflight: on Windows, npx-based backends require Node.js/npm/npx available.
+    // Fail fast with an actionable message instead of spawning and showing a cryptic npx.cmd error.
+    if (process.platform === 'win32' && NPX_BRIDGE_BACKENDS.has(backend)) {
+      try {
+        const cleanEnv = await prepareCleanEnv();
+        // resolveNpxPath internally resolves node first; this throws when node is missing.
+        void resolveNpxPath(cleanEnv);
+      } catch {
+        throw new Error(
+          [
+            `${backend} 需要 Node.js（包含 npm/npx）才能在 Windows 上启动。`,
+            '检测到当前环境缺少可用的 node/npx（或未加入 PATH）。',
+            '',
+            '解决方法：',
+            '1) 安装 Node.js LTS：https://nodejs.org/',
+            '2) 安装后重启 1ONE Code（必要时重启电脑）',
+            '3) 在终端验证：where node && where npx && node -v && npx -v',
+          ].join('\n')
+        );
+      }
+    }
 
     switch (backend) {
       case 'claude':
