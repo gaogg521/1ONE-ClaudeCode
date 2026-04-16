@@ -7,13 +7,11 @@
 import * as path from 'path';
 import { existsSync } from 'fs';
 import type { LoadedExtension, ExtSkill } from '../types';
+import type { SkillMetadata } from '@/common/types/skillMetadata';
 import { isPathWithinDirectory } from '../sandbox/pathSafety';
+import { readSkillMetadata } from './utils/skillMetadata';
 
-type ResolvedSkill = {
-  name: string;
-  description: string;
-  location: string;
-};
+type ResolvedSkill = SkillMetadata;
 
 export function resolveSkills(extensions: LoadedExtension[]): ResolvedSkill[] {
   const skills: ResolvedSkill[] = [];
@@ -40,9 +38,38 @@ function convertSkill(skill: ExtSkill, ext: LoadedExtension): ResolvedSkill | nu
     console.warn(`[Extensions] Skill file not found: ${absolutePath} (extension: ${ext.manifest.name})`);
     return null;
   }
+
+  const skillDir = path.dirname(absolutePath);
+  const metadata = readSkillMetadata(skillDir, {
+    sourceKind: 'extension',
+    isCustom: false,
+    sourceLabel: ext.manifest.displayName,
+  });
+
+  if (!metadata) {
+    return {
+      name: skill.name,
+      description: skill.description || `Skill from extension: ${ext.manifest.name}`,
+      location: absolutePath,
+      directory: skillDir,
+      runtimeFiles: [absolutePath],
+      isCustom: false,
+      sourceKind: 'extension',
+      sourceLabel: ext.manifest.displayName,
+      metadataFormat: 'legacy-skill-md',
+      platforms: ['generic'],
+      adapterPlatforms: [],
+      hasCommonLayer: false,
+      effective: true,
+      warnings: [],
+    };
+  }
+
   return {
-    name: skill.name,
-    description: skill.description || `Skill from extension: ${ext.manifest.name}`,
+    ...metadata,
+    name: metadata.name || skill.name,
+    description: metadata.description || skill.description || `Skill from extension: ${ext.manifest.name}`,
     location: absolutePath,
+    runtimeFiles: metadata.runtimeFiles.length > 0 ? metadata.runtimeFiles : [absolutePath],
   };
 }

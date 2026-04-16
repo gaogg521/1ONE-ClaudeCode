@@ -3,7 +3,8 @@
  * Includes tabs for sources, search, and skill cards.
  */
 import type { ExternalSource } from './types';
-import { Button, Input, Modal } from '@arco-design/web-react';
+import type { SkillPlatform } from '@/common/types/skillMetadata';
+import { Button, Input, Modal, Tag } from '@arco-design/web-react';
 import { Plus, Refresh, Search } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +18,7 @@ type AddSkillsModalProps = {
   activeSourceTab: string;
   setActiveSourceTab: (v: string) => void;
   activeSource: ExternalSource | undefined;
-  filteredExternalSkills: Array<{ name: string; description: string; path: string }>;
+  filteredExternalSkills: ExternalSource['skills'];
   externalSkillsLoading: boolean;
 
   // Search
@@ -35,7 +36,7 @@ type AddSkillsModalProps = {
   customSkills: string[];
 
   // Add handler
-  handleAddFoundSkills: (skills: Array<{ name: string; description: string; path: string }>) => void;
+  handleAddFoundSkills: (skills: ExternalSource['skills']) => void;
 };
 
 const AddSkillsModal: React.FC<AddSkillsModalProps> = ({
@@ -56,6 +57,21 @@ const AddSkillsModal: React.FC<AddSkillsModalProps> = ({
   handleAddFoundSkills,
 }) => {
   const { t } = useTranslation();
+
+  const getPlatformLabel = (platform: SkillPlatform) => {
+    switch (platform) {
+      case '1one':
+        return '1ONE';
+      case 'claude':
+        return 'Claude';
+      case 'openclaw':
+        return 'OpenClaw';
+      case 'cursor':
+        return 'Cursor';
+      default:
+        return t('settings.skillsHub.genericLayer', { defaultValue: 'Generic' });
+    }
+  };
 
   return (
     <Modal
@@ -135,7 +151,7 @@ const AddSkillsModal: React.FC<AddSkillsModalProps> = ({
                   const isAdded = customSkills.includes(skill.name);
                   return (
                     <div
-                      key={skill.path}
+                      key={skill.directory}
                       className='flex items-start gap-12px p-12px bg-base border border-transparent hover:border-border-2 rounded-8px transition-colors shadow-sm'
                     >
                       <div className='w-32px h-32px rounded-8px bg-fill-2 border border-border-1 flex items-center justify-center font-bold text-14px text-t-secondary uppercase shrink-0 mt-2px'>
@@ -143,6 +159,13 @@ const AddSkillsModal: React.FC<AddSkillsModalProps> = ({
                       </div>
                       <div className='flex-1 min-w-0'>
                         <div className='text-14px font-medium text-t-primary truncate'>{skill.name}</div>
+                        <div className='flex flex-wrap gap-4px mt-4px'>
+                          {skill.platforms.map((platform) => (
+                            <Tag key={`${skill.name}-${platform}`} size='small'>
+                              {getPlatformLabel(platform)}
+                            </Tag>
+                          ))}
+                        </div>
                         {skill.description && (
                           <div className='text-12px text-t-secondary line-clamp-2 mt-4px' title={skill.description}>
                             {skill.description}

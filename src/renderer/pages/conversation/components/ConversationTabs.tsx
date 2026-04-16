@@ -11,7 +11,7 @@ import { emitter } from '@/renderer/utils/emitter';
 import { cleanupSiderTooltips } from '@/renderer/utils/ui/siderTooltip';
 import { updateWorkspaceTime } from '@/renderer/utils/workspace/workspaceHistory';
 import { Dropdown, Menu, Message } from '@arco-design/web-react';
-import { Close, Plus, Robot } from '@icon-park/react';
+import { Close, Plus, Pushpin, Robot, Star } from '@icon-park/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -21,6 +21,7 @@ import { applyDefaultConversationName } from '../utils/newConversationName';
 import { buildCliAgentParams, buildPresetAssistantParams } from '../utils/createConversationParams';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { iconColors } from '@/renderer/styles/colors';
+import type { TChatConversation } from '@/common/config/storage';
 
 const TAB_OVERFLOW_THRESHOLD = 10;
 
@@ -325,10 +326,60 @@ const ConversationTabs: React.FC = () => {
       const hasRightTabs = tabIndex < openTabs.length - 1;
       const hasOtherTabs = openTabs.length > 1;
 
+      const togglePin = async () => {
+        try {
+          const conv = await ipcBridge.conversation.get.invoke({ id: tabId });
+          if (!conv) return;
+          const pinned = Boolean((conv.extra as { pinned?: boolean } | undefined)?.pinned);
+          await ipcBridge.conversation.update.invoke({
+            id: tabId,
+            updates: {
+              extra: {
+                pinned: !pinned,
+                pinnedAt: pinned ? undefined : Date.now(),
+              } as Partial<TChatConversation['extra']>,
+            } as Partial<TChatConversation>,
+            mergeExtra: true,
+          });
+          emitter.emit('chat.history.refresh');
+        } catch (error) {
+          console.error('[ConversationTabs] Failed to toggle pin:', error);
+          Message.error(t('conversation.history.pinFailed'));
+        }
+      };
+
+      const toggleFavorite = async () => {
+        try {
+          const conv = await ipcBridge.conversation.get.invoke({ id: tabId });
+          if (!conv) return;
+          const favorited = Boolean((conv.extra as { favorited?: boolean } | undefined)?.favorited);
+          await ipcBridge.conversation.update.invoke({
+            id: tabId,
+            updates: {
+              extra: {
+                favorited: !favorited,
+                favoritedAt: favorited ? undefined : Date.now(),
+              } as Partial<TChatConversation['extra']>,
+            } as Partial<TChatConversation>,
+            mergeExtra: true,
+          });
+          emitter.emit('chat.history.refresh');
+        } catch (error) {
+          console.error('[ConversationTabs] Failed to toggle favorite:', error);
+          Message.error(t('conversation.history.favoriteFailed'));
+        }
+      };
+
       return (
         <Menu
           onClickMenuItem={(key) => {
             switch (key) {
+              case 'favorite':
+                void toggleFavorite();
+                break;
+              case 'pin':
+                void togglePin();
+                break;
               case 'close-all':
                 closeAllTabs();
                 void navigate('/guid');
@@ -346,6 +397,19 @@ const ConversationTabs: React.FC = () => {
             }
           }}
         >
+          <Menu.Item key='favorite'>
+            <div className='flex items-center gap-8px'>
+              <Star theme='outline' size='14' />
+              <span>{t('conversation.history.favorite')}</span>
+            </div>
+          </Menu.Item>
+          <Menu.Item key='pin'>
+            <div className='flex items-center gap-8px'>
+              <Pushpin theme='outline' size='14' />
+              <span>{t('conversation.history.pin')}</span>
+            </div>
+          </Menu.Item>
+          <Menu.Divider />
           <Menu.Item key='close-others' disabled={!hasOtherTabs}>
             {t('conversation.tabs.closeOthers')}
           </Menu.Item>

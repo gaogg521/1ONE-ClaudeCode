@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 
 // === Mocking Dependencies === //
 
@@ -8,6 +8,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: any) => options?.defaultValue || key,
+    i18n: { language: 'en-US' },
   }),
 }));
 
@@ -19,22 +20,28 @@ vi.mock('@arco-design/web-react', async (importOriginal) => {
     Message: {
       success: vi.fn(),
       error: vi.fn(),
+      warning: vi.fn(),
       loading: vi.fn(() => vi.fn()),
     },
     // We can use simple divs instead of complex modals to make testing easier
     Modal: Object.assign(
-      ({ visible, title, children, onOk, onCancel, okText, cancelText }: any) => {
+      ({ visible, title, children, footer, onOk, onCancel, okText, cancelText }: any) => {
         if (!visible) return null;
         return (
           <div data-testid='mock-modal'>
             <h2>{title}</h2>
             <div>{children}</div>
-            <button data-testid='modal-ok' onClick={onOk}>
-              {okText || 'OK'}
-            </button>
-            <button data-testid='modal-cancel' onClick={onCancel}>
-              {cancelText || 'Cancel'}
-            </button>
+            {footer}
+            {onOk ? (
+              <button data-testid='modal-ok' type='button' onClick={onOk}>
+                {okText || 'OK'}
+              </button>
+            ) : null}
+            {onCancel ? (
+              <button data-testid='modal-cancel' type='button' onClick={onCancel}>
+                {cancelText || 'Cancel'}
+              </button>
+            ) : null}
           </div>
         );
       },
@@ -51,6 +58,7 @@ vi.mock('@icon-park/react', () => {
     Delete: () => <span data-testid='icon-delete' />,
     FolderOpen: () => <span data-testid='icon-folder' />,
     Info: () => <span data-testid='icon-info' />,
+    More: () => <span data-testid='icon-more' />,
     Search: () => <span data-testid='icon-search' />,
     Plus: () => <span data-testid='icon-plus' />,
     Refresh: () => <span data-testid='icon-refresh' />,
@@ -70,6 +78,7 @@ const mockDeleteSkill = vi.fn();
 const mockExportSkillWithSymlink = vi.fn();
 const mockAddCustomExternalPath = vi.fn();
 const mockShowOpen = vi.fn();
+const mockShowItemInFolder = vi.fn();
 
 vi.mock('@/common', () => {
   return {
@@ -86,6 +95,9 @@ vi.mock('@/common', () => {
       dialog: {
         showOpen: { invoke: (...args: any[]) => mockShowOpen(...args) },
       },
+      shell: {
+        showItemInFolder: { invoke: (...args: any[]) => mockShowItemInFolder(...args) },
+      },
     },
   };
 });
@@ -96,6 +108,13 @@ vi.mock('@/renderer/pages/settings/components/SettingsPageWrapper', () => {
   };
 });
 
+vi.mock('@/common/config/storage', () => ({
+  ConfigStorage: {
+    get: vi.fn(() => Promise.resolve([])),
+    set: vi.fn(() => Promise.resolve(undefined)),
+  },
+}));
+
 // Import the component after mocking dependencies
 import SkillsHubSettings from '@/renderer/pages/settings/SkillsHubSettings';
 
@@ -105,8 +124,36 @@ describe('SkillsHubSettings Component', () => {
 
     // Default mock responses
     mockListAvailableSkills.mockResolvedValue([
-      { name: 'MySkill1', description: 'desc1', location: '/path1', isCustom: true },
-      { name: 'Builtin1', description: 'desc2', location: '/path2', isCustom: false },
+      {
+        name: 'MySkill1',
+        description: 'desc1',
+        directory: '/path1',
+        location: '/path1',
+        runtimeFiles: [],
+        isCustom: true,
+        sourceKind: 'custom',
+        metadataFormat: 'legacy-skill-md',
+        platforms: ['generic'],
+        adapterPlatforms: [],
+        hasCommonLayer: false,
+        effective: true,
+        warnings: [],
+      },
+      {
+        name: 'Builtin1',
+        description: 'desc2',
+        directory: '/path2',
+        location: '/path2',
+        runtimeFiles: [],
+        isCustom: false,
+        sourceKind: 'builtin',
+        metadataFormat: 'legacy-skill-md',
+        platforms: ['generic'],
+        adapterPlatforms: [],
+        hasCommonLayer: false,
+        effective: true,
+        warnings: [],
+      },
     ]);
 
     mockDetectAndCountExternalSkills.mockResolvedValue({
@@ -117,8 +164,36 @@ describe('SkillsHubSettings Component', () => {
           source: 'gemini',
           path: '/home/gemini',
           skills: [
-            { name: 'ExtSkill1', description: 'extdesc1', path: '/home/gemini/ext1' },
-            { name: 'ExtSkill2', description: 'extdesc2', path: '/home/gemini/ext2' },
+            {
+              name: 'ExtSkill1',
+              description: 'extdesc1',
+              directory: '/home/gemini/ext1',
+              location: '/home/gemini/ext1',
+              runtimeFiles: [],
+              isCustom: false,
+              sourceKind: 'external',
+              metadataFormat: 'legacy-skill-md',
+              platforms: ['generic'],
+              adapterPlatforms: [],
+              hasCommonLayer: false,
+              effective: true,
+              warnings: [],
+            },
+            {
+              name: 'ExtSkill2',
+              description: 'extdesc2',
+              directory: '/home/gemini/ext2',
+              location: '/home/gemini/ext2',
+              runtimeFiles: [],
+              isCustom: false,
+              sourceKind: 'external',
+              metadataFormat: 'legacy-skill-md',
+              platforms: ['generic'],
+              adapterPlatforms: [],
+              hasCommonLayer: false,
+              effective: true,
+              warnings: [],
+            },
           ],
         },
       ],
@@ -207,10 +282,70 @@ describe('SkillsHubSettings Component', () => {
     });
   });
 
+  it('should open external skill preview when clicking row, not import immediately', async () => {
+    mockImportSkillWithSymlink.mockResolvedValue({ success: true });
+
+    render(<SkillsHubSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('external-skill-row-ExtSkill1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('external-skill-row-ExtSkill1'));
+
+    await waitFor(() => {
+      expect(screen.getByText('View external skill: ExtSkill1')).toBeInTheDocument();
+    });
+
+    expect(mockImportSkillWithSymlink).not.toHaveBeenCalled();
+
+    const previewModal = await screen.findByTestId('mock-modal');
+    fireEvent.click(within(previewModal).getByText('Import'));
+
+    await waitFor(() => {
+      expect(mockImportSkillWithSymlink).toHaveBeenCalledWith({ skillPath: '/home/gemini/ext1' });
+    });
+  });
+
+  it('should show friendly warning when import reports skill already exists', async () => {
+    const { Message } = await import('@arco-design/web-react');
+    mockImportSkillWithSymlink.mockResolvedValue({
+      success: false,
+      msg: 'Skill "lark-minutes" already exists',
+    });
+
+    render(<SkillsHubSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText('ExtSkill1')).toBeInTheDocument();
+    });
+
+    const importButtons = screen.getAllByText('Import');
+    fireEvent.click(importButtons[0]);
+
+    await waitFor(() => {
+      expect(Message.warning).toHaveBeenCalled();
+    });
+  });
+
   it('should call delete endpoint when deleting custom skill', async () => {
     // Modify mock to only return the custom skill
     mockListAvailableSkills.mockResolvedValue([
-      { name: 'MySkill1', description: 'desc1', location: '/path1', isCustom: true },
+      {
+        name: 'MySkill1',
+        description: 'desc1',
+        directory: '/path1',
+        location: '/path1',
+        runtimeFiles: [],
+        isCustom: true,
+        sourceKind: 'custom',
+        metadataFormat: 'legacy-skill-md',
+        platforms: ['generic'],
+        adapterPlatforms: [],
+        hasCommonLayer: false,
+        effective: true,
+        warnings: [],
+      },
     ]);
 
     const { Modal } = await import('@arco-design/web-react');
@@ -218,21 +353,26 @@ describe('SkillsHubSettings Component', () => {
     render(<SkillsHubSettings />);
 
     await waitFor(() => {
-      expect(screen.getByText('MySkill1')).toBeInTheDocument();
+      expect(screen.getByTestId('my-skill-row-MySkill1')).toBeInTheDocument();
     });
 
-    // Using testid because ARCO icons are mocked as spans with test ids
-    const deleteButtons = screen.getAllByTestId('icon-delete');
-    fireEvent.click(deleteButtons[0].parentElement!);
+    fireEvent.click(screen.getByTestId('my-skill-row-MySkill1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('my-skill-preview-delete')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('my-skill-preview-delete'));
+
+    mockDeleteSkill.mockResolvedValue({ success: true });
 
     await waitFor(() => {
       expect(Modal.confirm).toHaveBeenCalled();
-      const args = vi.mocked(Modal.confirm).mock.calls[0][0];
-      // Execute the ok callback to trigger actual deletion
-      if (args.onOk) args.onOk();
     });
-
-    mockDeleteSkill.mockResolvedValue({ success: true });
+    const args = vi.mocked(Modal.confirm).mock.calls[0][0];
+    if (args.onOk) {
+      await args.onOk();
+    }
 
     await waitFor(() => {
       expect(mockDeleteSkill).toHaveBeenCalledWith({ skillName: 'MySkill1' });

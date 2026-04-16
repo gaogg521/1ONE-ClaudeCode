@@ -93,6 +93,8 @@
   "promptEdit": "編集",
   "promptPreview": "プレビュー",
   "promptPreviewEmpty": "プレビューするコンテンツがありません",
+  "promptEditTooltip": "Markdown でアシスタントのルールを編集",
+  "promptPreviewTooltip": "Markdown のレンダリング結果をプレビュー",
   "deleteAssistantTitle": "アシスタントを削除",
   "deleteAssistantConfirm": "このアシスタントを削除してもよろしいですか？この操作は元に戻せません。",
   "deleteBuiltinAssistantExtra": "ビルトインアシスタントは一覧から削除され、アプリを再起動しても自動では戻りません。コピーを残す場合は先に「複製」をご利用ください。",

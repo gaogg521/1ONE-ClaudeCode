@@ -302,13 +302,18 @@ function buildWithDmgRetry(cmd, targetArch) {
 }
 
 // Clean stale Windows packaging outputs from previous runs
-function cleanupWindowsPackOutput() {
+function cleanupWindowsPackOutput(currentVersion) {
   const outDir = path.resolve(__dirname, '../out');
   if (!fs.existsSync(outDir)) return;
 
   const removed = [];
   const winUnpackedDirRe = /^win(?:-[a-z0-9]+)?-unpacked$/i;
-  const winArtifactFileRe = /-win-[^.]+\.(?:exe|msi|zip|7z)$/i;
+  // Only remove artifacts for the *current version*.
+  // Keeping historical installers/zips allows easy rollback and comparisons.
+  const winArtifactFileRe =
+    typeof currentVersion === 'string' && currentVersion
+      ? new RegExp(`-${currentVersion.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}-win-[^.]+\\.(?:exe|msi|zip|7z)$`, 'i')
+      : null;
 
   for (const entry of fs.readdirSync(outDir, { withFileTypes: true })) {
     const fullPath = path.join(outDir, entry.name);
@@ -319,7 +324,7 @@ function cleanupWindowsPackOutput() {
       continue;
     }
 
-    if (entry.isFile() && winArtifactFileRe.test(entry.name)) {
+    if (entry.isFile() && winArtifactFileRe && winArtifactFileRe.test(entry.name)) {
       fs.rmSync(fullPath, { force: true });
       removed.push(entry.name);
     }
@@ -328,6 +333,16 @@ function cleanupWindowsPackOutput() {
   if (removed.length > 0) {
     console.log(`🧹 Cleaned stale Windows outputs: ${removed.join(', ')}`);
   }
+}
+
+function bumpMinorVersion(version) {
+  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version || '').trim());
+  if (!m) {
+    throw new Error(`Invalid package.json version: "${version}". Expected semver like "1.0.0".`);
+  }
+  const major = Number(m[1]);
+  const minor = Number(m[2]);
+  return `${major}.${minor + 1}.0`;
 }
 
 // Parse command line arguments
@@ -421,8 +436,21 @@ if (forceBuild) console.log('⚡ --force: Force full rebuild');
 const packageJsonPath = path.resolve(__dirname, '../package.json');
 
 try {
-  // 1. Ensure package.json main entry is correct for electron-vite
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+
+  // 0. Auto-bump version for "auto" packaging runs (opt-out via env var).
+  // This keeps Windows artifacts unique so older installers remain in out/.
+  if (args[0] === 'auto' && process.env.ONE_DISABLE_AUTO_BUMP_VERSION !== '1') {
+    const prevVersion = packageJson.version;
+    const nextVersion = bumpMinorVersion(prevVersion);
+    if (nextVersion !== prevVersion) {
+      packageJson.version = nextVersion;
+      fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
+      console.log(`🔖 Auto version bump: ${prevVersion} → ${nextVersion}`);
+    }
+  }
+
+  // 1. Ensure package.json main entry is correct for electron-vite
   if (packageJson.main !== './out/main/index.js') {
     packageJson.main = './out/main/index.js';
     fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
@@ -576,7 +604,7 @@ try {
 
   const isWindowsBuild = builderArgs.includes('--win') || builderArgs.includes('--all');
   if (isWindowsBuild) {
-    cleanupWindowsPackOutput();
+    cleanupWindowsPackOutput(packageJson.version);
   }
 
   const builderCommand = `npx --no-install electron-builder ${builderArgs} ${archFlag} ${nsisInclude} ${publishArg}`;

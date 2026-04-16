@@ -17,6 +17,7 @@ import path from 'path';
 import { existsSync } from 'fs';
 import { getSkillsDir, getBuiltinSkillsCopyDir, getAutoSkillsDir } from '@process/utils/initStorage';
 import { ExtensionRegistry } from '@process/extensions';
+import { readSkillMetadata } from '@process/extensions/resolvers/utils/skillMetadata';
 
 /**
  * Skill 定义（与 aioncli-core 兼容）
@@ -29,6 +30,8 @@ export interface SkillDefinition {
   description: string;
   /** 文件路径 / File path */
   location: string;
+  /** 参与运行时拼装的文件列表 / Runtime files merged for this skill */
+  runtimeFiles?: string[];
   /** 完整内容（延迟加载）/ Full content (lazy loaded) */
   body?: string;
 }
@@ -42,41 +45,6 @@ export interface SkillIndex {
   description: string;
 }
 
-/**
- * 解析 SKILL.md 的 frontmatter
- * Parse frontmatter from SKILL.md
- */
-function parseFrontmatter(content: string): {
-  name?: string;
-  description?: string;
-} {
-  const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-  if (!frontmatterMatch) {
-    return {};
-  }
-
-  const frontmatter = frontmatterMatch[1];
-  const result: { name?: string; description?: string } = {};
-
-  // 解析 name
-  const nameMatch = frontmatter.match(/^name:\s*['"]?([^'"\n]+)['"]?\s*$/m);
-  if (nameMatch) {
-    result.name = nameMatch[1].trim();
-  }
-
-  // 解析 description（支持单引号、双引号、无引号）
-  const descMatch = frontmatter.match(/^description:\s*['"]?(.+?)['"]?\s*$/m);
-  if (descMatch) {
-    result.description = descMatch[1].trim();
-  }
-
-  return result;
-}
-
-/**
- * 移除 frontmatter，只保留 body 内容
- * Remove frontmatter, keep only body content
- */
 function extractBody(content: string): string {
   return content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '').trim();
 }
@@ -163,17 +131,19 @@ export class AcpSkillManager {
         if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
 
         const skillName = entry.name;
-        const skillFile = path.join(builtinDir, skillName, 'SKILL.md');
-        if (!existsSync(skillFile)) continue;
+        const skillDir = path.join(builtinDir, skillName);
+        const metadata = readSkillMetadata(skillDir, {
+          sourceKind: 'builtin',
+          isCustom: false,
+        });
+        if (!metadata) continue;
 
         try {
-          const content = await fs.readFile(skillFile, 'utf-8');
-          const { name, description } = parseFrontmatter(content);
-
           const skillDef: SkillDefinition = {
-            name: name || skillName,
-            description: description || `Builtin Skill: ${skillName}`,
-            location: skillFile,
+            name: metadata.name || skillName,
+            description: metadata.description || `Builtin Skill: ${skillName}`,
+            location: metadata.location,
+            runtimeFiles: metadata.runtimeFiles,
             // body 不在这里加载，按需获取
           };
 
@@ -228,6 +198,7 @@ export class AcpSkillManager {
           name: extSkill.name,
           description: extSkill.description,
           location: extSkill.location,
+          runtimeFiles: extSkill.runtimeFiles,
         };
 
         this.extensionSkills.set(extSkill.name, skillDef);
@@ -286,17 +257,19 @@ export class AcpSkillManager {
           // Skip if already discovered (builtin-skills/ takes precedence)
           if (this.skills.has(skillName)) continue;
 
-          const skillFile = path.join(dir, skillName, 'SKILL.md');
-          if (!existsSync(skillFile)) continue;
+          const skillDir = path.join(dir, skillName);
+          const metadata = readSkillMetadata(skillDir, {
+            sourceKind: dir === this.skillsDir ? 'custom' : 'builtin',
+            isCustom: dir === this.skillsDir,
+          });
+          if (!metadata) continue;
 
           try {
-            const content = await fs.readFile(skillFile, 'utf-8');
-            const { name, description } = parseFrontmatter(content);
-
             this.skills.set(skillName, {
-              name: name || skillName,
-              description: description || `Skill: ${skillName}`,
-              location: skillFile,
+              name: metadata.name || skillName,
+              description: metadata.description || `Skill: ${skillName}`,
+              location: metadata.location,
+              runtimeFiles: metadata.runtimeFiles,
             });
           } catch (error) {
             console.warn(`[AcpSkillManager] Failed to load skill ${skillName}:`, error);
@@ -393,8 +366,14 @@ export class AcpSkillManager {
     // 如果 body 还没加载，现在加载
     if (skill.body === undefined) {
       try {
-        const content = await fs.readFile(skill.location, 'utf-8');
-        skill.body = extractBody(content);
+        const runtimeFiles = skill.runtimeFiles && skill.runtimeFiles.length > 0 ? skill.runtimeFiles : [skill.location];
+        const parts = await Promise.all(
+          runtimeFiles.map(async (runtimeFile) => {
+            const content = await fs.readFile(runtimeFile, 'utf-8');
+            return extractBody(content);
+          })
+        );
+        skill.body = parts.filter((part) => part.trim().length > 0).join('\n\n').trim();
       } catch (error) {
         console.warn(`[AcpSkillManager] Failed to load skill body for ${name}:`, error);
         skill.body = '';

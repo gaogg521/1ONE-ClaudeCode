@@ -3,9 +3,21 @@
  * Contains name/avatar fields, agent selector, rules editor, and skills section.
  */
 import type { AssistantListItem, SkillInfo } from './types';
+import type { SkillPlatform } from '@/common/types/skillMetadata';
 import EmojiPicker from '@/renderer/components/chat/EmojiPicker';
 import MarkdownView from '@/renderer/components/Markdown';
-import { Avatar, Button, Checkbox, Collapse, Drawer, Input, Select, Tag, Typography } from '@arco-design/web-react';
+import {
+  Avatar,
+  Button,
+  Checkbox,
+  Collapse,
+  Drawer,
+  Input,
+  Select,
+  Tag,
+  Tooltip,
+  Typography,
+} from '@arco-design/web-react';
 import { Close, Delete, Plus, Robot } from '@icon-park/react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -44,6 +56,7 @@ type AssistantEditDrawerProps = {
   setSkillsModalVisible: (v: boolean) => void;
 
   // Active assistant info
+  assistants: AssistantListItem[];
   activeAssistant: AssistantListItem | null;
   activeAssistantId: string | null;
   isReadonlyAssistant: boolean;
@@ -83,6 +96,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
   setDeletePendingSkillName,
   setDeleteCustomSkillName,
   setSkillsModalVisible,
+  assistants,
   activeAssistant,
   activeAssistantId: _activeAssistantId,
   isReadonlyAssistant,
@@ -146,6 +160,67 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
     : isRuleEditable && promptViewMode === 'edit'
       ? '260px'
       : '220px';
+  const [templateAssistantId, setTemplateAssistantId] = useState<string>('');
+
+  const getPlatformLabel = (platform: SkillPlatform) => {
+    switch (platform) {
+      case '1one':
+        return '1ONE';
+      case 'claude':
+        return 'Claude';
+      case 'openclaw':
+        return 'OpenClaw';
+      case 'cursor':
+        return 'Cursor';
+      default:
+        return t('settings.skillsHub.genericLayer', { defaultValue: 'Generic' });
+    }
+  };
+
+  const renderSkillTags = (skill: SkillInfo) => (
+    <div className='flex flex-wrap gap-4px mt-4px'>
+      {skill.platforms.map((platform) => (
+        <Tag key={`${skill.name}-${platform}`} size='small'>
+          {getPlatformLabel(platform)}
+        </Tag>
+      ))}
+    </div>
+  );
+
+  const templateAssistants = React.useMemo(
+    () =>
+      assistants.filter(
+        (assistant) =>
+          assistant.id !== activeAssistant?.id &&
+          !isExtensionAssistant(assistant) &&
+          Array.isArray(assistant.enabledSkills) &&
+          assistant.enabledSkills.length > 0
+      ),
+    [activeAssistant?.id, assistants, isExtensionAssistant]
+  );
+
+  const selectedTemplateAssistant =
+    templateAssistants.find((assistant) => assistant.id === templateAssistantId) || templateAssistants[0] || null;
+
+  const recommendedSkills = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const assistant of assistants) {
+      if (assistant.id === activeAssistant?.id) continue;
+      if (assistant.presetAgentType !== editAgent) continue;
+      for (const skillName of assistant.enabledSkills || []) {
+        counts.set(skillName, (counts.get(skillName) || 0) + 1);
+      }
+    }
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 8)
+      .map(([name]) => {
+        const matchedSkill = availableSkills.find((skill) => skill.name === name);
+        return matchedSkill ? matchedSkill : null;
+      })
+      .filter((skill): skill is SkillInfo => Boolean(skill));
+  }, [activeAssistant?.id, assistants, availableSkills, editAgent]);
 
   return (
     <Drawer
@@ -349,18 +424,38 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
             >
               {isRuleEditable && (
                 <div className='flex items-center h-36px bg-fill-2 border-b border-border-2 flex-shrink-0'>
-                  <div
-                    className={`flex items-center h-full px-16px cursor-pointer transition-all text-13px font-medium ${promptViewMode === 'edit' ? 'text-primary border-b-2 border-primary bg-bg-1' : 'text-t-secondary hover:text-t-primary'}`}
-                    onClick={() => setPromptViewMode('edit')}
+                  <Tooltip
+                    content={t('settings.promptEditTooltip', {
+                      defaultValue: 'Edit assistant rules as Markdown',
+                    })}
                   >
-                    {t('settings.promptEdit', { defaultValue: 'Edit' })}
-                  </div>
-                  <div
-                    className={`flex items-center h-full px-16px cursor-pointer transition-all text-13px font-medium ${promptViewMode === 'preview' ? 'text-primary border-b-2 border-primary bg-bg-1' : 'text-t-secondary hover:text-t-primary'}`}
-                    onClick={() => setPromptViewMode('preview')}
+                    <div
+                      className={`flex items-center h-full px-16px cursor-pointer transition-all text-13px font-medium select-none border-b-2 border-transparent ${
+                        promptViewMode === 'edit'
+                          ? 'text-primary font-semibold border-primary bg-bg-1'
+                          : 'text-t-primary opacity-80 hover:opacity-100 hover:text-primary'
+                      }`}
+                      onClick={() => setPromptViewMode('edit')}
+                    >
+                      {t('settings.promptEdit', { defaultValue: 'Edit' })}
+                    </div>
+                  </Tooltip>
+                  <Tooltip
+                    content={t('settings.promptPreviewTooltip', {
+                      defaultValue: 'Preview rendered Markdown',
+                    })}
                   >
-                    {t('settings.promptPreview', { defaultValue: 'Preview' })}
-                  </div>
+                    <div
+                      className={`flex items-center h-full px-16px cursor-pointer transition-all text-13px font-medium select-none border-b-2 border-transparent ${
+                        promptViewMode === 'preview'
+                          ? 'text-primary font-semibold border-primary bg-bg-1'
+                          : 'text-t-primary opacity-80 hover:opacity-100 hover:text-primary'
+                      }`}
+                      onClick={() => setPromptViewMode('preview')}
+                    >
+                      {t('settings.promptPreview', { defaultValue: 'Preview' })}
+                    </div>
+                  </Tooltip>
                 </div>
               )}
               <div
@@ -411,6 +506,100 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                 >
                   {t('settings.addSkills', { defaultValue: 'Add Skills' })}
                 </Button>
+              </div>
+
+              <div className='mb-12px p-12px rd-12px bg-fill-1 border border-border-1 flex flex-col gap-12px'>
+                <div className='flex flex-col gap-8px'>
+                  <div className='text-13px font-medium text-t-primary'>
+                    {t('settings.skillRecommendationsTitle', { defaultValue: 'Recommended for this Agent' })}
+                  </div>
+                  {recommendedSkills.length > 0 ? (
+                    <div className='flex flex-wrap gap-8px'>
+                      {recommendedSkills.map((skill) => {
+                        const isSelected = selectedSkills.includes(skill.name);
+                        return (
+                          <Button
+                            key={`recommended-${skill.name}`}
+                            size='mini'
+                            type={isSelected ? 'primary' : 'outline'}
+                            className='rounded-[100px]'
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedSkills(selectedSkills.filter((name) => name !== skill.name));
+                              } else {
+                                setSelectedSkills([...selectedSkills, skill.name]);
+                              }
+                            }}
+                          >
+                            {skill.name}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className='text-12px text-t-secondary'>
+                      {t('settings.skillRecommendationsEmpty', {
+                        defaultValue: 'No recommendations yet for this Agent type.',
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className='flex flex-col gap-8px'>
+                  <div className='text-13px font-medium text-t-primary'>
+                    {t('settings.skillTemplatesTitle', { defaultValue: 'Skill Templates' })}
+                  </div>
+                  {templateAssistants.length > 0 ? (
+                    <div className='flex flex-col sm:flex-row gap-8px'>
+                      <Select
+                        className='flex-1'
+                        value={selectedTemplateAssistant?.id}
+                        onChange={(value) => setTemplateAssistantId(String(value))}
+                        placeholder={t('settings.skillTemplateSelectPlaceholder', {
+                          defaultValue: 'Choose an assistant template',
+                        })}
+                      >
+                        {templateAssistants.map((assistant) => (
+                          <Select.Option key={assistant.id} value={assistant.id}>
+                            {assistant.name}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                      <div className='flex gap-8px'>
+                        <Button
+                          size='small'
+                          type='outline'
+                          disabled={!selectedTemplateAssistant}
+                          onClick={() => {
+                            if (!selectedTemplateAssistant) return;
+                            setSelectedSkills(selectedTemplateAssistant.enabledSkills || []);
+                          }}
+                        >
+                          {t('settings.applySkillTemplate', { defaultValue: 'Apply Template' })}
+                        </Button>
+                        <Button
+                          size='small'
+                          type='outline'
+                          disabled={!selectedTemplateAssistant}
+                          onClick={() => {
+                            if (!selectedTemplateAssistant) return;
+                            setSelectedSkills(
+                              Array.from(new Set([...(selectedTemplateAssistant.enabledSkills || []), ...selectedSkills]))
+                            );
+                          }}
+                        >
+                          {t('settings.mergeSkillTemplate', { defaultValue: 'Merge Template' })}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className='text-12px text-t-secondary'>
+                      {t('settings.skillTemplatesEmpty', {
+                        defaultValue: 'No assistant templates with skills available yet.',
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <Collapse defaultActiveKey={['custom-skills']}>
@@ -570,6 +759,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                             {skill.description && (
                               <div className='text-12px text-t-secondary mt-2px line-clamp-2'>{skill.description}</div>
                             )}
+                            {renderSkillTags(skill)}
                           </div>
                         </div>
                       ))}

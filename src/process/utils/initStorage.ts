@@ -37,6 +37,7 @@ import {
   BUILTIN_IMAGE_GEN_LEGACY_NAMES,
   BUILTIN_IMAGE_GEN_NAME,
 } from '../resources/builtinMcp/constants';
+import { readSkillMetadata, resolveSkillRuntimeFiles } from '@process/extensions/resolvers/utils/skillMetadata';
 // Platform and architecture types (moved from deleted updateConfig)
 type PlatformType = 'win32' | 'darwin' | 'linux';
 type ArchitectureType = 'x64' | 'arm64' | 'ia32' | 'arm';
@@ -1160,31 +1161,59 @@ export const loadSkillsContent = async (enabledSkills: string[]): Promise<string
   const skillContents: string[] = [];
 
   for (const skillName of enabledSkills) {
-    // 1. Auto-enabled builtin: builtin-skills/_builtin/{skillName}/SKILL.md
-    const builtinSkillFile = path.join(builtinSkillsDir, skillName, 'SKILL.md');
-    // 2. Bundled skill: builtin-skills/{skillName}/SKILL.md
-    const bundledSkillFile = path.join(getBuiltinSkillsCopyDir(), skillName, 'SKILL.md');
-    // 3. User custom: skills/{skillName}/SKILL.md
-    const skillDirFile = path.join(skillsDir, skillName, 'SKILL.md');
-    // 向后兼容：扁平结构 {skillName}.md
-    // Backward compatible: flat structure {skillName}.md
-    const skillFlatFile = path.join(skillsDir, `${skillName}.md`);
+    const candidateDirs = [
+      path.join(builtinSkillsDir, skillName),
+      path.join(getBuiltinSkillsCopyDir(), skillName),
+      path.join(skillsDir, skillName),
+    ];
 
     try {
-      let content: string | null = null;
+      let contentParts: string[] = [];
+      let displayName = skillName;
 
-      if (existsSync(builtinSkillFile)) {
-        content = await fs.readFile(builtinSkillFile, 'utf-8');
-      } else if (existsSync(bundledSkillFile)) {
-        content = await fs.readFile(bundledSkillFile, 'utf-8');
-      } else if (existsSync(skillDirFile)) {
-        content = await fs.readFile(skillDirFile, 'utf-8');
-      } else if (existsSync(skillFlatFile)) {
-        content = await fs.readFile(skillFlatFile, 'utf-8');
+      for (const candidateDir of candidateDirs) {
+        if (!existsSync(candidateDir)) continue;
+
+        const metadata = readSkillMetadata(candidateDir, {
+          sourceKind: candidateDir.startsWith(path.resolve(getBuiltinSkillsCopyDir())) ? 'builtin' : 'custom',
+          isCustom: !candidateDir.startsWith(path.resolve(getBuiltinSkillsCopyDir())),
+        });
+
+        const runtimeFiles = resolveSkillRuntimeFiles(candidateDir);
+        if (metadata) {
+          displayName = metadata.name || displayName;
+        }
+
+        if (runtimeFiles.length > 0) {
+          const loadedParts = await Promise.all(
+            runtimeFiles.map(async (runtimeFile) => {
+              try {
+                return await fs.readFile(runtimeFile, 'utf-8');
+              } catch {
+                return '';
+              }
+            })
+          );
+          contentParts = loadedParts.filter((part) => part.trim().length > 0);
+          if (contentParts.length > 0) {
+            break;
+          }
+        }
+
+        // 向后兼容：扁平结构 {skillName}.md
+        // Backward compatible: flat structure {skillName}.md
+        const skillFlatFile = path.join(skillsDir, `${skillName}.md`);
+        if (candidateDir === path.join(skillsDir, skillName) && existsSync(skillFlatFile)) {
+          const flatContent = await fs.readFile(skillFlatFile, 'utf-8');
+          if (flatContent.trim()) {
+            contentParts = [flatContent];
+            break;
+          }
+        }
       }
 
-      if (content && content.trim()) {
-        skillContents.push(`## Skill: ${skillName}\n${content}`);
+      if (contentParts.length > 0) {
+        skillContents.push(`## Skill: ${displayName}\n${contentParts.join('\n\n')}`);
       }
     } catch (error) {
       console.warn(`[1ONE ClaudeCode] Failed to load skill ${skillName}:`, error);

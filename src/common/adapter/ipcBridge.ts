@@ -12,6 +12,7 @@ import type { AcpBackend, AcpBackendAll, AcpModelInfo, PresetAgentType } from '.
 import type { SlashCommandItem } from '../chat/slash/types';
 import type { IMcpServer, IProvider, TChatConversation, TProviderWithModel, ICssTheme } from '../config/storage';
 import type { PreviewHistoryTarget, PreviewSnapshotInfo } from '../types/preview';
+import type { ExternalSkillSource, SkillMetadata } from '../types/skillMetadata';
 import type {
   UpdateCheckRequest,
   UpdateCheckResult,
@@ -266,10 +267,7 @@ export const fs = {
   ), // 写入助手技能文件
   deleteAssistantSkill: bridge.buildProvider<boolean, { assistantId: string }>('delete-assistant-skill'), // 删除助手技能文件
   // 获取可用 skills 列表 / List available skills from skills directory
-  listAvailableSkills: bridge.buildProvider<
-    Array<{ name: string; description: string; location: string; isCustom: boolean }>,
-    void
-  >('list-available-skills'),
+  listAvailableSkills: bridge.buildProvider<SkillMetadata[], void>('list-available-skills'),
   // 读取 skill 信息（不导入）/ Read skill info without importing
   readSkillInfo: bridge.buildProvider<IBridgeResponse<{ name: string; description: string }>, { skillPath: string }>(
     'read-skill-info'
@@ -286,17 +284,9 @@ export const fs = {
     'detect-common-skill-paths'
   ),
   // 检测外部 skills 并统计数量（用于 Skills Hub）/ Detect external skills with counts (for Skills Hub)
-  detectAndCountExternalSkills: bridge.buildProvider<
-    IBridgeResponse<
-      Array<{
-        name: string;
-        path: string;
-        source: string;
-        skills: Array<{ name: string; description: string; path: string }>;
-      }>
-    >,
-    void
-  >('detect-and-count-external-skills'),
+  detectAndCountExternalSkills: bridge.buildProvider<IBridgeResponse<ExternalSkillSource[]>, void>(
+    'detect-and-count-external-skills'
+  ),
   // 符号链接方式导入 skill / Import skill via symlink
   importSkillWithSymlink: bridge.buildProvider<IBridgeResponse<{ skillName: string }>, { skillPath: string }>(
     'import-skill-with-symlink'

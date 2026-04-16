@@ -97,7 +97,7 @@ export const useAssistantSkills = ({
     }
   }, [customPathName, customPathValue, handleRefreshExternal, message, t]);
 
-  const handleAddFoundSkills = (skillsToAdd: Array<{ name: string; description: string; path: string }>) => {
+  const handleAddFoundSkills = (skillsToAdd: ExternalSource['skills']) => {
     let addedCount = 0;
     let skippedCount = 0;
     const newPendingSkills: PendingSkill[] = [];
@@ -105,7 +105,7 @@ export const useAssistantSkills = ({
     const newSelectedSkills: string[] = [];
 
     for (const skill of skillsToAdd) {
-      const { name, description, path: sPath } = skill;
+      const { name, description, directory } = skill;
 
       // Check if already in this assistant's list
       const alreadyInAssistant = customSkills.includes(name) || newCustomSkillNames.includes(name);
@@ -121,7 +121,7 @@ export const useAssistantSkills = ({
 
       if (!existsInAvailable && !existsInPending) {
         // Only add to pending if not in system
-        newPendingSkills.push({ path: sPath, name, description });
+        newPendingSkills.push({ path: directory, name, description });
       }
 
       newCustomSkillNames.push(name);

@@ -126,7 +126,7 @@ export const useAssistantEditor = ({
 
       // Load skills list for all non-extension assistants (builtin + custom)
       const skillsList = await ipcBridge.fs.listAvailableSkills.invoke();
-      setAvailableSkills(skillsList);
+      setAvailableSkills(skillsList.filter((skill) => skill.effective));
       setSelectedSkills(assistant.enabledSkills || []);
       setCustomSkills(assistant.customSkillNames || []);
     } catch (error) {
@@ -157,7 +157,7 @@ export const useAssistantEditor = ({
     // Load available skills list
     try {
       const skillsList = await ipcBridge.fs.listAvailableSkills.invoke();
-      setAvailableSkills(skillsList);
+      setAvailableSkills(skillsList.filter((skill) => skill.effective));
     } catch (error) {
       console.error('Failed to load skills:', error);
       setAvailableSkills([]);
@@ -191,7 +191,7 @@ export const useAssistantEditor = ({
 
       setEditContext(context);
       setEditSkills(skills);
-      setAvailableSkills(skillsList);
+      setAvailableSkills(skillsList.filter((skill) => skill.effective));
       setSelectedSkills(assistant.enabledSkills || []);
       setCustomSkills(assistant.customSkillNames || []);
     } catch (error) {
@@ -244,7 +244,7 @@ export const useAssistantEditor = ({
           }
           // Reload skills list after successful import
           const skillsList = await ipcBridge.fs.listAvailableSkills.invoke();
-          setAvailableSkills(skillsList);
+          setAvailableSkills(skillsList.filter((skill) => skill.effective));
         }
       }
 

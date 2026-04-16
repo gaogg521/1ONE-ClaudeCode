@@ -93,6 +93,8 @@
   "promptEdit": "Düzenle",
   "promptPreview": "Önizleme",
   "promptPreviewEmpty": "Önizlenecek içerik yok",
+  "promptEditTooltip": "Asistan kurallarını Markdown olarak düzenle",
+  "promptPreviewTooltip": "Oluşturulan Markdown önizlemesi",
   "deleteAssistantTitle": "Asistanı Sil",
   "deleteAssistantConfirm": "Bu asistanı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
   "deleteBuiltinAssistantExtra": "Yerleşik asistanlar listeden kaldırılır ve uygulamayı yeniden başlattığınızda geri gelmez. Önce kopya oluşturmak için 'Çoğalt'ı kullanabilirsiniz.",

@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { useConversationTabs } from '../../hooks/ConversationTabsContext';
-import { isConversationPinned } from '../utils/groupingHelpers';
+import { isConversationFavorited, isConversationPinned } from '../utils/groupingHelpers';
 
 type UseConversationActionsParams = {
   batchMode: boolean;
@@ -244,6 +244,35 @@ export const useConversationActions = ({
     [t]
   );
 
+  const handleToggleFavorite = useCallback(
+    async (conversation: TChatConversation) => {
+      const favorited = isConversationFavorited(conversation);
+
+      try {
+        const success = await ipcBridge.conversation.update.invoke({
+          id: conversation.id,
+          updates: {
+            extra: {
+              favorited: !favorited,
+              favoritedAt: favorited ? undefined : Date.now(),
+            } as Partial<TChatConversation['extra']>,
+          } as Partial<TChatConversation>,
+          mergeExtra: true,
+        });
+
+        if (success) {
+          emitter.emit('chat.history.refresh');
+        } else {
+          Message.error(t('conversation.history.favoriteFailed'));
+        }
+      } catch (error) {
+        console.error('Failed to toggle favorite conversation:', error);
+        Message.error(t('conversation.history.favoriteFailed'));
+      }
+    },
+    [t]
+  );
+
   const handleMenuVisibleChange = useCallback((conversationId: string, visible: boolean) => {
     setDropdownVisibleId(visible ? conversationId : null);
   }, []);
@@ -265,6 +294,7 @@ export const useConversationActions = ({
     handleRenameConfirm,
     handleRenameCancel,
     handleTogglePin,
+    handleToggleFavorite,
     handleMenuVisibleChange,
     handleOpenMenu,
   };

@@ -17,6 +17,11 @@ export const isConversationPinned = (conversation: TChatConversation): boolean =
   return Boolean(extra?.pinned);
 };
 
+export const isConversationFavorited = (conversation: TChatConversation): boolean => {
+  const extra = conversation.extra as { favorited?: boolean } | undefined;
+  return Boolean(extra?.favorited);
+};
+
 export const isCronJobConversation = (conversation: TChatConversation): boolean => {
   const extra = conversation.extra as { cronJobId?: string } | undefined;
   return Boolean(extra?.cronJobId);
@@ -26,6 +31,14 @@ export const getConversationPinnedAt = (conversation: TChatConversation): number
   const extra = conversation.extra as { pinnedAt?: number } | undefined;
   if (typeof extra?.pinnedAt === 'number') {
     return extra.pinnedAt;
+  }
+  return 0;
+};
+
+export const getConversationFavoritedAt = (conversation: TChatConversation): number => {
+  const extra = conversation.extra as { favoritedAt?: number } | undefined;
+  if (typeof extra?.favoritedAt === 'number') {
+    return extra.favoritedAt;
   }
   return 0;
 };
@@ -112,11 +125,19 @@ export const buildGroupedHistory = (
       return getConversationPinnedAt(b) - getConversationPinnedAt(a);
     });
 
+  // Favorites are a quick-access list. To avoid duplicates, we exclude pinned items from favorites section
+  // (a conversation can still be favorited, it will just appear in the pinned section UI).
+  const favoritedConversations = visibleConversations
+    .filter((conversation) => isConversationFavorited(conversation) && !isConversationPinned(conversation))
+    .toSorted((a, b) => getConversationFavoritedAt(b) - getConversationFavoritedAt(a));
+
   const normalConversations = visibleConversations.filter(
-    (conversation) => !isConversationPinned(conversation) && !isCronJobConversation(conversation)
+    (conversation) =>
+      !isConversationPinned(conversation) && !isConversationFavorited(conversation) && !isCronJobConversation(conversation)
   );
 
   return {
+    favoritedConversations,
     pinnedConversations,
     timelineSections: groupConversationsByWorkspace(normalConversations, t),
   };

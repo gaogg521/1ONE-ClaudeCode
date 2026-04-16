@@ -133,6 +133,7 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
         setDeletePendingSkillName={editor.setDeletePendingSkillName}
         setDeleteCustomSkillName={editor.setDeleteCustomSkillName}
         setSkillsModalVisible={editor.setSkillsModalVisible}
+        assistants={assistants}
         activeAssistant={activeAssistant}
         activeAssistantId={activeAssistantId}
         isReadonlyAssistant={isReadonlyAssistant}

@@ -93,6 +93,8 @@
   "promptEdit": "編輯",
   "promptPreview": "預覽",
   "promptPreviewEmpty": "暫無內容可預覽",
+  "promptEditTooltip": "以 Markdown 編輯助手規則",
+  "promptPreviewTooltip": "預覽 Markdown 渲染效果",
   "deleteAssistantTitle": "刪除助理",
   "deleteAssistantConfirm": "確定要刪除此助理嗎？此操作無法復原。",
   "deleteBuiltinAssistantExtra": "內建助理將從列表中移除，重新啟動應用後也不會自動恢復。如需保留副本，可先使用「複製」。",

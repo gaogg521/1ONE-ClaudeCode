@@ -6,7 +6,7 @@
 
 import type { TChatConversation } from '@/common/config/storage';
 import DirectorySelectionModal from '@/renderer/components/settings/DirectorySelectionModal';
-import { CronJobIndicator, useCronJobsMap } from '@/renderer/pages/cron';
+import { useCronJobsMap } from '@/renderer/pages/cron';
 import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Button, Empty, Input, Modal } from '@arco-design/web-react';
@@ -75,6 +75,7 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
     isConversationGenerating,
     hasCompletionUnread,
     expandedWorkspaces,
+    favoritedConversations,
     pinnedConversations,
     timelineSections,
     handleToggleWorkspace,
@@ -102,6 +103,7 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
     handleRenameConfirm,
     handleRenameCancel,
     handleTogglePin,
+    handleToggleFavorite,
     handleMenuVisibleChange,
     handleOpenMenu,
   } = useConversationActions({
@@ -160,6 +162,7 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
       onDelete: handleDeleteClick,
       onExport: handleExportConversation,
       onTogglePin: handleTogglePin,
+      onToggleFavorite: handleToggleFavorite,
       getJobStatus,
     }),
     [
@@ -179,6 +182,7 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
       handleDeleteClick,
       handleExportConversation,
       handleTogglePin,
+      handleToggleFavorite,
       getJobStatus,
     ]
   );
@@ -196,7 +200,7 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
   // Collect all sortable IDs for the pinned section
   const pinnedIds = useMemo(() => pinnedConversations.map((c) => c.id), [pinnedConversations]);
 
-  if (timelineSections.length === 0 && pinnedConversations.length === 0) {
+  if (timelineSections.length === 0 && pinnedConversations.length === 0 && favoritedConversations.length === 0) {
     return (
       <div className='py-48px flex-center'>
         <Empty description={t('conversation.history.noHistory')} />
@@ -392,6 +396,21 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
         >
+          {favoritedConversations.length > 0 && (
+            <div className='mb-8px min-w-0'>
+              {!collapsed && (
+                <div className='group flex items-center px-12px py-6px select-none sticky top-0 z-10 bg-fill-2'>
+                  <span className='text-12px text-t-secondary font-medium'>
+                    {t('conversation.history.favoritesSection')}
+                  </span>
+                </div>
+              )}
+              <div className='min-w-0'>
+                {favoritedConversations.map((conversation) => renderConversation(conversation))}
+              </div>
+            </div>
+          )}
+
           {pinnedConversations.length > 0 && (
             <div className='mb-8px min-w-0'>
               {!collapsed && (

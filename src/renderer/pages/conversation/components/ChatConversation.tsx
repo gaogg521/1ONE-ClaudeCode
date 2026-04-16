@@ -12,7 +12,7 @@ import { CronJobManager } from '@/renderer/pages/cron';
 import { usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 import { iconColors } from '@/renderer/styles/colors';
 import { Button, Dropdown, Menu, Tooltip, Typography } from '@arco-design/web-react';
-import { History } from '@icon-park/react';
+import { History, Pushpin, Star } from '@icon-park/react';
 import React, { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -372,8 +372,11 @@ const ChatConversation: React.FC<{
             // Kill worker on model switch — will be rebuilt on next message
             await ipcBridge.conversation.stop.invoke({ conversation_id: conversation.id });
             const existingModel = (conversation as unknown as { model?: Record<string, unknown> }).model;
-            const selected = { ...(existingModel ?? {}), useModel: modelId } as TProviderWithModel;
-            await ipcBridge.conversation.update.invoke({ id: conversation.id, updates: { model: selected } as any });
+            const selected = { ...existingModel, useModel: modelId } as TProviderWithModel;
+            await ipcBridge.conversation.update.invoke({
+              id: conversation.id,
+              updates: { model: selected } as unknown as Partial<TChatConversation>,
+            });
           }}
         />
       );
@@ -428,6 +431,78 @@ const ChatConversation: React.FC<{
 
   const headerExtraNode = (
     <div className='flex items-center gap-8px'>
+      {conversation && (
+        <>
+          <Tooltip
+            content={t(
+              (conversation.extra as { favorited?: boolean } | undefined)?.favorited
+                ? 'conversation.history.unfavorite'
+                : 'conversation.history.favorite'
+            )}
+          >
+            <Button
+              size='mini'
+              type='text'
+              icon={
+                <Star
+                  theme={(conversation.extra as { favorited?: boolean } | undefined)?.favorited ? 'filled' : 'outline'}
+                  size={16}
+                  fill={iconColors.secondary}
+                />
+              }
+              onClick={async (event) => {
+                event.stopPropagation();
+                const favorited = Boolean((conversation.extra as { favorited?: boolean } | undefined)?.favorited);
+                await ipcBridge.conversation.update.invoke({
+                  id: conversation.id,
+                  updates: {
+                    extra: {
+                      favorited: !favorited,
+                      favoritedAt: favorited ? undefined : Date.now(),
+                    } as Partial<TChatConversation['extra']>,
+                  } as Partial<TChatConversation>,
+                  mergeExtra: true,
+                });
+                emitter.emit('chat.history.refresh');
+              }}
+            />
+          </Tooltip>
+          <Tooltip
+            content={t(
+              (conversation.extra as { pinned?: boolean } | undefined)?.pinned
+                ? 'conversation.history.unpin'
+                : 'conversation.history.pin'
+            )}
+          >
+            <Button
+              size='mini'
+              type='text'
+              icon={
+                <Pushpin
+                  theme={(conversation.extra as { pinned?: boolean } | undefined)?.pinned ? 'filled' : 'outline'}
+                  size={16}
+                  fill={iconColors.secondary}
+                />
+              }
+              onClick={async (event) => {
+                event.stopPropagation();
+                const pinned = Boolean((conversation.extra as { pinned?: boolean } | undefined)?.pinned);
+                await ipcBridge.conversation.update.invoke({
+                  id: conversation.id,
+                  updates: {
+                    extra: {
+                      pinned: !pinned,
+                      pinnedAt: pinned ? undefined : Date.now(),
+                    } as Partial<TChatConversation['extra']>,
+                  } as Partial<TChatConversation>,
+                  mergeExtra: true,
+                });
+                emitter.emit('chat.history.refresh');
+              }}
+            />
+          </Tooltip>
+        </>
+      )}
       {conversation?.type === 'openclaw-gateway' && (
         <div className='shrink-0'>
           <StarOfficeMonitorCard

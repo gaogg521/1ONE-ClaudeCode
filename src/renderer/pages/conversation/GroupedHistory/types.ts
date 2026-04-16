@@ -25,6 +25,7 @@ export type TimelineSection = {
 };
 
 export type GroupedHistoryResult = {
+  favoritedConversations: TChatConversation[];
   pinnedConversations: TChatConversation[];
   timelineSections: TimelineSection[];
 };
@@ -58,6 +59,7 @@ export type ConversationRowProps = {
   onDelete: (conversationId: string) => void;
   onExport?: (conversation: TChatConversation) => void;
   onTogglePin: (conversation: TChatConversation) => void;
+  onToggleFavorite: (conversation: TChatConversation) => void;
   getJobStatus: (conversationId: string) => 'none' | 'active' | 'paused' | 'error' | 'unread';
 };
 
@@ -76,6 +78,6 @@ export type DragItem = {
   id: string;
   conversation?: TChatConversation;
   workspaceGroup?: WorkspaceGroup;
-  sourceSection: 'pinned' | string;
+  sourceSection: 'pinned' | 'favorites' | string;
   sourceWorkspace?: string;
 };

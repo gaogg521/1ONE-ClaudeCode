@@ -12,6 +12,8 @@ import https from 'node:https';
 import http from 'node:http';
 import JSZip from 'jszip';
 import { ipcBridge } from '@/common';
+import type { SkillMetadata, SkillSourceKind } from '@/common/types/skillMetadata';
+import { readSkillMetadata } from '@process/extensions/resolvers/utils/skillMetadata';
 import { getSystemDir, getAssistantsDir, getSkillsDir, getBuiltinSkillsCopyDir } from '@process/utils/initStorage';
 import { readDirectoryRecursive } from '@process/utils';
 
@@ -168,6 +170,77 @@ async function deleteAssistantResource(resourceType: ResourceType, filePattern: 
 // File name patterns for rules and skills
 const ruleFilePattern = (id: string, loc: string) => `${id}.${loc}.md`;
 const skillFilePattern = (id: string, loc: string) => `${id}-skills.${loc}.md`;
+
+const SKILL_SOURCE_PRIORITY: Record<SkillSourceKind, number> = {
+  builtin: 0,
+  custom: 1,
+  external: 2,
+  extension: 3,
+};
+
+function isSkillDirectoryEntry(entry: { isDirectory: () => boolean; isSymbolicLink: () => boolean }): boolean {
+  return entry.isDirectory() || entry.isSymbolicLink();
+}
+
+async function collectSkillMetadataFromDirectory(
+  skillsDir: string,
+  options: {
+    sourceKind: SkillSourceKind;
+    isCustom: boolean;
+    sourceLabel?: string;
+  }
+): Promise<SkillMetadata[]> {
+  try {
+    await fs.access(skillsDir);
+    const entries = await fs.readdir(skillsDir, { withFileTypes: true });
+    const skills: SkillMetadata[] = [];
+
+    for (const entry of entries) {
+      if (!isSkillDirectoryEntry(entry)) continue;
+      if (entry.name === '_builtin') continue;
+
+      const skillDir = path.join(skillsDir, entry.name);
+      const metadata = readSkillMetadata(skillDir, options);
+      if (metadata) {
+        skills.push(metadata);
+      }
+    }
+
+    return skills;
+  } catch {
+    return [];
+  }
+}
+
+function markShadowedSkills(skills: SkillMetadata[]): SkillMetadata[] {
+  const effectiveByName = new Map<string, SkillMetadata>();
+  const ordered = [...skills].sort((a, b) => {
+    const priorityDiff = SKILL_SOURCE_PRIORITY[a.sourceKind] - SKILL_SOURCE_PRIORITY[b.sourceKind];
+    if (priorityDiff !== 0) return priorityDiff;
+    return a.name.localeCompare(b.name);
+  });
+
+  return ordered.map((skill) => {
+    const effective = effectiveByName.get(skill.name);
+    if (!effective) {
+      const next: SkillMetadata = { ...skill, effective: true };
+      effectiveByName.set(skill.name, next);
+      return next;
+    }
+
+    return {
+      ...skill,
+      effective: false,
+      shadowedBy: {
+        byName: effective.name,
+        byDirectory: effective.directory,
+        bySourceKind: effective.sourceKind,
+        bySourceLabel: effective.sourceLabel,
+      },
+      warnings: [...skill.warnings, `Shadowed by ${effective.sourceKind}`],
+    };
+  });
+}
 
 export function initFsBridge(): void {
   const canceledZipRequests = new Set<string>();
@@ -796,77 +869,22 @@ export function initFsBridge(): void {
   // 获取可用 skills 列表 / List available skills from both builtin and user directories
   ipcBridge.fs.listAvailableSkills.provider(async () => {
     try {
-      const skills: Array<{
-        name: string;
-        description: string;
-        location: string;
-        isCustom: boolean;
-      }> = [];
+      const builtinSkills = await collectSkillMetadataFromDirectory(getBuiltinSkillsCopyDir(), {
+        sourceKind: 'builtin',
+        isCustom: false,
+        sourceLabel: 'Built-in',
+      });
+      const userSkills = await collectSkillMetadataFromDirectory(getSkillsDir(), {
+        sourceKind: 'custom',
+        isCustom: true,
+        sourceLabel: 'Imported',
+      });
 
-      // 辅助函数：从目录读取 skills
-      const readSkillsFromDir = async (skillsDir: string, isCustomDir: boolean) => {
-        try {
-          await fs.access(skillsDir);
-          const entries = await fs.readdir(skillsDir, { withFileTypes: true });
+      const result = markShadowedSkills([...builtinSkills, ...userSkills]);
 
-          for (const entry of entries) {
-            if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-
-            // 跳过内置 skills 目录（_builtin），这些 skills 自动注入，不需要用户选择
-            // Skip builtin skills directory (_builtin), these are auto-injected, no user selection needed
-            if (entry.name === '_builtin') continue;
-
-            const skillMdPath = path.join(skillsDir, entry.name, 'SKILL.md');
-
-            try {
-              const content = await fs.readFile(skillMdPath, 'utf-8');
-              // 解析 YAML front matter
-              const frontMatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-              if (frontMatterMatch) {
-                const yaml = frontMatterMatch[1];
-                const nameMatch = yaml.match(/^name:\s*(.+)$/m);
-                const descMatch = yaml.match(/^description:\s*['"]?(.+?)['"]?$/m);
-                if (nameMatch) {
-                  skills.push({
-                    name: nameMatch[1].trim(),
-                    description: descMatch ? descMatch[1].trim() : '',
-                    location: skillMdPath,
-                    isCustom: isCustomDir,
-                  });
-                }
-              }
-            } catch {
-              // Skill directory without SKILL.md, skip
-            }
-          }
-        } catch {
-          // Directory doesn't exist, skip
-        }
-      };
-
-      // Read builtin skills from the dedicated builtin-skills/ directory (isCustom: false)
-      const builtinSkillsDir = getBuiltinSkillsCopyDir();
-      const builtinCountBefore = skills.length;
-      await readSkillsFromDir(builtinSkillsDir, false);
-      const builtinCount = skills.length - builtinCountBefore;
-
-      // 读取用户自定义 skills (isCustom: true)
-      const userSkillsDir = getSkillsDir();
-      const userCountBefore = skills.length;
-      await readSkillsFromDir(userSkillsDir, true);
-      const userCount = skills.length - userCountBefore;
-
-      // Deduplicate: if a custom skill has the same name as a builtin, keep builtin
-      const skillMap = new Map<string, { name: string; description: string; location: string; isCustom: boolean }>();
-      for (const skill of skills) {
-        const existing = skillMap.get(skill.name);
-        if (!existing || !skill.isCustom) {
-          skillMap.set(skill.name, skill);
-        }
-      }
-      const result = Array.from(skillMap.values());
-
-      console.log(`[fsBridge] Listed ${result.length} available skills: builtin=${builtinCount}, custom=${userCount}`);
+      console.log(
+        `[fsBridge] Listed ${result.length} available skills: builtin=${builtinSkills.length}, custom=${userSkills.length}`
+      );
 
       return result;
     } catch (error) {
@@ -878,40 +896,22 @@ export function initFsBridge(): void {
   // 读取 skill 信息（不导入）/ Read skill info without importing
   ipcBridge.fs.readSkillInfo.provider(async ({ skillPath }) => {
     try {
-      // 验证 SKILL.md 文件存在 / Verify SKILL.md file exists
-      const skillMdPath = path.join(skillPath, 'SKILL.md');
-      try {
-        await fs.access(skillMdPath);
-      } catch {
+      const metadata = readSkillMetadata(skillPath, {
+        sourceKind: 'external',
+        isCustom: false,
+      });
+      if (!metadata) {
         return {
           success: false,
-          msg: 'SKILL.md file not found in the selected directory',
+          msg: 'No supported skill metadata found in the selected directory',
         };
-      }
-
-      // 读取 SKILL.md 获取 skill 信息 / Read SKILL.md to get skill info
-      const content = await fs.readFile(skillMdPath, 'utf-8');
-      const frontMatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-      let skillName = path.basename(skillPath); // 默认使用目录名 / Default to directory name
-      let skillDescription = '';
-
-      if (frontMatterMatch) {
-        const yaml = frontMatterMatch[1];
-        const nameMatch = yaml.match(/^name:\s*(.+)$/m);
-        const descMatch = yaml.match(/^description:\s*['"]?(.+?)['"]?$/m);
-        if (nameMatch) {
-          skillName = nameMatch[1].trim();
-        }
-        if (descMatch) {
-          skillDescription = descMatch[1].trim();
-        }
       }
 
       return {
         success: true,
         data: {
-          name: skillName,
-          description: skillDescription,
+          name: metadata.name,
+          description: metadata.description,
         },
         msg: 'Skill info loaded successfully',
       };
@@ -927,29 +927,18 @@ export function initFsBridge(): void {
   // 导入 skill 目录 / Import skill directory
   ipcBridge.fs.importSkill.provider(async ({ skillPath }) => {
     try {
-      // 验证 SKILL.md 文件存在 / Verify SKILL.md file exists
-      const skillMdPath = path.join(skillPath, 'SKILL.md');
-      try {
-        await fs.access(skillMdPath);
-      } catch {
+      const metadata = readSkillMetadata(skillPath, {
+        sourceKind: 'external',
+        isCustom: false,
+      });
+      if (!metadata) {
         return {
           success: false,
-          msg: 'SKILL.md file not found in the selected directory',
+          msg: 'No supported skill metadata found in the selected directory',
         };
       }
 
-      // 读取 SKILL.md 获取 skill 名称 / Read SKILL.md to get skill name
-      const content = await fs.readFile(skillMdPath, 'utf-8');
-      const frontMatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-      let skillName = path.basename(skillPath); // 默认使用目录名 / Default to directory name
-
-      if (frontMatterMatch) {
-        const yaml = frontMatterMatch[1];
-        const nameMatch = yaml.match(/^name:\s*(.+)$/m);
-        if (nameMatch) {
-          skillName = nameMatch[1].trim();
-        }
-      }
+      const skillName = metadata.name;
 
       // 获取用户 skills 目录 / Get user skills directory
       const userSkillsDir = getSkillsDir();
@@ -1012,55 +1001,37 @@ export function initFsBridge(): void {
       console.log(`[fsBridge] Found ${entries.length} entries in ${folderPath}`);
 
       for (const entry of entries) {
-        if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+        if (!isSkillDirectoryEntry(entry)) continue;
 
         const skillDir = path.join(folderPath, entry.name);
-        const skillMdPath = path.join(skillDir, 'SKILL.md');
-
-        try {
-          const content = await fs.readFile(skillMdPath, 'utf-8');
-          // 解析 YAML front matter
-          const frontMatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-          if (frontMatterMatch) {
-            const yaml = frontMatterMatch[1];
-            const nameMatch = yaml.match(/^name:\s*(.+)$/m);
-            const descMatch = yaml.match(/^description:\s*['"]?(.+?)['"]?$/m);
-            if (nameMatch) {
-              skills.push({
-                name: nameMatch[1].trim(),
-                description: descMatch ? descMatch[1].trim() : '',
-                path: skillDir,
-              });
-              console.log(`[fsBridge] Found skill in subdirectory: ${nameMatch[1].trim()}`);
-            }
-          }
-        } catch {
-          // Skill directory without SKILL.md, skip
+        const metadata = readSkillMetadata(skillDir, {
+          sourceKind: 'external',
+          isCustom: false,
+        });
+        if (metadata) {
+          skills.push({
+            name: metadata.name,
+            description: metadata.description,
+            path: skillDir,
+          });
+          console.log(`[fsBridge] Found skill in subdirectory: ${metadata.name}`);
         }
       }
 
       // Si no se encontraron skills en subdirectorios, probamos si la carpeta seleccionada en sí es una skill
       if (skills.length === 0) {
         console.log(`[fsBridge] No skills in subdirectories, checking if ${folderPath} is a skill itself`);
-        const skillMdPath = path.join(folderPath, 'SKILL.md');
-        try {
-          const content = await fs.readFile(skillMdPath, 'utf-8');
-          const frontMatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-          if (frontMatterMatch) {
-            const yaml = frontMatterMatch[1];
-            const nameMatch = yaml.match(/^name:\s*(.+)$/m);
-            const descMatch = yaml.match(/^description:\s*['"]?(.+?)['"]?$/m);
-            if (nameMatch) {
-              skills.push({
-                name: nameMatch[1].trim(),
-                description: descMatch ? descMatch[1].trim() : '',
-                path: folderPath,
-              });
-              console.log(`[fsBridge] Found skill in the folder itself: ${nameMatch[1].trim()}`);
-            }
-          }
-        } catch {
-          // Not a skill directory
+        const metadata = readSkillMetadata(folderPath, {
+          sourceKind: 'external',
+          isCustom: false,
+        });
+        if (metadata) {
+          skills.push({
+            name: metadata.name,
+            description: metadata.description,
+            path: folderPath,
+          });
+          console.log(`[fsBridge] Found skill in the folder itself: ${metadata.name}`);
         }
       }
 
@@ -1182,6 +1153,32 @@ export function initFsBridge(): void {
     try {
       const homedir = os.homedir();
       const userSkillsDir = getSkillsDir();
+      const builtinSkillsDir = getBuiltinSkillsCopyDir();
+
+      // Build a set of skill names that already exist locally (user + builtin).
+      // Import logic uses the skill "name" as the destination directory name,
+      // so name-based filtering matches the actual "already exists" behavior.
+      const existingSkillNames = new Set<string>();
+      try {
+        const userEntries = await fs.readdir(userSkillsDir, { withFileTypes: true });
+        for (const entry of userEntries) {
+          if (!isSkillDirectoryEntry(entry)) continue;
+          if (entry.name === '_builtin') continue;
+          existingSkillNames.add(entry.name);
+        }
+      } catch {
+        // user skills dir might not exist yet
+      }
+      try {
+        const builtinEntries = await fs.readdir(builtinSkillsDir, { withFileTypes: true });
+        for (const entry of builtinEntries) {
+          if (!isSkillDirectoryEntry(entry)) continue;
+          if (entry.name === '_builtin') continue;
+          existingSkillNames.add(entry.name);
+        }
+      } catch {
+        // builtin copy dir might not exist yet in some modes
+      }
       const builtinCandidates = [
         {
           name: 'Global Agents',
@@ -1225,7 +1222,7 @@ export function initFsBridge(): void {
         name: string;
         path: string;
         source: string;
-        skills: Array<{ name: string; description: string; path: string }>;
+        skills: SkillMetadata[];
       }> = [];
 
       for (const candidate of candidates) {
@@ -1234,44 +1231,22 @@ export function initFsBridge(): void {
           const entries = await fs.readdir(candidate.path, {
             withFileTypes: true,
           });
-          const skills: Array<{
-            name: string;
-            description: string;
-            path: string;
-          }> = [];
+          const skills: SkillMetadata[] = [];
 
           for (const entry of entries) {
-            if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+            if (!isSkillDirectoryEntry(entry)) continue;
             const skillDir = path.join(candidate.path, entry.name);
 
-            // Helper: try to parse a single skill directory with SKILL.md
-            const tryParseSkill = async (dir: string, fallbackName: string) => {
-              const skillMdPath = path.join(dir, 'SKILL.md');
-              try {
-                const content = await fs.readFile(skillMdPath, 'utf-8');
-                const frontMatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-                if (frontMatterMatch) {
-                  const yaml = frontMatterMatch[1];
-                  const nameMatch = yaml.match(/^name:\s*(.+)$/m);
-                  const descMatch = yaml.match(/^description:\s*['"]?(.+?)['"]?$/m);
-                  const skillName = nameMatch ? nameMatch[1].trim() : fallbackName;
-
-                  return {
-                    name: skillName,
-                    description: descMatch ? descMatch[1].trim() : '',
-                    path: dir,
-                  };
-                }
-              } catch {
-                // No SKILL.md or parse error
-              }
-              return null;
-            };
-
             // Case 1: Direct skill — has SKILL.md at the root of the entry
-            const directSkill = await tryParseSkill(skillDir, entry.name);
+            const directSkill = readSkillMetadata(skillDir, {
+              sourceKind: 'external',
+              isCustom: false,
+              sourceLabel: candidate.name,
+            });
             if (directSkill) {
-              skills.push(directSkill);
+              if (!existingSkillNames.has(directSkill.name)) {
+                skills.push(directSkill);
+              }
               continue;
             }
 
@@ -1283,11 +1258,17 @@ export function initFsBridge(): void {
                 withFileTypes: true,
               });
               for (const nestedEntry of nestedEntries) {
-                if (!nestedEntry.isDirectory() && !nestedEntry.isSymbolicLink()) continue;
+                if (!isSkillDirectoryEntry(nestedEntry)) continue;
                 const nestedDir = path.join(nestedSkillsDir, nestedEntry.name);
-                const nestedSkill = await tryParseSkill(nestedDir, nestedEntry.name);
+                const nestedSkill = readSkillMetadata(nestedDir, {
+                  sourceKind: 'external',
+                  isCustom: false,
+                  sourceLabel: candidate.name,
+                });
                 if (nestedSkill) {
-                  skills.push(nestedSkill);
+                  if (!existingSkillNames.has(nestedSkill.name)) {
+                    skills.push(nestedSkill);
+                  }
                 }
               }
             } catch {
@@ -1300,7 +1281,7 @@ export function initFsBridge(): void {
               name: candidate.name,
               path: candidate.path,
               source: candidate.source,
-              skills,
+              skills: markShadowedSkills(skills),
             });
           }
         } catch {
@@ -1325,23 +1306,18 @@ export function initFsBridge(): void {
   // 符号链接方式导入 skill / Import skill via symlink
   ipcBridge.fs.importSkillWithSymlink.provider(async ({ skillPath }) => {
     try {
-      const skillMdPath = path.join(skillPath, 'SKILL.md');
-      try {
-        await fs.access(skillMdPath);
-      } catch {
+      const metadata = readSkillMetadata(skillPath, {
+        sourceKind: 'external',
+        isCustom: false,
+      });
+      if (!metadata) {
         return {
           success: false,
-          msg: 'SKILL.md file not found in the selected directory',
+          msg: 'No supported skill metadata found in the selected directory',
         };
       }
 
-      const content = await fs.readFile(skillMdPath, 'utf-8');
-      const frontMatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-      let skillName = path.basename(skillPath);
-      if (frontMatterMatch) {
-        const nameMatch = frontMatterMatch[1].match(/^name:\s*(.+)$/m);
-        if (nameMatch) skillName = nameMatch[1].trim();
-      }
+      const skillName = metadata.name;
 
       const userSkillsDir = getSkillsDir();
       const targetDir = path.join(userSkillsDir, skillName);

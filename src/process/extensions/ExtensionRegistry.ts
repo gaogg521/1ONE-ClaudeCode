@@ -5,6 +5,7 @@
  */
 
 import type { ICssTheme } from '@/common/config/storage';
+import type { SkillMetadata } from '@/common/types/skillMetadata';
 import type { LoadedExtension, ExtensionState } from './types';
 import { ExtensionLoader } from './ExtensionLoader';
 import { resolveAcpAdapters } from './resolvers/AcpAdapterResolver';
@@ -41,7 +42,7 @@ export class ExtensionRegistry {
   private _mcpServers: Record<string, unknown>[] = [];
   private _assistants: Record<string, unknown>[] = [];
   private _agents: Record<string, unknown>[] = [];
-  private _skills: Array<{ name: string; description: string; location: string }> = [];
+  private _skills: SkillMetadata[] = [];
   private _themes: ICssTheme[] = [];
   private _channelPlugins = new Map<string, { constructor: unknown; meta: unknown }>();
   private _webuiContributions: WebuiContribution[] = [];
@@ -364,7 +365,7 @@ export class ExtensionRegistry {
   }
 
   /** Get all extension-contributed skills */
-  getSkills(): Array<{ name: string; description: string; location: string }> {
+  getSkills(): SkillMetadata[] {
     return this._skills;
   }
 

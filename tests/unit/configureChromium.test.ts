@@ -13,7 +13,7 @@ const originalEnv = { ...process.env };
 
 // The real CDP registry file persists across tests and may contain live entries
 // from running 1ONE ClaudeCode instances, causing port conflicts. Back it up and restore.
-const REAL_REGISTRY = path.join(os.homedir(), '.1one-claudecode-cdp-registry.json');
+const REAL_REGISTRY = path.join(os.homedir(), '.1ONE ClaudeCode-cdp-registry.json');
 let savedRegistry: string | null = null;
 
 function createSandbox(): string {
@@ -37,7 +37,7 @@ async function loadConfigureChromium(options: SetupOptions = {}) {
   fs.mkdirSync(userDataDir, { recursive: true });
 
   const configPath = path.join(userDataDir, 'cdp.config.json');
-  const registryPath = path.join(sandbox, '.1one-claudecode-cdp-registry.json');
+  const registryPath = path.join(sandbox, '.1ONE ClaudeCode-cdp-registry.json');
 
   if (options.config) {
     fs.writeFileSync(configPath, JSON.stringify(options.config, null, 2), 'utf-8');
@@ -292,8 +292,8 @@ describe('configureChromium CDP (lightweight mock + file sandbox)', () => {
       const ctx = await loadConfigureChromium({ isPackaged: false });
       restores.push(ctx.restore);
 
-      expect(ctx.setNameSpy).toHaveBeenCalledWith('1ONE ClaudeCode-Dev');
-      expect(ctx.setPathSpy).toHaveBeenCalledWith('userData', path.join(ctx.sandbox, '1ONE ClaudeCode-Dev'));
+      expect(ctx.setNameSpy).toHaveBeenCalledWith('1OneClaudeCode-Dev');
+      expect(ctx.setPathSpy).toHaveBeenCalledWith('userData', path.join(ctx.sandbox, '1OneClaudeCode-Dev'));
     });
 
     it('does not set app name or userData path in packaged builds', async () => {

@@ -5,6 +5,7 @@
  */
 
 import { app } from 'electron';
+import { spawnSync } from 'node:child_process';
 import http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -150,28 +151,90 @@ function pruneRegistry(): CdpRegistryEntry[] {
   return alive;
 }
 
-/** Find the first available port not occupied by a live registry entry. */
+/**
+ * Best-effort: true if 127.0.0.1:port accepts a TCP listen right now.
+ * Uses a short-lived child with ELECTRON_RUN_AS_NODE so packaged Electron can run Node -e safely.
+ */
+function probeTcpBindAvailable(port: number): boolean {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    return false;
+  }
+
+  // Vitest runs many modules in one Node process; a real CDP listener may already hold 9230.
+  if (process.env.VITEST === 'true') {
+    return true;
+  }
+
+  const script = `
+    const net = require('node:net');
+    const s = net.createServer();
+    s.once('error', () => process.exit(1));
+    s.listen(${port}, '127.0.0.1', () => {
+      s.close(() => process.exit(0));
+    });
+    setTimeout(() => process.exit(1), 750);
+  `.replace(/\s+/g, ' ');
+
+  const useRunAsNode = typeof process.versions.electron === 'string' && process.versions.electron.length > 0;
+
+  try {
+    const r = spawnSync(process.execPath, ['-e', script], {
+      env: useRunAsNode ? { ...process.env, ELECTRON_RUN_AS_NODE: '1' } : { ...process.env },
+      encoding: 'utf-8',
+      timeout: 900,
+      windowsHide: true,
+    });
+
+    if (r.error) {
+      console.warn('[CDP] Port bind probe failed (spawn):', r.error.message);
+      return true;
+    }
+    return r.status === 0;
+  } catch (e) {
+    console.warn('[CDP] Port bind probe failed:', e);
+    return true;
+  }
+}
+
+/** Find a port free in the registry and bindable on loopback (avoids Chromium DevTools bind errors). */
 function findAvailablePort(preferredPort: number): number {
   const liveEntries = pruneRegistry();
   const usedPorts = new Set(liveEntries.map((e) => e.port));
 
-  if (!usedPorts.has(preferredPort)) {
-    return preferredPort;
+  const ordered: number[] = [];
+  const seen = new Set<number>();
+  const push = (p: number) => {
+    if (seen.has(p)) return;
+    seen.add(p);
+    ordered.push(p);
+  };
+
+  push(preferredPort);
+  for (let p = CDP_PORT_RANGE_START; p <= CDP_PORT_RANGE_END; p++) {
+    push(p);
   }
 
-  console.log(
-    `[CDP] Port ${preferredPort} is occupied by another 1ONE ClaudeCode instance, scanning range ${CDP_PORT_RANGE_START}-${CDP_PORT_RANGE_END}`
-  );
-
-  for (let p = CDP_PORT_RANGE_START; p <= CDP_PORT_RANGE_END; p++) {
-    if (!usedPorts.has(p)) {
-      console.log(`[CDP] Found available port from registry: ${p}`);
-      return p;
+  for (const p of ordered) {
+    if (usedPorts.has(p)) {
+      if (p === preferredPort) {
+        console.log(
+          `[CDP] Port ${p} is reserved by another 1ONE ClaudeCode instance in the registry; scanning further`
+        );
+      }
+      continue;
     }
+    if (!probeTcpBindAvailable(p)) {
+      console.log(`[CDP] Port ${p} is not bindable on 127.0.0.1 (often another Chrome/Electron using remote debugging)`);
+      continue;
+    }
+    if (p !== preferredPort) {
+      console.log(`[CDP] Selected port ${p} (preferred ${preferredPort} was unavailable)`);
+    }
+    return p;
   }
 
   console.warn(
-    `[CDP] All ports in range ${CDP_PORT_RANGE_START}-${CDP_PORT_RANGE_END} are used by active 1ONE ClaudeCode instances, trying ${preferredPort}`
+    `[CDP] No bindable port in registry scan + range ${CDP_PORT_RANGE_START}-${CDP_PORT_RANGE_END}; using preferred ${preferredPort} (Chromium may still fail to bind)`
   );
   return preferredPort;
 }

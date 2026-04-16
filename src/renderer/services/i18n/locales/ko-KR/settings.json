@@ -93,6 +93,8 @@
   "promptEdit": "편집",
   "promptPreview": "미리보기",
   "promptPreviewEmpty": "미리보기할 내용 없음",
+  "promptEditTooltip": "Markdown으로 어시스턴트 규칙 편집",
+  "promptPreviewTooltip": "Markdown 렌더링 미리보기",
   "deleteAssistantTitle": "어시스턴트 삭제",
   "deleteAssistantConfirm": "이 어시스턴트를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
   "deleteBuiltinAssistantExtra": "내장 어시스턴트는 목록에서 제거되며 앱을 다시 시작해도 자동으로 복구되지 않습니다. 복사본이 필요하면 먼저 '복제'를 사용하세요.",

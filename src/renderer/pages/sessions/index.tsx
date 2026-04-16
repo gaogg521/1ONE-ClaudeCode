@@ -3,7 +3,7 @@
  */
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Button, Input, Tag, Tooltip, Spin, Empty, Typography } from '@arco-design/web-react';
-import { Add, Search, Play, Delete, Left, FolderOpen, Right } from '@icon-park/react';
+import { Add, Search, Play, Delete, Left, FolderOpen, Right, Pushpin, Star } from '@icon-park/react';
 import { useNavigate } from 'react-router-dom';
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
@@ -47,8 +47,40 @@ function formatDateKey(ts: number): string {
 
 const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) => void }> = ({ conv, onDelete }) => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const backend = getBackendInfo(conv);
   const isRunning = conv.status === 'running';
+  const extra = conv.extra as { pinned?: boolean; favorited?: boolean } | undefined;
+  const pinned = Boolean(extra?.pinned);
+  const favorited = Boolean(extra?.favorited);
+
+  const handleTogglePin = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await ipcBridge.conversation.update.invoke({
+      id: conv.id,
+      updates: {
+        extra: {
+          pinned: !pinned,
+          pinnedAt: pinned ? undefined : Date.now(),
+        } as Partial<TChatConversation['extra']>,
+      } as Partial<TChatConversation>,
+      mergeExtra: true,
+    });
+  };
+
+  const handleToggleFavorite = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await ipcBridge.conversation.update.invoke({
+      id: conv.id,
+      updates: {
+        extra: {
+          favorited: !favorited,
+          favoritedAt: favorited ? undefined : Date.now(),
+        } as Partial<TChatConversation['extra']>,
+      } as Partial<TChatConversation>,
+      mergeExtra: true,
+    });
+  };
 
   return (
     <div
@@ -88,6 +120,22 @@ const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) =>
           <Tag size='small' color={backend.color} style={{ flexShrink: 0 }}>{backend.label}</Tag>
         </div>
         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          <Tooltip content={favorited ? t('conversation.history.unfavorite') : t('conversation.history.favorite')}>
+            <Button
+              type='text'
+              size='mini'
+              icon={<Star theme={favorited ? 'filled' : 'outline'} size={14} />}
+              onClick={handleToggleFavorite}
+            />
+          </Tooltip>
+          <Tooltip content={pinned ? t('conversation.history.unpin') : t('conversation.history.pin')}>
+            <Button
+              type='text'
+              size='mini'
+              icon={<Pushpin theme={pinned ? 'filled' : 'outline'} size={14} />}
+              onClick={handleTogglePin}
+            />
+          </Tooltip>
           <Tooltip content='继续会话'>
             <Button
               type='text' size='mini'
@@ -129,8 +177,18 @@ const SessionsPage: React.FC = () => {
           const extra = c.extra as { isHealthCheck?: boolean; teamId?: string } | undefined;
           return !extra?.isHealthCheck && !extra?.teamId;
         });
-        // Sort by modifyTime descending
-        filtered.sort((a, b) => b.modifyTime - a.modifyTime);
+        // Sort: pinned first, then favorited, then modifyTime desc
+        filtered.sort((a, b) => {
+          const aExtra = a.extra as { pinned?: boolean; favorited?: boolean } | undefined;
+          const bExtra = b.extra as { pinned?: boolean; favorited?: boolean } | undefined;
+          const ap = aExtra?.pinned ? 1 : 0;
+          const bp = bExtra?.pinned ? 1 : 0;
+          if (ap !== bp) return bp - ap;
+          const af = aExtra?.favorited ? 1 : 0;
+          const bf = bExtra?.favorited ? 1 : 0;
+          if (af !== bf) return bf - af;
+          return b.modifyTime - a.modifyTime;
+        });
         setConvs(filtered);
       }
     } catch (e) {
