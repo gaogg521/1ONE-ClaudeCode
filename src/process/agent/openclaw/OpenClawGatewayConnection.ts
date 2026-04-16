@@ -67,6 +67,8 @@ export class OpenClawGatewayConnection {
   private lastTick: number | null = null;
   private tickIntervalMs = 30_000;
   private tickTimer: NodeJS.Timeout | null = null;
+  private pingTimer: NodeJS.Timeout | null = null;
+  private pingIntervalMs = 25_000;
 
   // Connection state
   private _isConnected = false;
@@ -112,15 +114,27 @@ export class OpenClawGatewayConnection {
     this.ws.on('open', () => {
       // New socket: reset pairing state so a manual retry can proceed.
       this.pairingRequired = false;
+      // Any successful open counts as activity.
+      this.touchActivity();
+      this.startPingWatch();
       this.queueConnect();
     });
 
     this.ws.on('message', (data) => this.handleMessage(this.rawDataToString(data)));
 
+    this.ws.on('pong', () => {
+      // Many proxies/servers rely on ping/pong for liveness.
+      this.touchActivity();
+    });
+
     this.ws.on('close', (code, reason) => {
       const reasonText = this.rawDataToString(reason);
       this.ws = null;
       this._isConnected = false;
+      if (this.pingTimer) {
+        clearInterval(this.pingTimer);
+        this.pingTimer = null;
+      }
       this.flushPendingErrors(new Error(`Gateway closed (${code}): ${reasonText}`));
       // Pairing-required is not a transient connectivity problem; do not auto-reconnect.
       if (!this.pairingRequired) {
@@ -145,6 +159,10 @@ export class OpenClawGatewayConnection {
     if (this.tickTimer) {
       clearInterval(this.tickTimer);
       this.tickTimer = null;
+    }
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
     }
     if (this.connectTimer) {
       clearTimeout(this.connectTimer);
@@ -516,6 +534,23 @@ export class OpenClawGatewayConnection {
         this.ws?.close(4000, 'activity timeout');
       }
     }, interval);
+  }
+
+  private startPingWatch(): void {
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
+    // Keepalive ping to avoid idle disconnections by proxies/servers.
+    this.pingTimer = setInterval(() => {
+      if (this.closed) return;
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      try {
+        this.ws.ping();
+      } catch {
+        // Ignore ping failures; close handler / reconnect will take over.
+      }
+    }, this.pingIntervalMs);
   }
 
   private rawDataToString(data: unknown): string {

@@ -13,7 +13,7 @@ import { uuid } from '@/common/utils';
 import type { AcpResult, ToolCallUpdate } from '@/common/types/acpTypes';
 import { AcpErrorType, createAcpError } from '@/common/types/acpTypes';
 import net from 'node:net';
-import { OpenClawGatewayConnection } from './OpenClawGatewayConnection';
+import { describeGatewayCloseCode, normalizeWsUrl, OpenClawGatewayConnection } from './OpenClawGatewayConnection';
 import { OpenClawGatewayManager } from './OpenClawGatewayManager';
 import { getGatewayAuthPassword, getGatewayAuthToken, getGatewayPort } from './openclawConfig';
 import type { ChatEvent, EventFrame, HelloOk, OpenClawGatewayConfig } from './types';
@@ -130,6 +130,16 @@ export class OpenClawAgent {
       const useExternal = gatewayConfig.useExternalGateway ?? false;
       const port = gatewayConfig.port || getGatewayPort();
       const host = gatewayConfig.host || 'localhost';
+      const urlRaw = (() => {
+        // Allow advanced users to pass a full ws(s) URL via host, e.g.:
+        // - wss://gateway.example.com/ws
+        // - ws://127.0.0.1:18789
+        // Otherwise, fall back to host:port.
+        if (/^wss?:\/\//i.test(host)) return host;
+        if (/:\\d+$/.test(host) || /:\d+$/.test(host)) return host;
+        return `${host}:${port}`;
+      })();
+      const wsUrl = normalizeWsUrl(urlRaw);
 
       // Auto-load token/password from OpenClaw config if not explicitly provided
       const token = gatewayConfig.token ?? getGatewayAuthToken() ?? undefined;
@@ -168,7 +178,7 @@ export class OpenClawAgent {
 
       // Create and configure connection
       this.connection = new OpenClawGatewayConnection({
-        url: `ws://${host}:${port}`,
+        url: wsUrl,
         token,
         password,
         onEvent: (evt) => this.handleEvent(evt),
@@ -708,8 +718,12 @@ export class OpenClawAgent {
     this.emitErrorMessage(`Connection error: ${err.message}`, 'disconnect');
   }
 
-  private handleClose(_code: number, reason: string): void {
-    this.handleDisconnect(reason);
+  private handleClose(code: number, reason: string): void {
+    const hint = describeGatewayCloseCode(code);
+    const extra = hint ? ` (${hint})` : '';
+    const reasonText = reason?.trim() ? reason.trim() : 'no reason';
+    this.emitErrorMessage(`Connection closed: ${code}${extra}\n${reasonText}`, 'disconnect');
+    this.handleDisconnect(reasonText);
   }
 
   /**

@@ -69,6 +69,7 @@ const TelegramConfigForm: React.FC<TelegramConfigFormProps> = ({
   const [usersLoading, setUsersLoading] = useState(false);
   const [pendingPairings, setPendingPairings] = useState<IChannelPairingRequest[]>([]);
   const [authorizedUsers, setAuthorizedUsers] = useState<IChannelUser[]>([]);
+  const [manualPairingCode, setManualPairingCode] = useState('');
 
   // Agent selection (used for Telegram conversations)
   const [availableAgents, setAvailableAgents] = useState<
@@ -274,6 +275,15 @@ const TelegramConfigForm: React.FC<TelegramConfigFormProps> = ({
     }
   };
 
+  const handleApproveManualCode = async () => {
+    const code = manualPairingCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      Message.warning(t('settings.assistant.pairingCodeInvalid', 'Please enter a valid 6-digit pairing code'));
+      return;
+    }
+    await handleApprovePairing(code);
+  };
+
   // Reject pairing
   const handleRejectPairing = async (code: string) => {
     try {
@@ -287,6 +297,15 @@ const TelegramConfigForm: React.FC<TelegramConfigFormProps> = ({
     } catch (error: any) {
       Message.error(error.message);
     }
+  };
+
+  const handleRejectManualCode = async () => {
+    const code = manualPairingCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      Message.warning(t('settings.assistant.pairingCodeInvalid', 'Please enter a valid 6-digit pairing code'));
+      return;
+    }
+    await handleRejectPairing(code);
   };
 
   // Revoke user
@@ -523,6 +542,30 @@ const TelegramConfigForm: React.FC<TelegramConfigFormProps> = ({
               </Button>
             }
           />
+
+          <div className='px-16px pb-12px'>
+            <div className='text-12px text-t-tertiary mb-8px'>
+              {t(
+                'settings.assistant.manualPairingHint',
+                'If the request does not appear below, paste the 6-digit code from the bot card and approve manually.'
+              )}
+            </div>
+            <div className='flex items-center gap-8px'>
+              <Input
+                value={manualPairingCode}
+                onChange={setManualPairingCode}
+                placeholder={t('settings.assistant.pairingCodePlaceholder', '6-digit code')}
+                maxLength={6}
+                style={{ width: 180 }}
+              />
+              <Button type='primary' size='small' onClick={handleApproveManualCode}>
+                {t('settings.assistant.approve', 'Approve')}
+              </Button>
+              <Button type='secondary' size='small' status='danger' onClick={handleRejectManualCode}>
+                {t('settings.assistant.reject', 'Reject')}
+              </Button>
+            </div>
+          </div>
 
           {pairingLoading ? (
             <div className='flex justify-center py-24px'>
