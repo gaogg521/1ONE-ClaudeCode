@@ -2,7 +2,9 @@ import { ipcBridge } from '@/common';
 import { ConfigStorage } from '@/common/config/storage';
 import { resolveLocaleKey } from '@/common/utils';
 import type { AcpBackendConfig } from '@/common/types/acpTypes';
-import type { ExternalSkillSource, SkillMetadata, SkillPlatform } from '@/common/types/skillMetadata';
+import type { ExternalSkillSource, SkillMetadata } from '@/common/types/skillMetadata';
+import { normalizeExtensionAssistants } from '@/renderer/pages/settings/AgentSettings/AssistantManagement/assistantUtils';
+import type { AssistantListItem } from '@/renderer/pages/settings/AgentSettings/AssistantManagement/types';
 import {
   Button,
   Checkbox,
@@ -16,13 +18,13 @@ import {
   Tag,
   Select,
 } from '@arco-design/web-react';
-import { Delete, FolderOpen, Info, More, Search, Plus, Refresh } from '@icon-park/react';
+import { Delete, FolderOpen, Info, Search, Plus, Refresh } from '@icon-park/react';
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import SettingsPageWrapper from './components/SettingsPageWrapper';
 
 /** Agent filter: skills used by at least one user-created (non-preset) assistant */
-const CUSTOM_ASSISTANT_AGENT_FILTER = '__custom_assistant__';
 
 const IMPORT_ALREADY_EXISTS_RE = /^Skill "([^"]+)" already exists$/;
 const IMPORT_ALREADY_EXISTS_BUILTIN_RE = /^Skill "([^"]+)" already exists in builtin skills$/;
@@ -63,17 +65,24 @@ const getAvatarColorClass = (name: string) => {
 const SkillsHubSettings: React.FC = () => {
   const { t, i18n } = useTranslation();
   const localeKey = resolveLocaleKey(i18n.language);
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [availableSkills, setAvailableSkills] = useState<SkillMetadata[]>([]);
-  const [assistants, setAssistants] = useState<AcpBackendConfig[]>([]);
+  const [autoSkills, setAutoSkills] = useState<SkillMetadata[]>([]);
+  const [assistants, setAssistants] = useState<AssistantListItem[]>([]);
   const [skillPaths, setSkillPaths] = useState<{ userSkillsDir: string; builtinSkillsDir: string } | null>(null);
   const [externalSources, setExternalSources] = useState<ExternalSkillSource[]>([]);
   const [activeSourceTab, setActiveSourceTab] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchExternalQuery, setSearchExternalQuery] = useState('');
-  const [agentFilter, setAgentFilter] = useState<string>('all');
-  const [assistantFilterIds, setAssistantFilterIds] = useState<string[]>([]);
-  const [unassignedMode, setUnassignedMode] = useState<'global' | 'selected-assistants'>('global');
+  // Modal: configure skills for a specific assistant (by-assistant view)
+  const [configAssistantVisible, setConfigAssistantVisible] = useState(false);
+  const [configAssistantTarget, setConfigAssistantTarget] = useState<AssistantListItem | null>(null);
+  const [configAssistantSkillIds, setConfigAssistantSkillIds] = useState<string[]>([]);
+  const [configAssistantSaving, setConfigAssistantSaving] = useState(false);
+  const [configAssistantSearch, setConfigAssistantSearch] = useState('');
+  const [externalSkillFilter, setExternalSkillFilter] = useState<'all' | 'unimported' | 'imported' | 'conflict'>('all');
+  const [agentFilter, setAgentFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
   const [showAddPathModal, setShowAddPathModal] = useState(false);
   const [customPathName, setCustomPathName] = useState('');
   const [customPathValue, setCustomPathValue] = useState('');
@@ -85,7 +94,8 @@ const SkillsHubSettings: React.FC = () => {
   const [skillSortMode, setSkillSortMode] = useState<'usage-desc' | 'usage-asc' | 'name-asc' | 'name-desc'>(
     'usage-desc'
   );
-  const [skillListLayout, setSkillListLayout] = useState<'flat' | 'by-assistant'>('flat');
+  const [activeMainTab, setActiveMainTab] = useState<'library' | 'discover'>('library');
+  const [skillView, setSkillView] = useState<'by-skill' | 'by-assistant'>('by-skill');
   const [replaceModalVisible, setReplaceModalVisible] = useState(false);
   const [replaceFromSkill, setReplaceFromSkill] = useState<string>('');
   const [replaceToSkill, setReplaceToSkill] = useState<string>('');
@@ -129,46 +139,20 @@ const SkillsHubSettings: React.FC = () => {
     [t]
   );
 
-  const getPlatformLabel = useCallback(
-    (platform: SkillPlatform) => {
-      switch (platform) {
-        case '1one':
-          return '1ONE';
-        case 'claude':
-          return 'Claude';
-        case 'openclaw':
-          return 'OpenClaw';
-        case 'cursor':
-          return 'Cursor';
-        default:
-          return t('settings.skillsHub.genericLayer', { defaultValue: 'Generic' });
-      }
-    },
-    [t]
-  );
-
   const renderSkillMetaTags = useCallback(
     (skill: SkillMetadata) => {
-      const platforms = Array.isArray(skill.platforms) ? skill.platforms : [];
-      return (
-        <div className='flex flex-wrap items-center gap-6px'>
-          {platforms.map((platform) => (
-            <Tag key={`${skill.name}-${platform}`} size='small'>
-              {getPlatformLabel(platform)}
-            </Tag>
-          ))}
-          {!skill.effective && skill.shadowedBy && (
+      if (!skill.effective && skill.shadowedBy) {
+        return (
+          <div className='flex flex-wrap items-center gap-6px'>
             <Tag size='small' color='orangered'>
-              {t('settings.skillsHub.shadowed', {
-                defaultValue: 'Shadowed by {{name}}',
-                name: skill.shadowedBy.byName,
-              })}
+              {t('settings.skillsHub.nameConflict', { defaultValue: '名称冲突' })}
             </Tag>
-          )}
-        </div>
-      );
+          </div>
+        );
+      }
+      return null;
     },
-    [getPlatformLabel, t]
+    [t]
   );
 
   const skillUsageMap = useMemo(() => {
@@ -194,35 +178,6 @@ const SkillsHubSettings: React.FC = () => {
     );
   }, [assistants, availableSkills]);
 
-  const skillAgentFilters = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          assistants
-            .map((assistant) => assistant.presetAgentType)
-            .filter((agentType): agentType is string => typeof agentType === 'string' && agentType.length > 0)
-        )
-      ),
-    [assistants]
-  );
-
-  const agentTypeInfo = useMemo(() => {
-    const map = new Map<string, { count: number; names: string[] }>();
-    for (const a of assistants) {
-      const type = a.presetAgentType;
-      if (!type || typeof type !== 'string') continue;
-      const current = map.get(type) ?? { count: 0, names: [] };
-      current.count += 1;
-      current.names.push(getAssistantDisplayName(a));
-      map.set(type, current);
-    }
-    return map;
-  }, [assistants, getAssistantDisplayName]);
-
-  const hasNonPresetAssistants = useMemo(() => assistants.some((assistant) => assistant.isPreset === false), [
-    assistants,
-  ]);
-
   const filteredSkills = useMemo(() => {
     const lowerQuery = searchQuery.toLowerCase();
     return availableSkills.filter((skill) => {
@@ -239,54 +194,15 @@ const SkillsHubSettings: React.FC = () => {
       }
 
       const usage = skillUsageMap.get(skill.name);
-      if (agentFilter === 'all') {
-        if (assistantFilterIds.length > 0) {
-          return Boolean(usage?.usedByAssistants.some((a) => assistantFilterIds.includes(a.id)));
-        }
-        return true;
+      if (agentFilter === 'assigned') {
+        return (usage?.usedByAssistants.length ?? 0) > 0;
       }
       if (agentFilter === 'unassigned') {
-        if (unassignedMode === 'selected-assistants' && assistantFilterIds.length > 0) {
-          // Reverse lookup: show skills that are NOT enabled by any of the selected assistants.
-          return !usage || !usage.usedByAssistants.some((a) => assistantFilterIds.includes(a.id));
-        }
-        // Default: globally unassigned (no assistants use it)
         return !usage || usage.usedByAssistants.length === 0;
-      }
-      if (agentFilter === CUSTOM_ASSISTANT_AGENT_FILTER) {
-        if (assistantFilterIds.length > 0) {
-          return Boolean(usage?.usedByAssistants.some((a) => assistantFilterIds.includes(a.id)));
-        }
-        return Boolean(usage?.usedByAssistants.some((assistant) => assistant.isPreset === false));
-      }
-      const matchesAgentType = Boolean(usage?.agentTypes.includes(agentFilter));
-      if (!matchesAgentType) return false;
-      if (assistantFilterIds.length > 0) {
-        return Boolean(usage?.usedByAssistants.some((a) => assistantFilterIds.includes(a.id)));
       }
       return true;
     });
-  }, [agentFilter, assistantFilterIds, availableSkills, searchQuery, skillUsageMap, unassignedMode]);
-
-  const assistantsForSelectedAgentType = useMemo(() => {
-    if (agentFilter === 'all') return [];
-    if (agentFilter === CUSTOM_ASSISTANT_AGENT_FILTER) {
-      return assistants.filter((a) => a.isPreset === false);
-    }
-    if (agentFilter === 'unassigned') {
-      return assistants;
-    }
-    return assistants.filter((a) => a.presetAgentType === agentFilter);
-  }, [agentFilter, assistants]);
-
-  const assistantsForSelectedAgentTypeOptions = useMemo(
-    () =>
-      assistantsForSelectedAgentType.map((a) => ({
-        value: a.id,
-        label: `${getAssistantDisplayName(a)} (${a.id})`,
-      })),
-    [assistantsForSelectedAgentType, getAssistantDisplayName]
-  );
+  }, [agentFilter, availableSkills, searchQuery, skillUsageMap]);
 
   const displaySkills = useMemo(() => {
     const cmpUsage = (a: SkillMetadata, b: SkillMetadata) => {
@@ -309,32 +225,46 @@ const SkillsHubSettings: React.FC = () => {
     });
   }, [filteredSkills, skillSortMode, skillUsageMap]);
 
-  const groupedAssistantSections = useMemo(() => {
-    const assistantsForGroups =
-      agentFilter === 'all' || agentFilter === 'unassigned'
-        ? assistants
-        : agentFilter === CUSTOM_ASSISTANT_AGENT_FILTER
-          ? assistants.filter((assistant) => assistant.isPreset === false)
-          : assistants.filter((assistant) => assistant.presetAgentType === agentFilter);
-    const sections = assistantsForGroups
-      .map((assistant) => ({
-        assistant,
-        skills: displaySkills.filter((skill) =>
-          skillUsageMap.get(skill.name)?.usedByAssistants.some((x) => x.id === assistant.id)
-        ),
-      }))
-      .filter((section) => section.skills.length > 0)
-      .toSorted((a, b) =>
-        getAssistantDisplayName(a.assistant).localeCompare(getAssistantDisplayName(b.assistant), undefined, {
-          sensitivity: 'base',
-        })
+  const groupedByAssistantData = useMemo(() => {
+    const searchLower = searchQuery.toLowerCase().trim();
+    const matchesSearch = (skill: SkillMetadata) => {
+      if (!searchLower) return true;
+      return (
+        skill.name.toLowerCase().includes(searchLower) ||
+        (skill.description ? skill.description.toLowerCase().includes(searchLower) : false)
       );
-    const unassignedSkills = displaySkills.filter((skill) => {
+    };
+
+    const allSections = assistants
+      .toSorted((a, b) =>
+        getAssistantDisplayName(a).localeCompare(getAssistantDisplayName(b), undefined, { sensitivity: 'base' })
+      )
+      .map((assistant) => {
+        const enabledNames = Array.isArray(assistant.enabledSkills) ? assistant.enabledSkills : [];
+        // Only count/show skills that exist in availableSkills (auto-skills in _builtin are excluded)
+        const resolvedSkills = enabledNames
+          .map((name) => availableSkills.find((s) => s.name === name))
+          .filter((s): s is SkillMetadata => s !== undefined);
+        const filteredSkills = resolvedSkills.filter(matchesSearch);
+        // Skills configured but not found in availableSkills (e.g., auto-skills or deleted skills)
+        const missingCount = enabledNames.length - resolvedSkills.length;
+        return { assistant, skills: filteredSkills, totalEnabledCount: resolvedSkills.length, missingCount };
+      });
+
+    const sections = allSections.filter((section) => {
+      if (agentFilter === 'assigned') return section.totalEnabledCount > 0;
+      if (agentFilter === 'unassigned') return section.totalEnabledCount === 0;
+      return true;
+    });
+
+    const unassignedSkills = availableSkills.filter((skill) => {
       const usage = skillUsageMap.get(skill.name);
+      if (!matchesSearch(skill)) return false;
       return !usage || usage.usedByAssistants.length === 0;
     });
+
     return { sections, unassignedSkills };
-  }, [agentFilter, assistants, displaySkills, getAssistantDisplayName, skillUsageMap]);
+  }, [agentFilter, assistants, availableSkills, getAssistantDisplayName, searchQuery, skillUsageMap]);
 
   const skillSelectOptions = useMemo(
     () =>
@@ -348,14 +278,25 @@ const SkillsHubSettings: React.FC = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [skills, agentConfigs] = await Promise.all([
+      const [skills, autoSkillsList, agentConfigs] = await Promise.all([
         ipcBridge.fs.listAvailableSkills.invoke(),
+        ipcBridge.fs.listAutoSkills.invoke().catch(() => [] as SkillMetadata[]),
         ConfigStorage.get('acp.customAgents'),
       ]);
       setAvailableSkills(skills);
-      setAssistants(
-        ((agentConfigs || []) as AcpBackendConfig[]).filter((assistant) => typeof assistant.id === 'string' && assistant.id.length > 0)
+      setAutoSkills(autoSkillsList);
+      const localAgents: AssistantListItem[] = ((agentConfigs || []) as AssistantListItem[]).filter(
+        (assistant) => typeof assistant.id === 'string' && assistant.id.length > 0
       );
+      const extRaw = await ipcBridge.extensions.getAssistants.invoke().catch(() => [] as Record<string, unknown>[]);
+      const extAgents = normalizeExtensionAssistants(extRaw);
+      const mergedAgents = [...localAgents];
+      for (const ext of extAgents) {
+        if (!mergedAgents.some((a) => a.id === ext.id)) {
+          mergedAgents.push(ext);
+        }
+      }
+      setAssistants(mergedAgents);
 
       const external = await ipcBridge.fs.detectAndCountExternalSkills.invoke();
       if (external.success && external.data) {
@@ -431,6 +372,46 @@ const SkillsHubSettings: React.FC = () => {
       }
     },
     [fetchData, t]
+  );
+
+  const externalSkillImportStatusMap = useMemo(() => {
+    const map = new Map<string, 'user' | 'builtin'>();
+    for (const skill of availableSkills) {
+      const existing = map.get(skill.name);
+      if (existing === 'builtin') continue;
+      if (skill.isCustom) {
+        map.set(skill.name, 'user');
+      } else {
+        map.set(skill.name, 'builtin');
+      }
+    }
+    return map;
+  }, [availableSkills]);
+
+  const renderExternalSkillStatusTag = useCallback(
+    (skill: SkillMetadata) => {
+      const status = externalSkillImportStatusMap.get(skill.name);
+      if (status === 'user') {
+        return (
+          <Tag size='small' color='green'>
+            {t('settings.skillsHub.externalSkillAlreadyImported', {
+              defaultValue: 'Already imported',
+            })}
+          </Tag>
+        );
+      }
+      if (status === 'builtin') {
+        return (
+          <Tag size='small' color='orangered'>
+            {t('settings.skillsHub.externalSkillNameConflict', {
+              defaultValue: 'Name conflicts with built-in skill',
+            })}
+          </Tag>
+        );
+      }
+      return null;
+    },
+    [externalSkillImportStatusMap, t]
   );
 
   const externalSkillDirectory = (skill: SkillMetadata) => skill.directory || skill.location || '';
@@ -638,6 +619,62 @@ const SkillsHubSettings: React.FC = () => {
       setAssigning(false);
     }
   }, [assistants, selectedAssistantIds, selectedSkill, t]);
+
+  // Open modal to configure skills for a specific assistant
+  const openConfigAssistantSkills = useCallback((assistant: AssistantListItem) => {
+    setConfigAssistantTarget(assistant);
+    setConfigAssistantSkillIds(Array.isArray(assistant.enabledSkills) ? assistant.enabledSkills : []);
+    setConfigAssistantSearch('');
+    setConfigAssistantVisible(true);
+  }, []);
+
+  const handleSaveConfigAssistantSkills = useCallback(async () => {
+    if (!configAssistantTarget) return;
+    setConfigAssistantSaving(true);
+    try {
+      const currentAgents = ((await ConfigStorage.get('acp.customAgents')) || []) as AssistantListItem[];
+      const updatedAgents = currentAgents.map((a) => {
+        if (a.id !== configAssistantTarget.id) return a;
+        const prevCustom = Array.isArray(a.customSkillNames) ? a.customSkillNames : [];
+        const nextCustom = prevCustom.filter((n) => configAssistantSkillIds.includes(n));
+        configAssistantSkillIds.forEach((id) => {
+          const skill = availableSkills.find((s) => s.name === id);
+          if (skill?.isCustom && !nextCustom.includes(id)) nextCustom.push(id);
+        });
+        return { ...a, enabledSkills: configAssistantSkillIds, customSkillNames: nextCustom };
+      });
+      await ConfigStorage.set('acp.customAgents', updatedAgents);
+      setAssistants((prev) =>
+        prev.map((a) =>
+          a.id === configAssistantTarget.id ? { ...a, enabledSkills: configAssistantSkillIds } : a
+        )
+      );
+      Message.success(t('settings.skillsHub.configAssistantSaved', { defaultValue: '技能配置已保存' }));
+      setConfigAssistantVisible(false);
+    } catch (err) {
+      console.error('Failed to save assistant skills:', err);
+      Message.error(t('settings.skillsHub.configAssistantFailed', { defaultValue: '保存失败' }));
+    } finally {
+      setConfigAssistantSaving(false);
+    }
+  }, [availableSkills, configAssistantSkillIds, configAssistantTarget, t]);
+
+  // Navigate to assistant editor
+  const OPEN_ASSISTANT_EDITOR_INTENT_KEY = 'guid.openAssistantEditorIntent';
+  const openAssistantEditor = useCallback(
+    (assistant: AssistantListItem) => {
+      try {
+        sessionStorage.setItem(
+          OPEN_ASSISTANT_EDITOR_INTENT_KEY,
+          JSON.stringify({ assistantId: assistant.id, openAssistantEditor: true })
+        );
+      } catch {
+        // ignore
+      }
+      navigate('/workspace/settings/assistants');
+    },
+    [navigate]
+  );
 
   const openReplaceModal = useCallback(() => {
     setReplaceFromSkill('');
@@ -902,34 +939,17 @@ const SkillsHubSettings: React.FC = () => {
       const usage = skillUsageMap.get(skill.name);
       if (!usage) return null;
 
-      const jumpToAssistant = (assistantId: string) => {
-        const assistant = assistants.find((a) => a.id === assistantId);
-        if (!assistant) return;
-        const nextAgentFilter =
-          assistant.isPreset === false ? CUSTOM_ASSISTANT_AGENT_FILTER : (assistant.presetAgentType ?? 'all');
-        setAgentFilter(nextAgentFilter);
-        setAssistantFilterIds([assistant.id]);
-      };
-
       return (
         <div className='flex flex-col gap-6px'>
           <div className='flex flex-wrap items-center gap-6px'>
             <Tag size='small' color={usage.usedByAssistants.length > 0 ? 'green' : 'gray'}>
-              {t('settings.skillsHub.usedByAssistantsCount', {
-                count: usage.usedByAssistants.length,
-                defaultValue:
-                  usage.usedByAssistants.length > 1
-                    ? `Used by ${usage.usedByAssistants.length} assistants`
-                    : usage.usedByAssistants.length === 1
-                      ? 'Used by 1 assistant'
-                      : 'Not assigned',
-              })}
+              {usage.usedByAssistants.length > 0
+                ? t('settings.skillsHub.assignedToCount', {
+                    count: usage.usedByAssistants.length,
+                    defaultValue: `已分配 ${usage.usedByAssistants.length} 个助手`,
+                  })
+                : t('settings.skillsHub.agentDefault', { defaultValue: 'AGENT 默认调用' })}
             </Tag>
-            {usage.agentTypes.map((agentType) => (
-              <Tag key={`${skill.name}-${agentType}-usage`} size='small' color='arcoblue'>
-                {getAgentLabel(agentType)}
-              </Tag>
-            ))}
           </div>
           {usage.usedByAssistants.length > 0 && (
             <div className='flex flex-wrap gap-6px'>
@@ -937,10 +957,14 @@ const SkillsHubSettings: React.FC = () => {
                 <button
                   key={`${skill.name}-${assistant.id}`}
                   type='button'
-                  className='text-12px text-t-secondary px-8px py-3px rd-[100px] bg-fill-1 border border-border-1 cursor-pointer hover:bg-fill-2 hover:border-border-2 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary-5'
+                  title={t('settings.skillsHub.configureAssistant', {
+                    name: getAssistantDisplayName(assistant),
+                    defaultValue: '配置 {{name}}',
+                  })}
+                  className='text-12px text-t-secondary px-8px py-3px rd-[100px] bg-fill-1 border border-border-1 cursor-pointer hover:bg-primary-1 hover:text-primary-6 hover:border-primary-4 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary-5'
                   onClick={(e) => {
                     e.stopPropagation();
-                    jumpToAssistant(assistant.id);
+                    openAssignModal(skill);
                   }}
                 >
                   {getAssistantDisplayName(assistant)}
@@ -959,19 +983,19 @@ const SkillsHubSettings: React.FC = () => {
         </div>
       );
     },
-    [assistants, getAgentLabel, getAssistantDisplayName, skillUsageMap, t]
+    [getAssistantDisplayName, openAssignModal, skillUsageMap, t]
   );
 
-  const renderMySkillRow = (skill: SkillMetadata) => (
-    <div
-      key={skill.name}
-      className='group flex flex-row gap-12px p-16px bg-base border border-transparent hover:border-border-1 hover:bg-fill-1 hover:shadow-sm rd-12px transition-all duration-200'
-    >
+  const renderMySkillRow = (skill: SkillMetadata) => {
+    const usage = skillUsageMap.get(skill.name);
+    const conflictTag = renderSkillMetaTags(skill);
+    return (
       <div
+        key={skill.name}
         data-testid={`my-skill-row-${skill.name}`}
+        className='group grid grid-cols-[minmax(160px,2fr)_minmax(0,3fr)_minmax(0,2.5fr)_40px] items-center gap-12px px-12px py-10px hover:bg-fill-1 rd-8px transition-all duration-150 cursor-pointer border border-transparent hover:border-border-1'
         role='button'
         tabIndex={0}
-        className='flex flex-1 min-w-0 flex-col sm:flex-row gap-16px cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary-5 rd-8px'
         onClick={() => setMySkillPreview(skill)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -980,169 +1004,249 @@ const SkillsHubSettings: React.FC = () => {
           }
         }}
       >
-        <div className='shrink-0 flex items-start sm:mt-2px'>
+        {/* Col 1: name + badge */}
+        <div className='flex items-center gap-8px min-w-0' onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
           <div
-            className={`w-40px h-40px rd-10px flex items-center justify-center font-bold text-16px shadow-sm text-transform-uppercase ${getAvatarColorClass(skill.name)}`}
+            className={`w-28px h-28px shrink-0 rd-6px flex items-center justify-center font-bold text-12px text-transform-uppercase ${getAvatarColorClass(skill.name)}`}
           >
             {skill.name.charAt(0).toUpperCase()}
           </div>
-        </div>
-
-        <div className='flex-1 min-w-0 flex flex-col justify-center gap-6px'>
-          <div className='flex items-center gap-10px flex-wrap'>
-            <h3 className='text-14px font-semibold text-t-primary/90 truncate m-0'>{skill.name}</h3>
-            {skill.isCustom ? (
-              <span className='bg-[rgba(var(--orange-6),0.08)] text-orange-6 border border-[rgba(var(--orange-6),0.2)] text-11px px-6px py-1px rd-4px font-medium'>
-                {t('settings.skillsHub.custom', { defaultValue: 'Custom' })}
-              </span>
-            ) : (
-              <span className='bg-[rgba(var(--blue-6),0.08)] text-blue-6 border border-[rgba(var(--blue-6),0.2)] text-11px px-6px py-1px rd-4px font-medium'>
-                {t('settings.skillsHub.builtin', { defaultValue: 'Built-in' })}
-              </span>
-            )}
-          </div>
-          {renderSkillMetaTags(skill)}
-          {renderSkillUsageSummary(skill)}
-          {skill.description && (
-            <p className='text-13px text-t-secondary leading-relaxed line-clamp-2 m-0' title={skill.description}>
-              {skill.description}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div
-        className='shrink-0 flex items-start sm:items-center pt-4px sm:pt-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity'
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <Dropdown
-          trigger='click'
-          position='br'
-          droplist={
-            <Menu>
-              <Menu.Item key='assign' onClick={() => openAssignModal(skill)}>
-                {t('settings.skillsHub.assignToAssistants', { defaultValue: 'Assign to assistants' })}
-              </Menu.Item>
-              <Menu.Item key='remove' onClick={() => openRemoveModal(skill)}>
-                {t('settings.skillsHub.removeFromAssistants', { defaultValue: 'Remove from assistants' })}
-              </Menu.Item>
-              {externalSkillDirectory(skill) ? (
-                <Menu.Item key='folder' onClick={() => void handleOpenExternalSkillFolder(skill)}>
-                  {t('settings.skillsHub.openSkillFolder', { defaultValue: 'Open folder in Explorer' })}
-                </Menu.Item>
-              ) : null}
-              {externalSources.length > 0 ? (
-                <Menu.SubMenu
-                  key='export'
-                  title={t('settings.skillsHub.exportTo', { defaultValue: 'Export To...' })}
-                >
-                  {externalSources.map((source) => (
-                    <Menu.Item
-                      key={source.source}
-                      onClick={() => {
-                        void runExportSkillToTarget(skill, source.path);
-                      }}
-                    >
-                      {source.name}
-                    </Menu.Item>
-                  ))}
-                </Menu.SubMenu>
-              ) : null}
-              {skill.isCustom ? (
-                <Menu.Item
-                  key='delete'
-                  className='text-danger-6'
-                  onClick={() => {
-                    Modal.confirm({
-                      title: t('settings.skillsHub.deleteConfirmTitle', { defaultValue: 'Delete Skill' }),
-                      content: t('settings.skillsHub.deleteConfirmContent', {
-                        name: skill.name,
-                        defaultValue: `Are you sure you want to delete "${skill.name}"?`,
-                      }),
-                      okButtonProps: { status: 'danger' },
-                      onOk: () => void handleDelete(skill.name),
-                    });
-                  }}
-                >
-                  {t('common.delete', { defaultValue: 'Delete' })}
-                </Menu.Item>
-              ) : null}
-            </Menu>
-          }
-        >
           <button
             type='button'
-            className='p-8px hover:bg-fill-2 text-t-tertiary hover:text-t-primary rd-8px outline-none border border-transparent cursor-pointer transition-colors bg-base flex items-center justify-center'
-            title={t('settings.skillsHub.mySkillQuickActions', { defaultValue: 'Quick actions' })}
-            aria-label={t('settings.skillsHub.mySkillQuickActions', { defaultValue: 'Quick actions' })}
-            data-testid={`my-skill-quick-${skill.name}`}
+            className='text-13px font-medium text-t-primary truncate hover:text-primary-6 transition-colors cursor-pointer bg-transparent border-none outline-none p-0'
+            onClick={() => setMySkillPreview(skill)}
           >
-            <More theme='outline' size={18} />
+            {skill.name}
           </button>
-        </Dropdown>
+          {skill.isCustom ? (
+            <span className='shrink-0 bg-[rgba(var(--orange-6),0.08)] text-orange-6 border border-[rgba(var(--orange-6),0.2)] text-10px px-5px py-0px rd-4px font-medium'>
+              {t('settings.skillsHub.installed', { defaultValue: '已安装' })}
+            </span>
+          ) : (
+            <span className='shrink-0 bg-[rgba(var(--blue-6),0.08)] text-blue-6 border border-[rgba(var(--blue-6),0.2)] text-10px px-5px py-0px rd-4px font-medium'>
+              {t('settings.skillsHub.official', { defaultValue: '官方' })}
+            </span>
+          )}
+          {conflictTag}
+        </div>
+
+        {/* Col 2: description */}
+        <p className='text-12px text-t-secondary leading-relaxed line-clamp-1 m-0' title={skill.description}>
+          {skill.description || '—'}
+        </p>
+
+        {/* Col 3: used-by assistants */}
+        <div className='flex flex-wrap items-center gap-4px'>
+          {(usage?.usedByAssistants.length ?? 0) === 0 ? (
+            <span className='text-11px text-t-secondary bg-fill-2 border border-border-1 px-8px py-2px rd-[100px]'>
+              {t('settings.skillsHub.agentDefault', { defaultValue: 'AGENT 默认调用' })}
+            </span>
+          ) : (
+            <>
+              {usage!.usedByAssistants.slice(0, 3).map((assistant) => (
+                <button
+                  key={assistant.id}
+                  type='button'
+                  title={t('settings.skillsHub.configureAssistant', {
+                    name: getAssistantDisplayName(assistant),
+                    defaultValue: '配置 {{name}}',
+                  })}
+                  className='text-11px text-t-secondary px-7px py-2px rd-[100px] bg-fill-1 border border-border-1 cursor-pointer hover:bg-primary-1 hover:text-primary-6 hover:border-primary-4 transition-colors outline-none'
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openAssignModal(skill);
+                  }}
+                >
+                  {getAssistantDisplayName(assistant)}
+                </button>
+              ))}
+              {(usage?.usedByAssistants.length ?? 0) > 3 && (
+                <span className='text-11px text-t-tertiary'>
+                  +{(usage?.usedByAssistants.length ?? 0) - 3}
+                </span>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Col 4: actions */}
+        <div
+          className='flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity'
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <Dropdown
+            trigger='click'
+            position='br'
+            droplist={
+              <Menu>
+                <Menu.Item key='assign' onClick={() => openAssignModal(skill)}>
+                  {t('settings.skillsHub.assignToAssistants', { defaultValue: 'Assign to assistants' })}
+                </Menu.Item>
+                <Menu.Item key='remove' onClick={() => openRemoveModal(skill)}>
+                  {t('settings.skillsHub.removeFromAssistants', { defaultValue: 'Remove from assistants' })}
+                </Menu.Item>
+                {externalSkillDirectory(skill) ? (
+                  <Menu.Item key='folder' onClick={() => void handleOpenExternalSkillFolder(skill)}>
+                    {t('settings.skillsHub.openSkillFolder', { defaultValue: 'Open folder in Explorer' })}
+                  </Menu.Item>
+                ) : null}
+                {externalSources.length > 0 ? (
+                  <Menu.SubMenu
+                    key='export'
+                    title={t('settings.skillsHub.exportTo', { defaultValue: 'Export To...' })}
+                  >
+                    {externalSources.map((source) => (
+                      <Menu.Item
+                        key={source.source}
+                        onClick={() => {
+                          void runExportSkillToTarget(skill, source.path);
+                        }}
+                      >
+                        {source.name}
+                      </Menu.Item>
+                    ))}
+                  </Menu.SubMenu>
+                ) : null}
+                {skill.isCustom ? (
+                  <Menu.Item
+                    key='delete'
+                    className='text-danger-6'
+                    onClick={() => {
+                      Modal.confirm({
+                        title: t('settings.skillsHub.deleteConfirmTitle', { defaultValue: 'Delete Skill' }),
+                        content: t('settings.skillsHub.deleteConfirmContent', {
+                          name: skill.name,
+                          defaultValue: `Are you sure you want to delete "${skill.name}"?`,
+                        }),
+                        okButtonProps: { status: 'danger' },
+                        onOk: () => void handleDelete(skill.name),
+                      });
+                    }}
+                  >
+                    {t('common.delete', { defaultValue: 'Delete' })}
+                  </Menu.Item>
+                ) : null}
+              </Menu>
+            }
+          >
+            <button
+              type='button'
+              className='px-10px py-5px text-12px font-medium text-primary-6 hover:text-primary-5 bg-primary-1 hover:bg-primary-2 rd-6px outline-none border border-primary-3 cursor-pointer transition-colors whitespace-nowrap'
+              data-testid={`my-skill-quick-${skill.name}`}
+            >
+              {t('settings.skillsHub.viewSkill', { defaultValue: '查看 SKILL' })}
+            </button>
+          </Dropdown>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const totalExternal = externalSources.reduce((sum, src) => sum + src.skills.length, 0);
   const activeSource = externalSources.find((s) => s.source === activeSourceTab);
 
   const filteredExternalSkills = useMemo(() => {
     if (!activeSource) return [];
-    if (!searchExternalQuery.trim()) return activeSource.skills;
     const lowerQuery = searchExternalQuery.toLowerCase();
-    return activeSource.skills.filter(
-      (s) =>
-        s.name.toLowerCase().includes(lowerQuery) || (s.description && s.description.toLowerCase().includes(lowerQuery))
-    );
-  }, [activeSource, searchExternalQuery]);
+    return activeSource.skills.filter((skill) => {
+      const status = externalSkillImportStatusMap.get(skill.name);
+      if (externalSkillFilter === 'unimported' && status) return false;
+      if (externalSkillFilter === 'imported' && status !== 'user') return false;
+      if (externalSkillFilter === 'conflict' && status !== 'builtin') return false;
+      if (!searchExternalQuery.trim()) return true;
+      return (
+        skill.name.toLowerCase().includes(lowerQuery) ||
+        (skill.description && skill.description.toLowerCase().includes(lowerQuery))
+      );
+    });
+  }, [activeSource, searchExternalQuery, externalSkillFilter, externalSkillImportStatusMap]);
+
+  const externalPreviewStatus = externalPreviewSkill
+    ? externalSkillImportStatusMap.get(externalPreviewSkill.name)
+    : undefined;
 
   return (
     <>
       <SettingsPageWrapper>
         <div className='flex flex-col h-full w-full'>
-          <div className='space-y-16px pb-24px'>
-            {/* ======== 发现外部技能 / Discovered External Skills ======== */}
-            {totalExternal > 0 && (
-              <div className='px-[16px] md:px-[32px] py-32px bg-base rd-16px md:rd-24px mb-16px shadow-sm border border-b-base relative overflow-hidden transition-all'>
-                {/* Section Header with Search Bar */}
-                <div className='flex flex-col lg:flex-row lg:items-start justify-between gap-16px mb-24px relative z-10 w-full'>
-                  <div className='flex flex-col'>
-                    <div className='flex items-center gap-10px mb-8px'>
-                      <span className='text-16px md:text-18px text-t-primary font-bold tracking-tight'>
-                        {t('settings.skillsHub.discoveredTitle', { defaultValue: 'Discovered External Skills' })}
-                      </span>
-                      <span className='bg-[rgba(var(--primary-6),0.08)] text-primary-6 text-12px px-10px py-2px rd-[100px] font-medium ml-4px'>
-                        {totalExternal}
-                      </span>
-                      <button
-                        className='outline-none border-none bg-transparent cursor-pointer p-6px text-t-tertiary hover:text-primary-6 transition-colors rd-full hover:bg-fill-2 ml-4px'
-                        onClick={() => void handleRefreshExternal()}
-                        title={t('common.refresh', { defaultValue: 'Refresh' })}
-                      >
-                        <Refresh theme='outline' size={16} className={refreshing ? 'animate-spin' : ''} />
-                      </button>
-                    </div>
-                    <Typography.Text className='text-13px text-t-secondary block max-w-xl leading-relaxed'>
-                      {t('settings.skillsHub.discoveryAlert', {
-                        defaultValue: 'Detected skills from your CLI tools. Import them to use in 1ONE ClaudeCode.',
-                      })}
-                    </Typography.Text>
-                  </div>
+          <div className='pb-24px'>
+            {/* ======== Tab Navigation ======== */}
+            <div className='flex items-center gap-8px mb-24px'>
+              {/* 我的技能 — warm primary color when active */}
+              <button
+                type='button'
+                className={`inline-flex items-center gap-8px px-20px py-9px text-13px font-medium rd-[100px] transition-all cursor-pointer outline-none border ${
+                  activeMainTab === 'library'
+                    ? 'bg-primary-6 border-primary-6 text-white shadow-sm'
+                    : 'bg-base border-border-1 text-t-secondary hover:text-t-primary hover:border-border-2'
+                }`}
+                onClick={() => setActiveMainTab('library')}
+              >
+                {t('settings.skillsHub.tabLibrary', { defaultValue: '我的技能' })}
+                <span
+                  className={`text-11px px-7px py-1px rd-[100px] font-medium ${
+                    activeMainTab === 'library' ? 'bg-white/25 text-white' : 'bg-fill-2 text-t-tertiary'
+                  }`}
+                >
+                  {availableSkills.length}
+                </span>
+              </button>
 
-                  {/* Search Bar Outputted inline with Header description in desktop */}
-                  <div className='relative group shrink-0 w-full lg:w-[240px]'>
-                    <div className='absolute left-12px top-1/2 -translate-y-1/2 text-t-tertiary group-focus-within:text-primary-6 flex pointer-events-none transition-colors'>
-                      <Search size={15} />
+              {/* 发现 — brand/teal color when active (cool tone contrast) */}
+              <button
+                type='button'
+                className={`inline-flex items-center gap-8px px-20px py-9px text-13px font-medium rd-[100px] transition-all cursor-pointer outline-none border ${
+                  activeMainTab === 'discover'
+                    ? 'bg-brand border-brand text-white shadow-sm'
+                    : 'bg-base border-border-1 text-t-secondary hover:text-t-primary hover:border-border-2'
+                }`}
+                onClick={() => setActiveMainTab('discover')}
+              >
+                {t('settings.skillsHub.tabDiscover', { defaultValue: '发现' })}
+                {totalExternal > 0 && (
+                  <span
+                    className={`text-11px px-7px py-1px rd-[100px] font-medium ${
+                      activeMainTab === 'discover' ? 'bg-white/25 text-white' : 'bg-fill-2 text-t-tertiary'
+                    }`}
+                  >
+                    {totalExternal}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            <div className='space-y-16px'>
+            {/* ======== 发现外部技能 / Discovered External Skills ======== */}
+            {activeMainTab === 'discover' && totalExternal > 0 && (
+              <div className='px-[16px] md:px-[32px] py-24px bg-base rd-16px md:rd-24px shadow-sm border border-b-base relative overflow-hidden transition-all'>
+                {/* Section toolbar: description + search + refresh */}
+                <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-12px mb-20px relative z-10'>
+                  <Typography.Text className='text-13px text-t-secondary leading-relaxed'>
+                    {t('settings.skillsHub.discoveryAlert', {
+                      defaultValue: '检测到来自 CLI 工具的技能，导入后可在 1ONE ClaudeCode 中使用。',
+                    })}
+                  </Typography.Text>
+                  <div className='flex items-center gap-8px shrink-0'>
+                    <div className='relative group w-full sm:w-[200px]'>
+                      <div className='absolute left-12px top-1/2 -translate-y-1/2 text-t-tertiary group-focus-within:text-primary-6 flex pointer-events-none transition-colors'>
+                        <Search size={15} />
+                      </div>
+                      <input
+                        type='text'
+                        className='w-full bg-fill-1 hover:bg-fill-2 border border-border-1 focus:border-primary-5 focus:bg-base outline-none rd-8px py-6px pl-36px pr-12px text-13px text-t-primary placeholder:text-t-tertiary transition-all shadow-sm box-border m-0'
+                        placeholder={t('settings.skillsHub.searchPlaceholder', { defaultValue: '搜索技能...' })}
+                        value={searchExternalQuery}
+                        onChange={(e) => setSearchExternalQuery(e.target.value)}
+                      />
                     </div>
-                    <input
-                      type='text'
-                      className='w-full bg-fill-1 hover:bg-fill-2 border border-border-1 focus:border-primary-5 focus:bg-base outline-none rd-8px py-6px pl-36px pr-12px text-13px text-t-primary placeholder:text-t-tertiary transition-all shadow-sm box-border m-0'
-                      placeholder={t('settings.skillsHub.searchPlaceholder', { defaultValue: 'Search skills...' })}
-                      value={searchExternalQuery}
-                      onChange={(e) => setSearchExternalQuery(e.target.value)}
-                    />
+                    <button
+                      className='outline-none border-none bg-transparent cursor-pointer p-6px text-t-tertiary hover:text-primary-6 transition-colors rd-full hover:bg-fill-2'
+                      onClick={() => void handleRefreshExternal()}
+                      title={t('common.refresh', { defaultValue: 'Refresh' })}
+                    >
+                      <Refresh theme='outline' size={16} className={refreshing ? 'animate-spin' : ''} />
+                    </button>
                   </div>
                 </div>
 
@@ -1174,6 +1278,18 @@ const SkillsHubSettings: React.FC = () => {
                   >
                     <Plus size={16} />
                   </button>
+                  <Select
+                    size='small'
+                    value={externalSkillFilter}
+                    onChange={(value) => setExternalSkillFilter(value as 'all' | 'unimported' | 'imported' | 'conflict')}
+                    options={[
+                      { value: 'all', label: t('settings.skillsHub.externalFilterAll', { defaultValue: 'All' }) },
+                      { value: 'unimported', label: t('settings.skillsHub.externalFilterUnimported', { defaultValue: 'Unimported' }) },
+                      { value: 'imported', label: t('settings.skillsHub.externalFilterImported', { defaultValue: 'Already imported' }) },
+                      { value: 'conflict', label: t('settings.skillsHub.externalFilterConflicts', { defaultValue: 'Name conflicts' }) },
+                    ]}
+                    className='w-[180px]'
+                  />
                 </div>
                 {/* Active tab content */}
                 {activeSource && (
@@ -1219,6 +1335,7 @@ const SkillsHubSettings: React.FC = () => {
                               {skill.name}
                             </h3>
                             <div className='mb-6px'>{renderSkillMetaTags(skill)}</div>
+                            <div className='flex flex-wrap gap-6px mb-6px'>{renderExternalSkillStatusTag(skill)}</div>
                             {skill.description && (
                               <p
                                 className='text-13px text-t-secondary leading-relaxed line-clamp-2 m-0'
@@ -1233,6 +1350,14 @@ const SkillsHubSettings: React.FC = () => {
                               size='small'
                               type='primary'
                               status='default'
+                              disabled={externalSkillImportStatusMap.get(skill.name) === 'builtin'}
+                              title={
+                                externalSkillImportStatusMap.get(skill.name) === 'builtin'
+                                  ? t('settings.skillsHub.externalSkillImportBlocked', {
+                                      defaultValue: 'Cannot import due to built-in skill name conflict',
+                                    })
+                                  : undefined
+                              }
                               onClick={(e) => {
                                 e.stopPropagation();
                                 void handleImport(externalSkillDirectory(skill), { skillName: skill.name });
@@ -1254,20 +1379,58 @@ const SkillsHubSettings: React.FC = () => {
                 )}
               </div>
             )}
+            {activeMainTab === 'discover' && totalExternal === 0 && (
+              <div className='text-center text-t-secondary text-13px py-60px bg-fill-1 rd-16px border border-b-base border-dashed flex flex-col items-center gap-12px'>
+                <span className='text-32px opacity-30'>🔍</span>
+                <div className='flex flex-col gap-4px'>
+                  <p className='m-0 font-medium text-t-primary'>
+                    {t('settings.skillsHub.discoverEmpty', { defaultValue: '未发现外部技能' })}
+                  </p>
+                  <p className='m-0 text-12px'>
+                    {t('settings.skillsHub.discoverEmptyHint', {
+                      defaultValue: '将 CLI 工具（Claude Code、Gemini、Agents）的技能目录添加到此处',
+                    })}
+                  </p>
+                </div>
+                <button
+                  type='button'
+                  className='px-16px py-8px bg-primary-6 text-white rd-8px text-13px font-medium hover:bg-primary-5 transition-colors cursor-pointer border-none outline-none'
+                  onClick={() => setShowAddPathModal(true)}
+                >
+                  {t('settings.skillsHub.addCustomPath', { defaultValue: '添加技能路径' })}
+                </button>
+              </div>
+            )}
 
             {/* ======== 我的技能 / My Skills ======== */}
+            {activeMainTab === 'library' && (
             <div className='px-[16px] md:px-[32px] py-32px bg-base rd-16px md:rd-24px shadow-sm border border-b-base relative overflow-hidden transition-all'>
               {/* Toolbar for My Skills */}
-              <div className='flex flex-col lg:flex-row lg:items-center justify-between gap-16px mb-24px relative z-10'>
-                <div className='flex items-center gap-10px shrink-0'>
-                  <span className='text-16px md:text-18px text-t-primary font-bold tracking-tight'>
-                    {t('settings.skillsHub.mySkillsTitle', { defaultValue: 'My Skills' })}
-                  </span>
-                  <span className='bg-[rgba(var(--primary-6),0.08)] text-primary-6 text-12px px-10px py-2px rd-[100px] font-medium ml-4px'>
-                    {availableSkills.length}
-                  </span>
+              <div className='flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-12px mb-24px relative z-10'>
+                <div className='relative group shrink-0 w-full sm:w-[240px]'>
+                  <div className='absolute left-12px top-1/2 -translate-y-1/2 text-t-tertiary group-focus-within:text-primary-6 flex pointer-events-none transition-colors'>
+                    <Search size={15} />
+                  </div>
+                  <input
+                    type='text'
+                    className='w-full bg-fill-1 hover:bg-fill-2 border border-border-1 focus:border-primary-5 focus:bg-base outline-none rd-8px py-6px pl-36px pr-12px text-13px text-t-primary placeholder:text-t-tertiary transition-all shadow-sm box-border m-0'
+                    placeholder={t('settings.skillsHub.searchPlaceholder', { defaultValue: '搜索技能...' })}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <div className='flex items-center gap-8px shrink-0'>
                   <button
-                    className='outline-none border-none bg-transparent cursor-pointer p-6px text-t-tertiary hover:text-primary-6 transition-colors rd-full hover:bg-fill-2 ml-4px'
+                    className='flex items-center justify-center gap-6px px-16px py-6px bg-base border border-border-1 hover:border-border-2 hover:bg-fill-1 text-t-primary rd-8px shadow-sm transition-all focus:outline-none cursor-pointer whitespace-nowrap'
+                    onClick={handleManualImport}
+                  >
+                    <FolderOpen size={15} className='text-t-secondary' />
+                    <span className='text-13px font-medium'>
+                      {t('settings.skillsHub.manualImport', { defaultValue: '从文件夹导入' })}
+                    </span>
+                  </button>
+                  <button
+                    className='outline-none border-none bg-transparent cursor-pointer p-6px text-t-tertiary hover:text-primary-6 transition-colors rd-full hover:bg-fill-2'
                     onClick={async () => {
                       await fetchData();
                       Message.success(t('common.refreshSuccess', { defaultValue: 'Refreshed' }));
@@ -1277,220 +1440,92 @@ const SkillsHubSettings: React.FC = () => {
                     <Refresh theme='outline' size={16} className={loading ? 'animate-spin' : ''} />
                   </button>
                 </div>
-
-                <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-12px w-full lg:w-auto shrink-0'>
-                  <div className='relative group shrink-0 w-full sm:w-[200px] lg:w-[240px]'>
-                    <div className='absolute left-12px top-1/2 -translate-y-1/2 text-t-tertiary group-focus-within:text-primary-6 flex pointer-events-none transition-colors'>
-                      <Search size={15} />
-                    </div>
-                    <input
-                      type='text'
-                      className='w-full bg-fill-1 hover:bg-fill-2 border border-border-1 focus:border-primary-5 focus:bg-base outline-none rd-8px py-6px pl-36px pr-12px text-13px text-t-primary placeholder:text-t-tertiary transition-all shadow-sm box-border m-0'
-                      placeholder={t('settings.skillsHub.searchPlaceholder', { defaultValue: 'Search skills...' })}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                  </div>
-
-                  <button
-                    className='flex items-center justify-center gap-6px px-16px py-6px bg-base border border-border-1 hover:border-border-2 hover:bg-fill-1 text-t-primary rd-8px shadow-sm transition-all focus:outline-none shrink-0 cursor-pointer whitespace-nowrap'
-                    onClick={handleManualImport}
-                  >
-                    <FolderOpen size={15} className='text-t-secondary' />
-                    <span className='text-13px font-medium'>
-                      {t('settings.skillsHub.manualImport', { defaultValue: 'Import from Folder' })}
-                    </span>
-                  </button>
-                </div>
               </div>
 
-              <div className='flex flex-wrap items-center gap-8px mb-16px'>
-                <Button
-                  size='small'
-                  type={agentFilter === 'all' ? 'primary' : 'outline'}
-                  className='rounded-[100px]'
-                  onClick={() => {
-                    setAgentFilter('all');
-                    setAssistantFilterIds([]);
-                    setUnassignedMode('global');
-                  }}
-                >
-                  {t('settings.skillsHub.filterAllAgents', { defaultValue: 'All Agents' })}
-                </Button>
-                <Button
-                  size='small'
-                  type={agentFilter === 'unassigned' ? 'primary' : 'outline'}
-                  className='rounded-[100px]'
-                  onClick={() => {
-                    setAgentFilter('unassigned');
-                    setAssistantFilterIds([]);
-                    setUnassignedMode('global');
-                  }}
-                >
-                  {t('settings.skillsHub.filterUnassigned', { defaultValue: 'Unassigned' })}
-                </Button>
-                {skillAgentFilters.map((agentType) => (
-                  <Tooltip
-                    key={`agent-filter-${agentType}`}
-                    content={() => {
-                      const info = agentTypeInfo.get(agentType);
-                      if (!info) return null;
-                      const uniqueNames = Array.from(new Set(info.names));
-                      return (
-                        <div className='max-w-[360px]'>
-                          <div className='font-medium mb-6px'>{getAgentLabel(agentType)}</div>
-                          <div className='text-12px opacity-80'>
-                            {uniqueNames.slice(0, 8).join('、')}
-                            {uniqueNames.length > 8 ? ` 等 ${uniqueNames.length} 个` : ''}
-                          </div>
-                        </div>
-                      );
-                    }}
-                  >
-                    <Button
-                      size='small'
-                      type={agentFilter === agentType ? 'primary' : 'outline'}
-                      className='rounded-[100px]'
+              {/* Status Filter Pills + View Toggle */}
+              <div className='flex flex-wrap items-center justify-between gap-10px mb-16px'>
+                <div className='flex items-center gap-8px'>
+                  {(['all', 'assigned', 'unassigned'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type='button'
+                      className={`px-16px py-6px text-13px rd-[100px] transition-all border outline-none cursor-pointer font-medium ${
+                        agentFilter === mode
+                          ? 'bg-primary-6 border-primary-6 text-white shadow-sm'
+                          : 'bg-base border-border-1 text-t-secondary hover:bg-fill-1 hover:text-t-primary'
+                      }`}
                       onClick={() => {
-                        setAgentFilter(agentType);
-                        setAssistantFilterIds([]);
-                        setUnassignedMode('global');
+                        setAgentFilter(mode);
                       }}
                     >
-                      {(() => {
-                        const info = agentTypeInfo.get(agentType);
-                        const count = info?.count ?? 0;
-                        return count > 1 ? `${getAgentLabel(agentType)} (${count})` : getAgentLabel(agentType);
-                      })()}
-                    </Button>
-                  </Tooltip>
-                ))}
-                {hasNonPresetAssistants && (
-                  <Button
-                    size='small'
-                    type={agentFilter === CUSTOM_ASSISTANT_AGENT_FILTER ? 'primary' : 'outline'}
-                    className='rounded-[100px]'
-                    onClick={() => {
-                      setAgentFilter(CUSTOM_ASSISTANT_AGENT_FILTER);
-                      setAssistantFilterIds([]);
-                      setUnassignedMode('global');
-                    }}
-                  >
-                    {t('settings.skillsHub.filterCustomAssistants', { defaultValue: 'Custom assistants' })}
-                  </Button>
-                )}
-              </div>
-
-              {(agentFilter !== 'all') && (
-                <div className='flex flex-wrap items-center gap-10px mb-16px'>
-                  <div className='flex items-center gap-8px'>
-                    <span className='text-12px text-t-tertiary'>
-                      {t('settings.skillsHub.filterByAssistant', { defaultValue: 'Filter by assistant' })}
-                    </span>
-                    {assistantFilterIds.length > 0 ? (
-                      <Tag size='small' color='arcoblue'>
-                        {t('settings.skillsHub.selectedCount', {
-                          count: assistantFilterIds.length,
-                          defaultValue: `${assistantFilterIds.length} selected`,
-                        })}
-                      </Tag>
-                    ) : null}
+                      {mode === 'all'
+                        ? t('settings.skillsHub.filterAll', { defaultValue: '全部' })
+                        : mode === 'assigned'
+                          ? t('settings.skillsHub.filterAssigned', { defaultValue: '已分配' })
+                          : skillView === 'by-assistant'
+                            ? t('settings.skillsHub.filterOnlyBuiltin', { defaultValue: '仅内置技能' })
+                            : t('settings.skillsHub.filterAgentDefault', { defaultValue: 'AGENT 默认调用' })}
+                      {mode === 'all' && (
+                        <span
+                          className={`ml-6px text-11px px-6px py-1px rd-[100px] ${agentFilter === 'all' ? 'bg-white/20 text-white' : 'bg-fill-2 text-t-tertiary'}`}
+                        >
+                          {availableSkills.length}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div className='flex items-center gap-8px'>
+                  {/* View toggle: 按技能 / 按助手 */}
+                  <div className='inline-flex bg-fill-2 p-2px rd-8px gap-1px'>
+                    {(['by-skill', 'by-assistant'] as const).map((view) => (
+                      <button
+                        key={view}
+                        type='button'
+                        className={`px-12px py-5px text-12px rd-6px transition-all cursor-pointer border-none outline-none whitespace-nowrap font-medium ${
+                          skillView === view
+                            ? 'bg-base shadow-sm text-t-primary'
+                            : 'bg-transparent text-t-secondary hover:text-t-primary'
+                        }`}
+                        onClick={() => setSkillView(view)}
+                      >
+                        {view === 'by-skill'
+                          ? t('settings.skillsHub.viewBySkill', { defaultValue: '按技能' })
+                          : t('settings.skillsHub.viewByAssistant', { defaultValue: '按助手' })}
+                      </button>
+                    ))}
                   </div>
-                  {agentFilter === 'unassigned' && (
+                  {skillView === 'by-skill' && (
                     <Select
                       size='small'
-                      className='w-full sm:w-[260px]'
-                      value={unassignedMode}
-                      onChange={(v) => setUnassignedMode(v as 'global' | 'selected-assistants')}
+                      className='w-[140px]'
+                      value={skillSortMode}
+                      onChange={(value) =>
+                        setSkillSortMode(value as 'usage-desc' | 'usage-asc' | 'name-asc' | 'name-desc')
+                      }
                       options={[
                         {
-                          value: 'global',
-                          label: t('settings.skillsHub.unassignedModeGlobal', {
-                            defaultValue: 'Globally unassigned',
-                          }),
+                          value: 'usage-desc',
+                          label: t('settings.skillsHub.sortUsageDesc', { defaultValue: '使用最多' }),
                         },
                         {
-                          value: 'selected-assistants',
-                          label: t('settings.skillsHub.unassignedModeSelected', {
-                            defaultValue: 'Not in selected assistants',
-                          }),
+                          value: 'name-asc',
+                          label: t('settings.skillsHub.sortNameAsc', { defaultValue: '名称 A → Z' }),
+                        },
+                        {
+                          value: 'name-desc',
+                          label: t('settings.skillsHub.sortNameDesc', { defaultValue: '名称 Z → A' }),
                         },
                       ]}
                     />
                   )}
-                  <div className='min-w-[240px] w-full sm:w-[360px]'>
-                    <Select
-                      mode='multiple'
-                      allowClear
-                      showSearch
-                      placeholder={t('settings.skillsHub.filterAssistantsPlaceholder', {
-                        defaultValue: 'Select assistants…',
-                      })}
-                      value={assistantFilterIds}
-                      onChange={(value) => setAssistantFilterIds(Array.isArray(value) ? (value as string[]) : [])}
-                      options={assistantsForSelectedAgentTypeOptions}
-                      maxTagCount={2}
-                      filterOption={(input, option) =>
-                        String(option?.label ?? '')
-                          .toLowerCase()
-                          .includes(String(input).toLowerCase())
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className='flex flex-col lg:flex-row lg:items-center flex-wrap gap-10px mb-16px'>
-                <div className='flex flex-wrap items-center gap-8px'>
-                  <Button
-                    size='small'
-                    type={skillListLayout === 'flat' ? 'primary' : 'outline'}
-                    className='rounded-[100px]'
-                    onClick={() => setSkillListLayout('flat')}
-                  >
-                    {t('settings.skillsHub.layoutFlat', { defaultValue: 'Flat list' })}
-                  </Button>
-                  <Button
-                    size='small'
-                    type={skillListLayout === 'by-assistant' ? 'primary' : 'outline'}
-                    className='rounded-[100px]'
-                    onClick={() => setSkillListLayout('by-assistant')}
-                  >
-                    {t('settings.skillsHub.layoutByAssistant', { defaultValue: 'By assistant' })}
+                  <Button size='small' type='outline' className='rounded-[100px]' onClick={() => openReplaceModal()}>
+                    {t('settings.skillsHub.batchReplace', { defaultValue: '批量替换' })}
                   </Button>
                 </div>
-                <Select
-                  size='small'
-                  className='w-full lg:w-[200px]'
-                  value={skillSortMode}
-                  onChange={(value) =>
-                    setSkillSortMode(value as 'usage-desc' | 'usage-asc' | 'name-asc' | 'name-desc')
-                  }
-                  options={[
-                    {
-                      value: 'usage-desc',
-                      label: t('settings.skillsHub.sortUsageDesc', { defaultValue: 'Usage: high → low' }),
-                    },
-                    {
-                      value: 'usage-asc',
-                      label: t('settings.skillsHub.sortUsageAsc', { defaultValue: 'Usage: low → high' }),
-                    },
-                    {
-                      value: 'name-asc',
-                      label: t('settings.skillsHub.sortNameAsc', { defaultValue: 'Name: A → Z' }),
-                    },
-                    {
-                      value: 'name-desc',
-                      label: t('settings.skillsHub.sortNameDesc', { defaultValue: 'Name: Z → A' }),
-                    },
-                  ]}
-                />
-                <Button size='small' type='outline' className='rounded-[100px]' onClick={() => openReplaceModal()}>
-                  {t('settings.skillsHub.batchReplace', { defaultValue: 'Batch replace' })}
-                </Button>
               </div>
 
-              {/* Path Display moved below the toolbar */}
+              {/* Path Display */}
               {skillPaths && (
                 <div className='flex items-center gap-8px text-12px text-t-tertiary font-mono bg-transparent py-4px mb-16px relative z-10 pt-4px border-t border-t-transparent'>
                   <FolderOpen size={16} className='shrink-0' />
@@ -1501,76 +1536,171 @@ const SkillsHubSettings: React.FC = () => {
               )}
 
               {availableSkills.length > 0 ? (
-                <div className='w-full flex flex-col gap-6px relative z-10'>
-                  {skillListLayout === 'flat' ? (
-                    displaySkills.map(renderMySkillRow)
-                  ) : (
+                <div className='w-full flex flex-col gap-0 relative z-10'>
+                  {skillView === 'by-skill' ? (
                     <>
-                      {groupedAssistantSections.unassignedSkills.length > 0 && (
-                        <div className='mb-16px flex flex-col gap-8px'>
-                          <div className='text-13px font-semibold text-t-primary px-4px'>
-                            {t('settings.skillsHub.sectionUnassigned', {
-                              defaultValue: 'Unassigned skills',
-                            })}
-                          </div>
-                          <div className='flex flex-col gap-6px'>
-                            {groupedAssistantSections.unassignedSkills.map(renderMySkillRow)}
-                          </div>
+                      {/* Table header */}
+                      <div className='grid grid-cols-[minmax(160px,2fr)_minmax(0,3fr)_minmax(0,2.5fr)_40px] items-center gap-12px px-12px py-8px mb-2px bg-fill-2 rd-8px'>
+                        <span className='text-11px font-semibold text-t-tertiary uppercase tracking-wider'>
+                          {t('settings.skillsHub.colSkill', { defaultValue: '技能' })}
+                        </span>
+                        <span className='text-11px font-semibold text-t-tertiary uppercase tracking-wider'>
+                          {t('settings.skillsHub.colDescription', { defaultValue: '描述' })}
+                        </span>
+                        <span className='text-11px font-semibold text-t-tertiary uppercase tracking-wider'>
+                          {t('settings.skillsHub.colUsedBy', { defaultValue: '使用中的助手' })}
+                        </span>
+                        <span />
+                      </div>
+                      {displaySkills.length > 0 ? (
+                        displaySkills.map(renderMySkillRow)
+                      ) : (
+                        <div className='text-center text-t-secondary text-13px py-32px bg-fill-1 rd-8px border border-b-base border-dashed mt-4px'>
+                          {t('settings.skillsHub.noSearchResults', { defaultValue: 'No matching skills found' })}
                         </div>
                       )}
-                      {groupedAssistantSections.sections.map(({ assistant, skills }) => (
-                        <div
-                          key={assistant.id}
-                          className='mb-16px flex flex-col gap-8px border border-border-1 rd-12px p-12px bg-fill-1'
-                        >
-                          <div className='flex flex-wrap items-center justify-between gap-8px px-4px'>
-                            <div className='flex flex-wrap items-center gap-8px min-w-0'>
-                              <span className='text-13px font-semibold text-t-primary truncate'>
-                                {getAssistantDisplayName(assistant)}
-                              </span>
-                              <Tag size='small' color='arcoblue'>
-                                {getAgentLabel(assistant.presetAgentType)}
-                              </Tag>
-                              {assistant.isPreset === false && (
-                                <Tag size='small' color='orangered'>
-                                  {t('settings.assistantFilterCustom', { defaultValue: 'Custom' })}
-                                </Tag>
-                              )}
-                            </div>
-                            {skills.length > 0 && (
-                              <Button
-                                size='mini'
-                                type='outline'
-                                className='shrink-0'
-                                onClick={() => {
-                                  const list = skills.map((s) => s.name).join(', ');
-                                  Modal.confirm({
-                                    title: t('settings.skillsHub.stripAssistantSkillsTitle', {
-                                      defaultValue: 'Remove skills from this assistant?',
-                                    }),
-                                    content: t('settings.skillsHub.stripAssistantSkillsContent', {
-                                      name: getAssistantDisplayName(assistant),
-                                      list,
-                                      defaultValue: `Remove all skills listed below from "${getAssistantDisplayName(assistant)}": ${list}`,
-                                    }),
-                                    okButtonProps: { status: 'danger' },
-                                    onOk: () =>
-                                      void handleStripListedSkillsFromAssistant(
-                                        assistant.id,
-                                        skills.map((s) => s.name)
-                                      ),
-                                  });
-                                }}
-                              >
-                                {t('settings.skillsHub.stripAssistantSkillsButton', {
-                                  defaultValue: 'Clear listed skills',
-                                })}
-                              </Button>
-                            )}
-                          </div>
-                          <div className='flex flex-col gap-6px'>{skills.map(renderMySkillRow)}</div>
+                    </>
+                  ) : (
+                    <>
+                      {/* By-assistant view — compact single-row table */}
+                      {groupedByAssistantData.sections.length === 0 && groupedByAssistantData.unassignedSkills.length === 0 ? (
+                        <div className='text-center text-t-secondary text-13px py-32px bg-fill-1 rd-8px border border-b-base border-dashed'>
+                          {t('settings.skillsHub.noSkillsAssigned', { defaultValue: '当前筛选条件下无结果' })}
                         </div>
-                      ))}
+                      ) : (
+                        <>
+                          {/* Table header */}
+                          <div className='grid grid-cols-[minmax(180px,2fr)_1fr_160px] items-center gap-12px px-12px py-8px mb-2px bg-fill-2 rd-8px'>
+                            <span className='text-11px font-semibold text-t-tertiary uppercase tracking-wider'>
+                              {t('settings.skillsHub.colAssistant', { defaultValue: '助手' })}
+                            </span>
+                            <span className='text-11px font-semibold text-t-tertiary uppercase tracking-wider'>
+                              {t('settings.skillsHub.colEnabledSkills', { defaultValue: '已启用技能' })}
+                            </span>
+                            <span />
+                          </div>
+
+                          {groupedByAssistantData.sections.map(({ assistant, skills, totalEnabledCount, missingCount }) => (
+                            <div
+                              key={assistant.id}
+                              className='group grid grid-cols-[minmax(180px,2fr)_1fr_160px] items-center gap-12px px-12px py-10px hover:bg-fill-1 rd-8px transition-all duration-150 border border-transparent hover:border-border-1'
+                            >
+                              {/* Col 1: Identity */}
+                              <div className='flex items-center gap-8px min-w-0'>
+                                <div
+                                  className={`w-28px h-28px shrink-0 rd-8px flex items-center justify-center font-bold text-11px text-transform-uppercase ${getAvatarColorClass(assistant.name)}`}
+                                >
+                                  {(assistant.nameI18n?.['zh-CN'] || assistant.name)?.charAt(0)?.toUpperCase()}
+                                </div>
+                                <div className='flex flex-col min-w-0'>
+                                  <span className='text-13px font-medium text-t-primary truncate'>
+                                    {getAssistantDisplayName(assistant)}
+                                  </span>
+                                  {assistant.presetAgentType && (
+                                    <span className='text-10px text-t-tertiary'>
+                                      {getAgentLabel(assistant.presetAgentType)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Col 2: Optional skill chips + system note (fully symmetric with 按技能 view) */}
+                              <div className='flex flex-wrap items-center gap-4px'>
+                                {skills.length === 0 ? (
+                                  <span className='text-11px text-t-tertiary'>
+                                    {t('settings.skillsHub.noOptionalSkills', { defaultValue: '未配置可选技能' })}
+                                  </span>
+                                ) : (
+                                  <>
+                                    {skills.slice(0, 3).map((skill) => (
+                                      <button
+                                        key={skill.name}
+                                        type='button'
+                                        className='text-11px px-8px py-3px rd-[100px] bg-primary-1 border border-primary-3 text-primary-6 hover:bg-primary-2 transition-colors cursor-pointer outline-none'
+                                        onClick={() => setMySkillPreview(skill)}
+                                        title={skill.description}
+                                      >
+                                        {skill.name}
+                                      </button>
+                                    ))}
+                                    {skills.length > 3 && (
+                                      <span className='text-11px text-t-tertiary px-4px'>+{skills.length - 3}</span>
+                                    )}
+                                  </>
+                                )}
+                                {/* Auto-skills: always-on system skills, shown as a non-interactive note only */}
+                                {autoSkills.length > 0 && (
+                                  <span
+                                    className='text-10px px-7px py-2px rd-[100px] bg-fill-2 border border-border-1 text-t-tertiary'
+                                    title={`系统内置（自动注入，不可管理）：${autoSkills.map((s) => s.name).join('、')}`}
+                                  >
+                                    系统: {autoSkills.length} 内置
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Col 3: Actions */}
+                              <div className='flex items-center justify-end gap-6px opacity-0 group-hover:opacity-100 transition-opacity'>
+                                <button
+                                  type='button'
+                                  className='text-11px text-primary-6 hover:text-primary-5 bg-primary-1 hover:bg-primary-2 px-10px py-5px rd-6px border border-primary-3 cursor-pointer transition-colors whitespace-nowrap outline-none'
+                                  onClick={() => openConfigAssistantSkills(assistant)}
+                                >
+                                  {skills.length === 0
+                                    ? t('settings.skillsHub.addSkill', { defaultValue: '+ 配置技能' })
+                                    : t('settings.skillsHub.manageSkills', { defaultValue: '配置技能' })}
+                                </button>
+                                <button
+                                  type='button'
+                                  className='text-11px text-t-secondary hover:text-t-primary bg-fill-2 hover:bg-fill-3 px-10px py-5px rd-6px border border-border-1 cursor-pointer transition-colors whitespace-nowrap outline-none'
+                                  onClick={() => openAssistantEditor(assistant)}
+                                >
+                                  {t('settings.skillsHub.editAssistant', { defaultValue: '编辑' })}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* AGENT 默认调用 section */}
+                          {groupedByAssistantData.unassignedSkills.length > 0 && (
+                            <div className='mt-16px pt-16px border-t border-border-1'>
+                              <div className='flex items-center gap-8px px-12px mb-4px'>
+                                <span className='text-12px font-semibold text-t-primary'>
+                                  {t('settings.skillsHub.sectionAgentDefault', { defaultValue: 'AGENT 默认调用' })}
+                                </span>
+                                <span className='text-11px px-7px py-1px rd-[100px] bg-fill-3 text-t-tertiary font-medium'>
+                                  {groupedByAssistantData.unassignedSkills.length}
+                                </span>
+                              </div>
+                              <p className='text-11px text-t-tertiary px-12px mb-10px m-0 leading-relaxed'>
+                                {t('settings.skillsHub.agentDefaultDesc', {
+                                  defaultValue: '未指定给任何助手，可被 AGENT 在执行过程中按需调用。点击可分配给特定助手。',
+                                })}
+                              </p>
+                              <div className='flex flex-wrap gap-6px px-12px'>
+                                {groupedByAssistantData.unassignedSkills.map((skill) => (
+                                  <button
+                                    key={skill.name}
+                                    data-testid={`my-skill-row-${skill.name}`}
+                                    type='button'
+                                    className='group/chip flex items-center gap-6px text-12px px-10px py-5px rd-[100px] bg-fill-2 border border-border-1 text-t-secondary hover:bg-primary-1 hover:text-primary-6 hover:border-primary-4 transition-colors cursor-pointer outline-none'
+                                    onClick={() => openAssignModal(skill)}
+                                    title={skill.description}
+                                  >
+                                    <div
+                                      className={`w-16px h-16px shrink-0 rd-4px flex items-center justify-center font-bold text-9px text-transform-uppercase ${getAvatarColorClass(skill.name)}`}
+                                    >
+                                      {skill.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    {skill.name}
+                                    <span className='text-10px text-t-tertiary group-hover/chip:text-primary-5'>+ 分配</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </>
                   )}
                 </div>
@@ -1584,8 +1714,10 @@ const SkillsHubSettings: React.FC = () => {
                 </div>
               )}
             </div>
+            )}
 
             {/* ======== Usage Tip ======== */}
+            {activeMainTab === 'library' && (
             <div className='px-16px md:px-[24px] py-20px bg-base border border-b-base shadow-sm rd-16px flex items-start gap-12px text-t-secondary'>
               <Info size={18} className='text-primary-6 mt-2px shrink-0' />
               <div className='flex flex-col gap-4px'>
@@ -1594,6 +1726,8 @@ const SkillsHubSettings: React.FC = () => {
                 </span>
                 <span className='text-13px leading-relaxed'>{t('settings.skillsHub.tipContent')}</span>
               </div>
+            </div>
+            )}
             </div>
           </div>
         </div>
@@ -1622,6 +1756,14 @@ const SkillsHubSettings: React.FC = () => {
                 </Button>
                 <Button
                   type='primary'
+                  disabled={externalPreviewStatus === 'builtin'}
+                  title={
+                    externalPreviewStatus === 'builtin'
+                      ? t('settings.skillsHub.externalSkillImportBlocked', {
+                          defaultValue: 'Cannot import due to built-in skill name conflict',
+                        })
+                      : undefined
+                  }
                   onClick={() =>
                     void handleImport(externalSkillDirectory(externalPreviewSkill), {
                       skillName: externalPreviewSkill.name,
@@ -1657,6 +1799,14 @@ const SkillsHubSettings: React.FC = () => {
               </Typography.Paragraph>
             </div>
             <div>{renderSkillMetaTags(externalPreviewSkill)}</div>
+            <div className='flex flex-wrap gap-6px'>{renderExternalSkillStatusTag(externalPreviewSkill)}</div>
+            {externalPreviewStatus === 'builtin' ? (
+              <div className='text-12px text-orangered-6'>
+                {t('settings.skillsHub.externalPreviewBuiltinConflict', {
+                  defaultValue: 'This skill cannot be imported because its name conflicts with an existing built-in skill.',
+                })}
+              </div>
+            ) : null}
             {externalPreviewSkill.description ? (
               <div>
                 <div className='text-12px font-medium text-t-secondary mb-6px'>
@@ -1799,6 +1949,94 @@ const SkillsHubSettings: React.FC = () => {
             ) : null}
           </div>
         ) : null}
+      </Modal>
+
+      {/* Configure skills for a specific assistant (by-assistant view) */}
+      <Modal
+        title={
+          configAssistantTarget
+            ? t('settings.skillsHub.configAssistantTitle', {
+                name: getAssistantDisplayName(configAssistantTarget),
+                defaultValue: `为「${getAssistantDisplayName(configAssistantTarget)}」配置技能`,
+              })
+            : ''
+        }
+        visible={configAssistantVisible}
+        onCancel={() => setConfigAssistantVisible(false)}
+        style={{ maxWidth: 520 }}
+        footer={
+          <div className='flex justify-end gap-8px'>
+            <Button onClick={() => setConfigAssistantVisible(false)}>
+              {t('common.cancel', { defaultValue: '取消' })}
+            </Button>
+            <Button type='primary' loading={configAssistantSaving} onClick={() => void handleSaveConfigAssistantSkills()}>
+              {t('common.save', { defaultValue: '保存' })}
+            </Button>
+          </div>
+        }
+        autoFocus={false}
+        focusLock
+      >
+        <div className='flex flex-col gap-12px'>
+          <div className='relative'>
+            <div className='absolute left-10px top-1/2 -translate-y-1/2 text-t-tertiary pointer-events-none'>
+              <Search size={14} />
+            </div>
+            <input
+              type='text'
+              className='w-full bg-fill-1 border border-border-1 focus:border-primary-5 outline-none rd-8px py-6px pl-32px pr-12px text-13px text-t-primary placeholder:text-t-tertiary transition-all box-border m-0'
+              placeholder={t('settings.skillsHub.searchPlaceholder', { defaultValue: '搜索技能...' })}
+              value={configAssistantSearch}
+              onChange={(e) => setConfigAssistantSearch(e.target.value)}
+            />
+          </div>
+          <div className='max-h-[360px] overflow-y-auto flex flex-col gap-2px custom-scrollbar'>
+            {availableSkills
+              .filter((s) => {
+                const q = configAssistantSearch.toLowerCase();
+                return !q || s.name.toLowerCase().includes(q) || (s.description?.toLowerCase().includes(q) ?? false);
+              })
+              .map((skill) => {
+                const checked = configAssistantSkillIds.includes(skill.name);
+                return (
+                  <div
+                    key={skill.name}
+                    className={`flex items-center gap-12px px-12px py-10px rd-8px cursor-pointer transition-all hover:bg-fill-1 ${checked ? 'bg-primary-1 hover:bg-primary-1' : ''}`}
+                    onClick={() => {
+                      setConfigAssistantSkillIds((prev) =>
+                        checked ? prev.filter((n) => n !== skill.name) : [...prev, skill.name]
+                      );
+                    }}
+                  >
+                    <Checkbox checked={checked} onChange={() => {}} />
+                    <div className='flex flex-col min-w-0 flex-1'>
+                      <div className='flex items-center gap-8px'>
+                        <span className='text-13px font-medium text-t-primary truncate'>{skill.name}</span>
+                        {skill.isCustom ? (
+                          <span className='text-10px px-5px rd-4px bg-[rgba(var(--orange-6),0.08)] text-orange-6 border border-[rgba(var(--orange-6),0.2)]'>
+                            {t('settings.skillsHub.installed', { defaultValue: '已安装' })}
+                          </span>
+                        ) : (
+                          <span className='text-10px px-5px rd-4px bg-[rgba(var(--blue-6),0.08)] text-blue-6 border border-[rgba(var(--blue-6),0.2)]'>
+                            {t('settings.skillsHub.official', { defaultValue: '官方' })}
+                          </span>
+                        )}
+                      </div>
+                      {skill.description && (
+                        <p className='text-11px text-t-tertiary m-0 line-clamp-1'>{skill.description}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+          <div className='text-11px text-t-tertiary'>
+            {t('settings.skillsHub.configAssistantSelected', {
+              count: configAssistantSkillIds.length,
+              defaultValue: `已选择 ${configAssistantSkillIds.length} 个技能`,
+            })}
+          </div>
+        </div>
       </Modal>
 
       {/* Add Custom External Path Modal */}

@@ -14,7 +14,7 @@ import JSZip from 'jszip';
 import { ipcBridge } from '@/common';
 import type { SkillMetadata, SkillSourceKind } from '@/common/types/skillMetadata';
 import { readSkillMetadata } from '@process/extensions/resolvers/utils/skillMetadata';
-import { getSystemDir, getAssistantsDir, getSkillsDir, getBuiltinSkillsCopyDir } from '@process/utils/initStorage';
+import { getSystemDir, getAssistantsDir, getSkillsDir, getBuiltinSkillsCopyDir, getAutoSkillsDir } from '@process/utils/initStorage';
 import { readDirectoryRecursive } from '@process/utils';
 
 // ============================================================================
@@ -893,7 +893,20 @@ export function initFsBridge(): void {
     }
   });
 
-  // 读取 skill 信息（不导入）/ Read skill info without importing
+  // 获取自动注入 skills (_builtin/) / List auto-injected skills from _builtin directory
+  ipcBridge.fs.listAutoSkills.provider(async () => {
+    try {
+      const autoSkills = await collectSkillMetadataFromDirectory(getAutoSkillsDir(), {
+        sourceKind: 'builtin',
+        isCustom: false,
+        sourceLabel: 'Auto',
+      });
+      return autoSkills;
+    } catch (error) {
+      console.error('[fsBridge] Failed to list auto skills:', error);
+      return [];
+    }
+  });
   ipcBridge.fs.readSkillInfo.provider(async ({ skillPath }) => {
     try {
       const metadata = readSkillMetadata(skillPath, {

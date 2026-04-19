@@ -4,6 +4,11 @@ import { render, screen, waitFor, fireEvent, within } from '@testing-library/rea
 
 // === Mocking Dependencies === //
 
+// Mock react-router-dom
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
+
 // Mock react-i18next
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -85,6 +90,7 @@ vi.mock('@/common', () => {
     ipcBridge: {
       fs: {
         listAvailableSkills: { invoke: (...args: any[]) => mockListAvailableSkills(...args) },
+        listAutoSkills: { invoke: () => Promise.resolve([]) },
         detectAndCountExternalSkills: { invoke: (...args: any[]) => mockDetectAndCountExternalSkills(...args) },
         getSkillPaths: { invoke: (...args: any[]) => mockGetSkillPaths(...args) },
         importSkillWithSymlink: { invoke: (...args: any[]) => mockImportSkillWithSymlink(...args) },
@@ -97,6 +103,9 @@ vi.mock('@/common', () => {
       },
       shell: {
         showItemInFolder: { invoke: (...args: any[]) => mockShowItemInFolder(...args) },
+      },
+      extensions: {
+        getAssistants: { invoke: () => Promise.resolve([]) },
       },
     },
   };
@@ -214,22 +223,29 @@ describe('SkillsHubSettings Component', () => {
       expect(mockDetectAndCountExternalSkills).toHaveBeenCalled();
     });
 
-    // Check headers
-    expect(screen.getByText('Discovered External Skills')).toBeInTheDocument();
-    expect(screen.getByText('My Skills')).toBeInTheDocument();
+    // Tab navigation should be present
+    expect(screen.getByText('我的技能')).toBeInTheDocument();
+    expect(screen.getByText('发现')).toBeInTheDocument();
 
-    // Check external skills render
-    expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
-    expect(screen.getByText('ExtSkill1')).toBeInTheDocument();
-
-    // Check my skills render
+    // Default tab is library — My Skills should be visible
     expect(screen.getByText('MySkill1')).toBeInTheDocument();
     expect(screen.getByText('Builtin1')).toBeInTheDocument();
-    expect(screen.getByText('Custom')).toBeInTheDocument();
-    expect(screen.getByText('Built-in')).toBeInTheDocument();
+    expect(screen.getByText('已安装')).toBeInTheDocument();
+    expect(screen.getByText('官方')).toBeInTheDocument();
 
-    // Check paths are rendered
+    // Paths rendered
     expect(screen.getByText('/user/skills')).toBeInTheDocument();
+
+    // External skills not yet visible (in Discover tab)
+    expect(screen.queryByText('ExtSkill1')).not.toBeInTheDocument();
+
+    // Switch to Discover tab
+    fireEvent.click(screen.getByText('发现'));
+
+    await waitFor(() => {
+      expect(screen.getByText('ExtSkill1')).toBeInTheDocument();
+      expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
+    });
   });
 
   it('should filter skills correctly by search query', async () => {
@@ -239,13 +255,11 @@ describe('SkillsHubSettings Component', () => {
       expect(screen.getByText('MySkill1')).toBeInTheDocument();
     });
 
-    // Get the My Skills search input
-    // The component has two search inputs, the second one is for My Skills
-    const searchInputs = screen.getAllByPlaceholderText('Search skills...');
-    const mySkillsSearch = searchInputs[1];
+    // Get the My Skills search input (single search on library tab)
+    const searchInput = screen.getByPlaceholderText('搜索技能...');
 
     // Search for non-existent skill
-    fireEvent.change(mySkillsSearch, { target: { value: 'NotFound' } });
+    fireEvent.change(searchInput, { target: { value: 'NotFound' } });
 
     await waitFor(() => {
       expect(screen.queryByText('MySkill1')).not.toBeInTheDocument();
@@ -253,7 +267,7 @@ describe('SkillsHubSettings Component', () => {
     });
 
     // Search for one specific skill
-    fireEvent.change(mySkillsSearch, { target: { value: 'builtin' } });
+    fireEvent.change(searchInput, { target: { value: 'builtin' } });
 
     await waitFor(() => {
       expect(screen.queryByText('MySkill1')).not.toBeInTheDocument();
@@ -266,12 +280,17 @@ describe('SkillsHubSettings Component', () => {
 
     render(<SkillsHubSettings />);
 
+    // Switch to Discover tab first
+    await waitFor(() => {
+      expect(screen.getByText('发现')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('发现'));
+
     await waitFor(() => {
       expect(screen.getByText('ExtSkill1')).toBeInTheDocument();
     });
 
     // Find import button for the external skill
-    // ExtSkill1 and ExtSkill2 - first Import button
     const importButtons = screen.getAllByText('Import');
     expect(importButtons.length).toBeGreaterThan(0);
 
@@ -286,6 +305,10 @@ describe('SkillsHubSettings Component', () => {
     mockImportSkillWithSymlink.mockResolvedValue({ success: true });
 
     render(<SkillsHubSettings />);
+
+    // Switch to Discover tab first
+    await waitFor(() => expect(screen.getByText('发现')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('发现'));
 
     await waitFor(() => {
       expect(screen.getByTestId('external-skill-row-ExtSkill1')).toBeInTheDocument();
@@ -315,6 +338,10 @@ describe('SkillsHubSettings Component', () => {
     });
 
     render(<SkillsHubSettings />);
+
+    // Switch to Discover tab
+    await waitFor(() => expect(screen.getByText('发现')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('发现'));
 
     await waitFor(() => {
       expect(screen.getByText('ExtSkill1')).toBeInTheDocument();
@@ -382,12 +409,15 @@ describe('SkillsHubSettings Component', () => {
   it('should be able to add a custom external path', async () => {
     render(<SkillsHubSettings />);
 
+    // Switch to Discover tab to access the + button
+    await waitFor(() => expect(screen.getByText('发现')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('发现'));
+
     await waitFor(() => {
-      expect(screen.getByText('Discovered External Skills')).toBeInTheDocument();
+      expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
     });
 
-    // Click Add button (has title "Add" mocked effectively)
-    // Instead of targeting testid, let's grab the add button. In UI it's a Plus icon.
+    // Click Add button (Plus icon)
     const plusIcon = screen.getByTestId('icon-plus');
     fireEvent.click(plusIcon.parentElement!);
 

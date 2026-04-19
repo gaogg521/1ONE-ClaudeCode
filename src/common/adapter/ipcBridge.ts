@@ -268,6 +268,8 @@ export const fs = {
   deleteAssistantSkill: bridge.buildProvider<boolean, { assistantId: string }>('delete-assistant-skill'), // 删除助手技能文件
   // 获取可用 skills 列表 / List available skills from skills directory
   listAvailableSkills: bridge.buildProvider<SkillMetadata[], void>('list-available-skills'),
+  // 获取自动注入 skills 列表 (_builtin/) / List auto-injected skills from _builtin directory
+  listAutoSkills: bridge.buildProvider<SkillMetadata[], void>('list-auto-skills'),
   // 读取 skill 信息（不导入）/ Read skill info without importing
   readSkillInfo: bridge.buildProvider<IBridgeResponse<{ name: string; description: string }>, { skillPath: string }>(
     'read-skill-info'
