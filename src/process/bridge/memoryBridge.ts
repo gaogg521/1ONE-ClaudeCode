@@ -34,6 +34,14 @@ async function resolveClaudeProjectRoot(): Promise<string> {
   return getSystemDir().workDir;
 }
 
+async function resolveClaudeProjectExtraRoots(): Promise<string[]> {
+  const configured = await ProcessConfig.get('memory.claudeProjectExtraRoots').catch((): undefined => undefined);
+  if (!Array.isArray(configured)) return [];
+  return configured
+    .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+    .map((item) => normalizeRootInput(item.trim()));
+}
+
 function normalizeRootInput(inputPath: string): string {
   const resolved = path.resolve(inputPath);
   try {
@@ -84,11 +92,15 @@ async function buildScopeInfo(): Promise<MemoryScopeInfo> {
   const configuredRoot =
     typeof configuredRaw === 'string' && configuredRaw.trim() ? path.resolve(configuredRaw.trim()) : null;
   const effectiveRoot = configuredRoot ?? appWorkDir;
+  const extraRoots = await resolveClaudeProjectExtraRoots();
+  const roots = [effectiveRoot, ...extraRoots].filter((r, index, self) => self.indexOf(r) === index);
+  const memoryDirs = roots.map(getMemoryDir);
   const { readPath, exists } = resolveProjectClaudePaths(effectiveRoot);
   return {
     effectiveRoot,
     configuredRoot,
-    absoluteMemoryDir: getMemoryDir(effectiveRoot),
+    additionalRoots: extraRoots,
+    absoluteMemoryDirs: memoryDirs,
     projectClaudePath: readPath,
     projectClaudeExists: exists,
     globalClaudePath: getGlobalClaudePath(),
@@ -106,6 +118,24 @@ export function initMemoryBridge(conversationRepo: IConversationRepository): voi
     }
     const resolved = normalizeRootInput(String(rootPath).trim());
     await ProcessConfig.set('memory.claudeProjectRoot', resolved);
+  });
+
+  ipcBridge.memory.setClaudeProjectRoots.provider(async ({ path: rootPath, extraRoots }) => {
+    if (rootPath === null || !String(rootPath).trim()) {
+      await ProcessConfig.remove('memory.claudeProjectRoot');
+    } else {
+      await ProcessConfig.set('memory.claudeProjectRoot', normalizeRootInput(String(rootPath).trim()));
+    }
+    const normalizedExtraRoots = Array.isArray(extraRoots)
+      ? extraRoots
+          .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+          .map((item) => normalizeRootInput(item.trim()))
+      : [];
+    if (normalizedExtraRoots.length > 0) {
+      await ProcessConfig.set('memory.claudeProjectExtraRoots', normalizedExtraRoots);
+    } else {
+      await ProcessConfig.remove('memory.claudeProjectExtraRoots');
+    }
   });
 
   ipcBridge.memory.suggestRoots.provider(async () => {
@@ -142,69 +172,89 @@ export function initMemoryBridge(conversationRepo: IConversationRepository): voi
 
   ipcBridge.memory.list.provider(async () => {
     const projectRoot = await resolveClaudeProjectRoot();
-    const dir = getMemoryDir(projectRoot);
-    console.log('[Memory Bridge] memory dir:', dir);
+    const extraRoots = await resolveClaudeProjectExtraRoots();
+    const roots = [projectRoot, ...extraRoots].filter((r, index, self) => self.indexOf(r) === index);
+    const dirs = roots.map(getMemoryDir);
+    console.log('[Memory Bridge] memory dirs:', dirs);
     const fsp = await import('node:fs/promises');
-    try {
-      const files = (await fsp.readdir(dir)).filter((f) => f.endsWith('.md'));
-      const settled = await Promise.all(
-        files.map(async (file) => {
-          const filePath = path.join(dir, file);
-          try {
-            const content = await fsp.readFile(filePath, 'utf-8');
-            const stat = statSync(filePath);
-            return {
-              name: parseEntryName(file, content),
-              filename: file,
-              path: filePath,
-              content,
-              updatedAt: stat.mtimeMs,
-            } satisfies MemoryFileEntry;
-          } catch {
-            return null;
-          }
-        })
-      );
-      return settled.filter((e): e is MemoryFileEntry => e !== null).toSorted((a, b) => b.updatedAt - a.updatedAt);
-    } catch {
-      return [];
+    const entries: MemoryFileEntry[] = [];
+    for (const dir of dirs) {
+      try {
+        const files = (await fsp.readdir(dir)).filter((f) => f.endsWith('.md'));
+        const nested = await Promise.all(
+          files.map(async (file) => {
+            const filePath = path.join(dir, file);
+            try {
+              const content = await fsp.readFile(filePath, 'utf-8');
+              const stat = statSync(filePath);
+              return {
+                name: parseEntryName(file, content),
+                filename: file,
+                path: filePath,
+                content,
+                updatedAt: stat.mtimeMs,
+              } satisfies MemoryFileEntry;
+            } catch {
+              return null;
+            }
+          })
+        );
+        entries.push(...nested.filter((e): e is MemoryFileEntry => e !== null));
+      } catch {
+        // ignore missing dir
+      }
     }
+    return entries.toSorted((a, b) => b.updatedAt - a.updatedAt);
   });
 
-  ipcBridge.memory.read.provider(async ({ filename }) => {
+  ipcBridge.memory.read.provider(async ({ filename, path: filePath }) => {
     if (filename === 'global-claude') {
       const p = getGlobalClaudePath();
       return existsSync(p) ? readFileSync(p, 'utf-8') : '';
     }
+    if (filePath && typeof filePath === 'string') {
+      try {
+        return readFileSync(filePath, 'utf-8');
+      } catch {
+        return '';
+      }
+    }
     const projectRoot = await resolveClaudeProjectRoot();
-    const filePath = path.join(getMemoryDir(projectRoot), path.basename(filename));
+    const resolvedPath = path.join(getMemoryDir(projectRoot), path.basename(filename));
     try {
-      return readFileSync(filePath, 'utf-8');
+      return readFileSync(resolvedPath, 'utf-8');
     } catch {
       return '';
     }
   });
 
-  ipcBridge.memory.write.provider(async ({ filename, content }) => {
+  ipcBridge.memory.write.provider(async ({ filename, content, path: filePath }) => {
     if (filename === 'global-claude') {
       writeFileSync(getGlobalClaudePath(), content, 'utf-8');
+      return;
+    }
+    if (filePath && typeof filePath === 'string') {
+      mkdirSync(path.dirname(filePath), { recursive: true });
+      writeFileSync(filePath, content, 'utf-8');
       return;
     }
     const projectRoot = await resolveClaudeProjectRoot();
     const dir = getMemoryDir(projectRoot);
     mkdirSync(dir, { recursive: true });
-    const filePath = path.join(dir, path.basename(filename));
-    writeFileSync(filePath, content, 'utf-8');
+    const resolvedPath = path.join(dir, path.basename(filename));
+    writeFileSync(resolvedPath, content, 'utf-8');
   });
 
-  ipcBridge.memory.delete.provider(async ({ filename }) => {
+  ipcBridge.memory.delete.provider(async ({ filename, path: filePath }) => {
     const { unlinkSync } = await import('node:fs');
-    const projectRoot = await resolveClaudeProjectRoot();
-    const filePath = path.join(getMemoryDir(projectRoot), path.basename(filename));
-    if (existsSync(filePath)) unlinkSync(filePath);
+    const target =
+      filePath && typeof filePath === 'string'
+        ? filePath
+        : path.join(getMemoryDir(await resolveClaudeProjectRoot()), path.basename(filename));
+    if (existsSync(target)) unlinkSync(target);
   });
 
-  ipcBridge.memory.openInEditor.provider(async ({ filename }) => {
+  ipcBridge.memory.openInEditor.provider(async ({ filename, path: filePath }) => {
     let p: string;
     if (filename === 'global-claude') {
       p = getGlobalClaudePath();
@@ -212,6 +262,8 @@ export function initMemoryBridge(conversationRepo: IConversationRepository): voi
       const projectRoot = await resolveClaudeProjectRoot();
       const { readPath, exists } = resolveProjectClaudePaths(projectRoot);
       p = exists ? readPath : getNewProjectClaudePath(projectRoot);
+    } else if (filePath && typeof filePath === 'string') {
+      p = filePath;
     } else {
       const projectRoot = await resolveClaudeProjectRoot();
       p = path.join(getMemoryDir(projectRoot), path.basename(filename));

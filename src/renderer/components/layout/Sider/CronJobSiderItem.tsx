@@ -241,6 +241,7 @@ const CronJobSiderItem: React.FC<CronJobSiderItemProps> = ({
                 onEditStart={handleEditStart}
                 onDelete={handleDelete}
                 onTogglePin={handleTogglePin}
+                onToggleFavorite={() => {}}
                 getJobStatus={() => 'none'}
               />
             ))}

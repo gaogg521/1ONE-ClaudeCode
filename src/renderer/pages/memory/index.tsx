@@ -62,6 +62,7 @@ const MemoryPage: React.FC = () => {
   const [newContent, setNewContent] = useState('---\nname: \ndescription: \ntype: user\n---\n\n');
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showAllEntries, setShowAllEntries] = useState(false);
 
   const typeLabel = useCallback(
     (key: string) =>
@@ -149,8 +150,8 @@ const MemoryPage: React.FC = () => {
     if (activeTab === 'project') void loadProjectClaude();
   }, [activeTab, loadProjectClaude, scope?.effectiveRoot]);
 
-  const applyProjectRoot = async () => {
-    const trimmed = pathInput.trim();
+  const applyProjectRoot = async (rootPath?: string) => {
+    const trimmed = (typeof rootPath === 'string' ? rootPath : pathInput).trim();
     if (!trimmed) {
       Message.warning(t('memory.nameRequired'));
       return;
@@ -158,6 +159,22 @@ const MemoryPage: React.FC = () => {
     setSaving(true);
     try {
       await memoryIpc.setClaudeProjectRoot.invoke({ path: trimmed });
+      setPathInput(trimmed);
+      Message.success(t('memory.scopeUpdated'));
+      await loadScope();
+      await loadEntries();
+      if (activeTab === 'project') await loadProjectClaude();
+    } catch {
+      Message.error(t('memory.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const applyProjectRoots = async (rootPath: string | null, extraRoots: string[]) => {
+    setSaving(true);
+    try {
+      await memoryIpc.setClaudeProjectRoots.invoke({ path: rootPath, extraRoots });
       Message.success(t('memory.scopeUpdated'));
       await loadScope();
       await loadEntries();
@@ -173,18 +190,26 @@ const MemoryPage: React.FC = () => {
     const trimmed = path.trim();
     if (!trimmed) return;
     setPathInput(trimmed);
+    await applyProjectRoot(trimmed);
+  };
+
+  const addAdditionalRoot = async (extraRoot: string) => {
+    if (!extraRoot.trim()) return;
+    const trimmed = extraRoot.trim();
     setSaving(true);
     try {
-      await memoryIpc.setClaudeProjectRoot.invoke({ path: trimmed });
-      Message.success(t('memory.scopeUpdated'));
-      await loadScope();
-      await loadEntries();
-      if (activeTab === 'project') await loadProjectClaude();
-    } catch {
-      Message.error(t('memory.saveFailed'));
+      await applyProjectRoots(scope?.configuredRoot ?? scope?.effectiveRoot ?? '', [
+        ...(scope?.additionalRoots ?? []),
+        trimmed,
+      ]);
     } finally {
       setSaving(false);
     }
+  };
+
+  const removeAdditionalRoot = async (rootToRemove: string) => {
+    const remaining = (scope?.additionalRoots ?? []).filter((r) => r !== rootToRemove);
+    await applyProjectRoots(scope?.configuredRoot ?? scope?.effectiveRoot ?? '', remaining);
   };
 
   const clearProjectRoot = async () => {
@@ -211,6 +236,20 @@ const MemoryPage: React.FC = () => {
       const first = paths?.[0];
       if (!first) return;
       await applyProjectRootPath(first);
+    } catch {
+      Message.info(t('memory.pickFolderUnavailable'));
+    }
+  };
+
+  const pickAdditionalFolder = async () => {
+    try {
+      const paths = await dialog.showOpen.invoke({
+        properties: ['openDirectory'],
+        defaultPath: scope?.effectiveRoot || pathInput,
+      });
+      const first = paths?.[0];
+      if (!first) return;
+      await addAdditionalRoot(first);
     } catch {
       Message.info(t('memory.pickFolderUnavailable'));
     }
@@ -251,7 +290,7 @@ const MemoryPage: React.FC = () => {
     if (!editEntry) return;
     setSaving(true);
     try {
-      await memoryIpc.write.invoke({ filename: editEntry.filename, content: editContent });
+      await memoryIpc.write.invoke({ filename: editEntry.filename, content: editContent, path: editEntry.path });
       setEditVisible(false);
       await loadEntries();
     } catch {
@@ -267,7 +306,7 @@ const MemoryPage: React.FC = () => {
       content: t('memory.deleteConfirm', { name: e.name }),
       okButtonProps: { status: 'danger' },
       onOk: async () => {
-        await memoryIpc.delete.invoke({ filename: e.filename });
+        await memoryIpc.delete.invoke({ filename: e.filename, path: e.path });
         await loadEntries();
       },
     });
@@ -393,6 +432,9 @@ const MemoryPage: React.FC = () => {
               <Button type='primary' size='small' loading={saving} onClick={() => void applyProjectRoot()}>
                 {t('memory.applyRoot')}
               </Button>
+              <Button size='small' icon={<FileAddition theme='outline' size={14} />} onClick={() => void pickAdditionalFolder()}>
+                {t('memory.addAdditionalRoot')}
+              </Button>
               {scope?.configuredRoot ? (
                 <Button size='small' loading={saving} onClick={() => void clearProjectRoot()}>
                   {t('memory.clearOverride')}
@@ -409,8 +451,23 @@ const MemoryPage: React.FC = () => {
               </div>
               <div>
                 <Typography.Text style={{ fontSize: 12 }}>{t('memory.memoryDir')}:</Typography.Text>{' '}
-                <Typography.Text code style={{ fontSize: 11 }}>{scope?.absoluteMemoryDir}</Typography.Text>
+                <Typography.Text code style={{ fontSize: 11 }}>{scope?.absoluteMemoryDirs?.[0]}</Typography.Text>
               </div>
+              {scope?.additionalRoots?.length ? (
+                <div>
+                  <Typography.Text style={{ fontSize: 12 }}>{t('memory.additionalRootsTitle')}:</Typography.Text>
+                  <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {scope.additionalRoots.map((root) => (
+                      <div key={root} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Typography.Text code style={{ fontSize: 11, flex: 1 }}>{root}</Typography.Text>
+                        <Button size='mini' status='danger' onClick={() => void removeAdditionalRoot(root)}>
+                          {t('memory.remove')}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <div>
                 <Typography.Text style={{ fontSize: 12 }}>
                   {scope?.configuredRoot ? t('memory.configuredOverride') : t('memory.usingWorkDir')}
@@ -469,18 +526,27 @@ const MemoryPage: React.FC = () => {
               <Spin loading />
             </div>
           ) : (
-            <Table
-              columns={memoryColumns}
-              data={entries}
-              rowKey='filename'
-              size='small'
-              pagination={false}
-              noDataElement={
-                <div style={{ textAlign: 'center', color: 'var(--color-text-3)', padding: '40px 0' }}>
-                  {t('memory.emptyAuto')}
+            <>
+              {entries.length > 8 && !showAllEntries && (
+                <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                  <Button size='small' onClick={() => setShowAllEntries(true)}>
+                    {t('memory.showMore')}
+                  </Button>
                 </div>
-              }
-            />
+              )}
+              <Table
+                columns={memoryColumns}
+                data={showAllEntries ? entries : entries.slice(0, 8)}
+                rowKey='path'
+                size='small'
+                pagination={showAllEntries && entries.length > 8 ? { pageSize: 8 } : false}
+                noDataElement={
+                  <div style={{ textAlign: 'center', color: 'var(--color-text-3)', padding: '40px 0' }}>
+                    {t('memory.emptyAuto')}
+                  </div>
+                }
+              />
+            </>
           )}
         </Tabs.TabPane>
 

@@ -54,9 +54,9 @@ const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) =>
   const pinned = Boolean(extra?.pinned);
   const favorited = Boolean(extra?.favorited);
 
-  const handleTogglePin = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    await ipcBridge.conversation.update.invoke({
+  const handleTogglePin = (e: Event) => {
+    (e as unknown as React.MouseEvent<HTMLElement>).stopPropagation();
+    void ipcBridge.conversation.update.invoke({
       id: conv.id,
       updates: {
         extra: {
@@ -68,9 +68,9 @@ const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) =>
     });
   };
 
-  const handleToggleFavorite = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    await ipcBridge.conversation.update.invoke({
+  const handleToggleFavorite = (e: Event) => {
+    (e as unknown as React.MouseEvent<HTMLElement>).stopPropagation();
+    void ipcBridge.conversation.update.invoke({
       id: conv.id,
       updates: {
         extra: {

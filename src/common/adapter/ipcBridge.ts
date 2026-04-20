@@ -1325,7 +1325,10 @@ export type MemoryScopeInfo = {
   effectiveRoot: string;
   /** User override from Settings (memory.claudeProjectRoot), or null when using workDir only */
   configuredRoot: string | null;
-  absoluteMemoryDir: string;
+  /** Additional project roots specified by the user */
+  additionalRoots: string[];
+  /** All resolved auto-memory directories, including the main root and extra roots */
+  absoluteMemoryDirs: string[];
   projectClaudePath: string;
   projectClaudeExists: boolean;
   globalClaudePath: string;
@@ -1335,13 +1338,14 @@ export type MemoryScopeInfo = {
 
 export const memory = {
   list: bridge.buildProvider<MemoryFileEntry[]>('memory.list'),
-  read: bridge.buildProvider<string, { filename: string }>('memory.read'),
-  write: bridge.buildProvider<void, { filename: string; content: string }>('memory.write'),
-  delete: bridge.buildProvider<void, { filename: string }>('memory.delete'),
-  openInEditor: bridge.buildProvider<void, { filename: string }>('memory.openInEditor'),
+  read: bridge.buildProvider<string, { filename: string; path?: string }>('memory.read'),
+  write: bridge.buildProvider<void, { filename: string; content: string; path?: string }>('memory.write'),
+  delete: bridge.buildProvider<void, { filename: string; path?: string }>('memory.delete'),
+  openInEditor: bridge.buildProvider<void, { filename: string; path?: string }>('memory.openInEditor'),
   projectClaude: bridge.buildProvider<ProjectClaudeInfo>('memory.projectClaude'),
   writeProjectClaude: bridge.buildProvider<void, { content: string }>('memory.writeProjectClaude'),
   getScope: bridge.buildProvider<MemoryScopeInfo>('memory.getScope'),
   setClaudeProjectRoot: bridge.buildProvider<void, { path: string | null }>('memory.setClaudeProjectRoot'),
+  setClaudeProjectRoots: bridge.buildProvider<void, { path: string | null; extraRoots: string[] }>('memory.setClaudeProjectRoots'),
   suggestRoots: bridge.buildProvider<string[]>('memory.suggestRoots'),
 };

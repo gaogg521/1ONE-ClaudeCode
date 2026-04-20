@@ -409,7 +409,7 @@ const ConversationTabs: React.FC = () => {
               <span>{t('conversation.history.pin')}</span>
             </div>
           </Menu.Item>
-          <Menu.Divider />
+          <div className='h-1px bg-fill-3 my-4px' />
           <Menu.Item key='close-others' disabled={!hasOtherTabs}>
             {t('conversation.tabs.closeOthers')}
           </Menu.Item>

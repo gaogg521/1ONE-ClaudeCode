@@ -169,6 +169,11 @@ export interface IConfigStorageRefer {
    * When unset, the app uses Settings → work directory (same as getSystemDir().workDir).
    */
   'memory.claudeProjectRoot'?: string;
+  /**
+   * Additional repository paths whose {@code ~/.claude/projects/{sanitized}/memory}
+   * directories should also be read for auto-memory entries.
+   */
+  'memory.claudeProjectExtraRoots'?: string[];
 }
 
 export interface IEnvStorageRefer {
