@@ -45,7 +45,7 @@ async function main() {
   });
 
   server.tool(
-    '1one_image_generation',
+    'one_image_generation',
     `REQUIRED tool for generating or editing images. You MUST use this tool for ANY image generation request.
 
 CRITICAL: You (the AI assistant) CANNOT generate images directly. You MUST call this tool for:

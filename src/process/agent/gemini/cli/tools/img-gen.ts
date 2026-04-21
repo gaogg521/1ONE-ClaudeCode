@@ -35,7 +35,7 @@ export interface ImageGenerationToolParams {
 }
 
 export class ImageGenerationTool extends BaseDeclarativeTool<ImageGenerationToolParams, ToolResult> {
-  static readonly Name: string = '1one_image_generation';
+  static readonly Name: string = 'one_image_generation';
 
   constructor(
     private readonly config: Config,
