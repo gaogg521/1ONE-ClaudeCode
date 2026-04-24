@@ -750,6 +750,53 @@ export const task = {
   getRunningCount: bridge.buildProvider<{ success: boolean; count: number }, void>('task.get-running-count'),
 };
 
+// 任务看板接口（个人任务，持久化到 SQLite）/ Kanban board API (personal tasks, stored in SQLite)
+export type IKanbanTask = {
+  id: string;
+  user_id: string;
+  subject: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  active_form?: string;
+  session_name?: string;
+  assigned_to?: string;
+  created_at: number;
+  updated_at: number;
+};
+
+export type IKanbanUser = { id: string; username: string };
+
+export const kanban = {
+  list: bridge.buildProvider<IKanbanTask[], void>('kanban.list'),
+  create: bridge.buildProvider<
+    IKanbanTask,
+    { subject: string; status: string; active_form?: string; session_name?: string; assigned_to?: string }
+  >('kanban.create'),
+  update: bridge.buildProvider<
+    boolean,
+    {
+      id: string;
+      subject?: string;
+      status?: string;
+      active_form?: string;
+      session_name?: string;
+      assigned_to?: string;
+    }
+  >('kanban.update'),
+  remove: bridge.buildProvider<boolean, { id: string }>('kanban.remove'),
+  listUsers: bridge.buildProvider<IKanbanUser[], void>('kanban.list-users'),
+  /** 当前桌面用户信息（Electron 模式，始终 admin） */
+  me: bridge.buildProvider<{ id: string; username: string; role: 'user' | 'admin' }, void>('kanban.me'),
+};
+
+// 用户管理接口（admin only）
+export const adminUsers = {
+  list: bridge.buildProvider<{ id: string; username: string; role: 'user' | 'admin'; created_at: number; last_login?: number | null }[], void>('admin.users.list'),
+  create: bridge.buildProvider<{ id: string; username: string; role: 'user' | 'admin' }, { username: string; password: string; role: 'user' | 'admin' }>('admin.users.create'),
+  setRole: bridge.buildProvider<boolean, { id: string; role: 'user' | 'admin' }>('admin.users.set-role'),
+  resetPassword: bridge.buildProvider<boolean, { id: string; password: string }>('admin.users.reset-password'),
+  remove: bridge.buildProvider<boolean, { id: string }>('admin.users.remove'),
+};
+
 // WebUI 服务管理接口 / WebUI service management API
 export interface IWebUIStatus {
   running: boolean;

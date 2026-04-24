@@ -191,7 +191,7 @@ const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit, tim
     return await fetch(input, { ...init, signal: controller.signal });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('STT_NETWORK_ERROR:timeout');
+      throw new Error('STT_NETWORK_ERROR:timeout', { cause: error });
     }
     throw error;
   } finally {

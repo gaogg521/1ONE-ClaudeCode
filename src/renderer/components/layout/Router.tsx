@@ -6,6 +6,7 @@ const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const SessionsPage = React.lazy(() => import('@renderer/pages/sessions'));
 const TasksPage = React.lazy(() => import('@renderer/pages/tasks'));
+const UsersPage = React.lazy(() => import('@renderer/pages/users'));
 const HooksPage = React.lazy(() => import('@renderer/pages/hooks'));
 const MCPPage = React.lazy(() => import('@renderer/pages/mcp'));
 const MemoryPage = React.lazy(() => import('@renderer/pages/memory'));
@@ -105,6 +106,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
             }
           />
           <Route path='/tasks' element={withRouteFallback(TasksPage)} />
+          <Route path='/users' element={withRouteFallback(UsersPage)} />
           <Route path='/hooks' element={withRouteFallback(HooksPage)} />
           <Route path='/mcp' element={withRouteFallback(MCPPage)} />
           <Route path='/memory' element={withRouteFallback(MemoryPage)} />

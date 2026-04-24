@@ -70,6 +70,23 @@
 - **不止一台设备**：WebUI 远程访问 + 统一设置入口
 - **不止一次任务**：定时任务、Hook 监控、记忆中心，适合长期运行
 
+### 一句话，值回票价（甚至不用票价）
+
+**价格优势**：免费开源 + 开箱即用的内置工具/助手，尽量把你从“装环境、配插件、抄脚本、踩坑排障”里解放出来。
+
+你是否也想过：
+
+1. **你想一句话做一个专属于自己的小游戏吗？**
+2. **你想一句话写出游戏的故事角色策划吗？**
+3. **你想一句话做一份牛逼的 PPT 吗？**
+4. **你不会代码，也能写出自己的软件吗？**
+5. **你想下班之后还能用微信和飞书管理自己的 AI 吗？**
+6. **你想多个人一起合作开发一个工具怎么办？**
+7. **Claude Code 的 UI 界面中国人用不了怎么办？**
+8. **写代码的人怎么管理自己安装的 N 个开发工具？**
+
+今天老赵（Allen）就来实现你们的愿望：**AI 神器 1ONE Code 来啦**。几十个已经写好的内置工具助手，开箱即用（团队版计划开发中，欢迎赞助！）
+
 <a id="features"></a>
 ## ✨ 功能概览
 
@@ -156,6 +173,40 @@ npm run restart
 <a id="screenshots"></a>
 ## 🖼️ 功能截图
 
+### 0. 一句话搞定（价格优势 / 效率优势）
+
+<p align="center">
+  <img src="./resources/一句话做游戏.png" alt="一句话做游戏" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/一句话做游戏2.png" alt="一句话做游戏（示例 2）" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/一句话做游戏3.png" alt="一句话做游戏（示例 3）" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/一句话创作.png" alt="一句话创作：故事/角色/策划" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/一句话创作2.png" alt="一句话创作（示例 2）" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/一句话做专业PPT.png" alt="一句话做专业 PPT" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/一句话完成开发任务.png" alt="一句话完成开发任务" width="90%">
+</p>
+
+**图片说明：** 这组截图强调“少折腾/少配置/低成本”的体验：用更少的步骤，把创作、生产与开发任务跑起来。
+
+---
+
 ### 1. 统一入口（双图）
 
 <p align="center">
@@ -167,6 +218,16 @@ npm run restart
 </p>
 
 **图片说明：** 同一功能以双图展示：左图是“统一入口”总览（本地 Claude Code / OpenClaw / Google CLI / Cursor 等一处汇总、开箱即用），右图是扩展视图，突出统一调度与快速切换能力。
+
+---
+
+### 1.1 APP 首页展示
+
+<p align="center">
+  <img src="./resources/APP首页展示.png" alt="APP 首页展示" width="90%">
+</p>
+
+**图片说明：** 首页聚合常用入口，降低新用户第一次上手的认知成本。
 
 ---
 
@@ -234,6 +295,16 @@ npm run restart
 
 ---
 
+### 7.1 内置大量助手
+
+<p align="center">
+  <img src="./resources/内置大量助手.png" alt="内置大量助手" width="90%">
+</p>
+
+**图片说明：** 预置多类工具助手，开箱即用；后续也可按需增删与自定义。
+
+---
+
 ### 8. 历史会话搜索
 
 <p align="center">
@@ -251,6 +322,16 @@ npm run restart
 </p>
 
 **图片说明：** 统一管理全局与项目记忆，帮助 Agent 在跨会话场景下保持上下文连续。
+
+---
+
+### 9.1 记忆管理
+
+<p align="center">
+  <img src="./resources/记忆管理.png" alt="记忆管理" width="90%">
+</p>
+
+**图片说明：** 记忆可视化管理与回溯，更适合长期项目与持续迭代。
 
 ---
 
@@ -281,6 +362,16 @@ npm run restart
 </p>
 
 **图片说明：** 使用 Cron 计划任务让 Agent 自动执行固定流程，适合巡检与日报场景。
+
+---
+
+### 12.1 团队任务（协作）
+
+<p align="center">
+  <img src="./resources/团队任务.png" alt="团队任务（协作）" width="90%">
+</p>
+
+**图片说明：** 多人协作场景下，把任务与产出结构化管理（团队版能力在规划中）。
 
 ---
 
@@ -423,7 +514,7 @@ npm run restart
     <td align="center" width="300">
       <strong>💚 微信</strong><br>
       <sub>Allen.赵 · 上海浦东</sub><br>
-      <sub>可用于问题反馈、商务合作与生态共建沟通</sub>
+      <sub>可用于问题反馈、合作与生态共建沟通</sub>
       <br><br>
       <img src="./resources/微信.png" alt="微信二维码" width="220">
     </td>

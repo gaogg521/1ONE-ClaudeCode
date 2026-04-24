@@ -173,7 +173,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
           if ((conv as { success?: boolean })?.success && (conv as { data?: any })?.data) {
             const conversation = (conv as { data: any }).data;
             db.updateConversation(this.conversation_id, {
-              extra: { ...(conversation.extra || {}), lastModelId: currentModelId },
+              extra: { ...conversation.extra, lastModelId: currentModelId },
             } as Partial<typeof conversation>);
           }
         }
@@ -329,7 +329,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
         if ((conv as { success?: boolean })?.success && (conv as { data?: any })?.data) {
           const conversation = (conv as { data: any }).data;
           db.updateConversation(this.conversation_id, {
-            extra: { ...(conversation.extra || {}), lastModelId: currentModelId },
+            extra: { ...conversation.extra, lastModelId: currentModelId },
           } as Partial<typeof conversation>);
         }
       }
@@ -542,7 +542,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     let changed = false;
     const next = current.map((p) => {
       if (p.id !== providerId) return p;
-      const modelProtocols = { ...(p.modelProtocols || {}) };
+      const modelProtocols = { ...p.modelProtocols };
       // For gateway providers that store per-model routing, force this model to OpenAI protocol.
       modelProtocols[modelName] = 'openai';
       changed = true;

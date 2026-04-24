@@ -32,6 +32,7 @@ export function initSchema(db: ISqliteDriver): void {
     password_hash TEXT NOT NULL,
     avatar_path TEXT,
     jwt_secret TEXT,
+    role TEXT NOT NULL DEFAULT 'user',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     last_login INTEGER
@@ -123,6 +124,23 @@ export function initSchema(db: ISqliteDriver): void {
   )`);
   db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_team ON team_tasks(team_id, status)');
 
+  // Personal tasks table (个人任务)
+  db.exec(`CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    active_form TEXT,
+    session_name TEXT,
+    assigned_to TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id, status)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to)');
+
   console.log('[Database] Schema initialized successfully');
 }
 
@@ -151,4 +169,4 @@ export function setDatabaseVersion(db: ISqliteDriver, version: number): void {
  * Current database schema version
  * Update this when adding new migrations in migrations.ts
  */
-export const CURRENT_DB_VERSION = 22;
+export const CURRENT_DB_VERSION = 24;

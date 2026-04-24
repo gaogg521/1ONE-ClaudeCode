@@ -280,6 +280,7 @@ export class OneCmdDatabase {
           username,
           email,
           password_hash: passwordHash,
+          role: 'user' as const,
           created_at: now,
           updated_at: now,
           last_login: null,
@@ -1628,6 +1629,128 @@ export class OneCmdDatabase {
   deleteRemoteAgent(id: string): IQueryResult<boolean> {
     try {
       const result = this.db.prepare('DELETE FROM remote_agents WHERE id = ?').run(id);
+      return { success: true, data: result.changes > 0 };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  updateUserRole(userId: string, role: 'user' | 'admin'): IQueryResult<boolean> {
+    try {
+      const now = Date.now();
+      this.db.prepare('UPDATE users SET role = ?, updated_at = ? WHERE id = ?').run(role, now, userId);
+      return { success: true, data: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  deleteUser(userId: string): IQueryResult<boolean> {
+    try {
+      const result = this.db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+      return { success: true, data: result.changes > 0 };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  getPersonalTask(id: string): { id: string; user_id: string } | null {
+    try {
+      return this.db.prepare('SELECT id, user_id FROM tasks WHERE id = ?').get(id) as { id: string; user_id: string } | null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ─── Personal Task CRUD ────────────────────────────────────────────────────
+
+  createPersonalTask(task: {
+    id: string;
+    user_id: string;
+    subject: string;
+    status: string;
+    active_form?: string;
+    session_name?: string;
+    assigned_to?: string;
+    created_at: number;
+    updated_at: number;
+  }): IQueryResult<boolean> {
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO tasks (id, user_id, subject, status, active_form, session_name, assigned_to, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          task.id,
+          task.user_id,
+          task.subject,
+          task.status,
+          task.active_form ?? null,
+          task.session_name ?? null,
+          task.assigned_to ?? null,
+          task.created_at,
+          task.updated_at
+        );
+      return { success: true, data: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  listPersonalTasks(user_id?: string): IQueryResult<
+    {
+      id: string;
+      user_id: string;
+      subject: string;
+      status: string;
+      active_form: string | null;
+      session_name: string | null;
+      assigned_to: string | null;
+      created_at: number;
+      updated_at: number;
+    }[]
+  > {
+    try {
+      const rows = user_id
+        ? this.db.prepare('SELECT * FROM tasks WHERE user_id = ? ORDER BY created_at DESC').all(user_id)
+        : this.db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
+      return { success: true, data: rows as any[] };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  updatePersonalTask(
+    id: string,
+    updates: Partial<{
+      subject: string;
+      status: string;
+      active_form: string | null;
+      session_name: string | null;
+      assigned_to: string | null;
+    }>
+  ): IQueryResult<boolean> {
+    try {
+      const sets: string[] = [];
+      const values: unknown[] = [];
+      for (const [key, value] of Object.entries(updates)) {
+        sets.push(`${key} = ?`);
+        values.push(value ?? null);
+      }
+      sets.push('updated_at = ?');
+      values.push(Date.now());
+      values.push(id);
+      this.db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+      return { success: true, data: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  deletePersonalTask(id: string): IQueryResult<boolean> {
+    try {
+      const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
       return { success: true, data: result.changes > 0 };
     } catch (error: any) {
       return { success: false, error: error.message };

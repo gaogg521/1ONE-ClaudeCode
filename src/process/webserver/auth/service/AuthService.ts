@@ -14,6 +14,7 @@ import { AUTH_CONFIG } from '../../config/constants';
 interface TokenPayload {
   userId: string;
   username: string;
+  role: 'user' | 'admin';
   iat?: number;
   exp?: number;
 }
@@ -232,10 +233,11 @@ export class AuthService {
    * 生成 WebUI 使用的标准会话 Token
    * Generate standard WebUI session token
    */
-  public static async generateToken(user: Pick<AuthUser, 'id' | 'username'>): Promise<string> {
+  public static async generateToken(user: Pick<AuthUser, 'id' | 'username' | 'role'>): Promise<string> {
     const payload: TokenPayload = {
       userId: user.id,
       username: user.username,
+      role: user.role ?? 'user',
     };
 
     return jwt.sign(payload, await this.getJwtSecret(), {
@@ -341,6 +343,7 @@ export class AuthService {
     return this.generateToken({
       id: this.normalizeUserId(decoded.userId),
       username: decoded.username,
+      role: (decoded as { role?: 'user' | 'admin' }).role ?? 'user',
     });
   }
 

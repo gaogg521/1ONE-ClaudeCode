@@ -13,7 +13,7 @@ import type { IUser, IQueryResult } from '@process/services/database/types';
  */
 export type AuthUser = Pick<
   IUser,
-  'id' | 'username' | 'password_hash' | 'jwt_secret' | 'created_at' | 'updated_at' | 'last_login'
+  'id' | 'username' | 'password_hash' | 'jwt_secret' | 'role' | 'created_at' | 'updated_at' | 'last_login'
 >;
 
 /**
@@ -42,6 +42,7 @@ function mapUser(row: IUser): AuthUser {
     username: row.username,
     password_hash: row.password_hash,
     jwt_secret: row.jwt_secret ?? null,
+    role: (row.role as 'user' | 'admin') ?? 'user',
     created_at: row.created_at,
     updated_at: row.updated_at,
     last_login: row.last_login ?? null,
@@ -202,5 +203,29 @@ export const UserRepository = {
     if (!result.success) {
       throw new Error(result.error || 'Failed to update JWT secret');
     }
+  },
+
+  async setRole(userId: string, role: 'user' | 'admin'): Promise<void> {
+    const db = await getDatabase();
+    const result = db.updateUserRole(userId, role);
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to update user role');
+    }
+  },
+
+  async createUserWithRole(username: string, passwordHash: string, role: 'user' | 'admin' = 'user'): Promise<AuthUser> {
+    const db = await getDatabase();
+    const result = db.createUser(username, undefined, passwordHash);
+    const user = unwrap(result, 'Failed to create user');
+    if (role === 'admin') {
+      await UserRepository.setRole(user.id, 'admin');
+      return { ...mapUser(user), role: 'admin' };
+    }
+    return mapUser(user);
+  },
+
+  async deleteUser(userId: string): Promise<void> {
+    const db = await getDatabase();
+    db.deleteUser(userId);
   },
 };

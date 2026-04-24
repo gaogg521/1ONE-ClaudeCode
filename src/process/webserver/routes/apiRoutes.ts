@@ -22,6 +22,8 @@ import { ONE_TIMESTAMP_SEPARATOR } from '@/common/config/constants';
 import directoryApi from '../directoryApi';
 import { apiRateLimiter } from '../middleware/security';
 import { registerWeixinLoginRoutes } from './weixinLoginRoutes';
+import { registerKanbanRoutes } from './kanbanRoutes';
+import { registerAdminRoutes } from './adminRoutes';
 
 /** Max upload size in bytes (30MB per Issue #1233) */
 const MAX_UPLOAD_SIZE = 30 * 1024 * 1024;
@@ -643,6 +645,8 @@ export function registerApiRoutes(app: Express): void {
    * GET /api/channel/weixin/login
    */
   registerWeixinLoginRoutes(app, validateApiAccess);
+  registerKanbanRoutes(app);
+  registerAdminRoutes(app);
 
   /**
    * 通用 API 端点 - Generic API endpoint

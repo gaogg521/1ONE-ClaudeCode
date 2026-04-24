@@ -213,7 +213,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
     }
 
     return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .toSorted((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, 8)
       .map(([name]) => {
         const matchedSkill = availableSkills.find((skill) => skill.name === name);

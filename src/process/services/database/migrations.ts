@@ -1117,6 +1117,66 @@ const migration_v22: IMigration = {
 };
 
 /**
+ * Migration v22 -> v23: Add personal tasks table
+ * Supports personal task board with assigned_to for team collaboration
+ */
+const migration_v23: IMigration = {
+  version: 23,
+  name: 'Add personal tasks table for task board',
+  up: (db) => {
+    // Create personal tasks table if it doesn't exist
+    db.exec(`CREATE TABLE IF NOT EXISTS tasks (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      active_form TEXT,
+      session_name TEXT,
+      assigned_to TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id, status)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to)');
+
+    console.log('[Migration v23] Added personal tasks table');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_tasks_assigned');
+    db.exec('DROP INDEX IF EXISTS idx_tasks_user');
+    db.exec('DROP TABLE IF EXISTS tasks');
+    console.log('[Migration v23] Rolled back: Removed personal tasks table');
+  },
+};
+
+/**
+ * Migration v23 -> v24: Add role to users, add conversation_id to tasks
+ * role: 'user' | 'admin', system_default_user = admin
+ */
+const migration_v24: IMigration = {
+  version: 24,
+  name: 'Add role to users table for team access control',
+  up: (db) => {
+    const cols = new Set((db.pragma('table_info(users)') as Array<{ name: string }>).map((c) => c.name));
+    if (!cols.has('role')) {
+      db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'`);
+    }
+    // system_default_user is always admin
+    db.exec(`UPDATE users SET role = 'admin' WHERE id = 'system_default_user'`);
+    console.log('[Migration v24] Added role column to users table');
+  },
+  down: (db) => {
+    // SQLite cannot drop columns; recreate table without role
+    db.exec(`CREATE TABLE IF NOT EXISTS users_backup AS SELECT id, username, email, password_hash, avatar_path, jwt_secret, created_at, updated_at, last_login FROM users`);
+    db.exec(`DROP TABLE users`);
+    db.exec(`ALTER TABLE users_backup RENAME TO users`);
+    console.log('[Migration v24] Rolled back: Removed role column from users');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -1124,7 +1184,7 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v1, migration_v2, migration_v3, migration_v4, migration_v5, migration_v6,
   migration_v7, migration_v8, migration_v9, migration_v10, migration_v11, migration_v12,
   migration_v13, migration_v14, migration_v15, migration_v16, migration_v17, migration_v18,
-  migration_v19, migration_v20, migration_v21, migration_v22,
+  migration_v19, migration_v20, migration_v21, migration_v22, migration_v23, migration_v24,
 ];
 
 /**

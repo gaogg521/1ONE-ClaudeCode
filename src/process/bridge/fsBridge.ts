@@ -214,7 +214,7 @@ async function collectSkillMetadataFromDirectory(
 
 function markShadowedSkills(skills: SkillMetadata[]): SkillMetadata[] {
   const effectiveByName = new Map<string, SkillMetadata>();
-  const ordered = [...skills].sort((a, b) => {
+  const ordered = [...skills].toSorted((a, b) => {
     const priorityDiff = SKILL_SOURCE_PRIORITY[a.sourceKind] - SKILL_SOURCE_PRIORITY[b.sourceKind];
     if (priorityDiff !== 0) return priorityDiff;
     return a.name.localeCompare(b.name);
@@ -1405,7 +1405,7 @@ export function initFsBridge(): void {
     builtinSkillsDir: getBuiltinSkillsCopyDir(),
   }));
 
-  // 将 skill 同步导出到外部目录 / Export skill to external directory via symlink
+  // 将 skill 复制导出到外部目录 / Export skill to external directory via copy
   ipcBridge.fs.exportSkillWithSymlink.provider(async ({ skillPath, targetDir }) => {
     try {
       const skillName = path.basename(skillPath);
@@ -1425,13 +1425,14 @@ export function initFsBridge(): void {
         // Path does not exist, proceed
       }
 
-      // 创建符号链接 / Create symlink
-      await fs.symlink(skillPath, targetPath, 'junction');
-      console.log(`[fsBridge] Exported skill "${skillName}" to ${targetPath} via symlink`);
+      // 使用递归拷贝而非符号链接，避免 symlink-escape 安全检查失败
+      // Use recursive copy instead of symlink to avoid symlink-escape security rejections
+      await fs.cp(skillPath, targetPath, { recursive: true });
+      console.log(`[fsBridge] Exported skill "${skillName}" to ${targetPath} via copy`);
 
       return { success: true, msg: `Successfully exported to ${targetPath}` };
     } catch (error) {
-      console.error('[fsBridge] Failed to export skill with symlink:', error);
+      console.error('[fsBridge] Failed to export skill:', error);
       return {
         success: false,
         msg: `Failed to export skill: ${error instanceof Error ? error.message : String(error)}`,

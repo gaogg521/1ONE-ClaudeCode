@@ -9,7 +9,7 @@ import PwaPullToRefresh from '@/renderer/components/layout/PwaPullToRefresh';
 import Titlebar from '@/renderer/components/layout/Titlebar';
 import { Layout as ArcoLayout } from '@arco-design/web-react';
 import { Tooltip } from '@arco-design/web-react';
-import { MenuFold, MenuUnfold, CommentOne, FolderOpen, Checklist, Lightning, Server, Brain, AlarmClock, Setting } from '@icon-park/react';
+import { MenuFold, MenuUnfold, CommentOne, FolderOpen, Checklist, Lightning, Server, Brain, AlarmClock, Setting, People } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -58,6 +58,7 @@ const NAV_ITEMS = [
   { icon: <CommentOne theme='outline' size={18} />, labelKey: 'nav.sessions', path: '/sessions', paths: ['/conversation'] },
   { icon: <FolderOpen theme='outline' size={18} />, labelKey: 'nav.workspace', path: '/workspace' },
   { icon: <Checklist theme='outline' size={18} />, labelKey: 'nav.tasks', path: '/tasks' },
+  { icon: <People theme='outline' size={18} />, labelKey: 'nav.users', path: '/users' },
   { icon: <Lightning theme='outline' size={18} />, labelKey: 'nav.hooks', path: '/hooks' },
   { icon: <Server theme='outline' size={18} />, labelKey: 'nav.mcp', path: '/mcp' },
   { icon: <Brain theme='outline' size={18} />, labelKey: 'nav.memory', path: '/memory' },

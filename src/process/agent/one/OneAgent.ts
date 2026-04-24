@@ -257,7 +257,7 @@ export class OneAgent extends EventEmitter {
       try {
         parsed = JSON.parse(raw);
       } catch (e) {
-        throw new Error(`Expected JSON chat completion, parse failed: ${(e as Error).message}`);
+        throw new Error(`Expected JSON chat completion, parse failed: ${(e as Error).message}`, { cause: e });
       }
       const root = parsed as Record<string, unknown>;
       if (root.object === 'chat.completion') {
