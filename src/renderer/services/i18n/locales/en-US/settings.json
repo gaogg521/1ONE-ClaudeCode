@@ -316,6 +316,13 @@
   "agent": "Agent",
   "tools": "Tools",
   "webui": "Remote",
+  "authProviders": {
+    "title": "Auth & Login",
+    "adminOnly": "Admin only",
+    "desc": "Configure WebUI sign-in methods: Local / LDAP / Feishu. External sign-in requires admin binding.",
+    "ldapHint": "LDAP/Directory sign-in with configurable fields, plus optional admin-group mapping.",
+    "feishuHint": "Feishu OAuth + QR sign-in. Ensure redirectUri is whitelisted in Feishu console."
+  },
   "installed": "Installed",
   "builtin": "Built-in",
   "channels": "Channels",

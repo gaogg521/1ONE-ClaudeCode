@@ -95,7 +95,7 @@ const refreshConversations = () => {
       if (data && Array.isArray(data)) {
         const filteredData = data.filter((conv) => {
           const extra = conv.extra as { isHealthCheck?: boolean; teamId?: string } | undefined;
-          return extra?.isHealthCheck !== true && !extra?.teamId;
+          return extra?.isHealthCheck !== true;
         });
         conversationsState = filteredData;
         conversationIdsState = new Set(filteredData.map((conversation) => conversation.id));

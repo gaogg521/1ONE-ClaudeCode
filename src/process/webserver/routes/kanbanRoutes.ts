@@ -14,13 +14,15 @@ const DESKTOP_USER_ID = 'system_default_user';
 
 export function registerKanbanRoutes(app: Express): void {
   const auth = TokenMiddleware.validateToken({ responseType: 'json' });
+  const isPrivileged = (role: string | undefined): boolean => role === 'system_admin' || role === 'org_admin' || role === 'admin';
 
   // GET /api/kanban/tasks — admin 看全部，user 只看自己的
   app.get('/api/kanban/tasks', apiRateLimiter, auth, async (req: Request, res: Response) => {
     try {
       const db = await getDatabase();
-      const { id: userId, role } = req.user!;
-      const result = role === 'admin' ? db.listPersonalTasks() : db.listPersonalTasks(userId);
+      const { id: userId, role, tenant_id } = req.user!;
+      const tenantId = tenant_id ?? 'default';
+      const result = isPrivileged(role) ? db.listPersonalTasks(tenantId) : db.listPersonalTasks(tenantId, userId);
       res.json({ success: true, data: result.data ?? [] });
     } catch (err) {
       console.error('[KanbanRoute] list error:', err);
@@ -71,7 +73,7 @@ export function registerKanbanRoutes(app: Express): void {
         return;
       }
       // 非 admin 只能修改自己的任务
-      if (role !== 'admin' && existing.user_id !== userId) {
+      if (!isPrivileged(role) && existing.user_id !== userId) {
         res.status(403).json({ success: false, message: 'Forbidden' });
         return;
       }
@@ -101,7 +103,7 @@ export function registerKanbanRoutes(app: Express): void {
         res.status(404).json({ success: false, message: 'Task not found' });
         return;
       }
-      if (role !== 'admin' && existing.user_id !== userId) {
+      if (!isPrivileged(role) && existing.user_id !== userId) {
         res.status(403).json({ success: false, message: 'Forbidden' });
         return;
       }
@@ -120,7 +122,7 @@ export function registerKanbanRoutes(app: Express): void {
       const result = db.getAllUsers();
       const users = (result.data ?? [])
         .filter((u) => u.id !== DESKTOP_USER_ID)
-        .map((u) => ({ id: u.id, username: u.username, role: u.role ?? 'user' }));
+        .map((u) => ({ id: u.id, username: u.username, role: u.role ?? 'member' }));
       res.json({ success: true, data: users });
     } catch (err) {
       console.error('[KanbanRoute] listUsers error:', err);

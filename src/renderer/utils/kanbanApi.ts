@@ -5,6 +5,7 @@
  */
 import { ipcBridge } from '@/common';
 import type { IKanbanTask, IKanbanUser } from '@/common/adapter/ipcBridge';
+import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
 
 export type { IKanbanTask, IKanbanUser };
 export type KanbanRole = 'user' | 'admin';
@@ -16,17 +17,30 @@ const isElectron = (): boolean => typeof window !== 'undefined' && !!window.elec
 const ELECTRON_ME: KanbanMe = { id: 'system_default_user', username: 'Admin', role: 'admin' };
 
 async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
+  const headers = opts?.headers ? { 'Content-Type': 'application/json', ...opts.headers } : { 'Content-Type': 'application/json' };
+  const method = String(opts?.method ?? 'GET').toUpperCase();
+  const shouldAttachCsrf = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+  let body = opts?.body;
+  if (shouldAttachCsrf && typeof body === 'string') {
+    try {
+      body = JSON.stringify(withCsrfToken(JSON.parse(body)));
+    } catch {
+      // ignore if body is not JSON
+    }
+  }
+
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...(opts?.headers ?? {}) },
+    headers,
     credentials: 'include',
     ...opts,
+    body,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
     throw new Error(err.message ?? res.statusText);
   }
-  const body = await res.json();
-  return body.data ?? body;
+  const respBody = await res.json();
+  return respBody.data ?? respBody;
 }
 
 export const kanbanApi = {
@@ -76,7 +90,17 @@ export const kanbanApi = {
 };
 
 // 用户管理 API（只在 WebUI 模式下使用）
-export type AdminUser = { id: string; username: string; role: KanbanRole; created_at: number; last_login?: number | null };
+export type AdminUser = {
+  id: string;
+  username: string;
+  role: KanbanRole;
+  created_at: number;
+  last_login?: number | null;
+  identities?: Array<{ provider: 'ldap' | 'feishu'; external_id: string }>;
+  protected?: boolean;
+};
+
+export type AuthProviderId = 'ldap' | 'feishu';
 
 export const adminApi = {
   listUsers: () =>
@@ -103,4 +127,10 @@ export const adminApi = {
     isElectron()
       ? ipcBridge.adminUsers.remove.invoke({ id })
       : apiFetch('/api/admin/users/' + id, { method: 'DELETE' }),
+
+  bindIdentity: (provider: AuthProviderId, userId: string, externalId: string) =>
+    apiFetch('/api/admin/auth/identities', { method: 'POST', body: JSON.stringify({ provider, userId, externalId }) }),
+
+  unbindIdentity: (provider: AuthProviderId, userId: string) =>
+    apiFetch('/api/admin/auth/identities', { method: 'DELETE', body: JSON.stringify({ provider, userId }) }),
 };

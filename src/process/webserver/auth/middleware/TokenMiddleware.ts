@@ -155,10 +155,18 @@ export const createAuthMiddleware = (type: 'json' | 'html' = 'json') => {
     }
 
     // 4. 附加用户信息到请求对象 / Attach user info to request object
+    const normalizeRole = (role: any): 'member' | 'org_admin' | 'system_admin' => {
+      if (!role) return 'member';
+      if (role === 'admin') return 'system_admin';
+      if (role === 'user') return 'member';
+      if (role === 'system_admin' || role === 'org_admin' || role === 'member') return role;
+      return 'member';
+    };
     req.user = {
       id: user.id,
       username: user.username,
-      role: user.role ?? 'user',
+      role: normalizeRole(user.role),
+      tenant_id: (user as any).tenant_id ?? 'default',
     };
 
     next();

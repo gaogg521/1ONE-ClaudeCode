@@ -117,7 +117,18 @@ const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) =>
           >
             {conv.name || '未命名会话'}
           </span>
-          <Tag size='small' color={backend.color} style={{ flexShrink: 0 }}>{backend.label}</Tag>
+          <Tag size='small' color={backend.color} style={{ flexShrink: 0 }}>
+            {backend.label}
+          </Tag>
+          {(() => {
+            const extra2 = conv.extra as { teamId?: string } | undefined;
+            if (!extra2?.teamId) return null;
+            return (
+              <Tag size='small' color='purple' style={{ flexShrink: 0 }}>
+                团队
+              </Tag>
+            );
+          })()}
         </div>
         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           <Tooltip content={favorited ? t('conversation.history.unfavorite') : t('conversation.history.favorite')}>
@@ -175,7 +186,7 @@ const SessionsPage: React.FC = () => {
       if (Array.isArray(data)) {
         const filtered = data.filter((c) => {
           const extra = c.extra as { isHealthCheck?: boolean; teamId?: string } | undefined;
-          return !extra?.isHealthCheck && !extra?.teamId;
+          return !extra?.isHealthCheck;
         });
         // Sort: pinned first, then favorited, then modifyTime desc
         filtered.sort((a, b) => {

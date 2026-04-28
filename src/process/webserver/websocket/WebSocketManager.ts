@@ -27,6 +27,14 @@ export class WebSocketManager {
   constructor(private wss: WebSocketServer) {}
 
   /**
+   * Get the auth token associated with a client socket.
+   * Used by the Web adapter to attach caller identity to bridge messages.
+   */
+  getClientToken(ws: WebSocket): string | null {
+    return this.clients.get(ws)?.token ?? null;
+  }
+
+  /**
    * 初始化 WebSocket 管理器
    * Initialize WebSocket manager
    */

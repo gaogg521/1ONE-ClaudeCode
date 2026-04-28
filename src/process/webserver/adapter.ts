@@ -36,10 +36,16 @@ export function initWebAdapter(wss: WebSocketServer): void {
 
   // 设置 WebSocket 消息处理器，将消息转发到 bridge emitter
   // Setup WebSocket message handler to forward messages to bridge emitter
-  wsManager.setupConnectionHandler((name, data, _ws) => {
+  wsManager.setupConnectionHandler((name, data, ws) => {
     const emitter = getBridgeEmitter();
     if (emitter) {
-      emitter.emit(name, data);
+      const token = wsManager.getClientToken(ws);
+      // Attach caller token for multi-user scoping. Providers can ignore it in desktop mode.
+      const payload =
+        data && typeof data === 'object' && !Array.isArray(data)
+          ? { ...(data as Record<string, unknown>), __authToken: token }
+          : { data, __authToken: token };
+      emitter.emit(name, payload);
     } else {
       console.warn('[adapter] Bridge emitter not set, message dropped:', name);
     }

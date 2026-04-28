@@ -68,6 +68,12 @@ export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): 
       icon: isDesktop ? <Earth theme='outline' size='16' /> : <Communication theme='outline' size='16' />,
       path: 'webui',
     },
+    auth: {
+      id: 'auth',
+      label: t('settings.authProviders.title', { defaultValue: '登录与认证' }),
+      icon: <LinkCloud theme='outline' size='16' />,
+      path: 'auth',
+    },
     system: { id: 'system', label: t('settings.system'), icon: <System theme='outline' size='16' />, path: 'system' },
     about: { id: 'about', label: t('settings.about'), icon: <Info theme='outline' size='16' />, path: 'about' },
   };

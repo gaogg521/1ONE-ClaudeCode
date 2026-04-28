@@ -14,7 +14,7 @@ import { AUTH_CONFIG } from '../../config/constants';
 interface TokenPayload {
   userId: string;
   username: string;
-  role: 'user' | 'admin';
+  role: 'member' | 'org_admin' | 'system_admin';
   iat?: number;
   exp?: number;
 }
@@ -234,10 +234,17 @@ export class AuthService {
    * Generate standard WebUI session token
    */
   public static async generateToken(user: Pick<AuthUser, 'id' | 'username' | 'role'>): Promise<string> {
+    const normalizeRole = (role: unknown): 'member' | 'org_admin' | 'system_admin' => {
+      if (!role) return 'member';
+      if (role === 'admin') return 'system_admin';
+      if (role === 'user') return 'member';
+      if (role === 'system_admin' || role === 'org_admin' || role === 'member') return role;
+      return 'member';
+    };
     const payload: TokenPayload = {
       userId: user.id,
       username: user.username,
-      role: user.role ?? 'user',
+      role: normalizeRole(user.role),
     };
 
     return jwt.sign(payload, await this.getJwtSecret(), {
@@ -343,7 +350,7 @@ export class AuthService {
     return this.generateToken({
       id: this.normalizeUserId(decoded.userId),
       username: decoded.username,
-      role: (decoded as { role?: 'user' | 'admin' }).role ?? 'user',
+      role: (decoded as { role?: 'member' | 'org_admin' | 'system_admin' | 'user' | 'admin' }).role ?? 'member',
     });
   }
 

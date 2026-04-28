@@ -7,6 +7,7 @@ type AuthStatus = 'checking' | 'authenticated' | 'unauthenticated';
 export interface AuthUser {
   id: string;
   username: string;
+  role?: 'member' | 'org_admin' | 'system_admin' | 'user' | 'admin';
 }
 
 interface LoginParams {
@@ -35,6 +36,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   status: AuthStatus;
   login: (params: LoginParams) => Promise<LoginResult>;
+  loginWithLdap: (params: LoginParams) => Promise<LoginResult>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   clearAuthCache: () => void;
@@ -238,6 +240,50 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     }
   }, []);
 
+  const loginWithLdap = useCallback(async ({ username, password }: LoginParams): Promise<LoginResult> => {
+    try {
+      if (isDesktopRuntime) {
+        setReady(true);
+        return { success: true };
+      }
+
+      const trimmedUsername = username.trim();
+      if (!trimmedUsername || !password) {
+        return { success: false, message: 'Username and password are required', code: 'unknown' };
+      }
+
+      const response = await fetch('/api/auth/ldap/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(withCsrfToken({ username: trimmedUsername, password })),
+      });
+
+      const data = (await response.json().catch(() => null)) as any;
+      if (!response.ok || !data?.success || !data?.user) {
+        let code: LoginErrorCode = 'unknown';
+        let message = data?.message ?? 'Login failed';
+        if (response.status === 401) code = 'invalidCredentials';
+        else if (response.status === 429) code = 'tooManyAttempts';
+        else if (response.status >= 500) code = 'serverError';
+        return { success: false, code, message };
+      }
+
+      setUser(data.user);
+      setStatus('authenticated');
+      setReady(true);
+      if (typeof window !== 'undefined' && (window as any).__websocketReconnect) {
+        (window as any).__websocketReconnect();
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('LDAP login request failed:', error);
+      return { success: false, message: 'Network error. Please try again.', code: 'networkError' };
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     if (isDesktopRuntime) {
       setUser(null);
@@ -272,11 +318,12 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       user,
       status,
       login,
+      loginWithLdap,
       logout,
       refresh,
       clearAuthCache,
     }),
-    [login, logout, ready, refresh, status, user]
+    [login, loginWithLdap, logout, ready, refresh, status, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

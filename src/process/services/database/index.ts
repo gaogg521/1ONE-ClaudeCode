@@ -12,6 +12,8 @@ import path from 'path';
 import { runMigrations as executeMigrations } from './migrations';
 import { CURRENT_DB_VERSION, getDatabaseVersion, initSchema, setDatabaseVersion } from './schema';
 import type {
+  IAuthIdentityRow,
+  IAuthProviderRow,
   IConversationRow,
   IMessageRow,
   IPaginatedResult,
@@ -496,6 +498,125 @@ export class OneCmdDatabase {
 
   /**
    * ==================
+   * Auth provider / identity operations
+   * 多登录方案配置与外部身份绑定
+   * ==================
+   */
+
+  getAuthProvider(provider: string): IQueryResult<IAuthProviderRow | null> {
+    try {
+      const row = this.db
+        .prepare('SELECT provider, enabled, config_json, updated_at FROM auth_providers WHERE provider = ?')
+        .get(provider) as IAuthProviderRow | undefined;
+      return { success: true, data: row ?? null };
+    } catch (error: any) {
+      return { success: false, error: error.message, data: null };
+    }
+  }
+
+  listAuthProviders(): IQueryResult<IAuthProviderRow[]> {
+    try {
+      const rows = this.db
+        .prepare('SELECT provider, enabled, config_json, updated_at FROM auth_providers ORDER BY provider ASC')
+        .all() as IAuthProviderRow[];
+      return { success: true, data: rows };
+    } catch (error: any) {
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  upsertAuthProvider(provider: string, enabled: boolean, configJson: string): IQueryResult<boolean> {
+    try {
+      const now = Date.now();
+      this.db
+        .prepare(
+          `INSERT INTO auth_providers (provider, enabled, config_json, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(provider) DO UPDATE SET enabled=excluded.enabled, config_json=excluded.config_json, updated_at=excluded.updated_at`
+        )
+        .run(provider, enabled ? 1 : 0, configJson, now);
+      return { success: true, data: true };
+    } catch (error: any) {
+      return { success: false, error: error.message, data: false };
+    }
+  }
+
+  getAuthIdentity(provider: string, externalId: string): IQueryResult<IAuthIdentityRow | null> {
+    try {
+      const row = this.db
+        .prepare('SELECT provider, external_id, user_id, created_at FROM auth_identities WHERE provider = ? AND external_id = ?')
+        .get(provider, externalId) as IAuthIdentityRow | undefined;
+      return { success: true, data: row ?? null };
+    } catch (error: any) {
+      return { success: false, error: error.message, data: null };
+    }
+  }
+
+  getAuthIdentityByUser(provider: string, userId: string): IQueryResult<IAuthIdentityRow | null> {
+    try {
+      const row = this.db
+        .prepare('SELECT provider, external_id, user_id, created_at FROM auth_identities WHERE provider = ? AND user_id = ?')
+        .get(provider, userId) as IAuthIdentityRow | undefined;
+      return { success: true, data: row ?? null };
+    } catch (error: any) {
+      return { success: false, error: error.message, data: null };
+    }
+  }
+
+  listAuthIdentitiesForUsers(userIds: string[]): IQueryResult<IAuthIdentityRow[]> {
+    try {
+      if (userIds.length === 0) return { success: true, data: [] };
+      const placeholders = userIds.map(() => '?').join(', ');
+      const rows = this.db
+        .prepare(
+          `SELECT provider, external_id, user_id, created_at
+           FROM auth_identities
+           WHERE user_id IN (${placeholders})
+           ORDER BY provider ASC`
+        )
+        .all(...userIds) as IAuthIdentityRow[];
+      return { success: true, data: rows };
+    } catch (error: any) {
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  setAuthIdentity(provider: string, externalId: string, userId: string): IQueryResult<boolean> {
+    try {
+      const now = Date.now();
+      this.db
+        .prepare(
+          `INSERT INTO auth_identities (provider, external_id, user_id, created_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(provider, external_id) DO UPDATE SET user_id=excluded.user_id`
+        )
+        .run(provider, externalId, userId, now);
+      return { success: true, data: true };
+    } catch (error: any) {
+      return { success: false, error: error.message, data: false };
+    }
+  }
+
+  deleteAuthIdentity(provider: string, externalId: string): IQueryResult<boolean> {
+    try {
+      this.db.prepare('DELETE FROM auth_identities WHERE provider = ? AND external_id = ?').run(provider, externalId);
+      return { success: true, data: true };
+    } catch (error: any) {
+      return { success: false, error: error.message, data: false };
+    }
+  }
+
+  deleteAuthIdentityByUser(provider: string, userId: string): IQueryResult<boolean> {
+    try {
+      this.db.prepare('DELETE FROM auth_identities WHERE provider = ? AND user_id = ?').run(provider, userId);
+      return { success: true, data: true };
+    } catch (error: any) {
+      return { success: false, error: error.message, data: false };
+    }
+  }
+
+  /**
+   * ==================
    * Conversation operations
    * ==================
    */
@@ -537,7 +658,9 @@ export class OneCmdDatabase {
 
   getConversation(conversationId: string): IQueryResult<TChatConversation> {
     try {
-      const row = this.db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversationId) as
+      const row = this.db
+        .prepare("SELECT * FROM conversations WHERE tenant_id = 'default' AND id = ?")
+        .get(conversationId) as
         | IConversationRow
         | undefined;
 
@@ -645,7 +768,7 @@ export class OneCmdDatabase {
       const finalUserId = userId || this.defaultUserId;
 
       const countResult = this.db
-        .prepare('SELECT COUNT(*) as count FROM conversations WHERE user_id = ?')
+        .prepare("SELECT COUNT(*) as count FROM conversations WHERE tenant_id = 'default' AND user_id = ?")
         .get(finalUserId) as {
         count: number;
       };
@@ -655,7 +778,7 @@ export class OneCmdDatabase {
           `
             SELECT *
             FROM conversations
-            WHERE user_id = ?
+            WHERE tenant_id = 'default' AND user_id = ?
             ORDER BY updated_at DESC LIMIT ?
             OFFSET ?
           `
@@ -692,7 +815,11 @@ export class OneCmdDatabase {
 
   getConversationsByCronJobId(cronJobId: string): TChatConversation[] {
     const rows = this.db
-      .prepare(`SELECT * FROM conversations WHERE json_extract(extra, '$.cronJobId') = ? ORDER BY created_at DESC`)
+      .prepare(
+        `SELECT * FROM conversations
+         WHERE tenant_id = 'default' AND json_extract(extra, '$.cronJobId') = ?
+         ORDER BY created_at DESC`
+      )
       .all(cronJobId) as IConversationRow[];
     const result: TChatConversation[] = [];
     for (const row of rows) {
@@ -703,6 +830,118 @@ export class OneCmdDatabase {
       }
     }
     return result;
+  }
+
+  /**
+   * List conversations visible to a user within a tenant:
+   * - owned conversations (user_id = userId)
+   * - team-shared conversations where user is a team member (team_memberships)
+   *
+   * Optional: filter by a specific teamId.
+   */
+  getAccessibleConversationsForUser(params: {
+    tenantId?: string;
+    userId: string;
+    page?: number;
+    pageSize?: number;
+    teamId?: string | null;
+  }): IPaginatedResult<TChatConversation> {
+    const tenantId = params.tenantId ?? 'default';
+    const page = params.page ?? 0;
+    const pageSize = params.pageSize ?? 50;
+    const teamId = params.teamId ?? null;
+
+    try {
+      const countRow = this.db
+        .prepare(
+          `
+          SELECT COUNT(*) as count
+          FROM conversations c
+          LEFT JOIN team_memberships tm
+            ON tm.tenant_id = c.tenant_id
+           AND tm.team_id = COALESCE(c.team_id, json_extract(c.extra, '$.teamId'))
+           AND tm.user_id = ?
+          WHERE c.tenant_id = ?
+            AND (c.user_id = ? OR tm.user_id IS NOT NULL)
+            AND (? IS NULL OR COALESCE(c.team_id, json_extract(c.extra, '$.teamId')) = ?)
+        `
+        )
+        .get(params.userId, tenantId, params.userId, teamId, teamId) as { count: number };
+
+      const rows = this.db
+        .prepare(
+          `
+          SELECT c.*
+          FROM conversations c
+          LEFT JOIN team_memberships tm
+            ON tm.tenant_id = c.tenant_id
+           AND tm.team_id = COALESCE(c.team_id, json_extract(c.extra, '$.teamId'))
+           AND tm.user_id = ?
+          WHERE c.tenant_id = ?
+            AND (c.user_id = ? OR tm.user_id IS NOT NULL)
+            AND (? IS NULL OR COALESCE(c.team_id, json_extract(c.extra, '$.teamId')) = ?)
+          ORDER BY c.updated_at DESC
+          LIMIT ?
+          OFFSET ?
+        `
+        )
+        .all(params.userId, tenantId, params.userId, teamId, teamId, pageSize, page * pageSize) as IConversationRow[];
+
+      const data: TChatConversation[] = [];
+      for (const row of rows) {
+        try {
+          data.push(rowToConversation(row));
+        } catch (e) {
+          console.warn('[Database] Skipping conversation row with unknown type:', row.type, row.id);
+        }
+      }
+
+      return {
+        data,
+        total: countRow.count,
+        page,
+        pageSize,
+        hasMore: (page + 1) * pageSize < countRow.count,
+      };
+    } catch (error: any) {
+      console.error('[Database] Get accessible conversations error:', error);
+      return { data: [], total: 0, page, pageSize, hasMore: false };
+    }
+  }
+
+  /**
+   * Check if a user can access a conversation (owner or team member) within a tenant.
+   */
+  canUserAccessConversation(params: { tenantId?: string; userId: string; conversationId: string }): boolean {
+    const tenantId = params.tenantId ?? 'default';
+    try {
+      const row = this.db
+        .prepare(
+          `
+          SELECT c.user_id as owner_user_id, COALESCE(c.team_id, json_extract(c.extra, '$.teamId')) as team_id
+          FROM conversations c
+          WHERE c.tenant_id = ? AND c.id = ?
+        `
+        )
+        .get(tenantId, params.conversationId) as { owner_user_id: string; team_id: string | null } | undefined;
+      if (!row) return false;
+      if (row.owner_user_id === params.userId) return true;
+      if (!row.team_id) return false;
+      const membership = this.db
+        .prepare(
+          `
+          SELECT 1
+          FROM team_memberships
+          WHERE tenant_id = ? AND team_id = ? AND user_id = ?
+          LIMIT 1
+        `
+        )
+        .get(tenantId, row.team_id, params.userId);
+      return Boolean(membership);
+    } catch (error) {
+      console.error('[Database] canUserAccessConversation error:', error);
+      return false;
+    }
   }
 
   updateConversation(conversationId: string, updates: Partial<TChatConversation>): IQueryResult<boolean> {
@@ -1635,7 +1874,7 @@ export class OneCmdDatabase {
     }
   }
 
-  updateUserRole(userId: string, role: 'user' | 'admin'): IQueryResult<boolean> {
+  updateUserRole(userId: string, role: string): IQueryResult<boolean> {
     try {
       const now = Date.now();
       this.db.prepare('UPDATE users SET role = ?, updated_at = ? WHERE id = ?').run(role, now, userId);
@@ -1698,7 +1937,7 @@ export class OneCmdDatabase {
     }
   }
 
-  listPersonalTasks(user_id?: string): IQueryResult<
+  listPersonalTasks(tenant_id: string, user_id?: string): IQueryResult<
     {
       id: string;
       user_id: string;
@@ -1713,8 +1952,8 @@ export class OneCmdDatabase {
   > {
     try {
       const rows = user_id
-        ? this.db.prepare('SELECT * FROM tasks WHERE user_id = ? ORDER BY created_at DESC').all(user_id)
-        : this.db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
+        ? this.db.prepare('SELECT * FROM tasks WHERE tenant_id = ? AND user_id = ? ORDER BY created_at DESC').all(tenant_id, user_id)
+        : this.db.prepare('SELECT * FROM tasks WHERE tenant_id = ? ORDER BY created_at DESC').all(tenant_id);
       return { success: true, data: rows as any[] };
     } catch (error: any) {
       return { success: false, error: error.message };

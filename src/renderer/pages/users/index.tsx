@@ -16,12 +16,18 @@ import {
   Select,
   Spin,
 } from '@arco-design/web-react';
-import { Add, Edit, DeleteFour, Refresh, Key } from '@icon-park/react';
-import { adminApi, kanbanApi, type AdminUser, type KanbanRole } from '@/renderer/utils/kanbanApi';
+import { Add, DeleteFour, Refresh, Key, Link, CloseSmall } from '@icon-park/react';
+import { adminApi, kanbanApi, type AdminUser, type AuthProviderId, type KanbanRole } from '@/renderer/utils/kanbanApi';
 
 const ROLE_TAG: Record<KanbanRole, { color: string; label: string }> = {
   admin: { color: 'arcoblue', label: 'Admin' },
   user: { color: 'gray', label: 'User' },
+};
+
+const getExternalId = (record: AdminUser, provider: AuthProviderId): string | null => {
+  const list = record.identities ?? [];
+  const row = list.find((x) => x.provider === provider);
+  return row?.external_id ?? null;
 };
 
 const UsersPage: React.FC = () => {
@@ -33,6 +39,10 @@ const UsersPage: React.FC = () => {
   const [createForm, setCreateForm] = useState({ username: '', password: '', role: 'user' as KanbanRole });
   const [newPwd, setNewPwd] = useState('');
   const [saving, setSaving] = useState(false);
+  const [bindVisible, setBindVisible] = useState(false);
+  const [bindUserId, setBindUserId] = useState<string | null>(null);
+  const [bindProvider, setBindProvider] = useState<AuthProviderId>('ldap');
+  const [bindExternalId, setBindExternalId] = useState('');
 
   const loadData = useCallback(async () => {
     // me 先加载，不受 users list 失败影响
@@ -103,6 +113,47 @@ const UsersPage: React.FC = () => {
     }
   };
 
+  const openBindModal = (userId: string, provider: AuthProviderId) => {
+    setBindUserId(userId);
+    setBindProvider(provider);
+    setBindExternalId('');
+    setBindVisible(true);
+  };
+
+  const handleBind = async () => {
+    if (!bindUserId) return;
+    if (!bindExternalId.trim()) {
+      Message.warning('external_id 不能为空');
+      return;
+    }
+    setSaving(true);
+    try {
+      await adminApi.bindIdentity(bindProvider, bindUserId, bindExternalId.trim());
+      Message.success('绑定成功');
+      setBindVisible(false);
+      setBindUserId(null);
+      setBindExternalId('');
+      await loadData();
+    } catch (err: unknown) {
+      Message.error(err instanceof Error ? err.message : '绑定失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUnbind = async (userId: string, provider: AuthProviderId) => {
+    setSaving(true);
+    try {
+      await adminApi.unbindIdentity(provider, userId);
+      Message.success('解绑成功');
+      await loadData();
+    } catch (err: unknown) {
+      Message.error(err instanceof Error ? err.message : '解绑失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className='p-20px flex items-center justify-center h-full'>
@@ -141,6 +192,20 @@ const UsersPage: React.FC = () => {
         val ? new Date(val).toLocaleString() : '未登录',
     },
     {
+      title: '绑定',
+      key: 'bindings',
+      render: (_: unknown, record: AdminUser) => {
+        const ldap = getExternalId(record, 'ldap');
+        const feishu = getExternalId(record, 'feishu');
+        return (
+          <Space size='mini' wrap>
+            <Tag color={ldap ? 'green' : 'gray'}>{ldap ? `LDAP ✓` : 'LDAP ×'}</Tag>
+            <Tag color={feishu ? 'green' : 'gray'}>{feishu ? `飞书 ✓` : '飞书 ×'}</Tag>
+          </Space>
+        );
+      },
+    },
+    {
       title: '操作',
       key: 'actions',
       render: (_: unknown, record: AdminUser) => (
@@ -150,6 +215,7 @@ const UsersPage: React.FC = () => {
             value={record.role}
             onChange={(v) => void handleSetRole(record.id, v as KanbanRole)}
             style={{ width: 80 }}
+            disabled={Boolean(record.protected)}
           >
             <Select.Option value='user'>User</Select.Option>
             <Select.Option value='admin'>Admin</Select.Option>
@@ -158,14 +224,48 @@ const UsersPage: React.FC = () => {
             size='mini'
             icon={<Key size={12} />}
             onClick={() => { setPwdUserId(record.id); setNewPwd(''); }}
+            disabled={Boolean(record.protected)}
           >
             重置密码
           </Button>
+          {getExternalId(record, 'ldap') ? (
+            <Popconfirm title='确认解绑 LDAP？' onOk={() => void handleUnbind(record.id, 'ldap')}>
+              <Button size='mini' icon={<CloseSmall size={12} />} disabled={Boolean(record.protected)}>
+                解绑LDAP
+              </Button>
+            </Popconfirm>
+          ) : (
+            <Button
+              size='mini'
+              icon={<Link size={12} />}
+              onClick={() => openBindModal(record.id, 'ldap')}
+              disabled={Boolean(record.protected)}
+            >
+              绑定LDAP
+            </Button>
+          )}
+          {getExternalId(record, 'feishu') ? (
+            <Popconfirm title='确认解绑飞书？' onOk={() => void handleUnbind(record.id, 'feishu')}>
+              <Button size='mini' icon={<CloseSmall size={12} />} disabled={Boolean(record.protected)}>
+                解绑飞书
+              </Button>
+            </Popconfirm>
+          ) : (
+            <Button
+              size='mini'
+              icon={<Link size={12} />}
+              onClick={() => openBindModal(record.id, 'feishu')}
+              disabled={Boolean(record.protected)}
+            >
+              绑定飞书
+            </Button>
+          )}
           <Popconfirm
             title='确认删除此用户？'
             onOk={() => void handleDelete(record.id)}
+            disabled={Boolean(record.protected)}
           >
-            <Button size='mini' status='danger' icon={<DeleteFour size={12} />} />
+            <Button size='mini' status='danger' icon={<DeleteFour size={12} />} disabled={Boolean(record.protected)} />
           </Popconfirm>
         </Space>
       ),
@@ -248,6 +348,36 @@ const UsersPage: React.FC = () => {
               onChange={setNewPwd}
             />
           </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 绑定外部账号弹窗 */}
+      <Modal
+        title='绑定外部账号'
+        visible={bindVisible}
+        onCancel={() => { setBindVisible(false); setBindUserId(null); }}
+        onOk={handleBind}
+        confirmLoading={saving}
+        okText='绑定'
+        cancelText='取消'
+      >
+        <Form layout='vertical'>
+          <Form.Item label='Provider' required>
+            <Select value={bindProvider} onChange={(v) => setBindProvider(v as AuthProviderId)}>
+              <Select.Option value='ldap'>LDAP</Select.Option>
+              <Select.Option value='feishu'>飞书</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item label='external_id' required>
+            <Input
+              placeholder={bindProvider === 'ldap' ? 'DN / entryUUID / objectGUID' : 'union_id / open_id'}
+              value={bindExternalId}
+              onChange={(v) => setBindExternalId(v)}
+            />
+          </Form.Item>
+          <div className='text-12px text-t-tertiary'>
+            说明：按“预创建绑定”策略，LDAP/飞书用户只有在绑定到本地用户后才能登录。
+          </div>
         </Form>
       </Modal>
     </div>

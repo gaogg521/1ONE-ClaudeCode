@@ -24,6 +24,7 @@ import { apiRateLimiter } from '../middleware/security';
 import { registerWeixinLoginRoutes } from './weixinLoginRoutes';
 import { registerKanbanRoutes } from './kanbanRoutes';
 import { registerAdminRoutes } from './adminRoutes';
+import { registerTeamTasksRoutes } from './teamTasksRoutes';
 
 /** Max upload size in bytes (30MB per Issue #1233) */
 const MAX_UPLOAD_SIZE = 30 * 1024 * 1024;
@@ -68,15 +69,63 @@ function isPathInsideRoot(targetPath: string, rootPath: string): boolean {
   return normalizedTarget === normalizedRoot || normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`);
 }
 
-export async function resolveUploadWorkspace(conversationId: string, requestedWorkspace?: string): Promise<string> {
+export async function resolveUploadWorkspace(
+  conversationId: string,
+  requestedWorkspace: string | undefined,
+  user: { id: string; tenant_id?: string; role?: string }
+): Promise<string> {
   if (!conversationId) {
     throw new Error('Missing conversation id');
   }
 
-  const db = await getDatabase();
-  const result = db.getConversation(conversationId);
-  const conversationWorkspace = result.data?.extra?.workspace;
-  if (!result.success || !conversationWorkspace) {
+  const aionDb = await getDatabase();
+  const driver = aionDb.getDriver();
+  const tenantId = user.tenant_id ?? 'default';
+
+  // Security: ensure the caller can access the conversation.
+  // Allowed when:
+  // - owner (conversations.user_id) matches current user, OR
+  // - privileged role (system_admin/org_admin) within the same tenant, OR
+  // - conversation belongs to a team and user is a member of that team.
+  const row = driver
+    .prepare(
+      `SELECT c.user_id, c.team_id, c.extra
+       FROM conversations c
+       WHERE c.tenant_id = ? AND c.id = ?`
+    )
+    .get(tenantId, conversationId) as { user_id: string; team_id: string | null; extra: string } | undefined;
+
+  if (!row) {
+    throw new Error('Conversation workspace not found');
+  }
+
+  const isPrivileged = user.role === 'system_admin' || user.role === 'org_admin' || user.role === 'admin';
+  const isOwner = row.user_id === user.id;
+  let isTeamMember = false;
+  if (row.team_id) {
+    const membership = driver
+      .prepare(
+        `SELECT 1
+         FROM team_memberships
+         WHERE tenant_id = ? AND team_id = ? AND user_id = ?
+         LIMIT 1`
+      )
+      .get(tenantId, row.team_id, user.id) as { 1: number } | undefined;
+    isTeamMember = Boolean(membership);
+  }
+
+  if (!isOwner && !isPrivileged && !isTeamMember) {
+    throw new Error('Forbidden');
+  }
+
+  let conversationWorkspace: string | undefined;
+  try {
+    const extra = JSON.parse(row.extra || '{}') as any;
+    conversationWorkspace = extra?.workspace;
+  } catch {
+    conversationWorkspace = undefined;
+  }
+  if (!conversationWorkspace) {
     throw new Error('Conversation workspace not found');
   }
 
@@ -323,7 +372,7 @@ export function registerApiRoutes(app: Express): void {
         if (conversationId && saveToWorkspace) {
           let workspace: string;
           try {
-            workspace = await resolveUploadWorkspace(conversationId, requestedWorkspace);
+            workspace = await resolveUploadWorkspace(conversationId, requestedWorkspace, req.user!);
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Invalid upload workspace';
             const statusCode =
@@ -647,6 +696,7 @@ export function registerApiRoutes(app: Express): void {
   registerWeixinLoginRoutes(app, validateApiAccess);
   registerKanbanRoutes(app);
   registerAdminRoutes(app);
+  registerTeamTasksRoutes(app, { rateLimit: apiRateLimiter, auth: validateApiAccess });
 
   /**
    * 通用 API 端点 - Generic API endpoint

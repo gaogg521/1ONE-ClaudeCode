@@ -137,6 +137,39 @@ body.login-page-active {
   margin-bottom: 28px;
 }
 
+.login-page__methods {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  background: rgba(102, 126, 234, 0.08);
+  border: 1px solid rgba(102, 126, 234, 0.18);
+  border-radius: 14px;
+  margin-bottom: 18px;
+}
+
+.login-page__method {
+  flex: 1;
+  height: 34px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.login-page__method:hover {
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.login-page__method.is-active {
+  background: white;
+  color: #374151;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
 .login-page__logo {
   display: flex;
   justify-content: center;
@@ -180,6 +213,38 @@ body.login-page-active {
 
 .login-page__form {
   margin-bottom: 24px;
+}
+
+.login-page__feishu {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-page__feishu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.login-page__feishu-qr {
+  border-radius: 14px;
+  border: 1px solid #eee;
+  background: #fafafa;
+  padding: 12px;
+}
+
+.login-page__feishu-qr-title {
+  text-align: center;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.login-page__feishu-qr-container {
+  display: flex;
+  justify-content: center;
 }
 
 .login-page__form-item {

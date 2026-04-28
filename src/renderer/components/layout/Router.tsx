@@ -7,6 +7,10 @@ const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const SessionsPage = React.lazy(() => import('@renderer/pages/sessions'));
 const TasksPage = React.lazy(() => import('@renderer/pages/tasks'));
 const UsersPage = React.lazy(() => import('@renderer/pages/users'));
+const AdminShell = React.lazy(() => import('@renderer/pages/admin/AdminShell'));
+const AdminUsers = React.lazy(() => import('@renderer/pages/admin/AdminUsers'));
+const AdminAuth = React.lazy(() => import('@renderer/pages/admin/AdminAuth'));
+const AdminTeams = React.lazy(() => import('@renderer/pages/admin/AdminTeams'));
 const HooksPage = React.lazy(() => import('@renderer/pages/hooks'));
 const MCPPage = React.lazy(() => import('@renderer/pages/mcp'));
 const MemoryPage = React.lazy(() => import('@renderer/pages/memory'));
@@ -21,6 +25,7 @@ import ModeSettings from '@renderer/pages/settings/ModeSettings';
 const SystemSettings = React.lazy(() => import('@renderer/pages/settings/SystemSettings'));
 const ToolsSettings = React.lazy(() => import('@renderer/pages/settings/ToolsSettings'));
 const WebuiSettings = React.lazy(() => import('@renderer/pages/settings/WebuiSettings'));
+const AuthProvidersSettings = React.lazy(() => import('@renderer/pages/settings/AuthProvidersSettings'));
 const ExtensionSettingsPage = React.lazy(() => import('@renderer/pages/settings/ExtensionSettingsPage'));
 const LoginPage = React.lazy(() => import('@renderer/pages/login'));
 const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase'));
@@ -106,7 +111,14 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
             }
           />
           <Route path='/tasks' element={withRouteFallback(TasksPage)} />
-          <Route path='/users' element={withRouteFallback(UsersPage)} />
+          {/* Backward compatible route; admin console is /admin/users */}
+          <Route path='/users' element={<Navigate to='/admin/users' replace />} />
+          <Route path='/admin' element={withRouteFallback(AdminShell)}>
+            <Route index element={<Navigate to='/admin/users' replace />} />
+            <Route path='users' element={withRouteFallback(AdminUsers)} />
+            <Route path='teams' element={withRouteFallback(AdminTeams)} />
+            <Route path='auth' element={withRouteFallback(AdminAuth)} />
+          </Route>
           <Route path='/hooks' element={withRouteFallback(HooksPage)} />
           <Route path='/mcp' element={withRouteFallback(MCPPage)} />
           <Route path='/memory' element={withRouteFallback(MemoryPage)} />
@@ -120,6 +132,8 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
           <Route path='/settings/skills-hub' element={withRouteFallback(SkillsHubSettings)} />
           <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
+          {/* Auth providers config is admin-only; keep a redirect for old links */}
+          <Route path='/settings/auth' element={<Navigate to='/admin/auth' replace />} />
           <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
           <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />
           <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />

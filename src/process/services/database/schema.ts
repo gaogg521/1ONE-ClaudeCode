@@ -27,23 +27,47 @@ export function initSchema(db: ISqliteDriver): void {
   // Users table (账户系统)
   db.exec(`CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     username TEXT UNIQUE NOT NULL,
     email TEXT UNIQUE,
     password_hash TEXT NOT NULL,
     avatar_path TEXT,
     jwt_secret TEXT,
-    role TEXT NOT NULL DEFAULT 'user',
+    role TEXT NOT NULL DEFAULT 'member',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     last_login INTEGER
   )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+
+  // Auth providers (WebUI 多登录方案配置)
+  db.exec(`CREATE TABLE IF NOT EXISTS auth_providers (
+    provider TEXT PRIMARY KEY,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    config_json TEXT NOT NULL DEFAULT '{}',
+    updated_at INTEGER NOT NULL
+  )`);
+
+  // Auth identities (外部账号 <-> 本地用户绑定表)
+  db.exec(`CREATE TABLE IF NOT EXISTS auth_identities (
+    provider TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (provider, external_id),
+    UNIQUE (provider, user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_auth_identities_user ON auth_identities(user_id)');
 
   // Conversations table (会话表 - 存储TChatConversation)
   db.exec(`CREATE TABLE IF NOT EXISTS conversations (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     user_id TEXT NOT NULL,
+    team_id TEXT,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
     extra TEXT NOT NULL,
@@ -53,7 +77,9 @@ export function initSchema(db: ISqliteDriver): void {
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_tenant_id ON conversations(tenant_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_team_id ON conversations(tenant_id, team_id, updated_at DESC)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_type ON conversations(type)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_user_updated ON conversations(user_id, updated_at DESC)');
@@ -79,6 +105,7 @@ export function initSchema(db: ISqliteDriver): void {
   // Teams table (团队模式)
   db.exec(`CREATE TABLE IF NOT EXISTS teams (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     user_id TEXT NOT NULL,
     name TEXT NOT NULL,
     workspace TEXT NOT NULL,
@@ -89,12 +116,38 @@ export function initSchema(db: ISqliteDriver): void {
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_teams_tenant_id ON teams(tenant_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_teams_user_id ON teams(user_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_teams_updated_at ON teams(updated_at)');
+
+  // Tenants table（企业/租户）
+  db.exec(`CREATE TABLE IF NOT EXISTS tenants (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+
+  // Team memberships（团队成员关系与角色）
+  db.exec(`CREATE TABLE IF NOT EXISTS team_memberships (
+    tenant_id TEXT NOT NULL,
+    team_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'member',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (team_id, user_id),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_team_memberships_user ON team_memberships(tenant_id, user_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_team_memberships_team ON team_memberships(tenant_id, team_id)');
 
   // Mailbox table (团队消息邮箱)
   db.exec(`CREATE TABLE IF NOT EXISTS mailbox (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     team_id TEXT NOT NULL,
     to_agent_id TEXT NOT NULL,
     from_agent_id TEXT NOT NULL,
@@ -110,6 +163,7 @@ export function initSchema(db: ISqliteDriver): void {
   // Team tasks table (团队任务)
   db.exec(`CREATE TABLE IF NOT EXISTS team_tasks (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     team_id TEXT NOT NULL,
     subject TEXT NOT NULL,
     description TEXT,
@@ -127,6 +181,7 @@ export function initSchema(db: ISqliteDriver): void {
   // Personal tasks table (个人任务)
   db.exec(`CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     user_id TEXT NOT NULL,
     subject TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
@@ -169,4 +224,4 @@ export function setDatabaseVersion(db: ISqliteDriver, version: number): void {
  * Current database schema version
  * Update this when adding new migrations in migrations.ts
  */
-export const CURRENT_DB_VERSION = 24;
+export const CURRENT_DB_VERSION = 28;

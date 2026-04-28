@@ -9,12 +9,32 @@ import { ProcessChat } from '@process/utils/initStorage';
 import type { TChatConversation } from '@/common/config/storage';
 import { migrateConversationToDatabase } from './migrationUtils';
 import type { IConversationRepository } from '@process/services/database/IConversationRepository';
+import { AuthService } from '@process/webserver/auth/service/AuthService';
+import { UserRepository } from '@process/webserver/auth/repository/UserRepository';
+import { getDatabase } from '@process/services/database';
 
 export function initDatabaseBridge(repo: IConversationRepository): void {
   // Get conversation messages from database
   ipcBridge.database.getConversationMessages.provider(async (_params) => {
-    const { conversation_id, page = 0, pageSize = 10000 } = _params ?? {};
+    const { conversation_id, page = 0, pageSize = 10000, __authToken } = (_params ?? {}) as {
+      conversation_id?: string;
+      page?: number;
+      pageSize?: number;
+      __authToken?: string | null;
+    };
     try {
+      // WebUI multi-user mode: enforce scope via token
+      if (typeof __authToken === 'string' && __authToken.trim() !== '') {
+        const decoded = await AuthService.verifyToken(__authToken);
+        if (!decoded) return [];
+        const user = await UserRepository.findById(decoded.userId);
+        if (!user) return [];
+        const tenantId = (user as any).tenant_id ?? 'default';
+        const db = await getDatabase();
+        if (!db.canUserAccessConversation({ tenantId, userId: user.id, conversationId: String(conversation_id ?? '') })) {
+          return [];
+        }
+      }
       const result = await repo.getMessages(conversation_id, page, pageSize);
       return result.data;
     } catch (error) {
@@ -25,8 +45,31 @@ export function initDatabaseBridge(repo: IConversationRepository): void {
 
   // Get user conversations from database with lazy migration from file storage
   ipcBridge.database.getUserConversations.provider(async (_params) => {
-    const { page = 0, pageSize = 10000 } = _params ?? {};
+    const { page = 0, pageSize = 10000, teamId, __authToken } = (_params ?? {}) as {
+      page?: number;
+      pageSize?: number;
+      teamId?: string | null;
+      __authToken?: string | null;
+    };
     try {
+      // WebUI multi-user mode: return only conversations visible to this user
+      if (typeof __authToken === 'string' && __authToken.trim() !== '') {
+        const decoded = await AuthService.verifyToken(__authToken);
+        if (!decoded) return [];
+        const user = await UserRepository.findById(decoded.userId);
+        if (!user) return [];
+        const tenantId = (user as any).tenant_id ?? 'default';
+        const db = await getDatabase();
+        const result = db.getAccessibleConversationsForUser({
+          tenantId,
+          userId: user.id,
+          page,
+          pageSize,
+          teamId: typeof teamId === 'string' ? teamId : null,
+        });
+        return result.data;
+      }
+
       const result = await repo.getUserConversations(undefined, page * pageSize, pageSize);
       const dbConversations = result.data;
 
@@ -66,8 +109,21 @@ export function initDatabaseBridge(repo: IConversationRepository): void {
   });
 
   ipcBridge.database.searchConversationMessages.provider(async (_params) => {
-    const { keyword, page = 0, pageSize = 20 } = _params ?? {};
+    const { keyword, page = 0, pageSize = 20, __authToken } = (_params ?? {}) as {
+      keyword?: string;
+      page?: number;
+      pageSize?: number;
+      __authToken?: string | null;
+    };
     try {
+      // WebUI multi-user mode: For now, keep behavior but block access if unauthenticated.
+      // (Scoped search across only accessible conversations will be added next.)
+      if (typeof __authToken === 'string' && __authToken.trim() !== '') {
+        const decoded = await AuthService.verifyToken(__authToken);
+        if (!decoded) {
+          return { items: [], total: 0, page, pageSize, hasMore: false };
+        }
+      }
       const result = await repo.searchMessages(keyword, page, pageSize);
       return result;
     } catch (error) {

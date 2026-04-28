@@ -15,6 +15,7 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutContext } from '@renderer/hooks/context/LayoutContext';
+import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
 import { useNotificationClick } from '@renderer/hooks/system/useNotificationClick';
 import { useDirectorySelection } from '@renderer/hooks/file/useDirectorySelection';
@@ -58,7 +59,7 @@ const NAV_ITEMS = [
   { icon: <CommentOne theme='outline' size={18} />, labelKey: 'nav.sessions', path: '/sessions', paths: ['/conversation'] },
   { icon: <FolderOpen theme='outline' size={18} />, labelKey: 'nav.workspace', path: '/workspace' },
   { icon: <Checklist theme='outline' size={18} />, labelKey: 'nav.tasks', path: '/tasks' },
-  { icon: <People theme='outline' size={18} />, labelKey: 'nav.users', path: '/users' },
+  { icon: <People theme='outline' size={18} />, labelKey: 'nav.admin', path: '/admin' },
   { icon: <Lightning theme='outline' size={18} />, labelKey: 'nav.hooks', path: '/hooks' },
   { icon: <Server theme='outline' size={18} />, labelKey: 'nav.mcp', path: '/mcp' },
   { icon: <Brain theme='outline' size={18} />, labelKey: 'nav.memory', path: '/memory' },
@@ -70,6 +71,10 @@ const SidebarNavIcons: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const role = user?.role ?? 'member';
+  const canSeeAdmin = role === 'system_admin' || role === 'org_admin' || role === 'admin';
+  const items = canSeeAdmin ? NAV_ITEMS : NAV_ITEMS.filter((x) => x.path !== '/admin');
   return (
     <div style={{
       display: 'flex',
@@ -81,7 +86,7 @@ const SidebarNavIcons: React.FC = () => {
       flexShrink: 0,
       width: 48,
     }}>
-      {NAV_ITEMS.map((item) => {
+      {items.map((item) => {
         const allPaths = [item.path, ...(item.paths ?? [])];
         const active = allPaths.some((p) => location.pathname.startsWith(p));
         return (

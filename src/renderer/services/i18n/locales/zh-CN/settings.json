@@ -316,6 +316,13 @@
   "agent": "对话Agent",
   "tools": "工具",
   "webui": "远程连接",
+  "authProviders": {
+    "title": "登录与认证",
+    "adminOnly": "仅管理员可配置",
+    "desc": "配置 WebUI 登录方式：本地账户 / LDAP 域控 / 飞书账号。外部登录需先在用户管理页绑定。",
+    "ldapHint": "支持 LDAP/域控登录（参数可自定义），并可配置管理员组 DN 以提升权限。",
+    "feishuHint": "支持飞书 OAuth 与扫码登录。请在飞书开放平台配置 redirectUri 白名单。"
+  },
   "installed": "已安装",
   "builtin": "内置",
   "channels": "频道",

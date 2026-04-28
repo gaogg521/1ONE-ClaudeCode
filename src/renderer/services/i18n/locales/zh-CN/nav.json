@@ -3,7 +3,7 @@
   "workspace": "工作区（文件）",
   "globalSettings": "全局设置",
   "tasks": "任务看板",
-  "users": "用户管理",
+  "admin": "管理后台",
   "hooks": "Hook 监控",
   "mcp": "MCP 服务",
   "memory": "记忆管理",

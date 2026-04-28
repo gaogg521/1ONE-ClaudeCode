@@ -19,15 +19,32 @@ import type { TMessage } from '@/common/chat/chatLib';
  */
 export interface IUser {
   id: string;
+  tenant_id?: string;
   username: string;
   email?: string;
   password_hash: string;
   avatar_path?: string;
   jwt_secret?: string | null;
-  role: 'user' | 'admin';
+  role: 'member' | 'org_admin' | 'system_admin' | 'user' | 'admin';
   created_at: number;
   updated_at: number;
   last_login?: number | null;
+}
+
+export type AuthProviderType = 'local' | 'ldap' | 'feishu';
+
+export interface IAuthProviderRow {
+  provider: AuthProviderType;
+  enabled: number; // 0/1
+  config_json: string; // JSON string (may contain encrypted secrets)
+  updated_at: number;
+}
+
+export interface IAuthIdentityRow {
+  provider: AuthProviderType;
+  external_id: string;
+  user_id: string;
+  created_at: number;
 }
 
 // Image metadata removed - images are stored in filesystem and referenced via message.resultDisplay

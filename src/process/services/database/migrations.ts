@@ -1177,6 +1177,169 @@ const migration_v24: IMigration = {
 };
 
 /**
+ * Migration v24 -> v25: Add auth providers + identities tables
+ * Supports multi-auth (local/ldap/feishu) configuration and external identity binding
+ */
+const migration_v25: IMigration = {
+  version: 25,
+  name: 'Add auth provider config + identity binding tables',
+  up: (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS auth_providers (
+      provider TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      updated_at INTEGER NOT NULL
+    )`);
+
+    db.exec(`CREATE TABLE IF NOT EXISTS auth_identities (
+      provider TEXT NOT NULL,
+      external_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (provider, external_id),
+      UNIQUE (provider, user_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_auth_identities_user ON auth_identities(user_id)');
+
+    console.log('[Migration v25] Added auth_providers + auth_identities tables');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_auth_identities_user');
+    db.exec('DROP TABLE IF EXISTS auth_identities');
+    db.exec('DROP TABLE IF EXISTS auth_providers');
+    console.log('[Migration v25] Rolled back: Removed auth providers/identities tables');
+  },
+};
+
+/**
+ * Migration v25 -> v26: Normalize roles for enterprise RBAC
+ * - admin -> system_admin
+ * - user  -> member
+ * - ensure system_default_user is system_admin
+ */
+const migration_v26: IMigration = {
+  version: 26,
+  name: 'Normalize user roles to member/org_admin/system_admin',
+  up: (db) => {
+    const cols = new Set((db.pragma('table_info(users)') as Array<{ name: string }>).map((c) => c.name));
+    if (!cols.has('role')) {
+      db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'member'`);
+    }
+    db.exec(`UPDATE users SET role = 'system_admin' WHERE role = 'admin' OR id = 'system_default_user'`);
+    db.exec(`UPDATE users SET role = 'member' WHERE role = 'user' OR role IS NULL OR TRIM(role) = ''`);
+    console.log('[Migration v26] Normalized user roles');
+  },
+  down: (db) => {
+    // Best-effort rollback: map back to old roles
+    db.exec(`UPDATE users SET role = 'admin' WHERE role = 'system_admin'`);
+    db.exec(`UPDATE users SET role = 'user' WHERE role = 'member' OR role = 'org_admin'`);
+    console.log('[Migration v26] Rolled back: mapped roles back to admin/user');
+  },
+};
+
+/**
+ * Migration v26 -> v27: Introduce tenant + team memberships for enterprise RBAC
+ * - Add tenant_id columns with default 'default'
+ * - Create tenants and team_memberships tables
+ * - Backfill existing data into default tenant
+ */
+const migration_v27: IMigration = {
+  version: 27,
+  name: 'Add tenants + team memberships and tenant_id columns',
+  up: (db) => {
+    const now = Date.now();
+
+    // 1) tenants table + default tenant
+    db.exec(`CREATE TABLE IF NOT EXISTS tenants (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`);
+    db.prepare(
+      `INSERT INTO tenants (id, name, created_at, updated_at)
+       VALUES ('default', 'Default', ?, ?)
+       ON CONFLICT(id) DO NOTHING`
+    ).run(now, now);
+
+    // 2) add tenant_id columns (best-effort; only when missing)
+    const ensureColumn = (table: string, col: string, ddl: string) => {
+      const cols = new Set((db.pragma(`table_info(${table})`) as Array<{ name: string }>).map((c) => c.name));
+      if (!cols.has(col)) db.exec(ddl);
+    };
+
+    ensureColumn('users', 'tenant_id', `ALTER TABLE users ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+    ensureColumn('conversations', 'tenant_id', `ALTER TABLE conversations ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+    ensureColumn('teams', 'tenant_id', `ALTER TABLE teams ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+    ensureColumn('mailbox', 'tenant_id', `ALTER TABLE mailbox ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+    ensureColumn('team_tasks', 'tenant_id', `ALTER TABLE team_tasks ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+    ensureColumn('tasks', 'tenant_id', `ALTER TABLE tasks ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+
+    // 3) backfill null/empty tenant_id (older DBs)
+    for (const t of ['users', 'conversations', 'teams', 'mailbox', 'team_tasks', 'tasks']) {
+      db.exec(`UPDATE ${t} SET tenant_id = 'default' WHERE tenant_id IS NULL OR TRIM(tenant_id) = ''`);
+    }
+
+    // 4) memberships table + backfill team owners as owner
+    db.exec(`CREATE TABLE IF NOT EXISTS team_memberships (
+      tenant_id TEXT NOT NULL,
+      team_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (team_id, user_id),
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_team_memberships_user ON team_memberships(tenant_id, user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_team_memberships_team ON team_memberships(tenant_id, team_id)');
+
+    db.prepare(
+      `INSERT INTO team_memberships (tenant_id, team_id, user_id, role, created_at, updated_at)
+       SELECT COALESCE(t.tenant_id, 'default'), t.id, t.user_id, 'owner', ?, ?
+       FROM teams t
+       WHERE NOT EXISTS (
+         SELECT 1 FROM team_memberships m WHERE m.team_id = t.id AND m.user_id = t.user_id
+       )`
+    ).run(now, now);
+
+    console.log('[Migration v27] Added tenants/team_memberships and tenant_id columns');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_team_memberships_team');
+    db.exec('DROP INDEX IF EXISTS idx_team_memberships_user');
+    db.exec('DROP TABLE IF EXISTS team_memberships');
+    db.exec('DROP TABLE IF EXISTS tenants');
+    // Keep tenant_id columns (SQLite cannot drop columns)
+    console.log('[Migration v27] Rolled back: dropped tenants/team_memberships (tenant_id columns retained)');
+  },
+};
+
+/**
+ * Migration v27 -> v28: Add team_id to conversations for team-shared history
+ */
+const migration_v28: IMigration = {
+  version: 28,
+  name: 'Add team_id column to conversations',
+  up: (db) => {
+    const cols = new Set((db.pragma('table_info(conversations)') as Array<{ name: string }>).map((c) => c.name));
+    if (!cols.has('team_id')) {
+      db.exec(`ALTER TABLE conversations ADD COLUMN team_id TEXT`);
+    }
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_team_id ON conversations(tenant_id, team_id, updated_at DESC)`);
+    console.log('[Migration v28] Added team_id to conversations');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_conversations_team_id');
+    // Cannot drop column in SQLite.
+    console.log('[Migration v28] Rolled back: dropped index (team_id column retained)');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -1185,6 +1348,10 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v7, migration_v8, migration_v9, migration_v10, migration_v11, migration_v12,
   migration_v13, migration_v14, migration_v15, migration_v16, migration_v17, migration_v18,
   migration_v19, migration_v20, migration_v21, migration_v22, migration_v23, migration_v24,
+  migration_v25,
+  migration_v26,
+  migration_v27,
+  migration_v28,
 ];
 
 /**

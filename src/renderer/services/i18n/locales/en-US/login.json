@@ -15,6 +15,15 @@
   "languageToggle": "Change language",
   "footerPrimary": "Transform your command-line AI",
   "footerSecondary": "Modern & Efficient",
+  "methods": {
+    "label": "Sign-in method",
+    "local": "Local account",
+    "ldap": "LDAP account",
+    "feishu": "Feishu account",
+    "feishuOauth": "Sign in with Feishu",
+    "feishuQrTitle": "Or scan with Feishu",
+    "feishuQrError": "Failed to initialize Feishu QR"
+  },
   "errors": {
     "empty": "Please enter username and password",
     "invalidCredentials": "Invalid username or password",

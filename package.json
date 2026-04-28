@@ -1,6 +1,6 @@
 {
   "name": "1one-claudecode",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "1ONE Code — Visual control center for Claude Code native capabilities.",
   "keywords": [],
   "license": "MIT",
@@ -114,6 +114,7 @@
     "jsonrepair": "^3.13.0",
     "jsonwebtoken": "^9.0.2",
     "katex": "^0.16.22",
+    "ldapjs": "^3.0.7",
     "mammoth": "^1.11.0",
     "mermaid": "^11.13.0",
     "multer": "^2.1.1",

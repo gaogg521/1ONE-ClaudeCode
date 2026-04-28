@@ -8,11 +8,48 @@ import type { Express, Request, Response } from 'express';
 import { AuthService } from '@process/webserver/auth/service/AuthService';
 import { AuthMiddleware } from '@process/webserver/auth/middleware/AuthMiddleware';
 import { UserRepository } from '@process/webserver/auth/repository/UserRepository';
+import { AuthProviderRepository } from '@process/webserver/auth/repository/AuthProviderRepository';
+import { AuthIdentityRepository } from '@process/webserver/auth/repository/AuthIdentityRepository';
+import type { AuthProviderType } from '@process/services/database/types';
 import { AUTH_CONFIG, getCookieOptions } from '../config/constants';
 import { TokenUtils } from '@process/webserver/auth/middleware/TokenMiddleware';
 import { createAppError } from '../middleware/errorHandler';
 import { authRateLimiter, authenticatedActionLimiter, apiRateLimiter } from '../middleware/security';
 import { verifyQRTokenDirect } from '@process/bridge/webuiQR';
+import { authenticateWithLdap, type LdapProviderConfig } from '../auth/providers/LdapAuthProvider';
+import {
+  buildFeishuAuthorizeUrl,
+  exchangeFeishuCodeForUserAccessToken,
+  fetchFeishuUserInfo,
+  resolveFeishuExternalId,
+  type FeishuProviderConfig,
+} from '../auth/providers/FeishuAuthProvider';
+
+const FEISHU_QR_SDK_URL =
+  'https://lf-package-cn.feishucdn.com/obj/feishu-static/lark/passport/qrcode/LarkSSOSDKWebQRCode-1.0.3.js';
+
+const feishuStateStore: Map<string, number> = new Map();
+const FEISHU_STATE_TTL_MS = 10 * 60 * 1000;
+
+function issueFeishuState(): string {
+  const state = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  feishuStateStore.set(state, Date.now() + FEISHU_STATE_TTL_MS);
+  return state;
+}
+
+function consumeFeishuState(state: string): boolean {
+  const expiry = feishuStateStore.get(state);
+  feishuStateStore.delete(state);
+  if (!expiry) return false;
+  return Date.now() <= expiry;
+}
+
+function cleanupFeishuState(): void {
+  const now = Date.now();
+  for (const [k, exp] of feishuStateStore.entries()) {
+    if (now > exp) feishuStateStore.delete(k);
+  }
+}
 
 /**
  * QR 登录页面 HTML（静态，不包含用户输入）
@@ -92,6 +129,128 @@ const QR_LOGIN_PAGE_HTML = `<!DOCTYPE html>
  */
 export function registerAuthRoutes(app: Express): void {
   /**
+   * 获取当前启用的认证提供方（不包含敏感配置）
+   * GET /api/auth/providers
+   */
+  app.get('/api/auth/providers', apiRateLimiter, async (_req: Request, res: Response) => {
+    try {
+      const providers = await AuthProviderRepository.listProviders();
+      res.json({ success: true, data: providers });
+    } catch (error) {
+      console.error('[AuthRoute] providers error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  /**
+   * 飞书授权入口
+   * - mode=oauth: 直接 302 跳转到授权页
+   * - mode=qr: 返回 goto URL，前端配合 QR SDK 生成二维码
+   */
+  app.get('/api/auth/feishu/authorize', apiRateLimiter, async (req: Request, res: Response) => {
+    try {
+      cleanupFeishuState();
+      const mode = String(req.query.mode ?? 'oauth');
+
+      const providerRow = await AuthProviderRepository.getProvider('feishu');
+      const cfg = (providerRow?.config ?? {}) as unknown as FeishuProviderConfig;
+      const appId = cfg.appId || process.env.FEISHU_APP_ID || '';
+      const redirectUri = cfg.redirectUri || process.env.FEISHU_REDIRECT_URI || '';
+      if (!providerRow?.enabled) {
+        res.status(404).json({ success: false, message: 'Feishu login is not enabled' });
+        return;
+      }
+      if (!appId || !redirectUri) {
+        res.status(500).json({ success: false, message: 'Feishu provider not configured' });
+        return;
+      }
+
+      const state = issueFeishuState();
+      const goto = buildFeishuAuthorizeUrl({ appId, redirectUri, state });
+
+      if (mode === 'qr') {
+        res.json({ success: true, data: { sdkUrl: FEISHU_QR_SDK_URL, goto, state } });
+        return;
+      }
+
+      res.redirect(goto);
+    } catch (error) {
+      console.error('[AuthRoute] feishu authorize error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  /**
+   * 飞书回调
+   * GET /api/auth/feishu/callback?code=...&state=...
+   */
+  app.get('/api/auth/feishu/callback', apiRateLimiter, async (req: Request, res: Response) => {
+    try {
+      const code = String(req.query.code ?? '');
+      const state = String(req.query.state ?? '');
+      if (!code || !state) {
+        res.status(400).send('Missing code/state');
+        return;
+      }
+      if (!consumeFeishuState(state)) {
+        res.status(400).send('Invalid state');
+        return;
+      }
+
+      const providerRow = await AuthProviderRepository.getProvider('feishu');
+      const cfg = (providerRow?.config ?? {}) as unknown as FeishuProviderConfig;
+      const appId = cfg.appId || process.env.FEISHU_APP_ID || '';
+      const appSecret = cfg.appSecret || process.env.FEISHU_APP_SECRET || '';
+      if (!providerRow?.enabled) {
+        res.status(404).send('Feishu login is not enabled');
+        return;
+      }
+      if (!appId || !appSecret) {
+        res.status(500).send('Feishu provider not configured');
+        return;
+      }
+
+      const token = await exchangeFeishuCodeForUserAccessToken({ appId, appSecret, code });
+      const userInfo = await fetchFeishuUserInfo(token);
+      const externalIdField = (cfg.externalIdField ?? 'union_id') as 'union_id' | 'open_id';
+      const externalId = resolveFeishuExternalId(userInfo, externalIdField);
+      if (!externalId) {
+        res.status(500).send('Failed to resolve Feishu user identity');
+        return;
+      }
+
+      const identity = await AuthIdentityRepository.getByExternalId('feishu', externalId);
+      if (!identity) {
+        res.status(403).send('Account not bound. Please contact admin.');
+        return;
+      }
+      const user = await UserRepository.findById(identity.user_id);
+      if (!user) {
+        res.status(403).send('Bound user not found');
+        return;
+      }
+
+      const sessionToken = await AuthService.generateToken({
+        id: user.id,
+        username: user.username,
+        role: user.role ?? 'user',
+      });
+
+      await UserRepository.updateLastLogin(user.id);
+      res.cookie(AUTH_CONFIG.COOKIE.NAME, sessionToken, {
+        ...getCookieOptions(),
+        maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,
+      });
+
+      // Unified landing: enter system homepage
+      res.redirect('/');
+    } catch (error) {
+      console.error('[AuthRoute] feishu callback error:', error);
+      res.status(500).send('Internal server error');
+    }
+  });
+
+  /**
    * 用户登录 - Login endpoint
    * POST /login
    */
@@ -147,6 +306,72 @@ export function registerAuthRoutes(app: Express): void {
       });
     } catch (error) {
       console.error('Login error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  /**
+   * LDAP 登录（域控账号）
+   * POST /api/auth/ldap/login
+   *
+   * 说明：按“预创建绑定”策略，仅允许已绑定到本地 user 的外部账号登录
+   */
+  app.post('/api/auth/ldap/login', authRateLimiter, AuthMiddleware.validateLoginInput, async (req: Request, res: Response) => {
+    try {
+      const { username, password } = req.body as { username: string; password: string };
+      const provider: AuthProviderType = 'ldap';
+      const providerRow = await AuthProviderRepository.getProvider(provider);
+      if (!providerRow || !providerRow.enabled) {
+        res.status(404).json({ success: false, message: 'LDAP login is not enabled' });
+        return;
+      }
+
+      const cfg = providerRow.config as unknown as LdapProviderConfig;
+      if (!cfg?.url || !cfg?.baseDN) {
+        res.status(500).json({ success: false, message: 'LDAP provider not configured' });
+        return;
+      }
+
+      const result = await authenticateWithLdap(username, password, cfg);
+
+      // 绑定检查：externalId -> userId
+      const identity = await AuthIdentityRepository.getByExternalId(provider, result.externalId);
+      if (!identity) {
+        res.status(403).json({ success: false, message: 'Account not bound. Please contact admin.' });
+        return;
+      }
+
+      const user = await UserRepository.findById(identity.user_id);
+      if (!user) {
+        res.status(403).json({ success: false, message: 'Bound user not found' });
+        return;
+      }
+
+      const token = await AuthService.generateToken({
+        id: user.id,
+        username: user.username,
+        role: result.isAdmin ? 'admin' : (user.role ?? 'user'),
+      });
+
+      await UserRepository.updateLastLogin(user.id);
+      res.cookie(AUTH_CONFIG.COOKIE.NAME, token, {
+        ...getCookieOptions(),
+        maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,
+      });
+
+      res.json({
+        success: true,
+        message: 'Login successful',
+        user: { id: user.id, username: user.username },
+        token,
+      });
+    } catch (error: any) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.toLowerCase().includes('invalidcredentials') || msg.toLowerCase().includes('invalid credentials')) {
+        res.status(401).json({ success: false, message: 'Invalid username or password' });
+        return;
+      }
+      console.error('[AuthRoute] ldap login error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });

@@ -135,6 +135,14 @@ export class SqliteTeamRepository implements ITeamRepository {
       team.createdAt,
       team.updatedAt
     );
+
+    // Ensure owner membership exists for enterprise RBAC.
+    // tenant_id defaults to 'default' for now.
+    db.prepare(
+      `INSERT INTO team_memberships (tenant_id, team_id, user_id, role, created_at, updated_at)
+       VALUES ('default', ?, ?, 'owner', ?, ?)
+       ON CONFLICT(team_id, user_id) DO UPDATE SET role='owner', updated_at=excluded.updated_at`
+    ).run(team.id, team.userId, team.createdAt, team.updatedAt);
     return team;
   }
 
@@ -146,7 +154,15 @@ export class SqliteTeamRepository implements ITeamRepository {
 
   async findAll(userId: string): Promise<TTeam[]> {
     const db = await this.getDb();
-    const rows = db.prepare('SELECT * FROM teams WHERE user_id = ? ORDER BY updated_at DESC').all(userId) as TeamRow[];
+    const rows = db
+      .prepare(
+        `SELECT DISTINCT t.*
+         FROM teams t
+         LEFT JOIN team_memberships m ON m.team_id = t.id AND m.user_id = ?
+         WHERE t.user_id = ? OR m.user_id = ?
+         ORDER BY t.updated_at DESC`
+      )
+      .all(userId, userId, userId) as TeamRow[];
     return rows.map(rowToTeam);
   }
 

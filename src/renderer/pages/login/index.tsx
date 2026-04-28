@@ -12,6 +12,13 @@ type MessageState = {
   text: string;
 };
 
+type LoginMethod = 'local' | 'ldap' | 'feishu';
+
+type FeishuQrLoginObj = {
+  matchOrigin?: (origin: string) => boolean;
+  matchData?: (data: unknown) => boolean;
+};
+
 const REMEMBER_ME_KEY = 'rememberMe';
 const REMEMBERED_USERNAME_KEY = 'rememberedUsername';
 const REMEMBERED_PASSWORD_KEY = 'rememberedPassword';
@@ -34,7 +41,7 @@ const deobfuscate = (text: string): string => {
 const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { status, login } = useAuth();
+  const { status, login, loginWithLdap } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -42,6 +49,10 @@ const LoginPage: React.FC = () => {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [message, setMessage] = useState<MessageState | null>(null);
   const [loading, setLoading] = useState(false);
+  const [method, setMethod] = useState<LoginMethod>('local');
+
+  const [feishuQr, setFeishuQr] = useState<{ sdkUrl: string; goto: string } | null>(null);
+  const feishuListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
 
   const usernameRef = useRef<HTMLInputElement | null>(null);
   const passwordRef = useRef<HTMLInputElement | null>(null);
@@ -134,7 +145,7 @@ const LoginPage: React.FC = () => {
       event.preventDefault();
       const trimmedUsername = username.trim();
 
-      if (!trimmedUsername || !password) {
+      if (method !== 'feishu' && (!trimmedUsername || !password)) {
         showMessage({ type: 'error', text: t('login.errors.empty') });
         return;
       }
@@ -142,7 +153,10 @@ const LoginPage: React.FC = () => {
       setLoading(true);
       setMessage(null);
 
-      const result = await login({ username: trimmedUsername, password, remember: rememberMe });
+      const result =
+        method === 'ldap'
+          ? await loginWithLdap({ username: trimmedUsername, password, remember: rememberMe })
+          : await login({ username: trimmedUsername, password, remember: rememberMe });
 
       if (result.success) {
         if (rememberMe) {
@@ -183,8 +197,105 @@ const LoginPage: React.FC = () => {
 
       setLoading(false);
     },
-    [login, navigate, password, rememberMe, showMessage, t, username]
+    [login, loginWithLdap, method, navigate, password, rememberMe, showMessage, t, username]
   );
+
+  const handleFeishuOauth = useCallback(() => {
+    window.location.href = '/api/auth/feishu/authorize?mode=oauth';
+  }, []);
+
+  const ensureScriptLoaded = useCallback(async (src: string): Promise<void> => {
+    if (typeof window === 'undefined') return;
+    const existing = document.querySelector(`script[data-one-feishu-qr="1"][src="${src}"]`);
+    if (existing) return;
+    await new Promise<void>((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.dataset.oneFeishuQr = '1';
+      script.addEventListener('load', () => resolve(), { once: true });
+      script.addEventListener('error', () => reject(new Error('Failed to load Feishu QR SDK')), { once: true });
+      document.head.appendChild(script);
+    });
+  }, []);
+
+  const initFeishuQr = useCallback(async () => {
+    setMessage(null);
+    setFeishuQr(null);
+    try {
+      const res = await fetch('/api/auth/feishu/authorize?mode=qr', { credentials: 'include' });
+      const raw = (await res.json().catch(() => null)) as unknown;
+      const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
+      const data = (obj?.data && typeof obj.data === 'object') ? (obj.data as Record<string, unknown>) : null;
+      if (!res.ok || obj?.success !== true || !data?.goto || !data?.sdkUrl) {
+        throw new Error((obj?.message as string) ?? 'Failed to init Feishu QR');
+      }
+
+      const sdkUrl = String(data.sdkUrl);
+      const goto = String(data.goto);
+      await ensureScriptLoaded(sdkUrl);
+
+      setFeishuQr({ sdkUrl, goto });
+    } catch (error) {
+      console.error('Failed to init Feishu QR:', error);
+      showMessage({ type: 'error', text: t('login.methods.feishuQrError', { defaultValue: '飞书二维码初始化失败' }) });
+    }
+  }, [ensureScriptLoaded, showMessage, t]);
+
+  useEffect(() => {
+    if (method !== 'feishu') {
+      setFeishuQr(null);
+      if (feishuListenerRef.current) {
+        window.removeEventListener('message', feishuListenerRef.current);
+        feishuListenerRef.current = null;
+      }
+      return;
+    }
+    void initFeishuQr();
+    return () => {
+      if (feishuListenerRef.current) {
+        window.removeEventListener('message', feishuListenerRef.current);
+        feishuListenerRef.current = null;
+      }
+    };
+  }, [initFeishuQr, method]);
+
+  useEffect(() => {
+    if (method !== 'feishu' || !feishuQr?.goto) return;
+    const QRLogin = (window as unknown as { QRLogin?: (opts: unknown) => unknown }).QRLogin;
+    if (!QRLogin) return;
+
+    const containerId = 'one-feishu-qr-container';
+    const obj = QRLogin({
+      id: containerId,
+      goto: feishuQr.goto,
+      width: '260',
+      height: '300',
+      style: 'width:260px;height:300px;margin:0 auto;',
+    }) as FeishuQrLoginObj;
+
+    const handler = (event: MessageEvent) => {
+      try {
+        if (obj?.matchOrigin?.(event.origin) && obj?.matchData?.(event.data)) {
+          const d = event.data as unknown;
+          const tmpCode =
+            d && typeof d === 'object' && 'tmp_code' in (d as Record<string, unknown>)
+              ? (d as Record<string, unknown>).tmp_code
+              : null;
+          if (tmpCode) {
+            window.location.href = `${feishuQr.goto}&tmp_code=${encodeURIComponent(String(tmpCode))}`;
+          }
+        }
+      } catch {}
+    };
+    feishuListenerRef.current = handler;
+    window.addEventListener('message', handler);
+
+    return () => {
+      window.removeEventListener('message', handler);
+      feishuListenerRef.current = null;
+    };
+  }, [feishuQr, method]);
 
   if (status === 'checking') {
     return <AppLoader />;
@@ -222,7 +333,50 @@ const LoginPage: React.FC = () => {
           <p className='login-page__subtitle'>{t('login.subtitle')}</p>
         </div>
 
+        <div className='login-page__methods' role='tablist' aria-label={t('login.methods.label', { defaultValue: '登录方式' })}>
+          <button
+            type='button'
+            role='tab'
+            className={`login-page__method ${method === 'local' ? 'is-active' : ''}`}
+            onClick={() => setMethod('local')}
+          >
+            {t('login.methods.local')}
+          </button>
+          <button
+            type='button'
+            role='tab'
+            className={`login-page__method ${method === 'ldap' ? 'is-active' : ''}`}
+            onClick={() => setMethod('ldap')}
+          >
+            {t('login.methods.ldap')}
+          </button>
+          <button
+            type='button'
+            role='tab'
+            className={`login-page__method ${method === 'feishu' ? 'is-active' : ''}`}
+            onClick={() => setMethod('feishu')}
+          >
+            {t('login.methods.feishu')}
+          </button>
+        </div>
+
         <form className='login-page__form' onSubmit={handleSubmit}>
+          {method === 'feishu' ? (
+            <div className='login-page__feishu'>
+              <div className='login-page__feishu-actions'>
+                <button type='button' className='login-page__submit' onClick={handleFeishuOauth} disabled={loading}>
+                  <span>{t('login.methods.feishuOauth', { defaultValue: '使用飞书登录' })}</span>
+                </button>
+              </div>
+              <div className='login-page__feishu-qr'>
+                <div className='login-page__feishu-qr-title'>
+                  {t('login.methods.feishuQrTitle', { defaultValue: '或使用飞书扫码登录' })}
+                </div>
+                <div id='one-feishu-qr-container' className='login-page__feishu-qr-container' />
+              </div>
+            </div>
+          ) : (
+            <>
           <div className='login-page__form-item'>
             <label className='login-page__label' htmlFor='username'>
               {t('login.username')}
@@ -332,6 +486,8 @@ const LoginPage: React.FC = () => {
             )}
             <span>{loading ? t('login.submitting') : t('login.submit')}</span>
           </button>
+            </>
+          )}
 
           <div
             role='alert'

@@ -15,6 +15,15 @@
   "languageToggle": "切换语言",
   "footerPrimary": "命令行 AI 的现代化体验",
   "footerSecondary": "高效且优雅",
+  "methods": {
+    "label": "登录方式",
+    "local": "本地账户",
+    "ldap": "域控账号",
+    "feishu": "飞书账号",
+    "feishuOauth": "使用飞书登录",
+    "feishuQrTitle": "或使用飞书扫码登录",
+    "feishuQrError": "飞书二维码初始化失败"
+  },
   "errors": {
     "empty": "请输入用户名和密码",
     "invalidCredentials": "用户名或密码错误",
