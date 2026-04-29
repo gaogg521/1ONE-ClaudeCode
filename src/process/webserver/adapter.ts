@@ -41,10 +41,15 @@ export function initWebAdapter(wss: WebSocketServer): void {
     if (emitter) {
       const token = wsManager.getClientToken(ws);
       // Attach caller token for multi-user scoping. Providers can ignore it in desktop mode.
-      const payload =
-        data && typeof data === 'object' && !Array.isArray(data)
-          ? { ...(data as Record<string, unknown>), __authToken: token }
-          : { data, __authToken: token };
+      // When `data` is missing (JSON omits undefined), avoid `{ data: undefined }` which breaks flat params.
+      let payload: Record<string, unknown>;
+      if (data !== undefined && data !== null && typeof data === 'object' && !Array.isArray(data)) {
+        payload = { ...(data as Record<string, unknown>), __authToken: token };
+      } else if (data !== undefined && data !== null) {
+        payload = { data, __authToken: token };
+      } else {
+        payload = { __authToken: token };
+      }
       emitter.emit(name, payload);
     } else {
       console.warn('[adapter] Bridge emitter not set, message dropped:', name);

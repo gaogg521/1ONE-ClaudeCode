@@ -242,9 +242,9 @@ const SessionsPage: React.FC = () => {
       list.push(c);
       map.set(key, list);
     }
-    const folderKeys = [...map.keys()].toSorted((a, b) => b.localeCompare(a));
+    const folderKeys = [...map.keys()].sort((a, b) => b.localeCompare(a));
     const folderItems = folderKeys.map((k) => {
-      const list = (map.get(k) ?? []).toSorted((a, b) => b.createTime - a.createTime);
+      const list = [...(map.get(k) ?? [])].sort((a, b) => b.createTime - a.createTime);
       const latest = list[0];
       const subtitle = latest?.name || '';
       const lastModify = latest?.modifyTime ?? 0;
