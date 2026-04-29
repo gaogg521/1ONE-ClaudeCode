@@ -8,13 +8,33 @@ import type { Express, Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
 import { getDatabase } from '@process/services/database';
 
-type TeamMembershipRole = 'viewer' | 'member' | 'owner';
+/** Matches adminRoutes team member roles (viewer/member/admin/owner). */
+function teamMembershipRank(role: string): number {
+  switch (role) {
+    case 'viewer':
+      return 1;
+    case 'member':
+      return 2;
+    case 'admin':
+      return 3;
+    case 'owner':
+      return 4;
+    default:
+      return 0;
+  }
+}
+
+function minTeamRoleToRank(minRole: 'viewer' | 'member' | 'owner'): number {
+  if (minRole === 'viewer') return 1;
+  if (minRole === 'member') return 2;
+  return 4;
+}
 
 function isPrivileged(role: string | undefined): boolean {
   return role === 'system_admin' || role === 'org_admin' || role === 'admin';
 }
 
-async function getTeamRole(req: Request, teamId: string): Promise<TeamMembershipRole | null> {
+async function getTeamRole(req: Request, teamId: string): Promise<string | null> {
   const db = await getDatabase();
   const driver = db.getDriver();
   const tenantId = req.user?.tenant_id ?? 'default';
@@ -30,13 +50,13 @@ async function getTeamRole(req: Request, teamId: string): Promise<TeamMembership
       LIMIT 1
     `
     )
-    .get(tenantId, teamId, userId) as { role: TeamMembershipRole } | undefined;
+    .get(tenantId, teamId, userId) as { role: string } | undefined;
 
   return row?.role ?? null;
 }
 
 function requireTeamAccess(minRole: 'viewer' | 'member' | 'owner') {
-  const rank: Record<TeamMembershipRole, number> = { viewer: 1, member: 2, owner: 3 };
+  const needed = minTeamRoleToRank(minRole);
 
   return async (req: Request, res: Response, next: NextFunction) => {
     const teamId = (req.query.teamId as string) || (req.body?.teamId as string) || (req.params.teamId as string);
@@ -46,13 +66,14 @@ function requireTeamAccess(minRole: 'viewer' | 'member' | 'owner') {
     }
 
     if (isPrivileged(req.user?.role)) {
-      (req as any).__teamRole = 'owner' as TeamMembershipRole;
+      (req as any).__teamRole = 'owner';
       next();
       return;
     }
 
     const role = await getTeamRole(req, teamId);
-    if (!role || rank[role] < rank[minRole]) {
+    const rank = role ? teamMembershipRank(role) : 0;
+    if (!role || rank < needed) {
       res.status(403).json({ success: false, error: 'Forbidden' });
       return;
     }

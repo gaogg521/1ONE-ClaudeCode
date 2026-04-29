@@ -116,13 +116,24 @@ export function initDatabaseBridge(repo: IConversationRepository): void {
       __authToken?: string | null;
     };
     try {
-      // WebUI multi-user mode: For now, keep behavior but block access if unauthenticated.
-      // (Scoped search across only accessible conversations will be added next.)
       if (typeof __authToken === 'string' && __authToken.trim() !== '') {
         const decoded = await AuthService.verifyToken(__authToken);
         if (!decoded) {
           return { items: [], total: 0, page, pageSize, hasMore: false };
         }
+        const user = await UserRepository.findById(decoded.userId);
+        if (!user) {
+          return { items: [], total: 0, page, pageSize, hasMore: false };
+        }
+        const tenantId = (user as { tenant_id?: string }).tenant_id ?? 'default';
+        const db = await getDatabase();
+        return db.searchConversationMessagesAccessible({
+          tenantId,
+          userId: user.id,
+          keyword: String(keyword ?? ''),
+          page,
+          pageSize,
+        });
       }
       const result = await repo.searchMessages(keyword, page, pageSize);
       return result;

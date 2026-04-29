@@ -5,7 +5,8 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Form, Input, Message, Modal, Select, Space, Table, Tag } from '@arco-design/web-react';
+import { Button, Card, Form, Input, Message, Modal, Popconfirm, Select, Space, Table, Tag } from '@arco-design/web-react';
+import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
 import AdminPageWrapper from './components/AdminPageWrapper';
 
 type TeamRow = {
@@ -29,10 +30,30 @@ type TeamMemberRow = {
 
 async function api<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...(opts ?? {}) });
-  const body = (await res.json().catch(() => null)) as any;
-  if (!res.ok || !body?.success) throw new Error(body?.message ?? 'Request failed');
+  const body = (await res.json().catch(() => null)) as { success?: boolean; message?: string; error?: string; data?: T };
+  if (!res.ok || !body?.success) throw new Error(body?.message ?? body?.error ?? 'Request failed');
   return body.data as T;
 }
+
+/** POST/PATCH/DELETE JSON with CSRF body field for tiny-csrf */
+async function apiMutate<T>(path: string, method: string, payload: Record<string, unknown>): Promise<T> {
+  return api<T>(path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(withCsrfToken(payload)),
+  });
+}
+
+type TeamTaskRow = {
+  id: string;
+  team_id: string;
+  subject: string;
+  description: string | null;
+  status: string;
+  owner: string | null;
+  created_at: number;
+  updated_at: number;
+};
 
 const ROLE_TAG: Record<TeamMemberRow['role'], { color: string; label: string }> = {
   owner: { color: 'arcoblue', label: 'Owner' },
@@ -53,12 +74,30 @@ const AdminTeams: React.FC = () => {
   const [members, setMembers] = useState<TeamMemberRow[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
 
+  const [teamTasks, setTeamTasks] = useState<TeamTaskRow[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [taskModalVisible, setTaskModalVisible] = useState(false);
+  const [taskForm, setTaskForm] = useState({ subject: '', description: '', owner: '' });
+
   const [addVisible, setAddVisible] = useState(false);
   const [addForm, setAddForm] = useState({ userId: '', role: 'member' as TeamMemberRow['role'] });
 
   const loadTeams = useCallback(async () => {
     const data = await api<TeamRow[]>('/api/admin/teams');
     setTeams(data ?? []);
+  }, []);
+
+  const loadTeamTasks = useCallback(async (teamId: string) => {
+    setTasksLoading(true);
+    try {
+      const data = await api<TeamTaskRow[]>(`/api/team-tasks?teamId=${encodeURIComponent(teamId)}`);
+      setTeamTasks(data ?? []);
+    } catch (e) {
+      Message.error(e instanceof Error ? e.message : '加载团队任务失败');
+      setTeamTasks([]);
+    } finally {
+      setTasksLoading(false);
+    }
   }, []);
 
   const loadMembers = useCallback(async (teamId: string) => {
@@ -105,8 +144,66 @@ const AdminTeams: React.FC = () => {
     async (team: TeamRow) => {
       setSelectedTeam(team);
       await loadMembers(team.id);
+      await loadTeamTasks(team.id);
     },
-    [loadMembers]
+    [loadMembers, loadTeamTasks]
+  );
+
+  const handleCreateTeamTask = useCallback(async () => {
+    if (!selectedTeam || !taskForm.subject.trim()) {
+      Message.warning('请填写任务标题');
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiMutate<unknown>('/api/team-tasks', 'POST', {
+        teamId: selectedTeam.id,
+        subject: taskForm.subject.trim(),
+        description: taskForm.description.trim() ? taskForm.description.trim() : null,
+        owner: taskForm.owner.trim() ? taskForm.owner.trim() : null,
+      });
+      Message.success('任务已创建');
+      setTaskModalVisible(false);
+      setTaskForm({ subject: '', description: '', owner: '' });
+      await loadTeamTasks(selectedTeam.id);
+    } catch (e) {
+      Message.error(e instanceof Error ? e.message : '创建失败');
+    } finally {
+      setSaving(false);
+    }
+  }, [loadTeamTasks, selectedTeam, taskForm]);
+
+  const handleDeleteTeamTask = useCallback(
+    async (taskId: string) => {
+      if (!selectedTeam) return;
+      setSaving(true);
+      try {
+        await apiMutate(`/api/team-tasks/${encodeURIComponent(taskId)}`, 'DELETE', {});
+        Message.success('已删除');
+        await loadTeamTasks(selectedTeam.id);
+      } catch (e) {
+        Message.error(e instanceof Error ? e.message : '删除失败');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [loadTeamTasks, selectedTeam]
+  );
+
+  const handleTeamTaskStatus = useCallback(
+    async (taskId: string, status: string) => {
+      if (!selectedTeam) return;
+      setSaving(true);
+      try {
+        await apiMutate(`/api/team-tasks/${encodeURIComponent(taskId)}`, 'PATCH', { status });
+        await loadTeamTasks(selectedTeam.id);
+      } catch (e) {
+        Message.error(e instanceof Error ? e.message : '更新失败');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [loadTeamTasks, selectedTeam]
   );
 
   const handleAddMember = useCallback(async () => {
@@ -202,6 +299,45 @@ const AdminTeams: React.FC = () => {
     [handleRemove, handleUpdateRole]
   );
 
+  const taskColumns = useMemo(
+    () => [
+      { title: '标题', dataIndex: 'subject' },
+      {
+        title: '状态',
+        dataIndex: 'status',
+        render: (_: unknown, r: TeamTaskRow) => (
+          <Select
+            size='mini'
+            value={r.status}
+            style={{ width: 130 }}
+            onChange={(v) => void handleTeamTaskStatus(r.id, String(v))}
+          >
+            <Select.Option value='pending'>pending</Select.Option>
+            <Select.Option value='in_progress'>in_progress</Select.Option>
+            <Select.Option value='done'>done</Select.Option>
+            <Select.Option value='cancelled'>cancelled</Select.Option>
+          </Select>
+        ),
+      },
+      {
+        title: '负责人',
+        dataIndex: 'owner',
+        render: (v: unknown) => (typeof v === 'string' && v ? v : '—'),
+      },
+      {
+        title: '操作',
+        render: (_: unknown, r: TeamTaskRow) => (
+          <Popconfirm title='确定删除该任务？' onOk={() => void handleDeleteTeamTask(r.id)}>
+            <Button size='mini' status='danger'>
+              删除
+            </Button>
+          </Popconfirm>
+        ),
+      },
+    ],
+    [handleDeleteTeamTask, handleTeamTaskStatus]
+  );
+
   return (
     <AdminPageWrapper>
       <div className='flex items-center justify-between mb-16px'>
@@ -263,6 +399,33 @@ const AdminTeams: React.FC = () => {
         </Card>
       </div>
 
+      {selectedTeam ? (
+        <Card
+          bordered={false}
+          className='mt-16px'
+          title={`团队任务：${selectedTeam.name}`}
+          extra={
+            <Space>
+              <Button size='small' onClick={() => void loadTeamTasks(selectedTeam.id)}>
+                刷新
+              </Button>
+              <Button type='primary' size='small' onClick={() => setTaskModalVisible(true)}>
+                新建任务
+              </Button>
+            </Space>
+          }
+        >
+          <Table
+            loading={tasksLoading}
+            data={teamTasks}
+            rowKey='id'
+            pagination={false}
+            size='small'
+            columns={taskColumns as any}
+          />
+        </Card>
+      ) : null}
+
       <Modal
         title='创建团队'
         visible={createVisible}
@@ -284,6 +447,36 @@ const AdminTeams: React.FC = () => {
               <Select.Option value='shared'>shared</Select.Option>
               <Select.Option value='isolated'>isolated</Select.Option>
             </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title='新建团队任务'
+        visible={taskModalVisible}
+        onCancel={() => setTaskModalVisible(false)}
+        onOk={handleCreateTeamTask}
+        confirmLoading={saving}
+        okText='创建'
+        cancelText='取消'
+      >
+        <Form layout='vertical'>
+          <Form.Item label='标题' required>
+            <Input value={taskForm.subject} onChange={(v) => setTaskForm((s) => ({ ...s, subject: v }))} />
+          </Form.Item>
+          <Form.Item label='描述'>
+            <Input.TextArea
+              value={taskForm.description}
+              onChange={(v) => setTaskForm((s) => ({ ...s, description: v }))}
+              autoSize={{ minRows: 2, maxRows: 8 }}
+            />
+          </Form.Item>
+          <Form.Item label='负责人 userId（可选）'>
+            <Input
+              value={taskForm.owner}
+              onChange={(v) => setTaskForm((s) => ({ ...s, owner: v }))}
+              placeholder='对应用户管理中的 user id'
+            />
           </Form.Item>
         </Form>
       </Modal>

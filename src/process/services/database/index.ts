@@ -1166,6 +1166,122 @@ export class OneCmdDatabase {
   }
 
   /**
+   * Search messages only within conversations the user may access (same rules as
+   * {@link getAccessibleConversationsForUser}): owner or team member via team_id / extra.teamId.
+   */
+  searchConversationMessagesAccessible(params: {
+    tenantId?: string;
+    userId: string;
+    keyword: string;
+    page?: number;
+    pageSize?: number;
+  }): IMessageSearchResponse {
+    const tenantId = params.tenantId ?? 'default';
+    const page = params.page ?? 0;
+    const pageSize = params.pageSize ?? 20;
+    const trimmedKeyword = params.keyword.trim();
+    if (!trimmedKeyword) {
+      return {
+        items: [],
+        total: 0,
+        page,
+        pageSize,
+        hasMore: false,
+      };
+    }
+
+    try {
+      const escapedKeyword = escapeLikePattern(trimmedKeyword);
+      const likePattern = `%${escapedKeyword}%`;
+
+      const countResult = this.db
+        .prepare(
+          `
+            SELECT COUNT(*) as count
+            FROM messages m
+            INNER JOIN conversations c ON c.id = m.conversation_id
+            LEFT JOIN team_memberships tm
+              ON tm.tenant_id = c.tenant_id
+             AND tm.team_id = COALESCE(c.team_id, json_extract(c.extra, '$.teamId'))
+             AND tm.user_id = ?
+            WHERE c.tenant_id = ?
+              AND (c.user_id = ? OR tm.user_id IS NOT NULL)
+              AND m.content LIKE ? ESCAPE '\\'
+          `
+        )
+        .get(params.userId, tenantId, params.userId, likePattern) as { count: number };
+
+      const rows = this.db
+        .prepare(
+          `
+            SELECT
+              c.id,
+              c.tenant_id,
+              c.user_id,
+              c.team_id,
+              c.name,
+              c.type,
+              c.extra,
+              c.model,
+              c.status,
+              c.source,
+              c.channel_chat_id,
+              c.created_at,
+              c.updated_at,
+              m.id as message_id,
+              m.type as message_type,
+              m.content as message_content,
+              m.created_at as message_created_at
+            FROM messages m
+            INNER JOIN conversations c ON c.id = m.conversation_id
+            LEFT JOIN team_memberships tm
+              ON tm.tenant_id = c.tenant_id
+             AND tm.team_id = COALESCE(c.team_id, json_extract(c.extra, '$.teamId'))
+             AND tm.user_id = ?
+            WHERE c.tenant_id = ?
+              AND (c.user_id = ? OR tm.user_id IS NOT NULL)
+              AND m.content LIKE ? ESCAPE '\\'
+            ORDER BY m.created_at DESC
+            LIMIT ? OFFSET ?
+          `
+        )
+        .all(
+          params.userId,
+          tenantId,
+          params.userId,
+          likePattern,
+          pageSize,
+          page * pageSize
+        ) as IConversationMessageSearchRow[];
+
+      const items: IMessageSearchItem[] = rows.map((row) => ({
+        conversation: rowToConversation(row),
+        messageId: row.message_id,
+        messageType: row.message_type,
+        messageCreatedAt: row.message_created_at,
+        previewText: extractSearchPreviewText(row.message_content),
+      }));
+
+      return {
+        items,
+        total: countResult.count,
+        page,
+        pageSize,
+        hasMore: (page + 1) * pageSize < countResult.count,
+      };
+    } catch (error: any) {
+      console.error('[Database] Search messages (accessible) error:', error);
+      return {
+        items: [],
+        total: 0,
+        page,
+        pageSize,
+        hasMore: false,
+      };
+    }
+  }
+
+  /**
    * Update a message in the database
    * @param messageId - Message ID to update
    * @param message - Updated message data

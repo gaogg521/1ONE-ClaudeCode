@@ -203,3 +203,6 @@ dist-server/
 .superset/
 .claude/teams/
 iterations/
+
+# Dropped local credentials in resources/ (never commit)
+resources/*password*.txt
