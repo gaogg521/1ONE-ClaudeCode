@@ -13,7 +13,16 @@ import type { IUser, IQueryResult } from '@process/services/database/types';
  */
 export type AuthUser = Pick<
   IUser,
-  'id' | 'tenant_id' | 'username' | 'password_hash' | 'jwt_secret' | 'role' | 'created_at' | 'updated_at' | 'last_login'
+  | 'id'
+  | 'tenant_id'
+  | 'username'
+  | 'email'
+  | 'password_hash'
+  | 'jwt_secret'
+  | 'role'
+  | 'created_at'
+  | 'updated_at'
+  | 'last_login'
 >;
 
 /**
@@ -48,6 +57,7 @@ function mapUser(row: IUser): AuthUser {
     id: row.id,
     tenant_id: row.tenant_id ?? 'default',
     username: row.username,
+    email: row.email,
     password_hash: row.password_hash,
     jwt_secret: row.jwt_secret ?? null,
     role: normalizeRole(row.role),
@@ -183,6 +193,14 @@ export const UserRepository = {
     const result = db.updateUserUsername(userId, username);
     if (!result.success) {
       throw new Error(result.error || 'Failed to update username');
+    }
+  },
+
+  async updateEmail(userId: string, email: string): Promise<void> {
+    const db = await getDatabase();
+    const result = db.updateUserEmail(userId, email);
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to update user email');
     }
   },
 

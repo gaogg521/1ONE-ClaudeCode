@@ -30,7 +30,12 @@ type TeamMemberRow = {
 
 async function api<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...(opts ?? {}) });
-  const body = (await res.json().catch(() => null)) as { success?: boolean; message?: string; error?: string; data?: T };
+  const body = (await res.json().catch((): null => null)) as {
+    success?: boolean;
+    message?: string;
+    error?: string;
+    data?: T;
+  };
   if (!res.ok || !body?.success) throw new Error(body?.message ?? body?.error ?? 'Request failed');
   return body.data as T;
 }
@@ -124,10 +129,10 @@ const AdminTeams: React.FC = () => {
     }
     setSaving(true);
     try {
-      await api(`/api/admin/teams`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(createForm),
+      await apiMutate('/api/admin/teams', 'POST', {
+        name: createForm.name.trim(),
+        workspace: createForm.workspace.trim(),
+        workspace_mode: createForm.workspace_mode,
       });
       Message.success('团队已创建');
       setCreateVisible(false);
@@ -214,10 +219,9 @@ const AdminTeams: React.FC = () => {
     }
     setSaving(true);
     try {
-      await api(`/api/admin/teams/${selectedTeam.id}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(addForm),
+      await apiMutate(`/api/admin/teams/${selectedTeam.id}/members`, 'POST', {
+        userId: addForm.userId.trim(),
+        role: addForm.role,
       });
       Message.success('成员已添加/更新');
       setAddVisible(false);
@@ -235,11 +239,7 @@ const AdminTeams: React.FC = () => {
       if (!selectedTeam) return;
       setSaving(true);
       try {
-        await api(`/api/admin/teams/${selectedTeam.id}/members/${userId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role }),
-        });
+        await apiMutate(`/api/admin/teams/${selectedTeam.id}/members/${userId}`, 'PATCH', { role });
         Message.success('角色已更新');
         await loadMembers(selectedTeam.id);
       } catch (e) {
@@ -256,7 +256,7 @@ const AdminTeams: React.FC = () => {
       if (!selectedTeam) return;
       setSaving(true);
       try {
-        await api(`/api/admin/teams/${selectedTeam.id}/members/${userId}`, { method: 'DELETE' });
+        await apiMutate(`/api/admin/teams/${selectedTeam.id}/members/${userId}`, 'DELETE', {});
         Message.success('成员已移除');
         await loadMembers(selectedTeam.id);
       } catch (e) {

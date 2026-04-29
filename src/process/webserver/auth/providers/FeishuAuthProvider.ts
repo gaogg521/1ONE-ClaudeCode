@@ -61,7 +61,7 @@ export async function exchangeFeishuCodeForUserAccessToken(params: {
         code: params.code,
       }),
     });
-    const data = (await res.json().catch(() => null)) as unknown;
+    const data = (await res.json().catch((): null => null)) as unknown;
     const obj = asFeishuResponse<{ access_token?: string }>(data);
     if (!res.ok || !obj) {
       throw new Error(`Feishu token exchange failed: HTTP ${res.status}`);
@@ -83,7 +83,7 @@ export async function fetchFeishuUserInfo(userAccessToken: string): Promise<Feis
         Authorization: `Bearer ${userAccessToken}`,
       },
     });
-    const data = (await res.json().catch(() => null)) as unknown;
+    const data = (await res.json().catch((): null => null)) as unknown;
     const obj = asFeishuResponse<FeishuUserInfo>(data);
     if (!res.ok || !obj) {
       throw new Error(`Feishu user_info failed: HTTP ${res.status}`);
@@ -104,5 +104,27 @@ export function resolveFeishuExternalId(
   const fallback = field === 'open_id' ? info.union_id : info.open_id;
   if (typeof fallback === 'string' && fallback.trim() !== '') return fallback.trim();
   return null;
+}
+
+/** Validates App ID + App Secret by requesting a tenant access token (no user OAuth). */
+export async function testFeishuAppCredentials(appId: string, appSecret: string): Promise<void> {
+  const id = String(appId ?? '').trim();
+  const secret = String(appSecret ?? '').trim();
+  if (!id || !secret || secret === '******') {
+    throw new Error('App ID and App Secret are required for connection test');
+  }
+  const res = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ app_id: id, app_secret: secret }),
+  });
+  const data = (await res.json().catch((): null => null)) as unknown;
+  const obj = asFeishuResponse<{ tenant_access_token?: string }>(data);
+  if (!res.ok || !obj) {
+    throw new Error(`Feishu API error: HTTP ${res.status}`);
+  }
+  if (obj.code !== 0) {
+    throw new Error(obj.msg || 'Feishu tenant token request failed');
+  }
 }
 

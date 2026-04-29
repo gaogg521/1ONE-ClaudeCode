@@ -793,7 +793,10 @@ export const adminUsers = {
   list: bridge.buildProvider<{ id: string; username: string; role: 'user' | 'admin'; created_at: number; last_login?: number | null }[], void>('admin.users.list'),
   create: bridge.buildProvider<{ id: string; username: string; role: 'user' | 'admin' }, { username: string; password: string; role: 'user' | 'admin' }>('admin.users.create'),
   setRole: bridge.buildProvider<boolean, { id: string; role: 'user' | 'admin' }>('admin.users.set-role'),
-  resetPassword: bridge.buildProvider<boolean, { id: string; password: string }>('admin.users.reset-password'),
+  sendResetPasswordCode: bridge.buildProvider<{ maskedEmail: string }, void>('admin.users.send-reset-password-code'),
+  resetPassword: bridge.buildProvider<boolean, { id: string; password: string; emailCode: string }>(
+    'admin.users.reset-password'
+  ),
   remove: bridge.buildProvider<boolean, { id: string }>('admin.users.remove'),
 };
 
@@ -806,6 +809,7 @@ export interface IWebUIStatus {
   networkUrl?: string;
   lanIP?: string; // 局域网 IP，用于构建远程访问 URL / LAN IP for building remote access URL
   adminUsername: string;
+  adminEmail?: string;
   initialPassword?: string;
 }
 
@@ -824,8 +828,12 @@ export const webui = {
   changeUsername: bridge.buildProvider<IBridgeResponse<{ username: string }>, { newUsername: string }>(
     'webui.change-username'
   ),
+  // 设置管理员邮箱 / Set admin email
+  setAdminEmail: bridge.buildProvider<IBridgeResponse, { email: string }>('webui.set-admin-email'),
+  // 发送管理员重置密码验证码（邮箱）/ Send admin reset password verification code (email)
+  sendResetCode: bridge.buildProvider<IBridgeResponse<{ maskedEmail: string }>, void>('webui.send-reset-code'),
   // 重置密码（生成新随机密码）/ Reset password (generate new random password)
-  resetPassword: bridge.buildProvider<IBridgeResponse<{ newPassword: string }>, void>('webui.reset-password'),
+  resetPassword: bridge.buildProvider<IBridgeResponse<{ newPassword: string }>, { code: string }>('webui.reset-password'),
   // 生成二维码登录 token / Generate QR login token
   generateQRToken: bridge.buildProvider<IBridgeResponse<{ token: string; expiresAt: number; qrUrl: string }>, void>(
     'webui.generate-qr-token'

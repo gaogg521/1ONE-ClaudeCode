@@ -3,6 +3,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '@/renderer/services/i18n';
 import { useNavigate } from 'react-router-dom';
+import {
+  Button,
+  Checkbox,
+  Divider,
+  Input,
+  Radio,
+  Select,
+  Typography,
+} from '@arco-design/web-react';
+import { Lock, User } from '@icon-park/react';
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '../../hooks/context/AuthContext';
 import './LoginPage.css';
@@ -12,7 +22,7 @@ type MessageState = {
   text: string;
 };
 
-type LoginMethod = 'local' | 'ldap' | 'feishu';
+type FormMethod = 'local' | 'ldap';
 
 type FeishuQrLoginObj = {
   matchOrigin?: (origin: string) => boolean;
@@ -23,7 +33,6 @@ const REMEMBER_ME_KEY = 'rememberMe';
 const REMEMBERED_USERNAME_KEY = 'rememberedUsername';
 const REMEMBERED_PASSWORD_KEY = 'rememberedPassword';
 
-// Simple obfuscation for stored credentials (not cryptographically secure, but prevents plain text storage)
 const obfuscate = (text: string): string => {
   const encoded = btoa(encodeURIComponent(text));
   return encoded.split('').toReversed().join('');
@@ -46,16 +55,14 @@ const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
-  const [passwordVisible, setPasswordVisible] = useState(false);
   const [message, setMessage] = useState<MessageState | null>(null);
   const [loading, setLoading] = useState(false);
-  const [method, setMethod] = useState<LoginMethod>('local');
+  const [formMethod, setFormMethod] = useState<FormMethod>('ldap');
+  const [showFeishuQr, setShowFeishuQr] = useState(false);
 
   const [feishuQr, setFeishuQr] = useState<{ sdkUrl: string; goto: string } | null>(null);
   const feishuListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
 
-  const usernameRef = useRef<HTMLInputElement | null>(null);
-  const passwordRef = useRef<HTMLInputElement | null>(null);
   const messageTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -86,7 +93,7 @@ const LoginPage: React.FC = () => {
       setRememberMe(true);
     }
     window.setTimeout(() => {
-      usernameRef.current?.focus();
+      document.getElementById('login-username-input')?.focus();
     }, 0);
 
     return () => {
@@ -133,9 +140,8 @@ const LoginPage: React.FC = () => {
     []
   );
 
-  const handleLanguageChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
-    const nextLanguage = event.target.value;
-    changeLanguage(nextLanguage).catch((error: Error) => {
+  const handleLanguageChange = useCallback((value: string) => {
+    changeLanguage(value).catch((error: Error) => {
       console.error('Failed to change language:', error);
     });
   }, []);
@@ -145,7 +151,7 @@ const LoginPage: React.FC = () => {
       event.preventDefault();
       const trimmedUsername = username.trim();
 
-      if (method !== 'feishu' && (!trimmedUsername || !password)) {
+      if (!trimmedUsername || !password) {
         showMessage({ type: 'error', text: t('login.errors.empty') });
         return;
       }
@@ -154,7 +160,7 @@ const LoginPage: React.FC = () => {
       setMessage(null);
 
       const result =
-        method === 'ldap'
+        formMethod === 'ldap'
           ? await loginWithLdap({ username: trimmedUsername, password, remember: rememberMe })
           : await login({ username: trimmedUsername, password, remember: rememberMe });
 
@@ -197,7 +203,7 @@ const LoginPage: React.FC = () => {
 
       setLoading(false);
     },
-    [login, loginWithLdap, method, navigate, password, rememberMe, showMessage, t, username]
+    [formMethod, login, loginWithLdap, navigate, password, rememberMe, showMessage, t, username]
   );
 
   const handleFeishuOauth = useCallback(() => {
@@ -224,9 +230,9 @@ const LoginPage: React.FC = () => {
     setFeishuQr(null);
     try {
       const res = await fetch('/api/auth/feishu/authorize?mode=qr', { credentials: 'include' });
-      const raw = (await res.json().catch(() => null)) as unknown;
+      const raw = (await res.json().catch((): null => null)) as unknown;
       const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
-      const data = (obj?.data && typeof obj.data === 'object') ? (obj.data as Record<string, unknown>) : null;
+      const data = obj?.data && typeof obj.data === 'object' ? (obj.data as Record<string, unknown>) : null;
       if (!res.ok || obj?.success !== true || !data?.goto || !data?.sdkUrl) {
         throw new Error((obj?.message as string) ?? 'Failed to init Feishu QR');
       }
@@ -243,7 +249,7 @@ const LoginPage: React.FC = () => {
   }, [ensureScriptLoaded, showMessage, t]);
 
   useEffect(() => {
-    if (method !== 'feishu') {
+    if (!showFeishuQr) {
       setFeishuQr(null);
       if (feishuListenerRef.current) {
         window.removeEventListener('message', feishuListenerRef.current);
@@ -258,10 +264,10 @@ const LoginPage: React.FC = () => {
         feishuListenerRef.current = null;
       }
     };
-  }, [initFeishuQr, method]);
+  }, [initFeishuQr, showFeishuQr]);
 
   useEffect(() => {
-    if (method !== 'feishu' || !feishuQr?.goto) return;
+    if (!showFeishuQr || !feishuQr?.goto) return;
     const QRLogin = (window as unknown as { QRLogin?: (opts: unknown) => unknown }).QRLogin;
     if (!QRLogin) return;
 
@@ -295,215 +301,157 @@ const LoginPage: React.FC = () => {
       window.removeEventListener('message', handler);
       feishuListenerRef.current = null;
     };
-  }, [feishuQr, method]);
+  }, [feishuQr, showFeishuQr]);
+
+  const methodHint = useMemo(() => {
+    if (formMethod === 'ldap') {
+      return t('login.methods.ldapHint', { defaultValue: '使用企业域控账户登录' });
+    }
+    return t('login.methods.localHint', { defaultValue: '使用本地管理员账户登录' });
+  }, [formMethod, t]);
 
   if (status === 'checking') {
     return <AppLoader />;
   }
 
   return (
-    <div className='login-page'>
-      {/* <div className='login-page__background' aria-hidden='true'>
-        <div className='login-page__background-circle login-page__background-circle--lg' />
-        <div className='login-page__background-circle login-page__background-circle--md' />
-        <div className='login-page__background-circle login-page__background-circle--sm' />
-      </div> */}
+    <div className='login-page login-page--enterprise'>
+      <div className='login-page__brand' aria-hidden={false}>
+        <div className='login-page__brand-tag'>{t('login.enterprise.tag', { defaultValue: '1ONE' })}</div>
+        <Typography.Title heading={4} className='login-page__brand-title'>
+          {t('login.enterprise.heroTitle', { defaultValue: '企业级 AI 工作台' })}
+        </Typography.Title>
+        <Typography.Paragraph className='login-page__brand-desc'>
+          {t('login.enterprise.brandDesc', {
+            defaultValue:
+              '面向团队的命令行与对话型 AI 体验，统一账号与权限，支持本地、域控与飞书等多种登录方式。',
+          })}
+        </Typography.Paragraph>
+        <div className='login-page__brand-visual' aria-hidden='true' />
+      </div>
 
-      <div className='login-page__card'>
-        <label className='login-page__lang-select-wrapper' htmlFor='lang-select'>
-          <select
-            id='lang-select'
-            className='login-page__lang-select'
-            value={i18n.language}
-            onChange={handleLanguageChange}
-          >
-            {supportedLanguages.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className='login-page__header'>
-          <div className='login-page__logo'>
-            <img src={loginLogo} alt={t('login.brand')} />
+      <div className='login-page__panel'>
+        <div className='login-page__card'>
+          <div className='login-page__lang'>
+            <Select
+              value={i18n.language}
+              onChange={handleLanguageChange}
+              size='small'
+              className='login-page__lang-select'
+              triggerProps={{ autoAlignPopupWidth: false }}
+            >
+              {supportedLanguages.map((lang) => (
+                <Select.Option key={lang.code} value={lang.code}>
+                  {lang.label}
+                </Select.Option>
+              ))}
+            </Select>
           </div>
-          <h1 className='login-page__title'>{t('login.brand')}</h1>
-          <p className='login-page__subtitle'>{t('login.subtitle')}</p>
-        </div>
 
-        <div className='login-page__methods' role='tablist' aria-label={t('login.methods.label', { defaultValue: '登录方式' })}>
-          <button
-            type='button'
-            role='tab'
-            className={`login-page__method ${method === 'local' ? 'is-active' : ''}`}
-            onClick={() => setMethod('local')}
-          >
-            {t('login.methods.local')}
-          </button>
-          <button
-            type='button'
-            role='tab'
-            className={`login-page__method ${method === 'ldap' ? 'is-active' : ''}`}
-            onClick={() => setMethod('ldap')}
-          >
-            {t('login.methods.ldap')}
-          </button>
-          <button
-            type='button'
-            role='tab'
-            className={`login-page__method ${method === 'feishu' ? 'is-active' : ''}`}
-            onClick={() => setMethod('feishu')}
-          >
-            {t('login.methods.feishu')}
-          </button>
-        </div>
-
-        <form className='login-page__form' onSubmit={handleSubmit}>
-          {method === 'feishu' ? (
-            <div className='login-page__feishu'>
-              <div className='login-page__feishu-actions'>
-                <button type='button' className='login-page__submit' onClick={handleFeishuOauth} disabled={loading}>
-                  <span>{t('login.methods.feishuOauth', { defaultValue: '使用飞书登录' })}</span>
-                </button>
-              </div>
-              <div className='login-page__feishu-qr'>
-                <div className='login-page__feishu-qr-title'>
-                  {t('login.methods.feishuQrTitle', { defaultValue: '或使用飞书扫码登录' })}
-                </div>
-                <div id='one-feishu-qr-container' className='login-page__feishu-qr-container' />
-              </div>
+          <div className='login-page__card-head'>
+            <div className='login-page__card-icon-wrap' aria-hidden='true'>
+              <img src={loginLogo} alt='' className='login-page__card-icon-img' />
             </div>
-          ) : (
-            <>
-          <div className='login-page__form-item'>
-            <label className='login-page__label' htmlFor='username'>
-              {t('login.username')}
-            </label>
-            <div className='login-page__input-wrapper'>
-              <svg
-                className='login-page__input-icon'
-                viewBox='0 0 24 24'
-                fill='none'
-                stroke='currentColor'
-                strokeWidth='2'
-                aria-hidden='true'
-              >
-                <path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' />
-                <circle cx='12' cy='7' r='4' />
-              </svg>
-              <input
-                ref={usernameRef}
-                id='username'
+            <Typography.Title heading={5} className='login-page__card-title'>
+              {t('login.enterprise.cardTitle', { defaultValue: '登录您的账户' })}
+            </Typography.Title>
+            <Typography.Paragraph type='secondary' className='login-page__card-sub'>
+              {t('login.enterprise.cardSubtitle', { defaultValue: '管理您的会话与任务' })}
+            </Typography.Paragraph>
+          </div>
+
+          <Radio.Group
+            className='login-page__method-group'
+            type='button'
+            value={formMethod}
+            onChange={(v) => setFormMethod(v as FormMethod)}
+          >
+            <Radio value='ldap'>{t('login.methods.ldap')}</Radio>
+            <Radio value='local'>{t('login.methods.local')}</Radio>
+          </Radio.Group>
+          <Typography.Paragraph type='secondary' className='login-page__method-hint'>
+            {methodHint}
+          </Typography.Paragraph>
+
+          <form className='login-page__form' onSubmit={handleSubmit}>
+            <div className='login-page__form-item'>
+              <Typography.Text className='login-page__label'>{t('login.username')}</Typography.Text>
+              <Input
+                id='login-username-input'
                 name='username'
-                className='login-page__input'
+                prefix={<User theme='outline' size='16' />}
                 placeholder={t('login.usernamePlaceholder')}
                 autoComplete='username'
                 value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                aria-required='true'
+                onChange={setUsername}
+                size='large'
               />
             </div>
-          </div>
 
-          <div className='login-page__form-item'>
-            <label className='login-page__label' htmlFor='password'>
-              {t('login.password')}
-            </label>
-            <div className='login-page__input-wrapper'>
-              <svg
-                className='login-page__input-icon'
-                viewBox='0 0 24 24'
-                fill='none'
-                stroke='currentColor'
-                strokeWidth='2'
-                aria-hidden='true'
-              >
-                <rect x='3' y='11' width='18' height='11' rx='2' ry='2' />
-                <path d='M7 11V7a5 5 0 0 1 10 0v4' />
-              </svg>
-              <input
-                ref={passwordRef}
+            <div className='login-page__form-item'>
+              <Typography.Text className='login-page__label'>{t('login.password')}</Typography.Text>
+              <Input.Password
                 id='password'
                 name='password'
-                type={passwordVisible ? 'text' : 'password'}
-                className='login-page__input'
+                prefix={<Lock theme='outline' size='16' />}
                 placeholder={t('login.passwordPlaceholder')}
                 autoComplete='current-password'
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                aria-required='true'
+                onChange={setPassword}
+                size='large'
               />
-              <button
-                type='button'
-                className='login-page__toggle-password'
-                onClick={() => setPasswordVisible((prev) => !prev)}
-                aria-label={passwordVisible ? t('login.hidePassword') : t('login.showPassword')}
-              >
-                <svg viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'>
-                  {passwordVisible ? (
-                    <>
-                      <path d='M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24' />
-                      <line x1='1' y1='1' x2='23' y2='23' />
-                    </>
-                  ) : (
-                    <>
-                      <path d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z' />
-                      <circle cx='12' cy='12' r='3' />
-                    </>
-                  )}
-                </svg>
-              </button>
             </div>
-          </div>
 
-          <div className='login-page__checkbox'>
-            <input
-              type='checkbox'
-              id='remember-me'
-              checked={rememberMe}
-              onChange={(event) => setRememberMe(event.target.checked)}
-            />
-            <label htmlFor='remember-me'>{t('login.rememberMe')}</label>
-          </div>
+            <Checkbox checked={rememberMe} onChange={setRememberMe} className='login-page__remember'>
+              {t('login.rememberMe')}
+            </Checkbox>
 
-          <button type='submit' className='login-page__submit' disabled={loading}>
-            {loading && (
-              <svg className='login-page__spinner' viewBox='0 0 24 24' width='18' height='18'>
-                <circle
-                  cx='12'
-                  cy='12'
-                  r='10'
-                  stroke='currentColor'
-                  strokeWidth='3'
-                  fill='none'
-                  strokeDasharray='50'
-                  strokeDashoffset='25'
-                  strokeLinecap='round'
-                />
-              </svg>
-            )}
-            <span>{loading ? t('login.submitting') : t('login.submit')}</span>
-          </button>
-            </>
-          )}
+            <Button type='primary' htmlType='submit' long size='large' loading={loading} className='login-page__submit-btn'>
+              {loading ? t('login.submitting') : t('login.submit')}
+            </Button>
 
-          <div
-            role='alert'
-            aria-live='polite'
-            className={`login-page__message ${message ? 'login-page__message--visible' : ''} ${message ? (message.type === 'success' ? 'login-page__message--success' : 'login-page__message--error') : ''}`}
-            hidden={!message}
-          >
-            {message?.text}
-          </div>
-        </form>
+            <Divider className='login-page__divider'>
+              {t('login.orDivider', { defaultValue: '或' })}
+            </Divider>
 
-        <div className='login-page__footer'>
-          <div className='login-page__footer-content'>
-            <span>{t('login.footerPrimary')}</span>
-            <span className='login-page__footer-divider'>•</span>
-            <span>{t('login.footerSecondary')}</span>
+            <Button long size='large' className='login-page__feishu-oauth' onClick={handleFeishuOauth} disabled={loading}>
+              {t('login.methods.feishuOauth', { defaultValue: '使用飞书登录' })}
+            </Button>
+
+            <Button
+              type='text'
+              long
+              className='login-page__feishu-qr-toggle'
+              onClick={() => setShowFeishuQr((v) => !v)}
+            >
+              {showFeishuQr
+                ? t('login.hideFeishuQr', { defaultValue: '收起飞书扫码' })
+                : t('login.showFeishuQr', { defaultValue: '显示飞书扫码登录' })}
+            </Button>
+
+            {showFeishuQr ? (
+              <div className='login-page__feishu-qr'>
+                <div className='login-page__feishu-qr-title'>{t('login.methods.feishuQrTitle', { defaultValue: '或使用飞书扫码登录' })}</div>
+                <div id='one-feishu-qr-container' className='login-page__feishu-qr-container' />
+              </div>
+            ) : null}
+
+            <div
+              role='alert'
+              aria-live='polite'
+              className={`login-page__message ${message ? 'login-page__message--visible' : ''} ${message ? (message.type === 'success' ? 'login-page__message--success' : 'login-page__message--error') : ''}`}
+              hidden={!message}
+            >
+              {message?.text}
+            </div>
+          </form>
+
+          <div className='login-page__footer'>
+            <div className='login-page__footer-content'>
+              <span>{t('login.footerPrimary')}</span>
+              <span className='login-page__footer-divider'>•</span>
+              <span>{t('login.footerSecondary')}</span>
+            </div>
           </div>
         </div>
       </div>

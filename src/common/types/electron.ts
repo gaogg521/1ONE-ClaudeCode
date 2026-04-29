@@ -7,6 +7,7 @@ export interface WebUIStatus {
   networkUrl?: string;
   lanIP?: string;
   adminUsername: string;
+  adminEmail?: string;
   initialPassword?: string;
 }
 
@@ -14,6 +15,14 @@ export interface WebUIStatus {
 export interface WebUIResetPasswordResult {
   success: boolean;
   newPassword?: string;
+  msg?: string;
+}
+
+export interface WebUISendResetCodeResult {
+  success: boolean;
+  data?: {
+    maskedEmail: string;
+  };
   msg?: string;
 }
 
@@ -53,7 +62,9 @@ export interface ElectronBridgeAPI {
   // 获取拖拽文件/目录的绝对路径 / Get absolute path for dragged file/directory
   getPathForFile?: (file: File) => string;
   // 直接 IPC 调用（绕过 bridge 库）/ Direct IPC calls (bypass bridge library)
-  webuiResetPassword?: () => Promise<WebUIResetPasswordResult>;
+  webuiSendResetCode?: () => Promise<WebUISendResetCodeResult>;
+  webuiResetPassword?: (code: string) => Promise<WebUIResetPasswordResult>;
+  webuiSetAdminEmail?: (email: string) => Promise<{ success: boolean; msg?: string }>;
   webuiGetStatus?: () => Promise<WebUIGetStatusResult>;
   // 修改密码（不需要当前密码）/ Change password (no current password required)
   webuiChangePassword?: (newPassword: string) => Promise<WebUIChangePasswordResult>;

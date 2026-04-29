@@ -89,10 +89,17 @@ const WebuiModalContent: React.FC = () => {
   // 设置新密码弹窗 / Set new password modal
   const [setPasswordModalVisible, setSetPasswordModalVisible] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [resetCodeModalVisible, setResetCodeModalVisible] = useState(false);
+  const [resetCodeLoading, setResetCodeLoading] = useState(false);
+  const [resetCode, setResetCode] = useState('');
+  const [resetCodeSentTo, setResetCodeSentTo] = useState<string | null>(null);
   const [setUsernameModalVisible, setSetUsernameModalVisible] = useState(false);
   const [usernameLoading, setUsernameLoading] = useState(false);
+  const [setAdminEmailModalVisible, setSetAdminEmailModalVisible] = useState(false);
+  const [adminEmailLoading, setAdminEmailLoading] = useState(false);
   const [form] = Form.useForm();
   const [usernameForm] = Form.useForm();
+  const [adminEmailForm] = Form.useForm();
 
   // 二维码登录相关状态 / QR code login related state
   const [qrUrl, setQrUrl] = useState<string | null>(null);
@@ -148,6 +155,7 @@ const WebuiModalContent: React.FC = () => {
               allowRemote: false,
               localUrl: `http://localhost:${WEBUI_DEFAULT_PORT}`,
               adminUsername: 'admin',
+              adminEmail: undefined,
             }
         );
       }
@@ -175,6 +183,7 @@ const WebuiModalContent: React.FC = () => {
           networkUrl: data.networkUrl,
           lanIP: prev?.lanIP,
           initialPassword: prev?.initialPassword,
+          adminEmail: prev?.adminEmail,
         }));
         if (data.networkUrl) {
           const match = data.networkUrl.match(/http:\/\/([^:]+):/);
@@ -442,9 +451,94 @@ const WebuiModalContent: React.FC = () => {
   };
 
   // 打开设置新密码弹窗 / Open set new password modal
-  const handleResetPassword = () => {
-    form.resetFields();
-    setSetPasswordModalVisible(true);
+  const handleResetPassword = async () => {
+    setResetLoading(true);
+    try {
+      let result: { success: boolean; msg?: string; data?: { maskedEmail: string } };
+      if (window.electronAPI?.webuiSendResetCode) {
+        result = await window.electronAPI.webuiSendResetCode();
+      } else {
+        result = await webui.sendResetCode.invoke();
+      }
+      if (!result.success) {
+        const errMap: Record<string, string> = {
+          ADMIN_EMAIL_NOT_CONFIGURED: t('settings.webui.resetCodeEmailNotConfigured', {
+            defaultValue: '管理员账号尚未配置邮箱，无法发送验证码。',
+          }),
+          SMTP_NOT_CONFIGURED: t('settings.webui.resetCodeSmtpNotConfigured', {
+            defaultValue: '邮件服务未配置，请先设置 SMTP 参数。',
+          }),
+          RESET_CODE_RATE_LIMITED: t('settings.webui.resetCodeRateLimited', {
+            defaultValue: '发送过于频繁，请稍后再试。',
+          }),
+        };
+        Message.error(errMap[result.msg ?? ''] || result.msg || t('settings.webui.passwordResetFailed'));
+        return;
+      }
+      setResetCode('');
+      setResetCodeSentTo(result.data?.maskedEmail ?? null);
+      setResetCodeModalVisible(true);
+      Message.success(
+        t('settings.webui.resetCodeSent', {
+          email: result.data?.maskedEmail ?? '',
+          defaultValue: '验证码已发送到 {{email}}',
+        })
+      );
+    } catch (error) {
+      console.error('Send reset code error:', error);
+      Message.error(t('settings.webui.passwordResetFailed'));
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleConfirmResetPassword = async () => {
+    const code = resetCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      Message.warning(t('settings.webui.resetCodeInvalidFormat', { defaultValue: '请输入 6 位数字验证码。' }));
+      return;
+    }
+    setResetCodeLoading(true);
+    try {
+      let result: { success: boolean; msg?: string; newPassword?: string };
+      if (window.electronAPI?.webuiResetPassword) {
+        result = await window.electronAPI.webuiResetPassword(code);
+      } else {
+        const bridgeResult = await webui.resetPassword.invoke({ code });
+        result = {
+          success: bridgeResult.success,
+          msg: bridgeResult.msg,
+          newPassword: bridgeResult.data?.newPassword,
+        };
+      }
+
+      if (result.success && result.newPassword) {
+        setCachedPassword(result.newPassword);
+        setStatus((prev) => (prev ? { ...prev, initialPassword: result.newPassword } : null));
+        setCanShowPlainPassword(true);
+        setResetCodeModalVisible(false);
+        setResetCode('');
+        Message.success(t('settings.webui.passwordResetSuccess'));
+        return;
+      }
+
+      const errMap: Record<string, string> = {
+        INVALID_RESET_CODE: t('settings.webui.resetCodeInvalid', { defaultValue: '验证码错误，请重试。' }),
+        RESET_CODE_NOT_REQUESTED: t('settings.webui.resetCodeNotRequested', {
+          defaultValue: '请先发送验证码。',
+        }),
+        RESET_CODE_EXPIRED: t('settings.webui.resetCodeExpired', { defaultValue: '验证码已过期，请重新发送。' }),
+        RESET_CODE_ATTEMPTS_EXCEEDED: t('settings.webui.resetCodeAttemptsExceeded', {
+          defaultValue: '验证码尝试次数过多，请重新发送。',
+        }),
+      };
+      Message.error(errMap[result.msg ?? ''] || result.msg || t('settings.webui.passwordResetFailed'));
+    } catch (error) {
+      console.error('Reset password with code error:', error);
+      Message.error(t('settings.webui.passwordResetFailed'));
+    } finally {
+      setResetCodeLoading(false);
+    }
   };
 
   const handleResetUsername = () => {
@@ -452,6 +546,45 @@ const WebuiModalContent: React.FC = () => {
       newUsername: status?.adminUsername || 'admin',
     });
     setSetUsernameModalVisible(true);
+  };
+
+  const handleOpenSetAdminEmail = () => {
+    adminEmailForm.setFieldsValue({
+      newEmail: status?.adminEmail ?? '',
+    });
+    setSetAdminEmailModalVisible(true);
+  };
+
+  const handleSetAdminEmail = async () => {
+    try {
+      const values = await adminEmailForm.validate();
+      const email = String(values.newEmail ?? '').trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        Message.warning(t('settings.webui.adminEmailInvalid', { defaultValue: '请输入有效的邮箱地址' }));
+        return;
+      }
+
+      setAdminEmailLoading(true);
+      let result: { success: boolean; msg?: string };
+      if (window.electronAPI?.webuiSetAdminEmail) {
+        result = await window.electronAPI.webuiSetAdminEmail(email);
+      } else {
+        result = await webui.setAdminEmail.invoke({ email });
+      }
+
+      if (result.success) {
+        Message.success(t('settings.webui.adminEmailChanged', { defaultValue: '管理员邮箱已更新' }));
+        setStatus((prev) => (prev ? { ...prev, adminEmail: email } : prev));
+        setSetAdminEmailModalVisible(false);
+        adminEmailForm.resetFields();
+      } else {
+        Message.error(result.msg || t('settings.webui.adminEmailChangeFailed', { defaultValue: '邮箱更新失败' }));
+      }
+    } catch (error) {
+      console.error('Set admin email error:', error);
+    } finally {
+      setAdminEmailLoading(false);
+    }
   };
 
   // 提交新密码 / Submit new password
@@ -627,6 +760,13 @@ const WebuiModalContent: React.FC = () => {
   };
   const displayPassword = getDisplayPassword();
   const displayUsername = status?.adminUsername || 'admin';
+  const maskEmailValue = (email: string) => {
+    const [name, domain] = email.split('@');
+    if (!name || !domain) return email;
+    if (name.length <= 2) return `${name[0] ?? '*'}*@${domain}`;
+    return `${name[0]}${'*'.repeat(Math.max(1, name.length - 2))}${name[name.length - 1]}@${domain}`;
+  };
+  const displayAdminEmail = status?.adminEmail ? maskEmailValue(status.adminEmail) : t('settings.webui.adminEmailNotSet');
 
   // 浏览器端只显示 Channels 配置，不显示 WebUI 服务配置 / In browser mode, only show Channels config, not WebUI service config
   if (!isDesktop) {
@@ -785,6 +925,24 @@ const WebuiModalContent: React.FC = () => {
             </div>
           </div>
 
+          {/* 管理员邮箱 / Admin email */}
+          <div className='flex items-center justify-between gap-12px py-12px'>
+            <span className='text-14px text-t-secondary shrink-0'>{t('settings.webui.adminEmail')}:</span>
+            <div className='inline-flex items-center gap-8px rd-100px border border-line bg-fill-1 px-10px py-4px min-w-0'>
+              <span className='text-14px text-t-primary truncate'>{displayAdminEmail}</span>
+              <Tooltip content={t('settings.webui.editAdminEmailTooltip', { defaultValue: 'Edit admin email' })}>
+                <Button
+                  type='text'
+                  size='mini'
+                  className='rd-100px !px-6px inline-flex items-center !h-24px'
+                  onClick={handleOpenSetAdminEmail}
+                >
+                  <EditTwo size={14} />
+                </Button>
+              </Tooltip>
+            </div>
+          </div>
+
           {/* 密码 / Password */}
           <div className='flex items-center justify-between gap-12px py-12px'>
             <span className='text-14px text-t-secondary shrink-0'>{t('settings.webui.initialPassword')}:</span>
@@ -929,6 +1087,65 @@ const WebuiModalContent: React.FC = () => {
           </Suspense>
         </div>
       )}
+
+      <AionModal
+        visible={resetCodeModalVisible}
+        onCancel={() => setResetCodeModalVisible(false)}
+        onOk={() => void handleConfirmResetPassword()}
+        confirmLoading={resetCodeLoading}
+        title={t('settings.webui.resetCodeModalTitle', { defaultValue: '邮箱验证码验证' })}
+        size='small'
+      >
+        <div className='pt-16px'>
+          <div className='text-13px text-t-secondary mb-10px'>
+            {t('settings.webui.resetCodeModalDesc', {
+              email: resetCodeSentTo ?? '',
+              defaultValue: '请输入发送到 {{email}} 的 6 位验证码',
+            })}
+          </div>
+          <Input
+            value={resetCode}
+            onChange={setResetCode}
+            maxLength={6}
+            placeholder={t('settings.webui.resetCodePlaceholder', { defaultValue: '请输入 6 位验证码' })}
+          />
+        </div>
+      </AionModal>
+
+      <AionModal
+        visible={setAdminEmailModalVisible}
+        onCancel={() => setSetAdminEmailModalVisible(false)}
+        onOk={() => void handleSetAdminEmail()}
+        confirmLoading={adminEmailLoading}
+        title={t('settings.webui.setAdminEmail', { defaultValue: '设置管理员邮箱' })}
+        size='small'
+      >
+        <Form form={adminEmailForm} layout='vertical' className='pt-16px'>
+          <Form.Item
+            label={t('settings.webui.adminEmail')}
+            field='newEmail'
+            rules={[
+              { required: true, message: t('settings.webui.adminEmailRequired', { defaultValue: '请输入邮箱地址' }) },
+              {
+                validator: (value, callback) => {
+                  if (typeof value !== 'string') {
+                    callback();
+                    return;
+                  }
+                  const trimmed = value.trim();
+                  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+                    callback(t('settings.webui.adminEmailInvalid', { defaultValue: '请输入有效的邮箱地址' }));
+                    return;
+                  }
+                  callback();
+                },
+              },
+            ]}
+          >
+            <Input placeholder={t('settings.webui.adminEmailPlaceholder', { defaultValue: '例如: admin@company.com' })} />
+          </Form.Item>
+        </Form>
+      </AionModal>
 
       <AionModal
         visible={setUsernameModalVisible}

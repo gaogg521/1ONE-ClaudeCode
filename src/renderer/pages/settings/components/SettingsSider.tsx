@@ -11,6 +11,7 @@ import {
   Info,
   Lightning,
   LinkCloud,
+  People,
   Puzzle,
   Robot,
   Speed,
@@ -32,6 +33,7 @@ export const BUILTIN_TAB_IDS = [
   'skills-hub',
   'tools',
   'webui',
+  'enterprise',
   'system',
   'about',
   'gemini',
@@ -87,6 +89,12 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
         label: t('settings.webui'),
         icon: isDesktop ? <Earth /> : <Communication />,
         path: 'webui',
+      },
+      enterprise: {
+        id: 'enterprise',
+        label: t('settings.enterprise', { defaultValue: '企业后台' }),
+        icon: <People />,
+        path: 'enterprise',
       },
       system: { id: 'system', label: t('settings.system'), icon: <System />, path: 'system' },
       about: { id: 'about', label: t('settings.about'), icon: <Info />, path: 'about' },
@@ -159,7 +167,10 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
     >
       {menus.map((item) => {
         const itemRoute = `/settings/${item.path}`;
-        const isSelected = pathname === itemRoute;
+        const isSelected =
+          item.id === 'enterprise'
+            ? pathname === itemRoute || pathname.startsWith(`${itemRoute}/`)
+            : pathname === itemRoute;
         return (
           <Tooltip key={item.id} {...siderTooltipProps} content={item.label} position='right'>
             <div

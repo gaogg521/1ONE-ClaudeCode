@@ -10,9 +10,11 @@ import { getDatabase } from '@process/services/database/export';
 import { UserRepository } from '@process/webserver/auth/repository/UserRepository';
 import { AuthService } from '@process/webserver/auth/service/AuthService';
 import { randomUUID } from 'node:crypto';
+import { WebuiService } from './services/WebuiService';
 
 /** system_default_user 由 DB 初始化时 ensureSystemUser() 保证永远存在 */
 const DESKTOP_USER_ID = 'system_default_user';
+const DESKTOP_TENANT_ID = 'default';
 
 export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
   // 暂停所有运行中的任务 / Stop all running tasks
@@ -47,7 +49,7 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
   ipcBridge.kanban.list.provider(async () => {
     try {
       const db = await getDatabase();
-      const result = db.listPersonalTasks();
+      const result = db.listPersonalTasks(DESKTOP_TENANT_ID, DESKTOP_USER_ID);
       if (!result.success) throw new Error(result.error);
       return (result.data ?? []) as import('@/common/adapter/ipcBridge').IKanbanTask[];
     } catch (error) {
@@ -124,30 +126,47 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
   });
 
   // ─── 用户管理（桌面 admin IPC）────────────────────────────────────────────
+  // WebUI 管理接口走 HTTP + JWT + requireEnterpriseElevation；此处为 Electron 单机会话，
+  // 信任本机已登录用户，不做二次验证（与浏览器多用户场景区分）。
 
   ipcBridge.adminUsers.list.provider(async () => {
     try {
       const users = await UserRepository.listUsers();
       return users
         .filter((u) => u.id !== DESKTOP_USER_ID)
-        .map((u) => ({ id: u.id, username: u.username, role: u.role ?? ('user' as const), created_at: u.created_at, last_login: u.last_login }));
+        .map((u) => ({
+          id: u.id,
+          username: u.username,
+          role:
+            u.role === 'system_admin' || u.role === 'org_admin'
+              ? ('admin' as const)
+              : ('user' as const),
+          created_at: u.created_at,
+          last_login: u.last_login,
+        }));
     } catch { return []; }
   });
 
   ipcBridge.adminUsers.create.provider(async ({ username, password, role }) => {
     const hash = await AuthService.hashPassword(password);
-    const user = await UserRepository.createUserWithRole(username, hash, role);
-    return { id: user.id, username: user.username, role: user.role };
+    const mappedRole = role === 'admin' ? 'org_admin' : 'member';
+    const user = await UserRepository.createUserWithRole(username, hash, mappedRole);
+    return { id: user.id, username: user.username, role };
   });
 
   ipcBridge.adminUsers.setRole.provider(async ({ id, role }) => {
-    await UserRepository.setRole(id, role);
+    const mappedRole = role === 'admin' ? 'org_admin' : 'member';
+    await UserRepository.setRole(id, mappedRole);
     return true;
   });
 
-  ipcBridge.adminUsers.resetPassword.provider(async ({ id, password }) => {
-    const hash = await AuthService.hashPassword(password);
-    await UserRepository.updatePassword(id, hash);
+  ipcBridge.adminUsers.sendResetPasswordCode.provider(async () => {
+    const data = await WebuiService.requestResetPasswordEmailCode();
+    return { maskedEmail: data.maskedEmail };
+  });
+
+  ipcBridge.adminUsers.resetPassword.provider(async ({ id, password, emailCode }) => {
+    await WebuiService.resetUserPasswordWithEmailCode(id, password, emailCode);
     return true;
   });
 

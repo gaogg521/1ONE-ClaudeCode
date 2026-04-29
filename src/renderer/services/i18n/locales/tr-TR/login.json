@@ -6,7 +6,7 @@
   "usernamePlaceholder": "Kullanıcı adınızı girin",
   "password": "Şifre",
   "passwordPlaceholder": "Şifrenizi girin",
-  "rememberMe": "Beni hatırla",
+  "rememberMe": "Oturumu açık tut",
   "submit": "Giriş Yap",
   "submitting": "Giriş yapılıyor...",
   "success": "Giriş başarılı! Yönlendiriliyor...",
@@ -15,6 +15,27 @@
   "languageToggle": "Dili değiştir",
   "footerPrimary": "Komut satırı AI'nızı dönüştürün",
   "footerSecondary": "Modern ve Verimli",
+  "enterprise": {
+    "tag": "1ONE",
+    "heroTitle": "Kurumsal AI çalışma alanı",
+    "brandDesc": "Ekipler için komut satırı ve sohbet AI; birleşik hesap ve izinler. Yerel, LDAP ve Feishu ile oturum açma.",
+    "cardTitle": "Hesabınıza giriş yapın",
+    "cardSubtitle": "Oturumlarınızı ve görevlerinizi yönetin"
+  },
+  "methods": {
+    "label": "Oturum açma yöntemi",
+    "local": "Yerel hesap",
+    "ldap": "LDAP",
+    "ldapHint": "Kurumsal dizin hesabıyla oturum açın",
+    "localHint": "Yerel yönetici hesabıyla oturum açın",
+    "feishu": "Feishu",
+    "feishuOauth": "Feishu ile oturum aç",
+    "feishuQrTitle": "Veya Feishu QR ile",
+    "feishuQrError": "Feishu QR başlatılamadı"
+  },
+  "orDivider": "veya",
+  "showFeishuQr": "Feishu QR oturumunu göster",
+  "hideFeishuQr": "Feishu QR'yi gizle",
   "errors": {
     "empty": "Lütfen kullanıcı adı ve şifre girin",
     "invalidCredentials": "Geçersiz kullanıcı adı veya şifre",

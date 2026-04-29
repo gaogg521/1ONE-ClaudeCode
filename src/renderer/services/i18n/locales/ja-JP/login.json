@@ -15,6 +15,27 @@
   "languageToggle": "言語を切り替える",
   "footerPrimary": "コマンドラインAIをモダンに変革",
   "footerSecondary": "効率的でエレガント",
+  "enterprise": {
+    "tag": "1ONE",
+    "heroTitle": "エンタープライズ AI ワークスペース",
+    "brandDesc": "チーム向けのコマンドライン／対話型 AI。アカウントと権限を統合し、ローカル・LDAP・Feishu などに対応。",
+    "cardTitle": "アカウントにサインイン",
+    "cardSubtitle": "セッションとタスクを管理"
+  },
+  "methods": {
+    "label": "サインイン方法",
+    "local": "ローカルアカウント",
+    "ldap": "LDAP",
+    "ldapHint": "企業ディレクトリのアカウントでサインイン",
+    "localHint": "ローカル管理者アカウントでサインイン",
+    "feishu": "Feishu",
+    "feishuOauth": "Feishu でサインイン",
+    "feishuQrTitle": "または Feishu QR でサインイン",
+    "feishuQrError": "Feishu QR の初期化に失敗しました"
+  },
+  "orDivider": "または",
+  "showFeishuQr": "Feishu QR ログインを表示",
+  "hideFeishuQr": "Feishu QR を隠す",
   "errors": {
     "empty": "ユーザー名とパスワードを入力してください",
     "invalidCredentials": "ユーザー名またはパスワードが正しくありません",

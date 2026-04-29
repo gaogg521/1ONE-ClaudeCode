@@ -15,6 +15,27 @@
   "languageToggle": "언어 변경",
   "footerPrimary": "명령줄 AI의 혁신",
   "footerSecondary": "현대적이고 효율적인",
+  "enterprise": {
+    "tag": "1ONE",
+    "heroTitle": "엔터프라이즈 AI 워크스페이스",
+    "brandDesc": "팀을 위한 명령줄·대화형 AI. 계정과 권한을 통합하고 로컬·LDAP·Feishu 등 로그인을 지원합니다.",
+    "cardTitle": "계정에 로그인",
+    "cardSubtitle": "세션과 작업 관리"
+  },
+  "methods": {
+    "label": "로그인 방식",
+    "local": "로컬 계정",
+    "ldap": "LDAP",
+    "ldapHint": "기업 디렉터리 계정으로 로그인",
+    "localHint": "로컬 관리자 계정으로 로그인",
+    "feishu": "Feishu",
+    "feishuOauth": "Feishu로 로그인",
+    "feishuQrTitle": "또는 Feishu QR로 로그인",
+    "feishuQrError": "Feishu QR 초기화 실패"
+  },
+  "orDivider": "또는",
+  "showFeishuQr": "Feishu QR 로그인 표시",
+  "hideFeishuQr": "Feishu QR 숨기기",
   "errors": {
     "empty": "사용자 이름과 비밀번호를 입력하세요",
     "invalidCredentials": "잘못된 사용자 이름 또는 비밀번호",

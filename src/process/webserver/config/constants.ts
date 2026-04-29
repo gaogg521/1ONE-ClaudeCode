@@ -51,6 +51,10 @@ export const AUTH_CONFIG = {
   COOKIE: {
     // Cookie 名称（Cookie name）
     NAME: 'one-session' as const,
+    /** HttpOnly cookie: enterprise admin panel re-auth (secondary verification) */
+    ENTERPRISE_NAME: 'one-enterprise-elev' as const,
+    /** Enterprise elevation JWT lifetime (ms), default 8 hours */
+    ENTERPRISE_MAX_AGE_MS: 8 * 60 * 60 * 1000,
     OPTIONS: {
       // 仅允许 HTTP 访问 Cookie（httpOnly flag）
       httpOnly: true,

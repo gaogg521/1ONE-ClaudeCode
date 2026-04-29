@@ -261,7 +261,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         body: JSON.stringify(withCsrfToken({ username: trimmedUsername, password })),
       });
 
-      const data = (await response.json().catch(() => null)) as any;
+      const data = (await response.json().catch((): null => null)) as any;
       if (!response.ok || !data?.success || !data?.user) {
         let code: LoginErrorCode = 'unknown';
         let message = data?.message ?? 'Login failed';

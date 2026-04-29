@@ -241,6 +241,23 @@ export class OneCmdDatabase {
       };
     }
   }
+
+  updateUserEmail(userId: string, email: string): IQueryResult<boolean> {
+    try {
+      const now = Date.now();
+      this.db.prepare('UPDATE users SET email = ?, updated_at = ? WHERE id = ?').run(email, now, userId);
+      return {
+        success: true,
+        data: true,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message,
+        data: false,
+      };
+    }
+  }
   /**
    * Expose the underlying SQLite driver for repositories that need raw SQL access.
    * Prefer using dedicated methods on OneCmdDatabase where possible.

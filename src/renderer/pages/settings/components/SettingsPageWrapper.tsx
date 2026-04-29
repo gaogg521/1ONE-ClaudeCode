@@ -12,6 +12,7 @@ import {
   Gemini,
   Info,
   LinkCloud,
+  People,
   Puzzle,
   Robot,
   System,
@@ -68,11 +69,11 @@ export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): 
       icon: isDesktop ? <Earth theme='outline' size='16' /> : <Communication theme='outline' size='16' />,
       path: 'webui',
     },
-    auth: {
-      id: 'auth',
-      label: t('settings.authProviders.title', { defaultValue: '登录与认证' }),
-      icon: <LinkCloud theme='outline' size='16' />,
-      path: 'auth',
+    enterprise: {
+      id: 'enterprise',
+      label: t('settings.enterprise', { defaultValue: '企业后台' }),
+      icon: <People theme='outline' size='16' />,
+      path: 'enterprise',
     },
     system: { id: 'system', label: t('settings.system'), icon: <System theme='outline' size='16' />, path: 'system' },
     about: { id: 'about', label: t('settings.about'), icon: <Info theme='outline' size='16' />, path: 'about' },
@@ -189,7 +190,10 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
           <div className='settings-mobile-top-nav'>
             {menuItems.map((item) => {
               const itemRoute = `/settings/${item.path}`;
-              const active = pathname === itemRoute;
+              const active =
+                item.id === 'enterprise'
+                  ? pathname === itemRoute || pathname.startsWith(`${itemRoute}/`)
+                  : pathname === itemRoute;
               return (
                 <button
                   key={item.path}

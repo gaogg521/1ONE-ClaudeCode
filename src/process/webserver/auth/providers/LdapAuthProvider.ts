@@ -20,6 +20,13 @@ export type LdapProviderConfig = {
   timeoutMs?: number;
 };
 
+/** Minimal typing for ldapjs search callback result stream (no @types/ldapjs). */
+type LdapSearchStream = {
+  on(event: 'searchEntry', listener: () => void): void;
+  on(event: 'error', listener: (err: Error) => void): void;
+  on(event: 'end', listener: (result?: { status?: number }) => void): void;
+};
+
 function escapeLdapFilterValue(value: string): string {
   // Basic LDAP filter escaping
   return value
@@ -94,7 +101,13 @@ function searchUserAsync(
 
       res.on('searchEntry', (entry) => {
         if (found) return;
-        found = { dn: entry.dn.toString(), entry: entry.object as SearchEntryObject };
+        const e = entry as unknown as {
+          dn: { toString(): string };
+          object?: unknown;
+          pojo?: unknown;
+        };
+        const obj = (e.pojo ?? e.object ?? {}) as SearchEntryObject;
+        found = { dn: e.dn.toString(), entry: obj };
       });
       res.on('error', (error) => reject(error));
       res.on('end', (result) => {
@@ -166,5 +179,66 @@ export async function authenticateWithLdap(
     } finally {
       unbindSafe(serviceClient);
     }
+}
+
+/**
+ * Verifies LDAP connectivity: optional service bind, then a base-object search on `baseDN`.
+ */
+export async function testLdapConnection(config: LdapProviderConfig): Promise<void> {
+  const url = String(config.url ?? '').trim();
+  const baseDN = String(config.baseDN ?? '').trim();
+  if (!url) {
+    throw Object.assign(new Error('LDAP URL is required'), { code: 'LDAP_TEST_MISSING_URL' });
+  }
+  if (!baseDN) {
+    throw Object.assign(new Error('Base DN is required'), { code: 'LDAP_TEST_MISSING_BASE' });
+  }
+
+  const bindDN = String(config.bindDN ?? '').trim();
+  const bindPassword = String(config.bindPassword ?? '');
+  const client = createClient(config);
+
+  try {
+    if (bindDN) {
+      if (!bindPassword || bindPassword === '******') {
+        throw Object.assign(new Error('Bind password is required for connection test'), {
+          code: 'LDAP_TEST_MISSING_BIND_PASSWORD',
+        });
+      }
+      await bindAsync(client, bindDN, bindPassword);
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      client.search(
+        baseDN,
+        {
+          scope: 'base',
+          filter: '(objectClass=*)',
+          sizeLimit: 1,
+        },
+        (err: Error | null, res: LdapSearchStream | undefined): void => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          if (!res) {
+            reject(new Error('LDAP search: missing response'));
+            return;
+          }
+          res.on('searchEntry', () => {});
+          res.on('error', reject);
+          res.on('end', (result) => {
+            if (result?.status !== undefined && result.status !== 0) {
+              reject(new Error(`LDAP search ended with status ${result.status}`));
+              return;
+            }
+            resolve();
+          });
+        }
+      );
+    });
+  } finally {
+    unbindSafe(client);
+  }
 }
 

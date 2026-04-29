@@ -30,7 +30,28 @@ const getExternalId = (record: AdminUser, provider: AuthProviderId): string | nu
   return row?.external_id ?? null;
 };
 
-const UsersPage: React.FC = () => {
+/** WebUI /kanban/me may return system_admin | org_admin | member while KanbanRole types say admin | user */
+function isKanbanAdminRole(role: string | undefined): boolean {
+  return role === 'admin' || role === 'system_admin' || role === 'org_admin';
+}
+
+function meRowForProfile(m: { id: string; username: string; role?: string }): AdminUser {
+  const kr: KanbanRole = isKanbanAdminRole(m.role) ? 'admin' : 'user';
+  return {
+    id: m.id,
+    username: m.username,
+    role: kr,
+    created_at: 0,
+    last_login: null,
+  };
+}
+
+type UsersPageProps = {
+  /** full = list all users (after enterprise elevation); profile = current user only */
+  enterpriseAccess?: 'full' | 'profile';
+};
+
+const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [me, setMe] = useState<{ role: KanbanRole }>({ role: 'user' });
   const [loading, setLoading] = useState(true);
@@ -39,20 +60,35 @@ const UsersPage: React.FC = () => {
   const [createForm, setCreateForm] = useState({ username: '', password: '', role: 'user' as KanbanRole });
   const [newPwd, setNewPwd] = useState('');
   const [saving, setSaving] = useState(false);
+  const [resetEmailCode, setResetEmailCode] = useState('');
+  const [resetEmailMasked, setResetEmailMasked] = useState<string | null>(null);
+  const [resetEmailSending, setResetEmailSending] = useState(false);
   const [bindVisible, setBindVisible] = useState(false);
   const [bindUserId, setBindUserId] = useState<string | null>(null);
   const [bindProvider, setBindProvider] = useState<AuthProviderId>('ldap');
   const [bindExternalId, setBindExternalId] = useState('');
 
   const loadData = useCallback(async () => {
-    // me 先加载，不受 users list 失败影响
     const m = await kanbanApi.me().catch(() => ({ id: '', username: '', role: 'user' as KanbanRole }));
     setMe(m);
-    if (m.role === 'admin') {
-      const u = await adminApi.listUsers().catch((): AdminUser[] => []);
-      setUsers(u ?? []);
+
+    if (enterpriseAccess === 'profile') {
+      if (!m.id) {
+        setUsers([]);
+        return;
+      }
+      setUsers([meRowForProfile(m)]);
+      return;
     }
-  }, []);
+
+    if (!isKanbanAdminRole(String(m.role))) {
+      setUsers([]);
+      return;
+    }
+
+    const u = await adminApi.listUsers().catch((): AdminUser[] => []);
+    setUsers(u ?? []);
+  }, [enterpriseAccess]);
 
   useEffect(() => {
     setLoading(true);
@@ -100,16 +136,54 @@ const UsersPage: React.FC = () => {
 
   const handleResetPwd = async () => {
     if (!newPwd.trim()) { Message.warning('密码不能为空'); return; }
+    if (!pwdUserId) return;
+    const code = resetEmailCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      Message.warning('请输入 6 位邮箱验证码');
+      return;
+    }
     setSaving(true);
     try {
-      await adminApi.resetPassword(pwdUserId!, newPwd);
+      await adminApi.resetPassword(pwdUserId, newPwd, code);
       Message.success('密码已重置');
       setPwdUserId(null);
       setNewPwd('');
+      setResetEmailCode('');
+      setResetEmailMasked(null);
     } catch (err: unknown) {
-      Message.error(err instanceof Error ? err.message : '重置失败');
+      const raw = err instanceof Error ? err.message : '重置失败';
+      const codeMap: Record<string, string> = {
+        ADMIN_EMAIL_NOT_CONFIGURED: '管理员邮箱未配置，无法发送/验证验证码',
+        SMTP_NOT_CONFIGURED: '邮件服务未配置（SMTP），无法发送验证码',
+        RESET_CODE_NOT_REQUESTED: '请先发送邮箱验证码',
+        RESET_CODE_EXPIRED: '验证码已过期，请重新发送',
+        RESET_CODE_ATTEMPTS_EXCEEDED: '验证码尝试次数过多，请重新发送',
+        INVALID_RESET_CODE: '验证码错误，请重试',
+      };
+      Message.error(codeMap[raw] ?? raw);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSendResetPasswordCode = async () => {
+    if (!pwdUserId) return;
+    setResetEmailSending(true);
+    try {
+      const data = await adminApi.sendResetPasswordCode();
+      setResetEmailMasked(data.maskedEmail);
+      setResetEmailCode('');
+      Message.success(`验证码已发送到 ${data.maskedEmail}`);
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : '发送验证码失败';
+      const codeMap: Record<string, string> = {
+        ADMIN_EMAIL_NOT_CONFIGURED: '管理员邮箱未配置',
+        SMTP_NOT_CONFIGURED: '邮件服务未配置（SMTP）',
+        RESET_CODE_RATE_LIMITED: '发送过于频繁，请稍后再试',
+      };
+      Message.error(codeMap[raw] ?? raw);
+    } finally {
+      setResetEmailSending(false);
     }
   };
 
@@ -153,25 +227,6 @@ const UsersPage: React.FC = () => {
       setSaving(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className='p-20px flex items-center justify-center h-full'>
-        <Spin tip='加载中...' />
-      </div>
-    );
-  }
-
-  if (me.role !== 'admin') {
-    return (
-      <div className='p-20px flex items-center justify-center h-full'>
-        <div className='text-center'>
-          <div className='text-16px text-t-tertiary mb-8px'>🔒 权限不足</div>
-          <div className='text-13px text-t-tertiary'>仅管理员可访问此页面</div>
-        </div>
-      </div>
-    );
-  }
 
   const columns = [
     { title: '用户名', dataIndex: 'username', key: 'username' },
@@ -223,7 +278,12 @@ const UsersPage: React.FC = () => {
           <Button
             size='mini'
             icon={<Key size={12} />}
-            onClick={() => { setPwdUserId(record.id); setNewPwd(''); }}
+            onClick={() => {
+              setPwdUserId(record.id);
+              setNewPwd('');
+              setResetEmailCode('');
+              setResetEmailMasked(null);
+            }}
             disabled={Boolean(record.protected)}
           >
             重置密码
@@ -272,23 +332,54 @@ const UsersPage: React.FC = () => {
     },
   ];
 
+  const visibleColumns =
+    enterpriseAccess === 'profile'
+      ? columns.filter((c) => c.key !== 'bindings' && c.key !== 'actions')
+      : columns;
+
+  const title =
+    enterpriseAccess === 'profile'
+      ? '我的账号'
+      : '用户管理';
+
+  if (loading) {
+    return (
+      <div className='p-20px flex items-center justify-center h-full'>
+        <Spin tip='加载中...' />
+      </div>
+    );
+  }
+
+  if (enterpriseAccess === 'full' && !isKanbanAdminRole(String(me.role))) {
+    return (
+      <div className='p-20px flex items-center justify-center h-full'>
+        <div className='text-center'>
+          <div className='text-16px text-t-tertiary mb-8px'>🔒 权限不足</div>
+          <div className='text-13px text-t-tertiary'>仅管理员可访问此页面</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className='p-20px flex flex-col h-full'>
       <div className='flex items-center justify-between mb-16px'>
         <div className='flex items-center gap-10px'>
-          <h2 className='m-0 text-18px font-700 text-t-primary'>用户管理</h2>
-          <Tag color='arcoblue' size='small'>Admin</Tag>
+          <h2 className='m-0 text-18px font-700 text-t-primary'>{title}</h2>
+          {enterpriseAccess === 'full' ? <Tag color='arcoblue' size='small'>Admin</Tag> : <Tag size='small'>只读</Tag>}
         </div>
         <Space>
           <Button size='small' icon={<Refresh theme='outline' />} onClick={() => void loadData()}>刷新</Button>
-          <Button type='primary' size='small' icon={<Add theme='outline' />} onClick={() => setCreateVisible(true)}>
-            创建用户
-          </Button>
+          {enterpriseAccess === 'full' ? (
+            <Button type='primary' size='small' icon={<Add theme='outline' />} onClick={() => setCreateVisible(true)}>
+              创建用户
+            </Button>
+          ) : null}
         </Space>
       </div>
 
       <Table
-        columns={columns}
+        columns={visibleColumns}
         data={users}
         rowKey='id'
         pagination={false}
@@ -334,7 +425,12 @@ const UsersPage: React.FC = () => {
       <Modal
         title='重置密码'
         visible={!!pwdUserId}
-        onCancel={() => setPwdUserId(null)}
+        onCancel={() => {
+          setPwdUserId(null);
+          setNewPwd('');
+          setResetEmailCode('');
+          setResetEmailMasked(null);
+        }}
         onOk={handleResetPwd}
         confirmLoading={saving}
         okText='重置'
@@ -348,6 +444,21 @@ const UsersPage: React.FC = () => {
               onChange={setNewPwd}
             />
           </Form.Item>
+          <Form.Item label='邮箱验证码' required>
+            <Input
+              placeholder='请输入 6 位验证码'
+              value={resetEmailCode}
+              onChange={(v) => setResetEmailCode(String(v ?? ''))}
+            />
+          </Form.Item>
+          <div className='flex items-center justify-between'>
+            <div className='text-12px text-t-tertiary'>
+              {resetEmailMasked ? `已发送到 ${resetEmailMasked}` : '点击发送获取验证码'}
+            </div>
+            <Button size='mini' onClick={() => void handleSendResetPasswordCode()} loading={resetEmailSending}>
+              发送验证码
+            </Button>
+          </div>
         </Form>
       </Modal>
 

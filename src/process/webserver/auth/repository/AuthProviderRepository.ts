@@ -53,6 +53,9 @@ const SECRET_KEYS_BY_PROVIDER: Record<AuthProviderType, string[]> = {
   local: [],
   ldap: ['bindPassword'],
   feishu: ['appSecret'],
+  /** Adjust keys when DingTalk/WeCom admin UI lands */
+  dingtalk: ['appSecret', 'clientSecret'],
+  wecom: ['secret'],
 };
 
 export const AuthProviderRepository = {

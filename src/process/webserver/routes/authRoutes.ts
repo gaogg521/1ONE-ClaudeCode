@@ -18,6 +18,12 @@ import { authRateLimiter, authenticatedActionLimiter, apiRateLimiter } from '../
 import { verifyQRTokenDirect } from '@process/bridge/webuiQR';
 import { authenticateWithLdap, type LdapProviderConfig } from '../auth/providers/LdapAuthProvider';
 import {
+  listEnterpriseSecondaryOptions,
+  parseEnterpriseElevationPasswordMethod,
+  verifyEnterpriseElevationPassword,
+} from '../auth/enterpriseElevationSecondary';
+import { isEnterpriseElevatableRole } from '../auth/enterpriseRoles';
+import {
   buildFeishuAuthorizeUrl,
   exchangeFeishuCodeForUserAccessToken,
   fetchFeishuUserInfo,
@@ -395,7 +401,119 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       res.clearCookie(AUTH_CONFIG.COOKIE.NAME);
+      res.clearCookie(AUTH_CONFIG.COOKIE.ENTERPRISE_NAME, { path: '/' });
       res.json({ success: true, message: 'Logged out successfully' });
+    }
+  );
+
+  /**
+   * Enterprise admin panel: elevation status (eligible = org/system admin; elevated = password re-auth OK)
+   * GET /api/auth/enterprise-elevation
+   */
+  app.get(
+    '/api/auth/enterprise-elevation',
+    apiRateLimiter,
+    AuthMiddleware.authenticateToken,
+    async (req: Request, res: Response) => {
+      const role = req.user?.role;
+      const eligible = isEnterpriseElevatableRole(role);
+      if (!eligible) {
+        res.clearCookie(AUTH_CONFIG.COOKIE.ENTERPRISE_NAME, { path: '/' });
+        res.json({ success: true, data: { eligible: false, elevated: false, secondaryMethods: [] } });
+        return;
+      }
+      let elevated = false;
+      const raw = req.cookies?.[AUTH_CONFIG.COOKIE.ENTERPRISE_NAME];
+      if (typeof raw === 'string' && raw.trim() !== '') {
+        const v = await AuthService.verifyEnterpriseElevationToken(raw.trim());
+        elevated = Boolean(v && v.userId === req.user?.id);
+      }
+      const secondaryMethods = await listEnterpriseSecondaryOptions(req.user!.id);
+      res.json({ success: true, data: { eligible, elevated, secondaryMethods } });
+    }
+  );
+
+  /**
+   * Secondary verification for enterprise management — sets HttpOnly elevation cookie.
+   * Password flow: body.password + optional body.method ('auto' | 'local_password' | 'ldap').
+   * OAuth (Feishu/DingTalk/WeCom): reserved — use GET secondaryMethods + dedicated endpoints when implemented.
+   * POST /api/auth/enterprise-elevate
+   */
+  app.post(
+    '/api/auth/enterprise-elevate',
+    apiRateLimiter,
+    AuthMiddleware.authenticateToken,
+    authenticatedActionLimiter,
+    async (req: Request, res: Response) => {
+      try {
+        const role = req.user?.role;
+        if (!isEnterpriseElevatableRole(role)) {
+          res.status(403).json({ success: false, message: 'Not eligible for enterprise management' });
+          return;
+        }
+        const rawMethod = (req.body as { method?: unknown })?.method;
+        if (typeof rawMethod === 'string' && ['feishu', 'dingtalk', 'wecom'].includes(rawMethod)) {
+          res.status(501).json({
+            success: false,
+            code: 'ELEVATION_OAUTH_NOT_IMPLEMENTED',
+            message: 'OAuth enterprise elevation for this provider is not implemented yet',
+          });
+          return;
+        }
+
+        const passwordMethod = parseEnterpriseElevationPasswordMethod(rawMethod);
+        if (passwordMethod === null) {
+          res.status(400).json({ success: false, message: 'Invalid method' });
+          return;
+        }
+
+        const password = String(req.body?.password ?? '');
+        if (!password) {
+          res.status(400).json({ success: false, message: 'Password is required' });
+          return;
+        }
+        const user = await UserRepository.findById(req.user!.id);
+        if (!user) {
+          res.status(404).json({ success: false, message: 'User not found' });
+          return;
+        }
+
+        const verified = await verifyEnterpriseElevationPassword({
+          user,
+          password,
+          method: passwordMethod,
+        });
+
+        if (!verified) {
+          res.status(401).json({ success: false, message: 'Incorrect password' });
+          return;
+        }
+
+        const token = await AuthService.signEnterpriseElevation(user.id);
+        res.cookie(AUTH_CONFIG.COOKIE.ENTERPRISE_NAME, token, {
+          ...getCookieOptions(),
+          maxAge: AUTH_CONFIG.COOKIE.ENTERPRISE_MAX_AGE_MS,
+        });
+        res.json({ success: true });
+      } catch (error) {
+        console.error('[AuthRoute] enterprise-elevate error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
+
+  /**
+   * Clear enterprise elevation without full logout
+   * POST /api/auth/enterprise-elevate/revoke
+   */
+  app.post(
+    '/api/auth/enterprise-elevate/revoke',
+    apiRateLimiter,
+    AuthMiddleware.authenticateToken,
+    authenticatedActionLimiter,
+    (_req: Request, res: Response) => {
+      res.clearCookie(AUTH_CONFIG.COOKIE.ENTERPRISE_NAME, { path: '/' });
+      res.json({ success: true });
     }
   );
 
@@ -501,6 +619,7 @@ export function registerAuthRoutes(app: Express): void {
         // Update password
         await UserRepository.updatePassword(user.id, newPasswordHash);
         await AuthService.invalidateAllTokens();
+        res.clearCookie(AUTH_CONFIG.COOKIE.ENTERPRISE_NAME, { path: '/' });
 
         res.json({
           success: true,

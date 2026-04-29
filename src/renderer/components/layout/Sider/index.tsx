@@ -118,6 +118,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
       import('@renderer/pages/settings/SystemSettings'),
       import('@renderer/pages/settings/ToolsSettings'),
       import('@renderer/pages/settings/WebuiSettings'),
+      import('@renderer/pages/settings/EnterpriseSettingsShell'),
       import('@renderer/pages/settings/ExtensionSettingsPage'),
     ]).catch(() => {});
   }, [isSettings]);

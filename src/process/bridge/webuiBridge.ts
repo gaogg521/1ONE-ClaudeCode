@@ -175,14 +175,29 @@ export function initWebuiBridge(): void {
     }, 'Change username');
   });
 
+  // Set admin email (used for admin password reset verification)
+  webui.setAdminEmail.provider(async ({ email }) => {
+    return WebuiService.handleAsync(async () => {
+      await WebuiService.setAdminEmail(email);
+      return { success: true };
+    }, 'Set admin email');
+  });
+
   // 重置密码（生成新随机密码）/ Reset password (generate new random password)
   // 注意：由于 @office-ai/platform bridge 的 provider 模式不支持返回值，
   // 我们通过 emitter 发送结果，前端监听 resetPasswordResult 事件
   // Note: Since @office-ai/platform bridge provider doesn't support return values,
   // we emit the result via emitter, frontend listens to resetPasswordResult event
-  webui.resetPassword.provider(async () => {
+  webui.sendResetCode.provider(async () => {
+    return WebuiService.handleAsync(async () => {
+      const data = await WebuiService.requestResetPasswordEmailCode();
+      return { success: true, data };
+    }, 'Send reset verification code');
+  });
+
+  webui.resetPassword.provider(async ({ code }) => {
     const result = await WebuiService.handleAsync(async () => {
-      const newPassword = await WebuiService.resetPassword();
+      const newPassword = await WebuiService.resetPasswordWithEmailCode(code);
       return { success: true, data: { newPassword } };
     }, 'Reset password');
 
@@ -239,9 +254,16 @@ export function initWebuiBridge(): void {
   // These handlers return results directly, without relying on emitter pattern
 
   // 直接 IPC: 重置密码 / Direct IPC: Reset password
-  ipcMain.handle('webui-direct-reset-password', async () => {
+  ipcMain.handle('webui-direct-send-reset-code', async () => {
     return WebuiService.handleAsync(async () => {
-      const newPassword = await WebuiService.resetPassword();
+      const data = await WebuiService.requestResetPasswordEmailCode();
+      return { success: true, data };
+    }, 'Direct IPC: Send reset verification code');
+  });
+
+  ipcMain.handle('webui-direct-reset-password', async (_event, { code }: { code: string }) => {
+    return WebuiService.handleAsync(async () => {
+      const newPassword = await WebuiService.resetPasswordWithEmailCode(code);
       return { success: true, newPassword };
     }, 'Direct IPC: Reset password');
   });
@@ -267,6 +289,14 @@ export function initWebuiBridge(): void {
       const username = await WebuiService.changeUsername(newUsername);
       return { success: true, data: { username } };
     }, 'Direct IPC: Change username');
+  });
+
+  // 直接 IPC: 设置管理员邮箱 / Direct IPC: Set admin email
+  ipcMain.handle('webui-direct-set-admin-email', async (_event, { email }: { email: string }) => {
+    return WebuiService.handleAsync(async () => {
+      await WebuiService.setAdminEmail(email);
+      return { success: true };
+    }, 'Direct IPC: Set admin email');
   });
 
   // 直接 IPC: 生成二维码 token / Direct IPC: Generate QR token

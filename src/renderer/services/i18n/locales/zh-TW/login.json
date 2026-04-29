@@ -6,8 +6,8 @@
   "usernamePlaceholder": "請輸入使用者名稱",
   "password": "密碼",
   "passwordPlaceholder": "請輸入密碼",
-  "rememberMe": "記住我",
-  "submit": "登入",
+  "rememberMe": "記住我的登入狀態",
+  "submit": "登入帳戶",
   "submitting": "登入中...",
   "success": "登入成功！準備跳轉...",
   "showPassword": "顯示密碼",
@@ -15,6 +15,27 @@
   "languageToggle": "切換語言",
   "footerPrimary": "命令列 AI 的現代化體驗",
   "footerSecondary": "高效且優雅",
+  "enterprise": {
+    "tag": "1ONE",
+    "heroTitle": "企業級 AI 工作台",
+    "brandDesc": "面向團隊的命令列與對話型 AI，統一帳號與權限，支援本機、LDAP 與飛書等多種登入方式。",
+    "cardTitle": "登入您的帳戶",
+    "cardSubtitle": "管理您的工作階段與任務"
+  },
+  "methods": {
+    "label": "登入方式",
+    "local": "本機帳戶",
+    "ldap": "LDAP 網域",
+    "ldapHint": "使用企業網域帳戶登入",
+    "localHint": "使用本機管理員帳戶登入",
+    "feishu": "飛書帳號",
+    "feishuOauth": "使用飛書登入",
+    "feishuQrTitle": "或使用飛書掃碼登入",
+    "feishuQrError": "飛書二維碼初始化失敗"
+  },
+  "orDivider": "或",
+  "showFeishuQr": "顯示飛書掃碼登入",
+  "hideFeishuQr": "收合飛書掃碼",
   "errors": {
     "empty": "請輸入使用者名稱與密碼",
     "invalidCredentials": "使用者名稱或密碼錯誤",

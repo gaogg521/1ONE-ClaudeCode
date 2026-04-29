@@ -36,8 +36,12 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
     body,
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(err.message ?? res.statusText);
+    const err = (await res.json().catch(() => ({}))) as { message?: string; code?: string };
+    const msg = err.message ?? res.statusText;
+    if (res.status === 403 && err.code === 'ENTERPRISE_ELEVATION_REQUIRED') {
+      throw new Error(msg || 'Enterprise elevation required');
+    }
+    throw new Error(msg);
   }
   const respBody = await res.json();
   return respBody.data ?? respBody;
@@ -96,11 +100,11 @@ export type AdminUser = {
   role: KanbanRole;
   created_at: number;
   last_login?: number | null;
-  identities?: Array<{ provider: 'ldap' | 'feishu'; external_id: string }>;
+  identities?: Array<{ provider: 'ldap' | 'feishu' | 'dingtalk' | 'wecom'; external_id: string }>;
   protected?: boolean;
 };
 
-export type AuthProviderId = 'ldap' | 'feishu';
+export type AuthProviderId = 'ldap' | 'feishu' | 'dingtalk' | 'wecom';
 
 export const adminApi = {
   listUsers: () =>
@@ -118,10 +122,21 @@ export const adminApi = {
       ? ipcBridge.adminUsers.setRole.invoke({ id, role })
       : apiFetch('/api/admin/users/' + id + '/role', { method: 'PATCH', body: JSON.stringify({ role }) }),
 
-  resetPassword: (id: string, password: string) =>
+  sendResetPasswordCode: () =>
     isElectron()
-      ? ipcBridge.adminUsers.resetPassword.invoke({ id, password })
-      : apiFetch('/api/admin/users/' + id + '/password', { method: 'PATCH', body: JSON.stringify({ password }) }),
+      ? ipcBridge.adminUsers.sendResetPasswordCode.invoke()
+      : apiFetch<{ maskedEmail: string }>('/api/admin/users/reset-password-email-code', {
+          method: 'POST',
+          body: JSON.stringify({}),
+        }),
+
+  resetPassword: (id: string, password: string, emailCode: string) =>
+    isElectron()
+      ? ipcBridge.adminUsers.resetPassword.invoke({ id, password, emailCode })
+      : apiFetch('/api/admin/users/' + id + '/password', {
+          method: 'PATCH',
+          body: JSON.stringify({ password, emailCode }),
+        }),
 
   deleteUser: (id: string) =>
     isElectron()
