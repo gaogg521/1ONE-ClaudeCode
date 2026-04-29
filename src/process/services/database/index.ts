@@ -10,7 +10,13 @@ import { createDriver } from './drivers/createDriver';
 import fs from 'fs';
 import path from 'path';
 import { runMigrations as executeMigrations } from './migrations';
-import { CURRENT_DB_VERSION, getDatabaseVersion, initSchema, setDatabaseVersion } from './schema';
+import {
+  CURRENT_DB_VERSION,
+  applyTenantAwareIndexes,
+  getDatabaseVersion,
+  initSchema,
+  setDatabaseVersion,
+} from './schema';
 import type {
   IAuthIdentityRow,
   IAuthProviderRow,
@@ -178,6 +184,9 @@ export class OneCmdDatabase {
         this.runMigrations(currentVersion, CURRENT_DB_VERSION);
         setDatabaseVersion(this.db, CURRENT_DB_VERSION);
       }
+
+      // Indexes on tenant_id / team_id — only safe after migrations may have ALTERed legacy tables
+      applyTenantAwareIndexes(this.db);
 
       this.ensureSystemUser();
     } catch (error) {

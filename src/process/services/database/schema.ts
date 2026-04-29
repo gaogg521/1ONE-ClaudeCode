@@ -38,7 +38,7 @@ export function initSchema(db: ISqliteDriver): void {
     updated_at INTEGER NOT NULL,
     last_login INTEGER
   )`);
-  db.exec('CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id)');
+  // tenant_id indexes: applied after migrations via applyTenantAwareIndexes() — legacy DBs may not have tenant_id yet
   db.exec('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
 
@@ -77,9 +77,8 @@ export function initSchema(db: ISqliteDriver): void {
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`);
-  db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_tenant_id ON conversations(tenant_id)');
+  // tenant_id / team_id indexes — same as users; columns may be added in migrations v27/v28
   db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_team_id ON conversations(tenant_id, team_id, updated_at DESC)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_type ON conversations(type)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_user_updated ON conversations(user_id, updated_at DESC)');
@@ -116,7 +115,6 @@ export function initSchema(db: ISqliteDriver): void {
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`);
-  db.exec('CREATE INDEX IF NOT EXISTS idx_teams_tenant_id ON teams(tenant_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_teams_user_id ON teams(user_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_teams_updated_at ON teams(updated_at)');
 
@@ -141,8 +139,7 @@ export function initSchema(db: ISqliteDriver): void {
     FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   )`);
-  db.exec('CREATE INDEX IF NOT EXISTS idx_team_memberships_user ON team_memberships(tenant_id, user_id)');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_team_memberships_team ON team_memberships(tenant_id, team_id)');
+  // team_memberships tenant indexes: created in migration_v27 when table is ensured + after applyTenantAwareIndexes
 
   // Mailbox table (团队消息邮箱)
   db.exec(`CREATE TABLE IF NOT EXISTS mailbox (
@@ -197,6 +194,22 @@ export function initSchema(db: ISqliteDriver): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_to)');
 
   console.log('[Database] Schema initialized successfully');
+}
+
+/**
+ * Indexes on tenant_id / team_id columns must run **after** migrations: existing user DBs
+ * may have old tables without these columns; initSchema only runs CREATE TABLE IF NOT EXISTS
+ * and cannot reshape legacy rows until ALTER TABLE in migrations.
+ */
+export function applyTenantAwareIndexes(db: ISqliteDriver): void {
+  db.exec('CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_tenant_id ON conversations(tenant_id)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_conversations_team_id ON conversations(tenant_id, team_id, updated_at DESC)'
+  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_teams_tenant_id ON teams(tenant_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_team_memberships_user ON team_memberships(tenant_id, user_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_team_memberships_team ON team_memberships(tenant_id, team_id)');
 }
 
 /**
