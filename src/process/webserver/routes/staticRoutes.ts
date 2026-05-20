@@ -149,6 +149,28 @@ function registerProductionStaticRoutes(expressApp: Express, staticRoot: string,
   }
 }
 
+/** API/auth paths must never be proxied to Vite (would break login & QR). */
+function shouldProxyToVite(req: import('express').Request): boolean {
+  const pathOnly = req.path;
+  if (pathOnly.startsWith('/api')) return false;
+  if (pathOnly === '/login' || pathOnly === '/logout' || pathOnly === '/qr-login') return false;
+  if (pathOnly.startsWith('/ws')) return false;
+  // Non-GET requests to backend paths should not hit Vite
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+  return true;
+}
+
+function registerViteDevProxy(expressApp: Express): void {
+  const proxy = createViteDevProxy();
+  expressApp.use((req, res, next) => {
+    if (!shouldProxyToVite(req)) {
+      next();
+      return;
+    }
+    proxy(req, res);
+  });
+}
+
 /**
  * Register static assets and page routes
  *
@@ -162,9 +184,8 @@ export function registerStaticRoutes(expressApp: Express): void {
   const hasViteDevServer = typeof process.env['ELECTRON_RENDERER_URL'] === 'string' && !!process.env['ELECTRON_RENDERER_URL'];
   const forceStatic = process.env.ONE_WEBUI_FORCE_STATIC === '1';
   if (!isProduction && hasViteDevServer && !forceStatic) {
-    console.log(`[WebUI] Dev mode: proxying to Vite dev server at http://localhost:${VITE_DEV_PORT}`);
-    const proxy = createViteDevProxy();
-    expressApp.use(proxy);
+    console.log(`[WebUI] Dev mode: proxying UI to Vite at http://localhost:${VITE_DEV_PORT} (API routes stay on WebUI)`);
+    registerViteDevProxy(expressApp);
     return;
   }
 
@@ -177,9 +198,8 @@ export function registerStaticRoutes(expressApp: Express): void {
   }
 
   // No built assets - proxy to Vite dev server in development mode
-  console.log(`[WebUI] No renderer build found, proxying to Vite dev server at http://localhost:${VITE_DEV_PORT}`);
-  const proxy = createViteDevProxy();
-  expressApp.use(proxy);
+  console.log(`[WebUI] No renderer build found, proxying UI to Vite at http://localhost:${VITE_DEV_PORT}`);
+  registerViteDevProxy(expressApp);
 }
 
 export default registerStaticRoutes;

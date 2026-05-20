@@ -39,9 +39,9 @@ describe('AcpConnection.setPromptTimeout', () => {
     expect((conn as any).promptTimeoutMs).toBe(30000);
   });
 
-  it('should default to 300 seconds', () => {
+  it('should default to 600 seconds', () => {
     const conn = new AcpConnection();
-    expect((conn as any).promptTimeoutMs).toBe(300000);
+    expect((conn as any).promptTimeoutMs).toBe(600000);
   });
 });
 

@@ -1082,6 +1082,10 @@ export function initFsBridge(): void {
           name: 'OpenCode (Alt)',
           path: path.join(homedir, '.opencode', 'skills'),
         },
+        {
+          name: 'GitHub Copilot CLI',
+          path: path.join(homedir, '.copilot', 'skills'),
+        },
       ];
 
       const detected: Array<{ name: string; path: string }> = [];

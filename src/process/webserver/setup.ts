@@ -10,32 +10,17 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import csrf from 'tiny-csrf';
 import crypto from 'crypto';
-import { networkInterfaces } from 'os';
+import { resolveAllLanIps } from '@/common/utils/resolveLanIp';
 import { AuthMiddleware } from '@process/webserver/auth/middleware/AuthMiddleware';
 import { errorHandler } from './middleware/errorHandler';
 import { attachCsrfToken } from './middleware/security';
 
 /**
- * 获取所有非内部 IPv4 地址（LAN、VPN、Tailscale 等）
- * Get all non-internal IPv4 addresses (LAN, VPN, Tailscale, etc.)
+ * 获取物理网卡 IPv4 地址（排除 VMware 等虚拟网卡；含 Tailscale 等）
+ * Get physical NIC IPv4 addresses (skip virtual adapters; includes Tailscale, etc.)
  */
 function getAllNonInternalIPs(): string[] {
-  const ips: string[] = [];
-  const nets = networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    const netInfo = nets[name];
-    if (!netInfo) continue;
-
-    for (const net of netInfo) {
-      // Node.js 18.4+ returns number (4/6), older versions return string ('IPv4'/'IPv6')
-      const isIPv4 = net.family === 'IPv4' || (net.family as unknown) === 4;
-      const isNotInternal = !net.internal;
-      if (isIPv4 && isNotInternal) {
-        ips.push(net.address);
-      }
-    }
-  }
-  return ips;
+  return resolveAllLanIps();
 }
 
 /**

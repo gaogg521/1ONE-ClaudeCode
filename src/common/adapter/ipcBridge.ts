@@ -813,9 +813,30 @@ export interface IWebUIStatus {
   initialPassword?: string;
 }
 
+export type IWebUIEnterpriseContext = {
+  joined: boolean;
+  tenantId: string;
+  tenantName: string | null;
+  canCreateEnterprise?: boolean;
+};
+
 export const webui = {
   // 获取 WebUI 状态 / Get WebUI status
   getStatus: bridge.buildProvider<IBridgeResponse<IWebUIStatus>, void>('webui.get-status'),
+  getEnterpriseContext: bridge.buildProvider<IBridgeResponse<IWebUIEnterpriseContext>, void>(
+    'webui.get-enterprise-context'
+  ),
+  previewEnterpriseInvite: bridge.buildProvider<
+    IBridgeResponse<{ tenantId: string; tenantName: string }>,
+    { code: string }
+  >('webui.preview-enterprise-invite'),
+  joinEnterprise: bridge.buildProvider<IBridgeResponse<{ tenantId: string; tenantName: string | null }>, { code: string }>(
+    'webui.join-enterprise'
+  ),
+  createEnterprise: bridge.buildProvider<
+    IBridgeResponse<{ tenantId: string; tenantName: string }>,
+    { name: string }
+  >('webui.create-enterprise'),
   // 启动 WebUI / Start WebUI
   start: bridge.buildProvider<
     IBridgeResponse<{ port: number; localUrl: string; networkUrl?: string; lanIP?: string; initialPassword?: string }>,

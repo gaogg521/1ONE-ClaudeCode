@@ -240,6 +240,14 @@ export const UserRepository = {
     }
   },
 
+  async updateTenantId(userId: string, tenantId: string): Promise<void> {
+    const db = await getDatabase();
+    const result = db.updateUserTenantId(userId, tenantId);
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to update tenant');
+    }
+  },
+
   async createUserWithRole(
     username: string,
     passwordHash: string,

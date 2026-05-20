@@ -79,6 +79,8 @@ export interface IConfigStorageRefer {
   'webui.desktop.enabled'?: boolean;
   /** 桌面模式下是否允许远程访问 / Allow remote access in desktop mode */
   'webui.desktop.allowRemote'?: boolean;
+  /** WebUI 管理界面模式：单机 WebUI 或企业版后台 / WebUI settings mode: standalone vs enterprise admin */
+  'webui.managementMode'?: 'standalone' | 'enterprise';
   /** 桌面模式下 WebUI 端口 / WebUI port in desktop mode */
   'webui.desktop.port'?: number;
   customCss: string; // 自定义 CSS 样式
@@ -89,6 +91,7 @@ export interface IConfigStorageRefer {
     /** @deprecated Image generation is now controlled via built-in MCP server toggle */
     switch?: boolean;
   };
+  'tools.agentToolkit'?: import('@/common/config/agentToolkitConfig').AgentToolkitConfig;
   'tools.speechToText'?: SpeechToTextConfig;
   // 是否在粘贴文件到工作区时询问确认（true = 不再询问）
   'workspace.pasteConfirm'?: boolean;
@@ -596,6 +599,8 @@ export interface IMcpServer {
 
 /** Stable ID for the built-in image generation MCP server */
 export const BUILTIN_IMAGE_GEN_ID = 'builtin-image-gen';
+export const BUILTIN_CODEGRAPH_ID = 'builtin-codegraph';
+export const BUILTIN_CODEGRAPH_NAME = 'codegraph';
 
 export interface IMcpTool {
   name: string;

@@ -9,6 +9,7 @@ import type {
   EnterpriseElevationSecondaryOption,
 } from '@/common/types/enterpriseElevation';
 import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
+import { fetchWebuiApi } from '@/renderer/utils/webuiApiBase';
 
 export type EnterpriseElevationState = {
   eligible: boolean;
@@ -33,11 +34,23 @@ export function isEnterpriseElevationError(e: unknown): e is EnterpriseElevation
   return e instanceof EnterpriseElevationError;
 }
 
+async function enterpriseAuthFetch(path: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetchWebuiApi(path, init);
+  } catch (e) {
+    if (e instanceof Error && e.message === 'WEBUI_NOT_RUNNING') {
+      throw new EnterpriseElevationError('network', 'WebUI is not running');
+    }
+    throw new EnterpriseElevationError('network');
+  }
+}
+
 export async function fetchEnterpriseElevation(): Promise<EnterpriseElevationState> {
   let res: Response;
   try {
-    res = await fetch('/api/auth/enterprise-elevation', { credentials: 'include' });
-  } catch {
+    res = await enterpriseAuthFetch('/api/auth/enterprise-elevation');
+  } catch (e) {
+    if (e instanceof EnterpriseElevationError) throw e;
     throw new EnterpriseElevationError('network');
   }
 
@@ -66,10 +79,9 @@ export async function postEnterpriseElevate(
   password: string,
   method?: EnterpriseElevationPasswordMethod
 ): Promise<void> {
-  const res = await fetch('/api/auth/enterprise-elevate', {
+  const res = await enterpriseAuthFetch('/api/auth/enterprise-elevate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(withCsrfToken({ password, ...(method ? { method } : {}) })),
   });
   const body = (await res.json().catch((): null => null)) as { success?: boolean; message?: string };
@@ -79,10 +91,9 @@ export async function postEnterpriseElevate(
 }
 
 export async function postEnterpriseElevateRevoke(): Promise<void> {
-  const res = await fetch('/api/auth/enterprise-elevate/revoke', {
+  const res = await enterpriseAuthFetch('/api/auth/enterprise-elevate/revoke', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(withCsrfToken({})),
   });
   const body = (await res.json().catch((): null => null)) as { success?: boolean; message?: string };

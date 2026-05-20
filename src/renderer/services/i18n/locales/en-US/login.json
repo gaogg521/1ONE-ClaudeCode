@@ -15,6 +15,12 @@
   "languageToggle": "Change language",
   "footerPrimary": "Transform your command-line AI",
   "footerSecondary": "Modern & Efficient",
+  "standalone": {
+    "heroTitle": "WebUI remote access",
+    "brandDesc": "Sign in with the local admin account to manage 1ONE from your phone or a remote browser.",
+    "cardTitle": "Sign in to WebUI",
+    "cardSubtitle": "Use the username and password from Settings → Remote → WebUI"
+  },
   "enterprise": {
     "tag": "1ONE",
     "heroTitle": "Enterprise AI workspace",

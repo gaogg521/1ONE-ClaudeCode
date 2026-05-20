@@ -147,6 +147,7 @@ export function writeJsonRpcMessage(child: ChildProcess, message: object): void 
 // ── Agent settings ──────────────────────────────────────────────────
 
 export interface ClaudeSettings {
+  model?: string;
   env?: {
     ANTHROPIC_MODEL?: string;
     [key: string]: string | undefined;
@@ -183,7 +184,10 @@ export function readClaudeSettings(): ClaudeSettings | null {
  */
 export function getClaudeModel(): string | null {
   const settings = readClaudeSettings();
-  return settings?.env?.ANTHROPIC_MODEL ?? null;
+  if (!settings) return null;
+  const topLevel = settings.model?.trim();
+  if (topLevel) return topLevel;
+  return settings.env?.ANTHROPIC_MODEL?.trim() || null;
 }
 
 // --- CodeBuddy settings support ---

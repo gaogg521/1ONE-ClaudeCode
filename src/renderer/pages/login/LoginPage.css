@@ -100,6 +100,15 @@ body.login-page-active {
   box-shadow: 0 12px 48px rgba(15, 23, 42, 0.12);
   padding: 36px 28px 28px;
   animation: login-slide-up 0.5s ease-out;
+  /* Card is always a light surface — reset theme tokens so dark mode does not yield white-on-white text */
+  color: #1d2129;
+  --color-text-1: #1d2129;
+  --color-text-2: #4e5969;
+  --color-text-3: #86909c;
+  --color-text-4: #c9cdd4;
+  --color-border-2: #e5e6eb;
+  --color-border-3: #c9cdd4;
+  --color-fill-2: #f2f3f5;
 }
 
 @keyframes login-slide-up {
@@ -122,6 +131,11 @@ body.login-page-active {
 
 .login-page__lang-select {
   min-width: 120px;
+}
+
+.login-page__card :global(.arco-select-view) {
+  color: #1d2129;
+  background-color: #fff;
 }
 
 .login-page__card-head {
@@ -150,6 +164,7 @@ body.login-page-active {
 .login-page__card-sub {
   margin: 0 !important;
   font-size: 13px !important;
+  color: #86909c !important;
 }
 
 .login-page__method-group {
@@ -184,6 +199,7 @@ body.login-page-active {
   margin-bottom: 8px;
   font-weight: 600;
   font-size: 13px;
+  color: #4e5969;
 }
 
 .login-page__remember {

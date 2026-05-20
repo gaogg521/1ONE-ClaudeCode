@@ -23,6 +23,12 @@ import {
   verifyEnterpriseElevationPassword,
 } from '../auth/enterpriseElevationSecondary';
 import { isEnterpriseElevatableRole } from '../auth/enterpriseRoles';
+import { resolveEnterpriseContext } from '../auth/enterpriseContext';
+import {
+  EnterpriseJoinError,
+  joinEnterpriseWithInvite,
+  previewEnterpriseInvite,
+} from '../auth/enterpriseJoinService';
 import {
   buildFeishuAuthorizeUrl,
   exchangeFeishuCodeForUserAccessToken,
@@ -144,6 +150,26 @@ export function registerAuthRoutes(app: Express): void {
       res.json({ success: true, data: providers });
     } catch (error) {
       console.error('[AuthRoute] providers error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  /**
+   * 登录页 UI 模式：单机 WebUI（仅本地 admin）vs 企业版（LDAP/飞书等）
+   * GET /api/auth/login-ui
+   */
+  app.get('/api/auth/login-ui', apiRateLimiter, async (_req: Request, res: Response) => {
+    try {
+      const providers = await AuthProviderRepository.listProviders();
+      const ldapEnabled = providers.some((p) => p.type === 'ldap' && p.enabled);
+      const feishuEnabled = providers.some((p) => p.type === 'feishu' && p.enabled);
+      const mode = ldapEnabled || feishuEnabled ? 'enterprise' : 'standalone';
+      res.json({
+        success: true,
+        data: { mode, ldapEnabled, feishuEnabled },
+      });
+    } catch (error) {
+      console.error('[AuthRoute] login-ui error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -403,6 +429,78 @@ export function registerAuthRoutes(app: Express): void {
       res.clearCookie(AUTH_CONFIG.COOKIE.NAME);
       res.clearCookie(AUTH_CONFIG.COOKIE.ENTERPRISE_NAME, { path: '/' });
       res.json({ success: true, message: 'Logged out successfully' });
+    }
+  );
+
+  /**
+   * Enterprise membership for the signed-in user (tenant !== default).
+   * GET /api/auth/enterprise-context
+   */
+  app.get(
+    '/api/auth/enterprise-context',
+    apiRateLimiter,
+    AuthMiddleware.authenticateToken,
+    async (req: Request, res: Response) => {
+      const tenantId = req.user?.tenant_id;
+      const data = await resolveEnterpriseContext(tenantId);
+      const joined = data.joined;
+      res.json({
+        success: true,
+        data: {
+          ...data,
+          canCreateEnterprise: !joined && req.user?.role === 'system_admin',
+        },
+      });
+    }
+  );
+
+  /**
+   * Preview enterprise invite code (tenant name only).
+   * GET /api/auth/enterprise-invite/preview?code=
+   */
+  app.get(
+    '/api/auth/enterprise-invite/preview',
+    apiRateLimiter,
+    AuthMiddleware.authenticateToken,
+    async (req: Request, res: Response) => {
+      try {
+        const code = String(req.query.code ?? '');
+        const data = await previewEnterpriseInvite(code);
+        res.json({ success: true, data });
+      } catch (err) {
+        if (err instanceof EnterpriseJoinError) {
+          res.status(400).json({ success: false, code: err.code, message: err.message });
+          return;
+        }
+        console.error('[AuthRoute] enterprise invite preview error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
+
+  /**
+   * Join an enterprise with invite code.
+   * POST /api/auth/enterprise-join
+   */
+  app.post(
+    '/api/auth/enterprise-join',
+    apiRateLimiter,
+    AuthMiddleware.authenticateToken,
+    authenticatedActionLimiter,
+    async (req: Request, res: Response) => {
+      try {
+        const code = String((req.body as { code?: unknown })?.code ?? '');
+        const data = await joinEnterpriseWithInvite(req.user!.id, code);
+        res.json({ success: true, data });
+      } catch (err) {
+        if (err instanceof EnterpriseJoinError) {
+          const status = err.code === 'FORBIDDEN' ? 403 : 400;
+          res.status(status).json({ success: false, code: err.code, message: err.message });
+          return;
+        }
+        console.error('[AuthRoute] enterprise join error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
     }
   );
 

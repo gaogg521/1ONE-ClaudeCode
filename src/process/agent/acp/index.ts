@@ -12,6 +12,7 @@ import type { IResponseMessage } from '@/common/adapter/ipcBridge';
 import { NavigationInterceptor } from '@/common/chat/navigation';
 import type { SlashCommandItem } from '@/common/chat/slash/types';
 import { uuid } from '@/common/utils';
+import { resolveAcpContextLimit } from '@/common/utils/resolveAcpContextLimit';
 import type {
   AcpBackend,
   AcpModelInfo,
@@ -30,6 +31,7 @@ import * as path from 'path';
 import { ProcessConfig } from '@process/utils/initStorage';
 import { mainLog } from '@process/utils/mainLogger';
 import { getEnhancedEnv, resolveNpxPath } from '@process/utils/shellEnv';
+import { getAgentToolkitConfig } from '@process/services/agentToolkit/config';
 import { AcpConnection } from './AcpConnection';
 import { AcpApprovalStore, createAcpApprovalKey } from './ApprovalStore';
 import {
@@ -41,6 +43,7 @@ import {
 import { buildAcpModelInfo, summarizeAcpModelInfo } from './modelInfo';
 import {
   buildBuiltinAcpSessionMcpServers,
+  buildEnabledAcpSessionMcpServers,
   buildTeamMcpServer,
   parseAcpMcpCapabilities,
   type AcpSessionMcpServer,
@@ -1057,13 +1060,15 @@ export class AcpAgent {
       if (data.update?.sessionUpdate === 'usage_update') {
         this.hasReceivedUsageUpdate = true;
         const usageUpdate = data.update as { used: number; size: number; cost?: { amount: number; currency: string } };
+        const modelId = this.connection.getModels()?.currentModelId ?? null;
+        const resolvedSize = resolveAcpContextLimit(usageUpdate.size, modelId);
         this.onStreamEvent({
           type: 'acp_context_usage',
           conversation_id: this.id,
           msg_id: uuid(),
           data: {
             used: usageUpdate.used,
-            size: usageUpdate.size,
+            size: resolvedSize > 0 ? resolvedSize : usageUpdate.size,
             cost: usageUpdate.cost,
           },
         });
@@ -1563,7 +1568,12 @@ export class AcpAgent {
 
       if (Array.isArray(mcpConfig) && mcpConfig.length > 0) {
         const capabilities = parseAcpMcpCapabilities(this.connection.getInitializeResponse());
-        servers.push(...buildBuiltinAcpSessionMcpServers(mcpConfig as IMcpServer[], capabilities));
+        const toolkit = await getAgentToolkitConfig();
+        const builders =
+          toolkit.enabled && toolkit.codegraphEnabled
+            ? buildEnabledAcpSessionMcpServers(mcpConfig as IMcpServer[], capabilities)
+            : buildBuiltinAcpSessionMcpServers(mcpConfig as IMcpServer[], capabilities);
+        servers.push(...builders);
       }
 
       // Inject team MCP server if this agent belongs to a team (stdio mode)

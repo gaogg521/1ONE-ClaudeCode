@@ -17,6 +17,7 @@ if (app.isPackaged) {
   process.env.PREBUILDS_ONLY = '1';
 }
 import initStorage from './utils/initStorage';
+import { bootstrapAgentToolkit } from './services/agentToolkit/bootstrap';
 import './utils/initBridge';
 import './services/i18n'; // Initialize i18n for main process
 import { getChannelManager } from '@process/channels';
@@ -28,6 +29,9 @@ export const initializeProcess = async () => {
 
   await initStorage();
   mark('initStorage');
+
+  void bootstrapAgentToolkit();
+  mark('agentToolkit');
 
   // Initialize Extension Registry (scan and resolve all extensions)
   try {

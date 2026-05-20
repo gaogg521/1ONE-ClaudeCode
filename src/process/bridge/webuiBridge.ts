@@ -52,6 +52,34 @@ export function initWebuiBridge(): void {
     }, 'Get status');
   });
 
+  webui.getEnterpriseContext.provider(async () => {
+    return WebuiService.handleAsync(async () => {
+      const data = await WebuiService.getEnterpriseContext();
+      return { success: true, data };
+    }, 'Get enterprise context');
+  });
+
+  webui.previewEnterpriseInvite.provider(async ({ code }) => {
+    return WebuiService.handleAsync(async () => {
+      const data = await WebuiService.previewEnterpriseInvite(code);
+      return { success: true, data };
+    }, 'Preview enterprise invite');
+  });
+
+  webui.joinEnterprise.provider(async ({ code }) => {
+    return WebuiService.handleAsync(async () => {
+      const data = await WebuiService.joinEnterpriseAsLocalAdmin(code);
+      return { success: true, data };
+    }, 'Join enterprise');
+  });
+
+  webui.createEnterprise.provider(async ({ name }) => {
+    return WebuiService.handleAsync(async () => {
+      const data = await WebuiService.createEnterpriseAsLocalAdmin(name);
+      return { success: true, data };
+    }, 'Create enterprise');
+  });
+
   // 启动 WebUI / Start WebUI
   webui.start.provider(async ({ port: requestedPort, allowRemote }) => {
     try {

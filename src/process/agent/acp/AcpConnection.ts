@@ -129,6 +129,23 @@ export function buildStartupErrorMessage(
   return errMsg;
 }
 
+/**
+ * User-facing message when the ACP child process exits during an active request.
+ * Exported for unit tests.
+ */
+export function formatAcpUnexpectedExitMessage(
+  code: number | null,
+  signal: NodeJS.Signals | null
+): string {
+  if (process.platform === 'win32' && code !== null && code !== 0 && signal == null) {
+    return (
+      `ACP 子进程异常退出（Windows code: ${code}）。` +
+      `常见原因：内存不足、被杀软/系统终止、或 Claude Code 进程崩溃。请重试或新开对话。`
+    );
+  }
+  return `ACP process exited unexpectedly (code: ${code}, signal: ${signal})`;
+}
+
 interface PendingRequest<T = unknown> {
   resolve: (value: T) => void;
   reject: (error: Error) => void;
@@ -156,8 +173,8 @@ export class AcpConnection {
   private configOptions: AcpSessionConfigOption[] | null = null;
   private models: AcpSessionModels | null = null;
 
-  // Configurable prompt timeout in milliseconds (default: 300000 = 5 minutes)
-  private promptTimeoutMs: number = 300000;
+  // Configurable prompt timeout in milliseconds (default: 600000 = 10 minutes)
+  private promptTimeoutMs: number = 600000;
 
   // Performance tracking: timestamp when last prompt was sent
   private lastPromptSentAt: number = 0;
@@ -174,7 +191,7 @@ export class AcpConnection {
 
   /**
    * Set the prompt timeout duration in seconds.
-   * @param seconds - Timeout in seconds (minimum 30, default 300)
+   * @param seconds - Timeout in seconds (minimum 30, default 600)
    */
   setPromptTimeout(seconds: number): void {
     this.promptTimeoutMs = Math.max(30, seconds) * 1000;
@@ -605,7 +622,7 @@ export class AcpConnection {
       if (request.timeoutId) {
         clearTimeout(request.timeoutId);
       }
-      request.reject(new Error(`ACP process exited unexpectedly (code: ${code}, signal: ${signal})`));
+      request.reject(new Error(formatAcpUnexpectedExitMessage(code, signal)));
     }
     this.pendingRequests.clear();
 

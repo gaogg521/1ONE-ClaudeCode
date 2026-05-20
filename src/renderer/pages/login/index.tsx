@@ -57,7 +57,8 @@ const LoginPage: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [message, setMessage] = useState<MessageState | null>(null);
   const [loading, setLoading] = useState(false);
-  const [formMethod, setFormMethod] = useState<FormMethod>('ldap');
+  const [loginUiMode, setLoginUiMode] = useState<'loading' | 'standalone' | 'enterprise'>('loading');
+  const [formMethod, setFormMethod] = useState<FormMethod>('local');
   const [showFeishuQr, setShowFeishuQr] = useState(false);
 
   const [feishuQr, setFeishuQr] = useState<{ sdkUrl: string; goto: string } | null>(null);
@@ -108,6 +109,34 @@ const LoginPage: React.FC = () => {
       void navigate('/guid', { replace: true });
     }
   }, [navigate, status]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadLoginUi = async () => {
+      try {
+        const res = await fetch('/api/auth/login-ui', { credentials: 'include' });
+        const body = (await res.json()) as {
+          success?: boolean;
+          data?: { mode?: 'standalone' | 'enterprise' };
+        };
+        if (!cancelled) {
+          const mode = body?.success && body.data?.mode === 'enterprise' ? 'enterprise' : 'standalone';
+          setLoginUiMode(mode);
+          if (mode === 'enterprise') {
+            setFormMethod('ldap');
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setLoginUiMode('standalone');
+        }
+      }
+    };
+    void loadLoginUi();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const clearMessageLater = useCallback(() => {
     if (messageTimer.current) {
@@ -310,13 +339,25 @@ const LoginPage: React.FC = () => {
     return t('login.methods.localHint', { defaultValue: '使用本地管理员账户登录' });
   }, [formMethod, t]);
 
-  if (status === 'checking') {
+  const isEnterpriseLogin = loginUiMode === 'enterprise';
+
+  if (status === 'checking' || loginUiMode === 'loading') {
     return <AppLoader />;
   }
 
+  const cardTitle = isEnterpriseLogin
+    ? t('login.enterprise.cardTitle', { defaultValue: '登录您的账户' })
+    : t('login.standalone.cardTitle', { defaultValue: '登录 WebUI' });
+  const cardSubtitle = isEnterpriseLogin
+    ? t('login.enterprise.cardSubtitle', { defaultValue: '管理您的会话与任务' })
+    : t('login.standalone.cardSubtitle', {
+        defaultValue: '用户名与密码见「设置 → 远程连接 → WebUI」',
+      });
+
   return (
-    <div className='login-page login-page--enterprise'>
-      <div className='login-page__brand' aria-hidden={false}>
+    <div className={`login-page${loginUiMode === 'enterprise' ? ' login-page--enterprise' : ''}`}>
+      {isEnterpriseLogin ? (
+        <div className='login-page__brand' aria-hidden={false}>
         <div className='login-page__brand-tag'>{t('login.enterprise.tag', { defaultValue: '1ONE' })}</div>
         <Typography.Title heading={4} className='login-page__brand-title'>
           {t('login.enterprise.heroTitle', { defaultValue: '企业级 AI 工作台' })}
@@ -328,7 +369,8 @@ const LoginPage: React.FC = () => {
           })}
         </Typography.Paragraph>
         <div className='login-page__brand-visual' aria-hidden='true' />
-      </div>
+        </div>
+      ) : null}
 
       <div className='login-page__panel'>
         <div className='login-page__card'>
@@ -353,13 +395,15 @@ const LoginPage: React.FC = () => {
               <img src={loginLogo} alt='' className='login-page__card-icon-img' />
             </div>
             <Typography.Title heading={5} className='login-page__card-title'>
-              {t('login.enterprise.cardTitle', { defaultValue: '登录您的账户' })}
+              {cardTitle}
             </Typography.Title>
             <Typography.Paragraph type='secondary' className='login-page__card-sub'>
-              {t('login.enterprise.cardSubtitle', { defaultValue: '管理您的会话与任务' })}
+              {cardSubtitle}
             </Typography.Paragraph>
           </div>
 
+          {isEnterpriseLogin ? (
+            <>
           <Radio.Group
             className='login-page__method-group'
             type='button'
@@ -372,6 +416,8 @@ const LoginPage: React.FC = () => {
           <Typography.Paragraph type='secondary' className='login-page__method-hint'>
             {methodHint}
           </Typography.Paragraph>
+            </>
+          ) : null}
 
           <form className='login-page__form' onSubmit={handleSubmit}>
             <div className='login-page__form-item'>
@@ -410,6 +456,8 @@ const LoginPage: React.FC = () => {
               {loading ? t('login.submitting') : t('login.submit')}
             </Button>
 
+            {isEnterpriseLogin ? (
+              <>
             <Divider className='login-page__divider'>
               {t('login.orDivider', { defaultValue: '或' })}
             </Divider>
@@ -434,6 +482,8 @@ const LoginPage: React.FC = () => {
                 <div className='login-page__feishu-qr-title'>{t('login.methods.feishuQrTitle', { defaultValue: '或使用飞书扫码登录' })}</div>
                 <div id='one-feishu-qr-container' className='login-page__feishu-qr-container' />
               </div>
+            ) : null}
+              </>
             ) : null}
 
             <div

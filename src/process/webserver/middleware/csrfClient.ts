@@ -7,6 +7,11 @@
 import { parse as parseCookie } from 'cookie';
 import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from '@process/webserver/config/constants';
 
+/** Session key for CSRF plaintext from `x-csrf-token` (tiny-csrf uses httpOnly signed `csrfToken` cookie). */
+const CSRF_SESSION_STORAGE_KEY = 'one-csrf-session';
+
+let csrfTokenMemory: string | null = null;
+
 // Read cookie by name in browser environment with error handling
 // 在浏览器环境中根据名称读取指定 Cookie，带错误处理
 function readCookie(name: string): string | null {
@@ -67,10 +72,47 @@ export function clearAllCookies(): void {
   }
 }
 
-// Retrieve current CSRF token from cookie (if present)
-// 从 Cookie 中获取当前的 CSRF Token（若不存在则返回 null）
+/**
+ * Store CSRF token from a WebUI response (`attachCsrfToken` sets `x-csrf-token`).
+ * Required because tiny-csrf keeps the secret in an httpOnly signed cookie; JS cannot read it.
+ */
+export function captureCsrfTokenFromResponse(response: Response): void {
+  try {
+    const token = response.headers.get(CSRF_HEADER_NAME);
+    if (!token || token.length === 0) return;
+    csrfTokenMemory = token;
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(CSRF_SESSION_STORAGE_KEY, token);
+    }
+  } catch (error) {
+    console.error('Failed to capture CSRF token from response:', error);
+  }
+}
+
+export function clearCsrfSessionToken(): void {
+  csrfTokenMemory = null;
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(CSRF_SESSION_STORAGE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+// Retrieve current CSRF token (session/header cache first, then legacy readable cookie)
 export function getCsrfToken(): string | null {
   try {
+    if (csrfTokenMemory && csrfTokenMemory.length > 0) {
+      return csrfTokenMemory;
+    }
+    if (typeof sessionStorage !== 'undefined') {
+      const stored = sessionStorage.getItem(CSRF_SESSION_STORAGE_KEY);
+      if (stored && stored.length > 0) {
+        csrfTokenMemory = stored;
+        return stored;
+      }
+    }
     return readCookie(CSRF_COOKIE_NAME);
   } catch (error) {
     console.error('Failed to get CSRF token:', error);

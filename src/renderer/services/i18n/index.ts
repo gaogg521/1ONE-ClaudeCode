@@ -42,14 +42,31 @@ const fallbackLocale = localeData[DEFAULT_LANGUAGE] ?? {};
 // Cache for loaded translations
 const loadedTranslations = new Map<string, Record<string, unknown>>();
 
-// Pre-populate cache with the synchronously loaded fallback locale
-loadedTranslations.set(DEFAULT_LANGUAGE, fallbackLocale as Record<string, unknown>);
-
 function getLocaleModules(locale: string): Record<string, unknown> {
   const normalized = normalizeLanguageCode(locale);
   const modules = localeData[normalized] ?? fallbackLocale;
   if (normalized === DEFAULT_LANGUAGE) return modules;
   return mergeWithFallback(fallbackLocale, modules);
+}
+
+/** Eagerly register every statically-imported locale (fixes WebUI login when lng≠en-US but bundle missing). */
+function buildAllResources(): Record<string, { translation: Record<string, unknown> }> {
+  const resources: Record<string, { translation: Record<string, unknown> }> = {};
+  for (const lang of supportedLanguages) {
+    const normalized = normalizeLanguageCode(lang);
+    const modules = getLocaleModules(normalized);
+    loadedTranslations.set(normalized, modules);
+    resources[normalized] = { translation: modules };
+  }
+  return resources;
+}
+
+const allResources = buildAllResources();
+
+function readLanguageHint(): string | null {
+  if (typeof localStorage === 'undefined') return null;
+  const stored = localStorage.getItem('i18nextLng');
+  return stored ? normalizeLanguageCode(stored) : null;
 }
 
 async function loadLocaleModules(locale: string): Promise<Record<string, unknown>> {
@@ -72,12 +89,8 @@ async function loadLocaleModules(locale: string): Promise<Record<string, unknown
 i18n
   .use(initReactI18next)
   .init({
-    resources: {
-      [DEFAULT_LANGUAGE]: {
-        translation: fallbackLocale,
-      },
-    },
-    lng: (typeof localStorage !== 'undefined' ? localStorage.getItem('i18nextLng') : null) || DEFAULT_LANGUAGE,
+    resources: allResources,
+    lng: readLanguageHint() || DEFAULT_LANGUAGE,
     fallbackLng: DEFAULT_LANGUAGE,
     debug: false,
     interpolation: { escapeValue: false },
@@ -86,15 +99,24 @@ i18n
     console.error('Failed to initialize i18n:', error);
   });
 
-// Load initial language from ConfigStorage (single source of truth)
+// Load initial language from ConfigStorage (single source of truth when bridge is available)
 async function initLanguage(): Promise<void> {
+  let language: string | undefined;
   try {
-    const savedLanguage = await ConfigStorage.get('language');
-    const language = savedLanguage || normalizeLanguageCode(navigator.language || DEFAULT_LANGUAGE);
-    await ensureAndSwitch(i18n, language, loadLocaleModules);
-    // Sync to localStorage so next page load can use it as a fast hint
+    language = await ConfigStorage.get('language');
+  } catch (error) {
+    console.warn('Failed to read language from ConfigStorage, using local hint:', error);
+  }
+
+  const resolved =
+    language ||
+    readLanguageHint() ||
+    normalizeLanguageCode(typeof navigator !== 'undefined' ? navigator.language : DEFAULT_LANGUAGE);
+
+  try {
+    await ensureAndSwitch(i18n, resolved, loadLocaleModules);
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('i18nextLng', normalizeLanguageCode(language));
+      localStorage.setItem('i18nextLng', normalizeLanguageCode(resolved));
     }
   } catch (error) {
     console.error('Failed to initialize language:', error);
@@ -136,13 +158,16 @@ ipcBridge.systemSettings.languageChanged.on(async ({ language }) => {
 export async function changeLanguage(lang: string): Promise<void> {
   await ensureAndSwitch(i18n, lang, loadLocaleModules);
   const normalized = normalizeLanguageCode(lang);
-  await ConfigStorage.set('language', normalized);
-  // Keep localStorage in sync so WebUI can use it as a fast hint on next load
+  // Always persist locally first (WebUI login page has no auth token → bridge may be unavailable)
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem('i18nextLng', normalized);
   }
-  // Notify main process to sync i18n (for tray menu, etc.)
-  ipcBridge.systemSettings.changeLanguage.invoke({ language: normalized }).catch(() => {});
+  try {
+    await ConfigStorage.set('language', normalized);
+    await ipcBridge.systemSettings.changeLanguage.invoke({ language: normalized });
+  } catch (error) {
+    console.warn('Failed to sync language to main process (local i18n still applied):', error);
+  }
 }
 
 // Clear translation cache (useful for development/testing)

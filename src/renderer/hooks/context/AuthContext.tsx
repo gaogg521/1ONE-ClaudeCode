@@ -1,5 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { withCsrfToken, hasValidCsrfToken, clearCookie } from '@process/webserver/middleware/csrfClient';
+import {
+  withCsrfToken,
+  hasValidCsrfToken,
+  clearCookie,
+  captureCsrfTokenFromResponse,
+  clearCsrfSessionToken,
+} from '@process/webserver/middleware/csrfClient';
 import { CSRF_COOKIE_NAME } from '@process/webserver/config/constants';
 
 type AuthStatus = 'checking' | 'authenticated' | 'unauthenticated';
@@ -54,7 +60,8 @@ function clearAuthCache(): void {
   if (typeof window === 'undefined') return;
 
   try {
-    // Clear CSRF cookie
+    // Clear CSRF cookie + session cache (tiny-csrf header token)
+    clearCsrfSessionToken();
     clearCookie(CSRF_COOKIE_NAME);
     clearCookie(CSRF_COOKIE_NAME, '/');
 
@@ -79,6 +86,8 @@ async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> 
       credentials: 'include',
       signal,
     });
+
+    captureCsrfTokenFromResponse(response);
 
     if (!response.ok) {
       return null;
@@ -164,11 +173,23 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         body: JSON.stringify(withCsrfToken({ username, password, remember })),
       });
 
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) {
+        console.error('[Auth] Login response is not JSON:', contentType, response.status);
+        return {
+          success: false,
+          message: 'WebUI API unavailable. Ensure WebUI is running and refresh the page.',
+          code: 'serverError',
+        };
+      }
+
       const data = (await response.json()) as {
         success: boolean;
         message?: string;
         user?: AuthUser;
       };
+
+      captureCsrfTokenFromResponse(response);
 
       if (!response.ok || !data.success || !data.user) {
         let code: LoginErrorCode = 'unknown';

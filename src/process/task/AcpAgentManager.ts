@@ -9,6 +9,7 @@ import { transformMessage } from '@/common/chat/chatLib';
 import { ONE_FILES_MARKER } from '@/common/config/constants';
 import type { IResponseMessage } from '@/common/adapter/ipcBridge';
 import { parseError, uuid } from '@/common/utils';
+import { resolveAcpContextLimit } from '@/common/utils/resolveAcpContextLimit';
 import type {
   AcpBackend,
   AcpModelInfo,
@@ -38,8 +39,9 @@ import { hasCronCommands } from './CronCommandDetector';
 import { skillSuggestWatcher } from '@process/services/cron/SkillSuggestWatcher';
 import { extractAndStripThinkTags } from './ThinkTagDetector';
 import type { AgentKillReason } from './IAgentManager';
-import { hasNativeSkillSupport } from '@/common/types/acpTypes';
-import { prepareFirstMessageWithSkillsIndex } from '@process/task/agentUtils';
+import { applyAgentToolkitFirstMessage } from '@process/services/agentToolkit/firstMessage';
+import { ensureCodegraphWorkspaceIndexed } from '@process/services/agentToolkit/codegraph';
+import { shouldAutoInitCodegraph } from '@process/services/agentToolkit/workspace';
 import { extractTextFromMessage, processCronInMessage } from './MessageMiddleware';
 
 interface AcpAgentManagerData {
@@ -274,6 +276,10 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
         // backend === 'custom' but no customAgentId - this is an invalid state
         // 自定义后端但缺少 customAgentId - 这是无效状态
         mainWarn('[AcpAgentManager]', 'Custom backend specified but customAgentId is missing');
+      }
+
+      if (data.workspace && (await shouldAutoInitCodegraph(data.workspace, data.customWorkspace))) {
+        void ensureCodegraphWorkspaceIndexed(data.workspace);
       }
 
       this.agent = new AcpAgent({
@@ -750,19 +756,17 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
         // 因此自定义工作空间或不支持原生 skill 发现的 backend 都需要通过 prompt 注入 skills。
         // So custom workspaces or backends without native skill discovery need prompt injection.
         if (this.isFirstMessage) {
-          const useNativeSkills = hasNativeSkillSupport(this.options.backend) && !this.options.customWorkspace;
-          if (useNativeSkills) {
-            // Native skill discovery via workspace symlinks — only inject preset rules
-            if (this.options.presetContext) {
-              contentToSend = `[Assistant Rules - You MUST follow these instructions]\n${this.options.presetContext}\n\n[User Request]\n${contentToSend}`;
-            }
-          } else {
-            // Custom workspace or no native support — inject rules + skills via prompt
-            contentToSend = await prepareFirstMessageWithSkillsIndex(contentToSend, {
+          contentToSend = await applyAgentToolkitFirstMessage(
+            contentToSend,
+            {
               presetContext: this.options.presetContext,
               enabledSkills: this.options.enabledSkills,
-            });
-          }
+            },
+            {
+              backend: this.options.backend,
+              customWorkspace: this.options.customWorkspace,
+            }
+          );
         }
 
         const result = await this.agent.sendMessage({
@@ -1196,10 +1200,12 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
       const result = db.getConversation(this.conversation_id);
       if (result.success && result.data && result.data.type === 'acp') {
         const conversation = result.data;
+        const modelId = this.persistedModelId ?? conversation.extra?.currentModelId ?? null;
+        const resolvedLimit = resolveAcpContextLimit(usage.size, modelId);
         const updatedExtra = {
           ...conversation.extra,
           lastTokenUsage: { totalTokens: usage.used },
-          lastContextLimit: usage.size,
+          lastContextLimit: resolvedLimit > 0 ? resolvedLimit : usage.size,
         };
         db.updateConversation(this.conversation_id, {
           extra: updatedExtra,

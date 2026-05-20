@@ -418,6 +418,7 @@ export const ACP_BACKENDS_ALL: Record<AcpBackendAll, AcpBackendConfig> = {
     enabled: true, // ✅ Augment Code CLI，使用 `auggie --acp` 启动
     supportsStreaming: false,
     acpArgs: ['--acp'], // auggie 使用 --acp flag
+    skillsDirs: ['.augment/skills'],
   },
   kimi: {
     id: 'kimi',
@@ -437,6 +438,7 @@ export const ACP_BACKENDS_ALL: Record<AcpBackendAll, AcpBackendConfig> = {
     enabled: true, // ✅ OpenCode CLI，使用 `opencode acp` 启动
     supportsStreaming: false,
     acpArgs: ['acp'], // opencode 使用 acp 子命令
+    skillsDirs: ['.opencode/skills'],
   },
   droid: {
     id: 'droid',
@@ -457,6 +459,7 @@ export const ACP_BACKENDS_ALL: Record<AcpBackendAll, AcpBackendConfig> = {
     enabled: true, // ✅ GitHub Copilot CLI，使用 `copilot --acp --stdio` 启动
     supportsStreaming: false,
     acpArgs: ['--acp', '--stdio'], // copilot 使用 --acp --stdio 启动 ACP mode
+    skillsDirs: ['.github/skills'],
   },
   qoder: {
     id: 'qoder',
@@ -514,6 +517,7 @@ export const ACP_BACKENDS_ALL: Record<AcpBackendAll, AcpBackendConfig> = {
     enabled: true, // ✅ Kiro CLI, launched via `kiro-cli acp`
     supportsStreaming: false,
     acpArgs: ['acp'], // Kiro uses `kiro-cli acp` subcommand
+    skillsDirs: ['.kiro/skills'],
   },
   remote: {
     id: 'remote',

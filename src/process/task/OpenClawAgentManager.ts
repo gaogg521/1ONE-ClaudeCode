@@ -19,10 +19,16 @@ import { skillSuggestWatcher } from '@process/services/cron/SkillSuggestWatcher'
 import BaseAgentManager from '@process/task/BaseAgentManager';
 import { IpcAgentEventEmitter } from '@process/task/IpcAgentEventEmitter';
 import { teamEventBus } from '@process/team/teamEventBus';
+import { applyAgentToolkitFirstMessage } from '@process/services/agentToolkit/firstMessage';
+import { ensureCodegraphWorkspaceIndexed } from '@process/services/agentToolkit/codegraph';
+import { shouldAutoInitCodegraph } from '@process/services/agentToolkit/workspace';
 
 export interface OpenClawAgentManagerData {
   conversation_id: string;
   workspace?: string;
+  customWorkspace?: boolean;
+  enabledSkills?: string[];
+  presetContext?: string;
   backend?: AcpBackendAll;
   agentName?: string;
   /** Gateway configuration */
@@ -82,6 +88,9 @@ class OpenClawAgentManager extends BaseAgentManager<OpenClawAgentManagerData> {
     this.agent = new OpenClawAgent(config);
 
     try {
+      if (data.workspace && (await shouldAutoInitCodegraph(data.workspace, data.customWorkspace))) {
+        void ensureCodegraphWorkspaceIndexed(data.workspace);
+      }
       await this.agent.start();
       return this.agent;
     } catch (error) {
@@ -233,9 +242,23 @@ class OpenClawAgentManager extends BaseAgentManager<OpenClawAgentManagerData> {
         addMessage(this.conversation_id, userMessage);
       }
 
-      // Send message to agent (use agentContent if provided, e.g. with injected skills)
+      let agentContent = data.agentContent || data.content;
+      if (this.isFirstMessage && !data.agentContent) {
+        agentContent = await applyAgentToolkitFirstMessage(
+          data.content,
+          {
+            presetContext: this.options.presetContext,
+            enabledSkills: this.options.enabledSkills,
+          },
+          { backend: 'openclaw-gateway', customWorkspace: this.options.customWorkspace, fullSkillContent: true }
+        );
+        this.isFirstMessage = false;
+      } else if (this.isFirstMessage) {
+        this.isFirstMessage = false;
+      }
+
       const result = await this.agent.sendMessage({
-        content: data.agentContent || data.content,
+        content: agentContent,
         files: data.files,
         msg_id: data.msg_id,
       });

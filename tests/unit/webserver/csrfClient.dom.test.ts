@@ -12,6 +12,8 @@ import {
   clearAllCookies,
   withCsrfToken,
   withCsrfHeader,
+  captureCsrfTokenFromResponse,
+  clearCsrfSessionToken,
 } from '@/process/webserver/middleware/csrfClient';
 import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from '@/process/webserver/config/constants';
 
@@ -25,6 +27,7 @@ Object.defineProperty(document, 'cookie', {
 
 describe('csrfClient', () => {
   beforeEach(() => {
+    clearCsrfSessionToken();
     // Clear all cookies before each test
     Object.keys(mockCookies).forEach((key) => {
       delete mockCookies[key];
@@ -38,6 +41,16 @@ describe('csrfClient', () => {
       delete mockCookies[key];
     });
     document.cookie = '';
+  });
+
+  describe('captureCsrfTokenFromResponse', () => {
+    it('stores token from x-csrf-token response header', () => {
+      const response = new Response(null, {
+        headers: { [CSRF_HEADER_NAME]: 'header-csrf-token' },
+      });
+      captureCsrfTokenFromResponse(response);
+      expect(getCsrfToken()).toBe('header-csrf-token');
+    });
   });
 
   describe('getCsrfToken', () => {

@@ -8,7 +8,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { execSync } from 'child_process';
-import { networkInterfaces } from 'os';
+import { resolveLanIp } from '@/common/utils/resolveLanIp';
 import { AuthService } from '@process/webserver/auth/service/AuthService';
 import { UserRepository } from '@process/webserver/auth/repository/UserRepository';
 import { AUTH_CONFIG, SERVER_CONFIG } from './config/constants';
@@ -58,26 +58,11 @@ export function clearInitialAdminPassword(): void {
 }
 
 /**
- * 获取局域网 IP 地址
- * Get LAN IP address using os.networkInterfaces()
+ * 获取局域网 IP 地址（优先无线/有线物理网卡，排除 VMware 等虚拟网卡）
+ * Get LAN IP address (prefer physical WLAN/Ethernet, skip virtual adapters)
  */
 function getLanIP(): string | null {
-  const nets = networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    const netInfo = nets[name];
-    if (!netInfo) continue;
-
-    for (const net of netInfo) {
-      // 跳过内部地址（127.0.0.1）和 IPv6
-      // Skip internal addresses (127.0.0.1) and IPv6
-      const isIPv4 = net.family === 'IPv4';
-      const isNotInternal = !net.internal;
-      if (isIPv4 && isNotInternal) {
-        return net.address;
-      }
-    }
-  }
-  return null;
+  return resolveLanIp();
 }
 
 /**

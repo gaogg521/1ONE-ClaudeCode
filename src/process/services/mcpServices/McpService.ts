@@ -15,6 +15,7 @@ import { GeminiMcpAgent } from './agents/GeminiMcpAgent';
 import { OneCmdMcpAgent } from './agents/OneCmdMcpAgent';
 import { CodexMcpAgent } from './agents/CodexMcpAgent';
 import { OpencodeMcpAgent } from './agents/OpencodeMcpAgent';
+import { CopilotMcpAgent } from './agents/CopilotMcpAgent';
 import { AionrsMcpAgent } from './agents/OneCmdAionrsMcpAgent';
 import type { IMcpProtocol, DetectedMcpServer, McpConnectionTestResult, McpSyncResult, McpSource } from './McpProtocol';
 
@@ -92,6 +93,7 @@ export class McpService {
       ['1one', new OneCmdMcpAgent()], // 1ONE 本地 @office-ai/aioncli-core
       ['codex', new CodexMcpAgent()],
       ['opencode', new OpencodeMcpAgent()],
+      ['copilot', new CopilotMcpAgent()],
       ['aionrs', new AionrsMcpAgent()], // Aion CLI (Rust binary, TOML config)
     ]);
   }

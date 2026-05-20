@@ -1340,6 +1340,36 @@ const migration_v28: IMigration = {
 };
 
 /**
+ * Migration v28 -> v29: Enterprise invite codes for joining a tenant
+ */
+const migration_v29: IMigration = {
+  version: 29,
+  name: 'Add tenant_invites for enterprise join',
+  up: (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS tenant_invites (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      code TEXT NOT NULL UNIQUE,
+      created_by TEXT NOT NULL,
+      max_uses INTEGER,
+      use_count INTEGER NOT NULL DEFAULT 0,
+      expires_at INTEGER,
+      created_at INTEGER NOT NULL,
+      revoked INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_tenant_invites_tenant ON tenant_invites(tenant_id, created_at DESC)');
+    console.log('[Migration v29] Added tenant_invites table');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_tenant_invites_tenant');
+    db.exec('DROP TABLE IF EXISTS tenant_invites');
+    console.log('[Migration v29] Rolled back tenant_invites');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -1352,6 +1382,7 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v26,
   migration_v27,
   migration_v28,
+  migration_v29,
 ];
 
 /**

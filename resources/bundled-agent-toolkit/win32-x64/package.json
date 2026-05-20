@@ -1,0 +1,8 @@
+{
+  "name": "1one-bundled-agent-toolkit",
+  "private": true,
+  "dependencies": {
+    "@colbymchenry/codegraph": "0.7.9",
+    "agent-browser": "0.27.0"
+  }
+}

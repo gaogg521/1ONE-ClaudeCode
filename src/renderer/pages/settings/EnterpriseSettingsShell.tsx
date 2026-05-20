@@ -23,6 +23,8 @@ import {
   postEnterpriseElevate,
   postEnterpriseElevateRevoke,
 } from '@/renderer/utils/enterpriseElevationApi';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import WebuiManagementModePanel from '@/renderer/pages/settings/WebuiSettings/WebuiManagementModePanel';
 
 const VERIFY_CHOICE_STORAGE_KEY = '1one-enterprise-elevate-verify-choice';
 
@@ -106,6 +108,15 @@ const EnterpriseSettingsShell: React.FC = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const isDesktop = isElectronDesktop();
+  const {
+    loading: enterpriseModeLoading,
+    hasJoinedEnterprise,
+    managementMode,
+    showEnterpriseSettingsNav,
+    openEnterpriseAdminInBrowser,
+    webuiApiBase,
+  } = useWebuiEnterpriseMode();
 
   const [status, setStatus] = useState<'loading' | 'ready'>('loading');
   const [eligible, setEligible] = useState(false);
@@ -207,6 +218,8 @@ const EnterpriseSettingsShell: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (enterpriseModeLoading || isDesktop) return;
+    if (!hasJoinedEnterprise || managementMode !== 'enterprise') return;
     setStatus('loading');
     loadElevation().catch((e: unknown) => {
       let msg: string;
@@ -237,7 +250,7 @@ const EnterpriseSettingsShell: React.FC = () => {
       setElevated(false);
       setSecondaryMethods([]);
     });
-  }, [loadElevation, t]);
+  }, [enterpriseModeLoading, hasJoinedEnterprise, isDesktop, loadElevation, managementMode, t]);
 
   const fullAccess = eligible && elevated;
 
@@ -273,17 +286,34 @@ const EnterpriseSettingsShell: React.FC = () => {
   }, [logout, navigate, t]);
 
   useEffect(() => {
-    if (status !== 'ready') return;
+    if (enterpriseModeLoading) return;
+    if (!hasJoinedEnterprise || managementMode !== 'enterprise') {
+      void navigate('/settings/webui', { replace: true });
+    }
+  }, [enterpriseModeLoading, hasJoinedEnterprise, managementMode, navigate]);
+
+  useEffect(() => {
+    if (status !== 'ready' || enterpriseModeLoading) return;
+    if (!showEnterpriseSettingsNav) return;
     const path = location.pathname;
     if (!eligible || !elevated) {
       if (!path.endsWith('/settings/enterprise/users')) {
         void navigate('/settings/enterprise/users', { replace: true });
       }
     }
-  }, [eligible, elevated, status, location.pathname, navigate]);
+  }, [
+    eligible,
+    elevated,
+    enterpriseModeLoading,
+    location.pathname,
+    navigate,
+    showEnterpriseSettingsNav,
+    status,
+  ]);
 
   const activeTab = useMemo(() => {
     if (location.pathname.includes('/settings/enterprise/auth')) return 'auth';
+    if (location.pathname.includes('/settings/enterprise/invites')) return 'invites';
     if (location.pathname.includes('/settings/enterprise/teams')) return 'teams';
     return 'users';
   }, [location.pathname]);
@@ -297,6 +327,7 @@ const EnterpriseSettingsShell: React.FC = () => {
         return;
       }
       if (key === 'auth') void navigate('/settings/enterprise/auth');
+      else if (key === 'invites') void navigate('/settings/enterprise/invites');
       else if (key === 'teams') void navigate('/settings/enterprise/teams');
       else void navigate('/settings/enterprise/users');
     },
@@ -360,6 +391,36 @@ const EnterpriseSettingsShell: React.FC = () => {
     [status, eligible, elevated, loadElevation]
   );
 
+  if (enterpriseModeLoading) {
+    return (
+      <SettingsPageWrapper>
+        <div className='flex justify-center py-40px'>
+          <Spin />
+        </div>
+      </SettingsPageWrapper>
+    );
+  }
+
+  if (!hasJoinedEnterprise || managementMode !== 'enterprise') {
+    return null;
+  }
+
+  if (isDesktop) {
+    return (
+      <SettingsPageWrapper>
+        <WebuiManagementModePanel />
+        <Typography.Paragraph type='secondary' className='mt-12px text-13px'>
+          {t('settings.webui.enterpriseDesktopOnlyBrowser', {
+            defaultValue: '桌面应用内不提供完整企业后台，请使用浏览器打开 WebUI 进行管理。',
+          })}
+        </Typography.Paragraph>
+        <Button type='primary' disabled={!webuiApiBase} onClick={() => void openEnterpriseAdminInBrowser()}>
+          {t('settings.webui.openEnterpriseInBrowser', { defaultValue: '在浏览器中打开企业后台' })}
+        </Button>
+      </SettingsPageWrapper>
+    );
+  }
+
   return (
     <EnterpriseGateProvider value={gateValue}>
       <SettingsPageWrapper>
@@ -414,6 +475,10 @@ const EnterpriseSettingsShell: React.FC = () => {
             <Tabs.TabPane
               key='auth'
               title={t('settings.authProviders.enterprisePageTitle', { defaultValue: '系统配置' })}
+            />
+            <Tabs.TabPane
+              key='invites'
+              title={t('settings.webui.invitesTab', { defaultValue: '邀请码' })}
             />
           </Tabs>
         ) : (

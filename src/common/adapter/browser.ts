@@ -149,10 +149,9 @@ if (win.electronAPI) {
             return;
           }
 
-          // 短暂延迟后跳转到登录页，以便显示 UI 反馈
-          // Redirect to login page after a short delay to show any UI feedback
+          // HashRouter: use #/login — pathname /login causes /login#/login
           setTimeout(() => {
-            window.location.href = '/login';
+            window.location.replace(`${window.location.origin}/#/login`);
           }, 1000);
 
           return;
@@ -189,7 +188,7 @@ if (win.electronAPI) {
           return;
         }
         setTimeout(() => {
-          window.location.href = '/login';
+          window.location.replace(`${window.location.origin}/#/login`);
         }, 500);
         return;
       }

@@ -1,0 +1,15 @@
+{
+  "platform": "win32",
+  "arch": "x64",
+  "generatedAt": "2026-05-19T09:04:51.616Z",
+  "packages": {
+    "codegraph": {
+      "version": "0.7.9",
+      "cli": "node_modules/@colbymchenry/codegraph/dist/bin/codegraph.js"
+    },
+    "agent-browser": {
+      "version": "0.27.0",
+      "cli": "node_modules/agent-browser/bin/agent-browser.js"
+    }
+  }
+}

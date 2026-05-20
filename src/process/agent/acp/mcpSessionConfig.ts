@@ -74,6 +74,52 @@ function shouldInjectBuiltinServer(server: IMcpServer): boolean {
   return server.status === undefined || server.status === 'connected';
 }
 
+function shouldInjectEnabledServer(server: IMcpServer): boolean {
+  if (!server.enabled) {
+    return false;
+  }
+  if (server.status === 'disconnected' || server.status === 'error') {
+    return false;
+  }
+  return true;
+}
+
+function mapServerToAcpSession(
+  server: IMcpServer,
+  effectiveCapabilities: AcpMcpCapabilities
+): AcpSessionMcpServer | null {
+  switch (server.transport.type) {
+    case 'stdio':
+      if (!effectiveCapabilities.stdio) return null;
+      return {
+        type: 'stdio',
+        name: server.name,
+        command: server.transport.command,
+        args: server.transport.args || [],
+        env: toNameValueEntries(server.transport.env) ?? [],
+      };
+    case 'http':
+    case 'streamable_http':
+      if (!effectiveCapabilities.http) return null;
+      return {
+        type: 'http',
+        name: server.name,
+        url: server.transport.url,
+        headers: toNameValueEntries(server.transport.headers),
+      };
+    case 'sse':
+      if (!effectiveCapabilities.sse) return null;
+      return {
+        type: 'sse',
+        name: server.name,
+        url: server.transport.url,
+        headers: toNameValueEntries(server.transport.headers),
+      };
+    default:
+      return null;
+  }
+}
+
 export function buildBuiltinAcpSessionMcpServers(
   mcpServers: IMcpServer[] | undefined | null,
   capabilities: Partial<AcpMcpCapabilities> = DEFAULT_ACP_MCP_CAPABILITIES
@@ -89,38 +135,27 @@ export function buildBuiltinAcpSessionMcpServers(
 
   return mcpServers
     .filter(shouldInjectBuiltinServer)
-    .map((server): AcpSessionMcpServer | null => {
-      switch (server.transport.type) {
-        case 'stdio':
-          if (!effectiveCapabilities.stdio) return null;
-          return {
-            type: 'stdio',
-            name: server.name,
-            command: server.transport.command,
-            args: server.transport.args || [],
-            env: toNameValueEntries(server.transport.env) ?? [],
-          };
-        case 'http':
-        case 'streamable_http':
-          if (!effectiveCapabilities.http) return null;
-          return {
-            type: 'http',
-            name: server.name,
-            url: server.transport.url,
-            headers: toNameValueEntries(server.transport.headers),
-          };
-        case 'sse':
-          if (!effectiveCapabilities.sse) return null;
-          return {
-            type: 'sse',
-            name: server.name,
-            url: server.transport.url,
-            headers: toNameValueEntries(server.transport.headers),
-          };
-        default:
-          return null;
-      }
-    })
+    .map((server) => mapServerToAcpSession(server, effectiveCapabilities))
+    .filter((server): server is AcpSessionMcpServer => server !== null);
+}
+
+/** Inject all enabled MCP servers from 1ONE config into ACP session/new (when agent toolkit is on). */
+export function buildEnabledAcpSessionMcpServers(
+  mcpServers: IMcpServer[] | undefined | null,
+  capabilities: Partial<AcpMcpCapabilities> = DEFAULT_ACP_MCP_CAPABILITIES
+): AcpSessionMcpServer[] {
+  if (!Array.isArray(mcpServers) || mcpServers.length === 0) {
+    return [];
+  }
+
+  const effectiveCapabilities: AcpMcpCapabilities = {
+    ...DEFAULT_ACP_MCP_CAPABILITIES,
+    ...capabilities,
+  };
+
+  return mcpServers
+    .filter(shouldInjectEnabledServer)
+    .map((server) => mapServerToAcpSession(server, effectiveCapabilities))
     .filter((server): server is AcpSessionMcpServer => server !== null);
 }
 

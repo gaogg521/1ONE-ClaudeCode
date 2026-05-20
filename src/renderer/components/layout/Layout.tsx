@@ -23,6 +23,7 @@ import { useMultiAgentDetection } from '@renderer/hooks/agent/useMultiAgentDetec
 import { cleanupSiderTooltips } from '@renderer/utils/ui/siderTooltip';
 import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShortcuts';
 import { isElectronDesktop } from '@renderer/utils/platform';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import '@renderer/styles/layout.css';
 
 const useDebug = () => {
@@ -72,8 +73,11 @@ const SidebarNavIcons: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { showEnterpriseSettingsNav } = useWebuiEnterpriseMode();
   const role = user?.role ?? 'member';
-  const canSeeAdmin = role === 'system_admin' || role === 'org_admin' || role === 'admin';
+  const canSeeAdmin =
+    showEnterpriseSettingsNav &&
+    (role === 'system_admin' || role === 'org_admin' || role === 'admin');
   const items = canSeeAdmin ? NAV_ITEMS : NAV_ITEMS.filter((x) => x.path !== '/settings/enterprise');
   return (
     <div style={{

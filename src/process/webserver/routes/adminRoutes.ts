@@ -18,6 +18,14 @@ import { testLdapConnection, type LdapProviderConfig } from '../auth/providers/L
 import { testFeishuAppCredentials } from '../auth/providers/FeishuAuthProvider';
 import { requireEnterpriseElevation } from '../auth/middleware/enterpriseElevationMiddleware';
 import { isEnterpriseAdminRole, isSystemAdminRole } from '../auth/enterpriseRoles';
+import { isEnterpriseTenantId } from '@/common/config/webuiEnterpriseConfig';
+import {
+  EnterpriseJoinError,
+  createEnterpriseInvite,
+  createEnterpriseTenant,
+  listEnterpriseInvites,
+  revokeEnterpriseInvite,
+} from '../auth/enterpriseJoinService';
 
 const PROTECTED_IDS = new Set(['system_default_user']);
 
@@ -511,4 +519,118 @@ export function registerAdminRoutes(app: Express): void {
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
+
+  // POST /api/admin/enterprise/setup — create tenant and assign current user (system_admin on default only)
+  app.post(
+    '/api/admin/enterprise/setup',
+    apiRateLimiter,
+    auth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const name = String((req.body as { name?: unknown })?.name ?? '');
+        const data = await createEnterpriseTenant(req.user!.id, name);
+        res.json({ success: true, data });
+      } catch (err) {
+        if (err instanceof EnterpriseJoinError) {
+          res.status(400).json({ success: false, code: err.code, message: err.message });
+          return;
+        }
+        console.error('[AdminRoute] enterprise setup error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
+
+  // GET /api/admin/enterprise/invites
+  app.get(
+    '/api/admin/enterprise/invites',
+    apiRateLimiter,
+    auth,
+    requireAdmin,
+    requireEnterpriseElevation,
+    async (req: Request, res: Response) => {
+      try {
+        const tenantId = req.user?.tenant_id ?? 'default';
+        if (!isEnterpriseTenantId(tenantId)) {
+          res.status(400).json({ success: false, message: 'Join or create an enterprise first' });
+          return;
+        }
+        const invites = await listEnterpriseInvites(tenantId);
+        res.json({
+          success: true,
+          data: invites.map((inv) => ({
+            ...inv,
+            display_code:
+              inv.code.length > 4 ? `${inv.code.slice(0, 4)}-${inv.code.slice(4)}` : inv.code,
+          })),
+        });
+      } catch (err) {
+        console.error('[AdminRoute] list enterprise invites error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
+
+  // POST /api/admin/enterprise/invites
+  app.post(
+    '/api/admin/enterprise/invites',
+    apiRateLimiter,
+    auth,
+    requireAdmin,
+    requireEnterpriseElevation,
+    async (req: Request, res: Response) => {
+      try {
+        const tenantId = req.user?.tenant_id ?? 'default';
+        if (!isEnterpriseTenantId(tenantId)) {
+          res.status(400).json({ success: false, message: 'Join or create an enterprise first' });
+          return;
+        }
+        const body = req.body as { maxUses?: unknown; expiresInDays?: unknown };
+        const maxUses =
+          typeof body.maxUses === 'number' && body.maxUses > 0 ? Math.floor(body.maxUses) : null;
+        const expiresInDays =
+          typeof body.expiresInDays === 'number' && body.expiresInDays > 0
+            ? Math.floor(body.expiresInDays)
+            : null;
+        const { invite, displayCode } = await createEnterpriseInvite({
+          tenantId,
+          createdBy: req.user!.id,
+          maxUses,
+          expiresInDays,
+        });
+        res.json({ success: true, data: { invite, displayCode } });
+      } catch (err) {
+        console.error('[AdminRoute] create enterprise invite error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
+
+  // DELETE /api/admin/enterprise/invites/:id
+  app.delete(
+    '/api/admin/enterprise/invites/:id',
+    apiRateLimiter,
+    auth,
+    requireAdmin,
+    requireEnterpriseElevation,
+    async (req: Request, res: Response) => {
+      try {
+        const tenantId = req.user?.tenant_id ?? 'default';
+        if (!isEnterpriseTenantId(tenantId)) {
+          res.status(400).json({ success: false, message: 'Join or create an enterprise first' });
+          return;
+        }
+        await revokeEnterpriseInvite(tenantId, String(req.params.id));
+        res.json({ success: true });
+      } catch (err) {
+        if (err instanceof EnterpriseJoinError) {
+          res.status(400).json({ success: false, code: err.code, message: err.message });
+          return;
+        }
+        console.error('[AdminRoute] revoke enterprise invite error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
 }

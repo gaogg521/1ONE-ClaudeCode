@@ -15,6 +15,12 @@
   "languageToggle": "切换语言",
   "footerPrimary": "命令行 AI 的现代化体验",
   "footerSecondary": "高效且优雅",
+  "standalone": {
+    "heroTitle": "WebUI 远程访问",
+    "brandDesc": "使用本机管理员账户登录，在手机或远程浏览器中管理 1ONE 会话与任务。",
+    "cardTitle": "登录 WebUI",
+    "cardSubtitle": "用户名与密码见「设置 → 远程连接 → WebUI」"
+  },
   "enterprise": {
     "tag": "1ONE",
     "heroTitle": "企业级 AI 工作台",

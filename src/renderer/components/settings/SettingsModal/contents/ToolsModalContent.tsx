@@ -22,6 +22,7 @@ import AionSelect from '@/renderer/components/base/AionSelect';
 import AddMcpServerModal from '@/renderer/pages/settings/components/AddMcpServerModal';
 import McpAgentStatusDisplay from '@/renderer/pages/settings/ToolsSettings/McpAgentStatusDisplay';
 import McpServerItem from '@/renderer/pages/settings/ToolsSettings/McpServerItem';
+import AgentToolkitSettingsSection from '@/renderer/pages/settings/ToolsSettings/AgentToolkitSettingsSection';
 import {
   useMcpServers,
   useMcpAgentStatus,
@@ -1027,6 +1028,7 @@ const ToolsModalContent: React.FC = () => {
               </AionScrollArea>
             </div>
           </div>
+          <AgentToolkitSettingsSection />
           {/* 图像生成 */}
           <ImageGenerationSettingsSection
             imageGenerationModel={imageGenerationModel}

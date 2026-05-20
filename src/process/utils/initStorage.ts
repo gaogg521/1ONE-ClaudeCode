@@ -33,10 +33,14 @@ import { getDatabase } from '../services/database/export';
 import type { AcpBackendConfig } from '@/common/types/acpTypes';
 import { migrateFromElectronConfig, importConfigFromFile } from './configMigration';
 import {
+  BUILTIN_CODEGRAPH_ID,
   BUILTIN_IMAGE_GEN_ID,
   BUILTIN_IMAGE_GEN_LEGACY_NAMES,
   BUILTIN_IMAGE_GEN_NAME,
 } from '../resources/builtinMcp/constants';
+import { buildCodegraphMcpServer } from '@process/services/agentToolkit/codegraph';
+import { getAgentToolkitConfig } from '@process/services/agentToolkit/config';
+import { syncVendoredBuiltinSkills } from '@process/services/agentToolkit/syncVendoredSkills';
 import { readSkillMetadata, resolveSkillRuntimeFiles } from '@process/extensions/resolvers/utils/skillMetadata';
 // Platform and architecture types (moved from deleted updateConfig)
 type PlatformType = 'win32' | 'darwin' | 'linux';
@@ -449,6 +453,12 @@ const initBuiltinAssistantRules = async (): Promise<void> => {
     } catch (error) {
       console.warn(`[1ONE ClaudeCode] Failed to sync builtin skills directory:`, error);
     }
+
+    try {
+      await syncVendoredBuiltinSkills();
+    } catch (error) {
+      console.warn(`[1ONE ClaudeCode] Failed to sync vendored agent toolkit skills:`, error);
+    }
   }
 
   // Ensure user skills directory exists
@@ -783,6 +793,32 @@ const ensureBuiltinMcpServers = async (): Promise<void> => {
       changed = true;
     }
 
+    const toolkitConfig = await getAgentToolkitConfig();
+    const codegraphShouldEnable = toolkitConfig.enabled && toolkitConfig.codegraphEnabled;
+    const codegraphIdx = mcpServers.findIndex((s) => s.builtin === true && s.id === BUILTIN_CODEGRAPH_ID);
+    const codegraphServer = buildCodegraphMcpServer(now);
+    codegraphServer.enabled = codegraphShouldEnable;
+    if (codegraphIdx >= 0) {
+      const existing = mcpServers[codegraphIdx];
+      const existingStdio = existing.transport.type === 'stdio' ? existing.transport : null;
+      const targetStdio = codegraphServer.transport.type === 'stdio' ? codegraphServer.transport : null;
+      const needsUpdate =
+        existing.enabled !== codegraphShouldEnable ||
+        existingStdio?.command !== targetStdio?.command ||
+        (existingStdio?.args || []).join(' ') !== (targetStdio?.args || []).join(' ');
+      if (needsUpdate) {
+        mcpServers[codegraphIdx] = {
+          ...codegraphServer,
+          createdAt: existing.createdAt,
+          enabled: codegraphShouldEnable,
+        };
+        changed = true;
+      }
+    } else {
+      mcpServers.push(codegraphServer);
+      changed = true;
+    }
+
     if (changed) {
       await configFile.set('mcp.config', mcpServers);
       console.log('[1ONE ClaudeCode] Built-in MCP servers ensured');
@@ -1068,6 +1104,15 @@ const initStorage = async () => {
   // 4.2 Ensure built-in MCP servers exist and are up-to-date
   await ensureBuiltinMcpServers();
   mark('4.2 builtinMcpServers');
+
+  try {
+    const existingToolkit = await configFile.get('tools.agentToolkit').catch((): undefined => undefined);
+    if (!existingToolkit) {
+      await configFile.set('tools.agentToolkit', (await getAgentToolkitConfig(true)));
+    }
+  } catch (error) {
+    console.warn('[1ONE ClaudeCode] Failed to seed tools.agentToolkit config:', error);
+  }
 
   // 5. 初始化内置助手（Assistants）
   try {

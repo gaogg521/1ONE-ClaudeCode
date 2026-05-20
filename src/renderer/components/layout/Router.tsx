@@ -8,6 +8,7 @@ const SessionsPage = React.lazy(() => import('@renderer/pages/sessions'));
 const TasksPage = React.lazy(() => import('@renderer/pages/tasks'));
 const AdminUsers = React.lazy(() => import('@renderer/pages/admin/AdminUsers'));
 const AdminAuth = React.lazy(() => import('@renderer/pages/admin/AdminAuth'));
+const AdminInvites = React.lazy(() => import('@renderer/pages/admin/AdminInvites'));
 const AdminTeams = React.lazy(() => import('@renderer/pages/admin/AdminTeams'));
 const EnterpriseSettingsShell = React.lazy(() => import('@renderer/pages/settings/EnterpriseSettingsShell'));
 const HooksPage = React.lazy(() => import('@renderer/pages/hooks'));
@@ -115,6 +116,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
             <Route path='users' element={withRouteFallback(AdminUsers)} />
             <Route path='teams' element={withRouteFallback(AdminTeams)} />
             <Route path='auth' element={withRouteFallback(AdminAuth)} />
+            <Route path='invites' element={withRouteFallback(AdminInvites)} />
           </Route>
           {/* Legacy admin URLs → settings */}
           <Route path='/users' element={<Navigate to='/settings/enterprise/users' replace />} />

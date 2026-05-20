@@ -16,6 +16,8 @@ import { existsSync } from 'fs';
 import fs from 'fs/promises';
 import path from 'path';
 import { getSkillsDir, getBuiltinSkillsCopyDir, getAutoSkillsDir, getSystemDir } from './initStorage';
+import { ensureCodegraphWorkspaceIndexed } from '@process/services/agentToolkit/codegraph';
+import { shouldAutoInitCodegraph } from '@process/services/agentToolkit/workspace';
 import { computeOpenClawIdentityHash } from './openclawUtils';
 
 /**
@@ -191,6 +193,10 @@ export const createGeminiAgent = async (
     });
   }
 
+  if (await shouldAutoInitCodegraph(newWorkspace, finalCustomWorkspace)) {
+    void ensureCodegraphWorkspaceIndexed(newWorkspace);
+  }
+
   return {
     type: 'gemini',
     model,
@@ -238,6 +244,10 @@ export const createAcpAgent = async (options: ICreateConversationParams): Promis
       extraSkillPaths: extra.extraSkillPaths,
       excludeBuiltinSkills: extra.excludeBuiltinSkills,
     });
+  }
+
+  if (await shouldAutoInitCodegraph(workspace, customWorkspace)) {
+    void ensureCodegraphWorkspaceIndexed(workspace);
   }
 
   return {

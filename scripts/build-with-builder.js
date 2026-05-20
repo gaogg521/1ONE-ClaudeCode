@@ -517,6 +517,15 @@ try {
   // This only affects packaging assets; runtime integration will be added in a future PR.
   prepareBundledBun();
 
+  if (process.env.SKIP_BUNDLED_AGENT_TOOLKIT !== '1') {
+    execSync('node scripts/prepareBundledAgentToolkit.js', { stdio: 'inherit', env: process.env });
+  }
+
+  // 5a. Vendor agent toolkit skills (superpowers, agent-browser stub, etc.)
+  if (process.env.SKIP_AGENT_TOOLKIT_VENDOR !== '1') {
+    execSync('node scripts/vendor-agent-toolkit.mjs', { stdio: 'inherit', env: process.env });
+  }
+
   // 5b. Prepare hub resources (index.json + extension zips for offline fallback)
   execSync('node scripts/prepareHubResources.js', { stdio: 'inherit', env: process.env });
   // 5b. Prepare aionrs binary (Rust CLI for agent integration)

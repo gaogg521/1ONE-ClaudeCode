@@ -16,12 +16,16 @@ import { skillSuggestWatcher } from '@process/services/cron/SkillSuggestWatcher'
 import BaseAgentManager from '@process/task/BaseAgentManager';
 import { IpcAgentEventEmitter } from '@process/task/IpcAgentEventEmitter';
 import { teamEventBus } from '@process/team/teamEventBus';
+import { applyAgentToolkitFirstMessage } from '@process/services/agentToolkit/firstMessage';
+import { ensureCodegraphWorkspaceIndexed } from '@process/services/agentToolkit/codegraph';
+import { shouldAutoInitCodegraph } from '@process/services/agentToolkit/workspace';
 
 export interface NanoBotAgentManagerData {
   conversation_id: string;
   workspace?: string;
   customWorkspace?: boolean;
   enabledSkills?: string[];
+  presetContext?: string;
   presetAssistantId?: string;
   yoloMode?: boolean;
 }
@@ -29,11 +33,14 @@ export interface NanoBotAgentManagerData {
 class NanoBotAgentManager extends BaseAgentManager<NanoBotAgentManagerData> {
   agent!: NanobotAgent;
   bootstrap: Promise<NanobotAgent>;
+  private isFirstMessage = true;
+  private readonly options: NanoBotAgentManagerData;
 
   constructor(data: NanoBotAgentManagerData) {
     super('nanobot', data, new IpcAgentEventEmitter());
     this.conversation_id = data.conversation_id;
     this.workspace = data.workspace ?? '';
+    this.options = data;
 
     this.bootstrap = this.initAgent(data);
     // Prevent unhandled promise rejection when agent fails to start.
@@ -52,6 +59,9 @@ class NanoBotAgentManager extends BaseAgentManager<NanoBotAgentManagerData> {
     this.agent = new NanobotAgent(config);
 
     try {
+      if (data.workspace && (await shouldAutoInitCodegraph(data.workspace, data.customWorkspace))) {
+        void ensureCodegraphWorkspaceIndexed(data.workspace);
+      }
       await this.agent.start();
       return this.agent;
     } catch (error) {
@@ -115,11 +125,24 @@ class NanoBotAgentManager extends BaseAgentManager<NanoBotAgentManagerData> {
         addMessage(this.conversation_id, userMessage);
       }
 
+      let contentToSend = data.content;
+      if (this.isFirstMessage) {
+        contentToSend = await applyAgentToolkitFirstMessage(
+          contentToSend,
+          {
+            presetContext: this.options.presetContext,
+            enabledSkills: this.options.enabledSkills,
+          },
+          { backend: 'nanobot', customWorkspace: this.options.customWorkspace, fullSkillContent: true }
+        );
+        this.isFirstMessage = false;
+      }
+
       // Fire-and-forget: nanobot CLI blocks until completion, so we must not
       // await it here. The IPC response needs to return immediately so the
       // frontend can display the user message. Response and finish events
       // are emitted asynchronously via handleStreamEvent/handleSignalEvent.
-      this.agent.sendMessage({ content: data.content }).catch((error) => {
+      this.agent.sendMessage({ content: contentToSend }).catch((error) => {
         cronBusyGuard.setProcessing(this.conversation_id, false);
         const errorMsg = error instanceof Error ? error.message : String(error);
         this.emitErrorMessage(`Failed to send message: ${errorMsg}`);

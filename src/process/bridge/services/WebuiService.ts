@@ -4,13 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { networkInterfaces } from 'os';
+import { resolveLanIp } from '@/common/utils/resolveLanIp';
 import { createHash, randomInt } from 'crypto';
 import nodemailer from 'nodemailer';
 import type { IWebUIStatus } from '@/common/adapter/ipcBridge';
 import { AuthService } from '@process/webserver/auth/service/AuthService';
 import { UserRepository } from '@process/webserver/auth/repository/UserRepository';
 import { AUTH_CONFIG, SERVER_CONFIG } from '@process/webserver/config/constants';
+import { resolveEnterpriseContext } from '@process/webserver/auth/enterpriseContext';
+import type { EnterpriseContextSnapshot } from '@/common/config/webuiEnterpriseConfig';
 
 /**
  * WebUI 服务层 - 封装所有 WebUI 相关的业务逻辑
@@ -67,21 +69,7 @@ export class WebuiService {
    * Get LAN IP address
    */
   static getLanIP(): string | null {
-    const nets = networkInterfaces();
-    for (const name of Object.keys(nets)) {
-      const netInfo = nets[name];
-      if (!netInfo) continue;
-
-      for (const net of netInfo) {
-        // Node.js 18.4+ returns number (4/6), older versions return string ('IPv4'/'IPv6')
-        const isIPv4 = net.family === 'IPv4' || (net.family as unknown) === 4;
-        const isNotInternal = !net.internal;
-        if (isIPv4 && isNotInternal) {
-          return net.address;
-        }
-      }
-    }
-    return null;
+    return resolveLanIp();
   }
 
   /**
@@ -373,5 +361,35 @@ export class WebuiService {
 
     // Rotate JWT secret to invalidate all existing tokens after a privileged password reset.
     await AuthService.invalidateAllTokens();
+  }
+
+  /**
+   * Enterprise membership for the local WebUI instance (desktop IPC / pre-login).
+   * Uses the built-in system user row as the source of truth.
+   */
+  static async getEnterpriseContext(): Promise<EnterpriseContextSnapshot> {
+    const adminUser = await this.getAdminUser();
+    const ctx = await resolveEnterpriseContext(adminUser.tenant_id);
+    return {
+      ...ctx,
+      canCreateEnterprise: !ctx.joined && adminUser.role === 'system_admin',
+    };
+  }
+
+  static async previewEnterpriseInvite(code: string) {
+    const { previewEnterpriseInvite } = await import('@process/webserver/auth/enterpriseJoinService');
+    return previewEnterpriseInvite(code);
+  }
+
+  static async joinEnterpriseAsLocalAdmin(code: string) {
+    const { joinEnterpriseWithInvite } = await import('@process/webserver/auth/enterpriseJoinService');
+    const adminUser = await this.getAdminUser();
+    return joinEnterpriseWithInvite(adminUser.id, code);
+  }
+
+  static async createEnterpriseAsLocalAdmin(name: string) {
+    const { createEnterpriseTenant } = await import('@process/webserver/auth/enterpriseJoinService');
+    const adminUser = await this.getAdminUser();
+    return createEnterpriseTenant(adminUser.id, name);
   }
 }

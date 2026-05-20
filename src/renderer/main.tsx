@@ -18,6 +18,11 @@ import './utils/ui/runtimePatches';
 // Browser adapter setup
 import '@/common/adapter/browser';
 
+// WebUI HashRouter: normalize legacy pathname /login → #/login (avoids /login#/login)
+if (typeof window !== 'undefined' && window.location.pathname === '/login') {
+  window.location.replace(`${window.location.origin}/#/login${window.location.search}`);
+}
+
 // React and core dependencies
 import type { PropsWithChildren } from 'react';
 import React from 'react';

@@ -8,6 +8,8 @@ import { ipcBridge } from '@/common';
 import { transformMessage } from '@/common/chat/chatLib';
 import type { IResponseMessage } from '@/common/adapter/ipcBridge';
 import type { TokenUsageData } from '@/common/config/storage';
+import type { AcpModelInfo } from '@/common/types/acpTypes';
+import { resolveAcpContextLimit } from '@/common/utils/resolveAcpContextLimit';
 import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
 import type { ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -40,6 +42,15 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
   const [aiProcessing, setAiProcessing] = useState(false); // New loading state for AI response
   const [tokenUsage, setTokenUsage] = useState<TokenUsageData | null>(null);
   const [contextLimit, setContextLimit] = useState<number>(0);
+  const currentModelIdRef = useRef<string | null>(null);
+
+  const applyContextUsage = useCallback((used: number, reportedSize: number) => {
+    setTokenUsage({ totalTokens: used });
+    const resolved = resolveAcpContextLimit(reportedSize, currentModelIdRef.current);
+    if (resolved > 0) {
+      setContextLimit(resolved);
+    }
+  }, []);
 
   // Use refs to sync state for immediate access in event handlers
   const runningRef = useRef(running);
@@ -237,9 +248,17 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
           }
           addOrUpdateMessage(transformedMessage);
           break;
-        case 'acp_model_info':
-          // Model info updates are handled by AcpModelSelector, no action needed here
+        case 'acp_model_info': {
+          const modelInfo = message.data as AcpModelInfo;
+          if (modelInfo?.currentModelId) {
+            currentModelIdRef.current = modelInfo.currentModelId;
+            setContextLimit((prev) => {
+              const resolved = resolveAcpContextLimit(prev, modelInfo.currentModelId);
+              return resolved > 0 ? resolved : prev;
+            });
+          }
           break;
+        }
         case 'slash_commands_updated':
           // Slash commands became available (often during bootstrap when
           // agent_status events are suppressed). Update acpStatus so
@@ -249,10 +268,7 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
         case 'acp_context_usage': {
           const usageData = message.data as { used: number; size: number };
           if (usageData && typeof usageData.used === 'number') {
-            setTokenUsage({ totalTokens: usageData.used });
-            if (usageData.size > 0) {
-              setContextLimit(usageData.size);
-            }
+            applyContextUsage(usageData.used, usageData.size ?? 0);
           }
           break;
         }
@@ -303,7 +319,16 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
           break;
       }
     },
-    [conversation_id, addOrUpdateMessage, throttledSetThought, setThought, setRunning, setAiProcessing, setAcpStatus]
+    [
+      conversation_id,
+      addOrUpdateMessage,
+      throttledSetThought,
+      setThought,
+      setRunning,
+      setAiProcessing,
+      setAcpStatus,
+      applyContextUsage,
+    ]
   );
 
   useEffect(() => {
@@ -318,6 +343,7 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
     setAcpStatus(null);
     setTokenUsage(null);
     setContextLimit(0);
+    currentModelIdRef.current = null;
     hasContentInTurnRef.current = false;
     setHasHydratedRunningState(false);
 
@@ -344,13 +370,19 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
       setHasHydratedRunningState(true);
 
       // Restore persisted context usage data
-      if (res.type === 'acp' && res.extra?.lastTokenUsage) {
-        const { lastTokenUsage, lastContextLimit } = res.extra;
-        if (lastTokenUsage.totalTokens > 0) {
-          setTokenUsage(lastTokenUsage);
+      if (res.type === 'acp') {
+        const modelId = res.extra?.currentModelId;
+        if (typeof modelId === 'string' && modelId) {
+          currentModelIdRef.current = modelId;
         }
-        if (lastContextLimit && lastContextLimit > 0) {
-          setContextLimit(lastContextLimit);
+        if (res.extra?.lastTokenUsage) {
+          const { lastTokenUsage, lastContextLimit } = res.extra;
+          if (lastTokenUsage.totalTokens > 0) {
+            setTokenUsage(lastTokenUsage);
+          }
+          if (lastContextLimit && lastContextLimit > 0) {
+            setContextLimit(resolveAcpContextLimit(lastContextLimit, currentModelIdRef.current));
+          }
         }
       }
     });
