@@ -15,7 +15,6 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutContext } from '@renderer/hooks/context/LayoutContext';
-import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
 import { useNotificationClick } from '@renderer/hooks/system/useNotificationClick';
 import { useDirectorySelection } from '@renderer/hooks/file/useDirectorySelection';
@@ -56,29 +55,32 @@ const useDebug = () => {
   return { onClick };
 };
 
-const NAV_ITEMS = [
-  { icon: <CommentOne theme='outline' size={18} />, labelKey: 'nav.sessions', path: '/sessions', paths: ['/conversation'] },
-  { icon: <FolderOpen theme='outline' size={18} />, labelKey: 'nav.workspace', path: '/workspace' },
-  { icon: <Checklist theme='outline' size={18} />, labelKey: 'nav.tasks', path: '/tasks' },
-  { icon: <People theme='outline' size={18} />, labelKey: 'nav.admin', path: '/settings/enterprise' },
-  { icon: <Lightning theme='outline' size={18} />, labelKey: 'nav.hooks', path: '/hooks' },
-  { icon: <Server theme='outline' size={18} />, labelKey: 'nav.mcp', path: '/mcp' },
-  { icon: <Brain theme='outline' size={18} />, labelKey: 'nav.memory', path: '/memory' },
-  { icon: <AlarmClock theme='outline' size={18} />, labelKey: 'nav.scheduled', path: '/scheduled' },
-  { icon: <Setting theme='outline' size={18} />, labelKey: 'nav.globalSettings', path: '/settings' },
+type NavItem = {
+  icon: React.ReactNode;
+  labelKey: string;
+  labelDefault: string;
+  path: string;
+  paths?: string[];
+};
+
+const NAV_ITEMS: NavItem[] = [
+  { icon: <CommentOne theme='outline' size={18} />, labelKey: 'nav.sessions', labelDefault: 'Sessions', path: '/sessions', paths: ['/conversation'] },
+  { icon: <FolderOpen theme='outline' size={18} />, labelKey: 'nav.workspace', labelDefault: 'Workspace', path: '/workspace' },
+  { icon: <Checklist theme='outline' size={18} />, labelKey: 'nav.tasks', labelDefault: 'Tasks', path: '/tasks' },
+  { icon: <People theme='outline' size={18} />, labelKey: 'nav.enterpriseConsole', labelDefault: 'Enterprise', path: '/enterprise' },
+  { icon: <Lightning theme='outline' size={18} />, labelKey: 'nav.hooks', labelDefault: 'Hooks', path: '/hooks' },
+  { icon: <Server theme='outline' size={18} />, labelKey: 'nav.mcp', labelDefault: 'MCP', path: '/mcp' },
+  { icon: <Brain theme='outline' size={18} />, labelKey: 'nav.memory', labelDefault: 'Memory', path: '/memory' },
+  { icon: <AlarmClock theme='outline' size={18} />, labelKey: 'nav.scheduled', labelDefault: 'Scheduled', path: '/scheduled' },
+  { icon: <Setting theme='outline' size={18} />, labelKey: 'nav.globalSettings', labelDefault: 'Settings', path: '/settings' },
 ];
 
 const SidebarNavIcons: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { user } = useAuth();
-  const { showEnterpriseSettingsNav } = useWebuiEnterpriseMode();
-  const role = user?.role ?? 'member';
-  const canSeeAdmin =
-    showEnterpriseSettingsNav &&
-    (role === 'system_admin' || role === 'org_admin' || role === 'admin');
-  const items = canSeeAdmin ? NAV_ITEMS : NAV_ITEMS.filter((x) => x.path !== '/settings/enterprise');
+  const { showEnterpriseConsoleNav } = useWebuiEnterpriseMode();
+  const items = showEnterpriseConsoleNav ? NAV_ITEMS : NAV_ITEMS.filter((x) => x.path !== '/enterprise');
   return (
     <div style={{
       display: 'flex',
@@ -94,7 +96,7 @@ const SidebarNavIcons: React.FC = () => {
         const allPaths = [item.path, ...(item.paths ?? [])];
         const active = allPaths.some((p) => location.pathname.startsWith(p));
         return (
-          <Tooltip key={item.path} content={t(item.labelKey, { defaultValue: item.path })} position='right' mini>
+          <Tooltip key={item.path} content={t(item.labelKey, { defaultValue: item.labelDefault })} position='right' mini>
             <div
               onClick={() => navigate(item.path)}
               style={{

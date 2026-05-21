@@ -5,6 +5,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Alert, Button, Form, Input, Message, Tabs, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
@@ -13,6 +14,7 @@ import { isElectronDesktop } from '@/renderer/utils/platform';
 
 const WebuiJoinEnterprisePanel: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const isDesktop = isElectronDesktop();
   const {
     loading,
@@ -86,12 +88,13 @@ const WebuiJoinEnterprisePanel: React.FC = () => {
       );
       setInviteCode('');
       setPreviewName(null);
+      void navigate('/enterprise');
     } catch (e) {
       Message.error(mapJoinError(e));
     } finally {
       setJoinLoading(false);
     }
-  }, [inviteCode, isDesktop, joinWithInviteCode, mapJoinError, t, webuiApiBase]);
+  }, [inviteCode, joinWithInviteCode, mapJoinError, navigate, t, webuiApiBase]);
 
   const handleCreate = useCallback(async () => {
     const name = orgName.trim();
@@ -113,12 +116,13 @@ const WebuiJoinEnterprisePanel: React.FC = () => {
         })
       );
       setOrgName('');
+      void navigate('/enterprise');
     } catch (e) {
       Message.error(mapJoinError(e));
     } finally {
       setCreateLoading(false);
     }
-  }, [createEnterpriseOrganization, isDesktop, mapJoinError, orgName, t, webuiApiBase]);
+  }, [createEnterpriseOrganization, mapJoinError, navigate, orgName, t, webuiApiBase]);
 
   if (loading || hasJoinedEnterprise) {
     return null;

@@ -2,7 +2,8 @@ import loginLogo from '@renderer/assets/logos/brand/app.png';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '@/renderer/services/i18n';
-import { useNavigate } from 'react-router-dom';
+import { consumePostLoginRedirect, readRedirectFromSearch } from '@/renderer/utils/postLoginRedirect';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Button,
   Checkbox,
@@ -50,7 +51,14 @@ const deobfuscate = (text: string): string => {
 const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const { status, login, loginWithLdap } = useAuth();
+
+  const navigateAfterLogin = useCallback(() => {
+    const fromQuery = readRedirectFromSearch(location.search);
+    const target = fromQuery ?? consumePostLoginRedirect();
+    void navigate(target, { replace: true });
+  }, [location.search, navigate]);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -106,9 +114,9 @@ const LoginPage: React.FC = () => {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      void navigate('/guid', { replace: true });
+      navigateAfterLogin();
     }
-  }, [navigate, status]);
+  }, [navigateAfterLogin, status]);
 
   useEffect(() => {
     let cancelled = false;
@@ -208,7 +216,7 @@ const LoginPage: React.FC = () => {
         showMessage({ type: 'success', text: successText });
 
         window.setTimeout(() => {
-          void navigate('/guid', { replace: true });
+          navigateAfterLogin();
         }, 600);
       } else {
         const errorText = (() => {
@@ -232,7 +240,7 @@ const LoginPage: React.FC = () => {
 
       setLoading(false);
     },
-    [formMethod, login, loginWithLdap, navigate, password, rememberMe, showMessage, t, username]
+    [formMethod, login, loginWithLdap, navigateAfterLogin, password, rememberMe, showMessage, t, username]
   );
 
   const handleFeishuOauth = useCallback(() => {

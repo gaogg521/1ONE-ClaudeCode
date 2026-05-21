@@ -5,6 +5,7 @@
  */
 import { ipcBridge } from '@/common';
 import type { IKanbanTask, IKanbanUser } from '@/common/adapter/ipcBridge';
+import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
 import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
 
 export type { IKanbanTask, IKanbanUser };
@@ -29,22 +30,19 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
     }
   }
 
-  const res = await fetch(path, {
-    headers,
-    credentials: 'include',
-    ...opts,
-    body,
-  });
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { message?: string; code?: string };
-    const msg = err.message ?? res.statusText;
-    if (res.status === 403 && err.code === 'ENTERPRISE_ELEVATION_REQUIRED') {
-      throw new Error(msg || 'Enterprise elevation required');
+  try {
+    return await fetchWebuiApiJson<T>(path, {
+      headers,
+      ...opts,
+      body,
+    });
+  } catch (e) {
+    const err = e as Error & { code?: string; status?: number };
+    if (err.status === 403 && err.code === 'ENTERPRISE_ELEVATION_REQUIRED') {
+      throw new Error(err.message || 'Enterprise elevation required');
     }
-    throw new Error(msg);
+    throw err instanceof Error ? err : new Error(String(e));
   }
-  const respBody = await res.json();
-  return respBody.data ?? respBody;
 }
 
 export const kanbanApi = {

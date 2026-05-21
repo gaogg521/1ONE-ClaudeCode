@@ -20,11 +20,16 @@ export type EnterpriseElevationSecondaryId =
 
 export type EnterpriseElevationSecondaryKind = 'password' | 'oauth';
 
+/** When `available` is false for LDAP, explains why (for UI copy / disabled menu entry). */
+export type EnterpriseElevationLdapUnavailableReason = 'ldap_not_configured' | 'ldap_not_bound';
+
 export type EnterpriseElevationSecondaryOption = {
   id: EnterpriseElevationSecondaryId;
   kind: EnterpriseElevationSecondaryKind;
   /** User may attempt this path now (provider enabled, binding when required, handler implemented). */
   available: boolean;
+  /** Set when `id === 'ldap'` and `available` is false. */
+  unavailableReason?: EnterpriseElevationLdapUnavailableReason;
 };
 
 /** OAuth elevation via POST is added per provider (e.g. exchange code after OAuth redirect). Reserved IDs. */

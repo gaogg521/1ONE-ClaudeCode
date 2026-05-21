@@ -13,6 +13,7 @@ import {
   revokeEnterpriseInvite,
   type EnterpriseInviteListItem,
 } from '@/renderer/utils/enterpriseJoinApi';
+import { formatWebuiAdminError } from '@/renderer/utils/webuiApiBase';
 
 const EnterpriseInvitesSection: React.FC = () => {
   const { t } = useTranslation();
@@ -28,11 +29,18 @@ const EnterpriseInvitesSection: React.FC = () => {
       const data = await listEnterpriseInvites();
       setRows(data);
     } catch (e) {
-      Message.error(e instanceof Error ? e.message : 'Failed to load invites');
+      Message.error(
+        formatWebuiAdminError(
+          e,
+          t('settings.webui.inviteElevationRequired', {
+            defaultValue: '请先在页面顶部完成管理员二次验证后再管理邀请码。',
+          })
+        )
+      );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -53,7 +61,14 @@ const EnterpriseInvitesSection: React.FC = () => {
       );
       await load();
     } catch (e) {
-      Message.error(e instanceof Error ? e.message : 'Failed to create invite');
+      Message.error(
+        formatWebuiAdminError(
+          e,
+          t('settings.webui.inviteElevationRequired', {
+            defaultValue: '请先在页面顶部完成管理员二次验证后再管理邀请码。',
+          })
+        )
+      );
     } finally {
       setCreating(false);
     }
@@ -65,7 +80,14 @@ const EnterpriseInvitesSection: React.FC = () => {
       Message.success(t('settings.webui.inviteRevoked', { defaultValue: '邀请码已作废' }));
       await load();
     } catch (e) {
-      Message.error(e instanceof Error ? e.message : 'Failed to revoke');
+      Message.error(
+        formatWebuiAdminError(
+          e,
+          t('settings.webui.inviteElevationRequired', {
+            defaultValue: '请先在页面顶部完成管理员二次验证后再管理邀请码。',
+          })
+        )
+      );
     }
   };
 

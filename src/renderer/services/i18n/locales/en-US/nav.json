@@ -1,0 +1,12 @@
+{
+  "sessions": "Sessions",
+  "workspace": "Workspace",
+  "globalSettings": "Settings",
+  "tasks": "Tasks",
+  "admin": "Admin",
+  "enterpriseConsole": "Enterprise",
+  "hooks": "Hooks",
+  "mcp": "MCP",
+  "memory": "Memory",
+  "scheduled": "Scheduled"
+}

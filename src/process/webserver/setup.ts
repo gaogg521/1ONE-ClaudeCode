@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Express } from 'express';
+import type { Express, NextFunction, Request, Response } from 'express';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -12,7 +12,7 @@ import csrf from 'tiny-csrf';
 import crypto from 'crypto';
 import { resolveAllLanIps } from '@/common/utils/resolveLanIp';
 import { AuthMiddleware } from '@process/webserver/auth/middleware/AuthMiddleware';
-import { errorHandler } from './middleware/errorHandler';
+import { errorHandler, createAppError } from './middleware/errorHandler';
 import { attachCsrfToken } from './middleware/security';
 
 /**
@@ -50,6 +50,67 @@ function getCsrfSecret(): string {
 // Generate once at module load, remains constant for process lifetime
 const CSRF_SECRET = getCsrfSecret();
 
+/** tiny-csrf cookie options (mirror `tiny-csrf/index.js`). */
+const CSRF_COOKIE_PARAMS = Object.freeze({
+  httpOnly: true,
+  sameSite: 'strict' as const,
+  signed: true,
+  maxAge: 300000,
+});
+
+// Loaded via runtime `require`; main bundle is CJS-compatible and `tiny-csrf` is externalized from the bundle.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const encryptCookieForCsrf = require('tiny-csrf/encryption').encryptCookie as (
+  cookie: string,
+  secret: string
+) => string;
+
+/**
+ * Normalize path for CSRF exemptions: tiny-csrf matches `originalUrl`, so querystrings break string excludes like `/login`.
+ * Path-only whitelist keeps admin JSON and auth endpoints aligned with intent.
+ */
+function normalizeRequestPathForCsrf(req: Request): string {
+  const raw = typeof req.originalUrl === 'string' ? req.originalUrl : req.url;
+  if (!raw || raw === '') {
+    return '/';
+  }
+  const pathOnly = raw.split('?')[0]?.split('#')[0];
+  return pathOnly === '' ? '/' : pathOnly;
+}
+
+/**
+ * Same exclusions as legacy `csrf(..., excludedUrls)` but keyed on pathname only (ignores query / hash).
+ */
+function shouldBypassCsrfByPath(pathOnly: string): boolean {
+  if (pathOnly === '/login') {
+    return true;
+  }
+  if (pathOnly === '/api/auth/qr-login') {
+    return true;
+  }
+  if (pathOnly === '/api/upload' || pathOnly.startsWith('/api/upload/')) {
+    return true;
+  }
+  if (pathOnly === '/api/auth/enterprise-elevate' || pathOnly.startsWith('/api/auth/enterprise-elevate/')) {
+    return true;
+  }
+  if (pathOnly === '/api/admin' || pathOnly.startsWith('/api/admin/')) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Replicate tiny-csrf "excluded URL" branch so `attachCsrfToken` can expose `x-csrf-token` without running body verification.
+ */
+function attachCsrfTokenBypass(req: Request, res: Response, secret: string): void {
+  req.csrfToken = () => {
+    const csrfPlaintext = crypto.randomUUID();
+    res.cookie('csrfToken', encryptCookieForCsrf(csrfPlaintext, secret), CSRF_COOKIE_PARAMS);
+    return csrfPlaintext;
+  };
+}
+
 /**
  * 配置基础中间件
  * Configure basic middleware for Express app
@@ -67,16 +128,28 @@ export function setupBasicMiddleware(app: Express): void {
   app.use(cookieParser('cookie-parser-secret'));
   // P1 安全修复：登录接口启用 CSRF 保护（前端已添加 withCsrfToken）
   // P1 Security fix: Enable CSRF for login (frontend already uses withCsrfToken)
-  // 仅排除 QR 登录（有独立的一次性 token 保护机制）
-  // Only exclude QR login (has its own one-time token protection)
-  app.use(
-    csrf(
-      CSRF_SECRET,
-      ['POST', 'PUT', 'DELETE', 'PATCH'], // Protected methods
-      ['/login', '/api/auth/qr-login', '/api/upload'], // Excluded: login form, QR login, and file upload (uses API token auth)
-      [] // No service worker URLs
-    )
-  );
+  // Path-based bypass (see `shouldBypassCsrfByPath`): fixes querystring mismatches vs tiny-csrf string excludes
+  // and keeps /api/admin/* off body verification while still emitting CSRF helpers for SPA.
+  // 企业管理 / 登录豁免：按 pathname 判断，避免因 ?xxx 无法命中 tiny-csrf 的字符串排除而误拦。
+  const csrfMw = csrf(CSRF_SECRET, ['POST', 'PUT', 'DELETE', 'PATCH'], [], []);
+
+  /**
+   * tiny-csrf 在校验失败时同步 throw，否则会落到全局 ErrorHandler → 误判为 HTTP 500。
+   * Normalize to HTTP 403 so clients / i18n can show CSRF refresh guidance.
+   */
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const pathOnly = normalizeRequestPathForCsrf(req);
+    if (shouldBypassCsrfByPath(pathOnly)) {
+      attachCsrfTokenBypass(req, res, CSRF_SECRET);
+      next();
+      return;
+    }
+    try {
+      csrfMw(req, res, next);
+    } catch {
+      next(createAppError('CSRF verification failed.', 403, 'csrf_invalid'));
+    }
+  });
   app.use(attachCsrfToken); // Attach token to response headers
 
   // 安全中间件

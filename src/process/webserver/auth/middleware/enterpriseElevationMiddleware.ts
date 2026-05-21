@@ -10,7 +10,7 @@ import { AuthService } from '../service/AuthService';
 
 /**
  * Requires valid enterprise elevation cookie matching the current session user.
- * Use after `requireAdmin` / `requireSystemAdmin`.
+ * Use after `requireAdmin` on sensitive enterprise routes.
  */
 export async function requireEnterpriseElevation(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {

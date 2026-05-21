@@ -30,9 +30,13 @@ const getExternalId = (record: AdminUser, provider: AuthProviderId): string | nu
   return row?.external_id ?? null;
 };
 
-/** WebUI /kanban/me may return system_admin | org_admin | member while KanbanRole types say admin | user */
+/** WebUI /kanban/me and /api/admin/users may return system_admin | org_admin | member while KanbanRole is admin | user */
 function isKanbanAdminRole(role: string | undefined): boolean {
   return role === 'admin' || role === 'system_admin' || role === 'org_admin';
+}
+
+function toKanbanRoleForUi(role: string | undefined): KanbanRole {
+  return isKanbanAdminRole(role) ? 'admin' : 'user';
 }
 
 function meRowForProfile(m: { id: string; username: string; role?: string }): AdminUser {
@@ -235,7 +239,8 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
       dataIndex: 'role',
       key: 'role',
       render: (_: unknown, record: AdminUser) => {
-        const cfg = ROLE_TAG[record.role] ?? ROLE_TAG.user;
+        const kr = toKanbanRoleForUi(String(record.role));
+        const cfg = ROLE_TAG[kr];
         return <Tag color={cfg.color}>{cfg.label}</Tag>;
       },
     },
@@ -267,7 +272,7 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
         <Space size='mini'>
           <Select
             size='mini'
-            value={record.role}
+            value={toKanbanRoleForUi(String(record.role))}
             onChange={(v) => void handleSetRole(record.id, v as KanbanRole)}
             style={{ width: 80 }}
             disabled={Boolean(record.protected)}

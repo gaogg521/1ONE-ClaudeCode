@@ -21,7 +21,10 @@ export function isEnterpriseElevatableRole(role: string | undefined): boolean {
   return isEnterpriseAdminRole(role);
 }
 
-/** Global auth provider config (LDAP secrets, Feishu app keys) — highest privilege only. */
+/**
+ * Platform-wide superuser (first bootstrap / cross-tenant ops). Auth provider HTTP routes use
+ * {@link isEnterpriseAdminRole} + enterprise elevation instead — org admins configure LDAP/Feishu for their tenant.
+ */
 export function isSystemAdminRole(role: string | undefined): boolean {
   return role === 'system_admin';
 }

@@ -17,6 +17,7 @@ import {
   type LdapProviderConfig,
 } from '@process/webserver/auth/providers/LdapAuthProvider';
 import type {
+  EnterpriseElevationLdapUnavailableReason,
   EnterpriseElevationPasswordMethod,
   EnterpriseElevationSecondaryOption,
 } from '@/common/types/enterpriseElevation';
@@ -35,7 +36,16 @@ export async function listEnterpriseSecondaryOptions(userId: string): Promise<En
     Boolean(String(ldapCfg?.url ?? '').trim()) &&
     Boolean(String(ldapCfg?.baseDN ?? '').trim());
   const ldapBound = await AuthIdentityRepository.getByUser('ldap', userId);
-  const ldapAvailable = ldapServerOk && Boolean(ldapBound?.external_id);
+  const ldapIdentityOk = Boolean(ldapBound?.external_id);
+  const ldapAvailable = ldapServerOk && ldapIdentityOk;
+  let ldapUnavailableReason: EnterpriseElevationLdapUnavailableReason | undefined;
+  if (!ldapAvailable) {
+    if (!ldapServerOk) {
+      ldapUnavailableReason = 'ldap_not_configured';
+    } else if (!ldapIdentityOk) {
+      ldapUnavailableReason = 'ldap_not_bound';
+    }
+  }
 
   const feishuRow = await AuthProviderRepository.getProvider('feishu');
   const feishuBound = await AuthIdentityRepository.getByUser('feishu', userId);
@@ -46,7 +56,12 @@ export async function listEnterpriseSecondaryOptions(userId: string): Promise<En
 
   return [
     { id: 'local_password', kind: 'password', available: hasLocalHash },
-    { id: 'ldap', kind: 'password', available: ldapAvailable },
+    {
+      id: 'ldap',
+      kind: 'password',
+      available: ldapAvailable,
+      ...(ldapUnavailableReason ? { unavailableReason: ldapUnavailableReason } : {}),
+    },
     { id: 'feishu', kind: 'oauth', available: feishuAvailable },
     { id: 'dingtalk', kind: 'oauth', available: false },
     { id: 'wecom', kind: 'oauth', available: false },
@@ -82,9 +97,18 @@ export async function verifyEnterpriseElevationPassword(params: {
   const { user, password, method } = params;
   const hasLocalHash = Boolean(user.password_hash && String(user.password_hash).trim() !== '');
 
-  if (method === 'local_password') {
+  const verifyLocalPassword = async (): Promise<boolean> => {
     if (!hasLocalHash) return false;
-    return AuthService.verifyPassword(password, user.password_hash!);
+    try {
+      return await AuthService.constantTimeVerify(password, user.password_hash!, true);
+    } catch (err) {
+      console.error('[enterpriseElevation] local password verify:', err);
+      return false;
+    }
+  };
+
+  if (method === 'local_password') {
+    return verifyLocalPassword();
   }
 
   if (method === 'ldap') {
@@ -92,7 +116,7 @@ export async function verifyEnterpriseElevationPassword(params: {
   }
 
   // auto: local first, then LDAP
-  if (hasLocalHash && (await AuthService.verifyPassword(password, user.password_hash!))) {
+  if (await verifyLocalPassword()) {
     return true;
   }
   return verifyWithLdap(user, password);

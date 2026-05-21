@@ -52,3 +52,80 @@ export async function fetchWebuiApi(path: string, init?: RequestInit): Promise<R
   captureCsrfTokenFromResponse(response);
   return response;
 }
+
+/** Error thrown by {@link fetchWebuiApiJson} with HTTP metadata when available */
+export type WebuiApiJsonError = Error & { status?: number; code?: string };
+
+/**
+ * Normalize API error payloads: `message`, `error` (express AppError/global handler), then status text.
+ */
+/** Map common admin API failures to user-facing hints (elevation, permissions). */
+export function formatWebuiAdminError(error: unknown, elevationHint?: string): string {
+  if (!(error instanceof Error)) {
+    return 'Request failed';
+  }
+  const err = error as WebuiApiJsonError;
+  if (
+    err.code === 'ENTERPRISE_ELEVATION_REQUIRED' ||
+    /enterprise elevation/i.test(err.message ?? '')
+  ) {
+    return (
+      elevationHint ??
+      err.message ??
+      'Enterprise elevation required'
+    );
+  }
+  return err.message || 'Request failed';
+}
+
+export function readWebuiApiErrorMessage(body: Record<string, unknown> | null, res: Response): string {
+  if (!body) {
+    return res.statusText;
+  }
+  const m = typeof body.message === 'string' ? body.message.trim() : '';
+  const e = typeof body.error === 'string' ? body.error.trim() : '';
+  return m || e || res.statusText;
+}
+
+function unwrapSuccessEnvelope<T>(body: Record<string, unknown>): T {
+  if (
+    Object.prototype.hasOwnProperty.call(body, 'data') &&
+    (body as { data?: unknown }).data !== undefined
+  ) {
+    return (body as { data: T }).data;
+  }
+  return body as unknown as T;
+}
+
+/**
+ * Call WebUI REST with correct base URL, capture CSRF from `x-csrf-token`, and unwrap `{ success, data }`.
+ *
+ * - HTTP error or `success === false`: throws {@link WebuiApiJsonError} with `status`/`code`.
+ * - 2xx JSON **without** a `success` field (legacy/raw handlers): returns the parsed body as `T`.
+ */
+export async function fetchWebuiApiJson<T = unknown>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetchWebuiApi(path, init);
+  const body = (await res.json().catch((): null => null)) as Record<string, unknown> | null;
+
+  if (!res.ok) {
+    const msg = readWebuiApiErrorMessage(body, res);
+    const err = new Error(msg) as WebuiApiJsonError;
+    err.status = res.status;
+    err.code = typeof body?.code === 'string' ? body.code : undefined;
+    throw err;
+  }
+
+  if (body && typeof body === 'object' && 'success' in body && body.success === false) {
+    const msg = readWebuiApiErrorMessage(body, res);
+    const err = new Error(msg) as WebuiApiJsonError;
+    err.status = res.status;
+    err.code = typeof body?.code === 'string' ? body.code : undefined;
+    throw err;
+  }
+
+  if (body && typeof body === 'object' && 'success' in body && body.success === true) {
+    return unwrapSuccessEnvelope<T>(body);
+  }
+
+  return body as T;
+}

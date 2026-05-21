@@ -1,7 +1,12 @@
 import React, { Suspense } from 'react';
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { HashRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
+import {
+  consumePostLoginRedirect,
+  readRedirectFromSearch,
+  setPostLoginRedirect,
+} from '@/renderer/utils/postLoginRedirect';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const SessionsPage = React.lazy(() => import('@renderer/pages/sessions'));
@@ -10,7 +15,12 @@ const AdminUsers = React.lazy(() => import('@renderer/pages/admin/AdminUsers'));
 const AdminAuth = React.lazy(() => import('@renderer/pages/admin/AdminAuth'));
 const AdminInvites = React.lazy(() => import('@renderer/pages/admin/AdminInvites'));
 const AdminTeams = React.lazy(() => import('@renderer/pages/admin/AdminTeams'));
-const EnterpriseSettingsShell = React.lazy(() => import('@renderer/pages/settings/EnterpriseSettingsShell'));
+const EnterpriseLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseLayout'));
+const EnterpriseHome = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseHome'));
+const EnterpriseUsagePage = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseUsagePage'));
+const EnterpriseSecurityPage = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseSecurityPage'));
+const PersonalShell = React.lazy(() => import('@renderer/components/layout/PersonalShell'));
+const LegacyEnterpriseRedirect = React.lazy(() => import('@renderer/components/layout/LegacyEnterpriseRedirect'));
 const HooksPage = React.lazy(() => import('@renderer/pages/hooks'));
 const MCPPage = React.lazy(() => import('@renderer/pages/mcp'));
 const MemoryPage = React.lazy(() => import('@renderer/pages/memory'));
@@ -40,112 +50,132 @@ const withRouteFallback = (Component: React.LazyExoticComponent<React.ComponentT
   </Suspense>
 );
 
-const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
+const ProtectedLayout: React.FC = () => {
   const { status } = useAuth();
+  const location = useLocation();
 
   if (status === 'checking') {
     return <AppLoader />;
   }
 
   if (status !== 'authenticated') {
+    const returnPath = `${location.pathname}${location.search}`;
+    if (returnPath && returnPath !== '/login') {
+      setPostLoginRedirect(returnPath);
+    }
     return <Navigate to='/login' replace />;
   }
 
-  return React.cloneElement(layout);
+  return <Outlet />;
 };
 
-const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
+const LoginRoute: React.FC = () => {
+  const { status } = useAuth();
+  const location = useLocation();
+
+  if (status === 'authenticated') {
+    const fromQuery = readRedirectFromSearch(location.search);
+    const target = fromQuery ?? consumePostLoginRedirect();
+    return <Navigate to={target} replace />;
+  }
+
+  return withRouteFallback(LoginPage);
+};
+
+const PanelRoute: React.FC = () => {
   const { status } = useAuth();
 
   return (
     <HashRouter>
       <Routes>
-        <Route
-          path='/login'
-          element={status === 'authenticated' ? <Navigate to='/sessions' replace /> : withRouteFallback(LoginPage)}
-        />
-        <Route element={<ProtectedLayout layout={layout} />}>
-          <Route index element={<Navigate to='/sessions' replace />} />
-          <Route path='/sessions' element={withRouteFallback(SessionsPage)} />
-          <Route path='/workspace' element={withRouteFallback(WorkspacePage)} />
-          <Route path='/workspace/settings' element={<Navigate to='/workspace/settings/model' replace />} />
-          <Route
-            path='/workspace/settings/model'
-            element={
-              <Suspense fallback={<AppLoader />}>
-                <WorkspaceSettingsShell>
-                  <ModeSettings />
-                </WorkspaceSettingsShell>
-              </Suspense>
-            }
-          />
-          <Route
-            path='/workspace/settings/assistants'
-            element={
-              <Suspense fallback={<AppLoader />}>
-                <WorkspaceSettingsShell>
-                  <AssistantSettings />
-                </WorkspaceSettingsShell>
-              </Suspense>
-            }
-          />
-          <Route
-            path='/workspace/settings/tools'
-            element={
-              <Suspense fallback={<AppLoader />}>
-                <WorkspaceSettingsShell>
-                  <ToolsSettings />
-                </WorkspaceSettingsShell>
-              </Suspense>
-            }
-          />
-          <Route
-            path='/workspace/settings/agent'
-            element={
-              <Suspense fallback={<AppLoader />}>
-                <WorkspaceSettingsShell>
-                  <AgentSettings />
-                </WorkspaceSettingsShell>
-              </Suspense>
-            }
-          />
-          <Route path='/tasks' element={withRouteFallback(TasksPage)} />
-          {/* Enterprise admin: global settings → 企业后台 */}
-          <Route path='/settings/enterprise' element={withRouteFallback(EnterpriseSettingsShell)}>
-            <Route index element={<Navigate to='users' replace />} />
+        <Route path='/login' element={<LoginRoute />} />
+        <Route element={<ProtectedLayout />}>
+          <Route element={withRouteFallback(PersonalShell)}>
+            <Route index element={<Navigate to='/sessions' replace />} />
+            <Route path='/sessions' element={withRouteFallback(SessionsPage)} />
+            <Route path='/workspace' element={withRouteFallback(WorkspacePage)} />
+            <Route path='/workspace/settings' element={<Navigate to='/workspace/settings/model' replace />} />
+            <Route
+              path='/workspace/settings/model'
+              element={
+                <Suspense fallback={<AppLoader />}>
+                  <WorkspaceSettingsShell>
+                    <ModeSettings />
+                  </WorkspaceSettingsShell>
+                </Suspense>
+              }
+            />
+            <Route
+              path='/workspace/settings/assistants'
+              element={
+                <Suspense fallback={<AppLoader />}>
+                  <WorkspaceSettingsShell>
+                    <AssistantSettings />
+                  </WorkspaceSettingsShell>
+                </Suspense>
+              }
+            />
+            <Route
+              path='/workspace/settings/tools'
+              element={
+                <Suspense fallback={<AppLoader />}>
+                  <WorkspaceSettingsShell>
+                    <ToolsSettings />
+                  </WorkspaceSettingsShell>
+                </Suspense>
+              }
+            />
+            <Route
+              path='/workspace/settings/agent'
+              element={
+                <Suspense fallback={<AppLoader />}>
+                  <WorkspaceSettingsShell>
+                    <AgentSettings />
+                  </WorkspaceSettingsShell>
+                </Suspense>
+              }
+            />
+            <Route path='/tasks' element={withRouteFallback(TasksPage)} />
+            <Route path='/hooks' element={withRouteFallback(HooksPage)} />
+            <Route path='/mcp' element={withRouteFallback(MCPPage)} />
+            <Route path='/memory' element={withRouteFallback(MemoryPage)} />
+            <Route path='/guid' element={withRouteFallback(Guid)} />
+            <Route path='/conversation/:id' element={withRouteFallback(Conversation)} />
+            <Route path='/settings/aionrs' element={withRouteFallback(AionrsSettings)} />
+            <Route path='/team/:id' element={withRouteFallback(TeamIndex)} />
+            <Route path='/settings/gemini' element={withRouteFallback(GeminiSettings)} />
+            <Route path='/settings/model' element={<ModeSettings />} />
+            <Route path='/settings/assistants' element={withRouteFallback(AssistantSettings)} />
+            <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
+            <Route path='/settings/skills-hub' element={withRouteFallback(SkillsHubSettings)} />
+            <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
+            <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
+            <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />
+            <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />
+            <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
+            <Route path='/settings' element={<Navigate to='/settings/agent' replace />} />
+            <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
+            <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
+            <Route path='/scheduled/:jobId' element={withRouteFallback(TaskDetailPage)} />
+          </Route>
+
+          <Route path='/enterprise' element={withRouteFallback(EnterpriseLayout)}>
+            <Route index element={withRouteFallback(EnterpriseHome)} />
             <Route path='users' element={withRouteFallback(AdminUsers)} />
             <Route path='teams' element={withRouteFallback(AdminTeams)} />
             <Route path='auth' element={withRouteFallback(AdminAuth)} />
             <Route path='invites' element={withRouteFallback(AdminInvites)} />
+            <Route path='usage' element={withRouteFallback(EnterpriseUsagePage)} />
+            <Route path='security' element={withRouteFallback(EnterpriseSecurityPage)} />
           </Route>
-          {/* Legacy admin URLs → settings */}
-          <Route path='/users' element={<Navigate to='/settings/enterprise/users' replace />} />
-          <Route path='/admin' element={<Navigate to='/settings/enterprise/users' replace />} />
-          <Route path='/admin/users' element={<Navigate to='/settings/enterprise/users' replace />} />
-          <Route path='/admin/teams' element={<Navigate to='/settings/enterprise/teams' replace />} />
-          <Route path='/admin/auth' element={<Navigate to='/settings/enterprise/auth' replace />} />
-          <Route path='/hooks' element={withRouteFallback(HooksPage)} />
-          <Route path='/mcp' element={withRouteFallback(MCPPage)} />
-          <Route path='/memory' element={withRouteFallback(MemoryPage)} />
-          <Route path='/guid' element={withRouteFallback(Guid)} />
-          <Route path='/conversation/:id' element={withRouteFallback(Conversation)} />
-          <Route path='/settings/aionrs' element={withRouteFallback(AionrsSettings)} />
-          <Route path='/team/:id' element={withRouteFallback(TeamIndex)} />
-          <Route path='/settings/gemini' element={withRouteFallback(GeminiSettings)} />
-          <Route path='/settings/model' element={<ModeSettings />} />
-          <Route path='/settings/assistants' element={withRouteFallback(AssistantSettings)} />
-          <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
-          <Route path='/settings/skills-hub' element={withRouteFallback(SkillsHubSettings)} />
-          <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
-          <Route path='/settings/auth' element={<Navigate to='/settings/enterprise/auth' replace />} />
-          <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
-          <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />
-          <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />
-          <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
-          <Route path='/settings' element={<Navigate to='/settings/agent' replace />} />
-          <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
-          <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
-          <Route path='/scheduled/:jobId' element={withRouteFallback(TaskDetailPage)} />
+
+          <Route path='/settings/enterprise/*' element={withRouteFallback(LegacyEnterpriseRedirect)} />
+          <Route path='/users' element={<Navigate to='/enterprise/users' replace />} />
+          <Route path='/admin' element={<Navigate to='/enterprise/users' replace />} />
+          <Route path='/admin/users' element={<Navigate to='/enterprise/users' replace />} />
+          <Route path='/admin/teams' element={<Navigate to='/enterprise/teams' replace />} />
+          <Route path='/admin/auth' element={<Navigate to='/enterprise/auth' replace />} />
+          <Route path='/settings/auth' element={<Navigate to='/enterprise/auth' replace />} />
         </Route>
         <Route path='*' element={<Navigate to={status === 'authenticated' ? '/sessions' : '/login'} replace />} />
       </Routes>

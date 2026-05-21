@@ -21,8 +21,9 @@ import { Communication, Copy, Earth, EditTwo, Refresh } from '@icon-park/react';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsViewMode } from '../settingsViewContext';
-import WebuiManagementModePanel from '@/renderer/pages/settings/WebuiSettings/WebuiManagementModePanel';
 import WebuiJoinEnterprisePanel from '@/renderer/pages/settings/WebuiSettings/WebuiJoinEnterprisePanel';
+import WebuiStandaloneBanner from '@/renderer/pages/settings/WebuiSettings/WebuiStandaloneBanner';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 
 /**
  * 偏好设置行组件
@@ -72,6 +73,7 @@ const WebuiModalContent: React.FC = () => {
   const { t } = useTranslation();
   const viewMode = useSettingsViewMode();
   const isPageMode = viewMode === 'page';
+  const { loading: enterpriseModeLoading, hasJoinedEnterprise } = useWebuiEnterpriseMode();
   const [activeTab, setActiveTab] = useState<'webui' | 'channels'>('webui');
 
   // 检测是否在 Electron 桌面环境 / Check if running in Electron desktop environment
@@ -638,8 +640,6 @@ const WebuiModalContent: React.FC = () => {
       <div className='flex flex-col h-full w-full'>
         <AionScrollArea className='flex-1 min-h-0 pb-16px' disableOverflow={isPageMode}>
           <div className='space-y-16px'>
-            <WebuiJoinEnterprisePanel />
-            <WebuiManagementModePanel />
             <h2 className='text-20px font-500 text-t-primary m-0'>Channels</h2>
             <Suspense fallback={<div className='text-13px text-t-secondary'>{t('common.loading')}</div>}>
               <ChannelModalContentLazy />
@@ -860,19 +860,20 @@ const WebuiModalContent: React.FC = () => {
           )}
         </div>
 
-        {/* 企业版（可选，默认折叠）/ Enterprise (optional, collapsed) */}
-        <Collapse
-          bordered={false}
-          className='bg-2 rd-16px overflow-hidden [&_.arco-collapse-item-header]:px-16px'
-        >
-          <Collapse.Item
-            header={t('settings.webui.enterpriseOptionalTitle', { defaultValue: '企业版（可选）' })}
-            name='enterprise'
+        {!enterpriseModeLoading && hasJoinedEnterprise ? <WebuiStandaloneBanner /> : null}
+        {!enterpriseModeLoading && !hasJoinedEnterprise ? (
+          <Collapse
+            bordered={false}
+            className='bg-2 rd-16px overflow-hidden [&_.arco-collapse-item-header]:px-16px'
           >
-            <WebuiJoinEnterprisePanel />
-            <WebuiManagementModePanel />
-          </Collapse.Item>
-        </Collapse>
+            <Collapse.Item
+              header={t('settings.webui.enterpriseOptionalTitle', { defaultValue: '企业版（可选）' })}
+              name='enterprise'
+            >
+              <WebuiJoinEnterprisePanel />
+            </Collapse.Item>
+          </Collapse>
+        ) : null}
       </div>
     </AionScrollArea>
   );

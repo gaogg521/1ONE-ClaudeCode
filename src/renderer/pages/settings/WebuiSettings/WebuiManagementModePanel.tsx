@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import { Alert, Button, Radio, Typography } from '@arco-design/web-react';
+import React, { useCallback } from 'react';
+import { Alert, Button, Message, Radio, Typography } from '@arco-design/web-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { WebuiManagementMode } from '@/common/config/webuiEnterpriseConfig';
@@ -23,25 +23,47 @@ const WebuiManagementModePanel: React.FC = () => {
     enterpriseContext,
     setManagementMode,
     openEnterpriseAdminInBrowser,
-    webuiApiBase,
   } = useWebuiEnterpriseMode();
+
+  const launchEnterpriseAdmin = useCallback(async () => {
+    const result = await openEnterpriseAdminInBrowser();
+    if (result === 'webui_not_running') {
+      Message.warning(
+        t('settings.webui.joinNeedWebuiRunning', {
+          defaultValue: '请先在上方的 WebUI 卡片中启用 WebUI 服务',
+        })
+      );
+      return;
+    }
+    if (result === 'failed') {
+      Message.error(
+        t('settings.webui.openEnterpriseFailed', {
+          defaultValue: '无法打开浏览器，请手动访问 WebUI 地址',
+        })
+      );
+    }
+  }, [openEnterpriseAdminInBrowser, t]);
+
+  const handleModeChange = useCallback(
+    (value: WebuiManagementMode) => {
+      void setManagementMode(value).then(() => {
+        if (value === 'enterprise' && !isDesktop) {
+          void navigate('/enterprise');
+          return;
+        }
+        if (value === 'standalone' && !isDesktop) {
+          void navigate('/settings/webui');
+        }
+      });
+    },
+    [isDesktop, navigate, setManagementMode]
+  );
 
   if (loading || !hasJoinedEnterprise) {
     return null;
   }
 
   const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId ?? '';
-
-  const handleModeChange = (value: WebuiManagementMode) => {
-    void setManagementMode(value).then(() => {
-      if (!isDesktop && value === 'enterprise') {
-        void navigate('/settings/enterprise/users');
-      }
-      if (!isDesktop && value === 'standalone') {
-        void navigate('/settings/webui');
-      }
-    });
-  };
 
   return (
     <div className='mb-16px p-16px rd-12px border border-border-2 bg-2'>
@@ -78,12 +100,7 @@ const WebuiManagementModePanel: React.FC = () => {
         />
       ) : null}
       {managementMode === 'enterprise' && isDesktop ? (
-        <Button
-          className='mt-12px'
-          type='primary'
-          disabled={!webuiApiBase}
-          onClick={() => void openEnterpriseAdminInBrowser()}
-        >
+        <Button className='mt-12px' type='primary' onClick={() => void launchEnterpriseAdmin()}>
           {t('settings.webui.openEnterpriseInBrowser', { defaultValue: '在浏览器中打开企业后台' })}
         </Button>
       ) : null}

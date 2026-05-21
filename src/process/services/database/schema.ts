@@ -126,6 +126,22 @@ export function initSchema(db: ISqliteDriver): void {
     updated_at INTEGER NOT NULL
   )`);
 
+  // Enterprise invite codes（企业邀请码）
+  db.exec(`CREATE TABLE IF NOT EXISTS tenant_invites (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    code TEXT NOT NULL UNIQUE,
+    created_by TEXT NOT NULL,
+    max_uses INTEGER,
+    use_count INTEGER NOT NULL DEFAULT 0,
+    expires_at INTEGER,
+    created_at INTEGER NOT NULL,
+    revoked INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_tenant_invites_tenant ON tenant_invites(tenant_id, created_at DESC)');
+
   // Team memberships（团队成员关系与角色）
   db.exec(`CREATE TABLE IF NOT EXISTS team_memberships (
     tenant_id TEXT NOT NULL,
@@ -237,4 +253,4 @@ export function setDatabaseVersion(db: ISqliteDriver, version: number): void {
  * Current database schema version
  * Update this when adding new migrations in migrations.ts
  */
-export const CURRENT_DB_VERSION = 28;
+export const CURRENT_DB_VERSION = 29;

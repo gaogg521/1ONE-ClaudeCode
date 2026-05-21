@@ -594,7 +594,10 @@ export function registerAuthRoutes(app: Express): void {
         });
         res.json({ success: true });
       } catch (error) {
-        console.error('[AuthRoute] enterprise-elevate error:', error);
+        console.error(
+          '[AuthRoute] enterprise-elevate error:',
+          error instanceof Error ? error.stack ?? error.message : error
+        );
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }

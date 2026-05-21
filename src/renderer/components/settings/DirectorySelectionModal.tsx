@@ -8,6 +8,7 @@ import { Button, Modal, Spin } from '@arco-design/web-react';
 import { IconFile, IconFolder, IconUp } from '@arco-design/web-react/icon';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { fetchWebuiApi } from '@/renderer/utils/webuiApiBase';
 
 interface DirectoryItem {
   name: string;
@@ -48,12 +49,8 @@ const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
       setError(null);
       try {
         const showFiles = isFileMode ? 'true' : 'false';
-        const response = await fetch(
-          `/api/directory/browse?path=${encodeURIComponent(dirPath)}&showFiles=${showFiles}`,
-          {
-            method: 'GET',
-            credentials: 'include',
-          }
+        const response = await fetchWebuiApi(
+          `/api/directory/browse?path=${encodeURIComponent(dirPath)}&showFiles=${showFiles}`
         );
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));

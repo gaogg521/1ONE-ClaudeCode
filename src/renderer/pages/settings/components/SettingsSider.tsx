@@ -11,7 +11,6 @@ import {
   Info,
   Lightning,
   LinkCloud,
-  People,
   Puzzle,
   Robot,
   Speed,
@@ -24,7 +23,6 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Tooltip } from '@arco-design/web-react';
 import { getSiderTooltipProps } from '@/renderer/utils/ui/siderTooltip';
-import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 
 /** Builtin settings tab IDs in display order (must match router paths). */
 export const BUILTIN_TAB_IDS = [
@@ -34,7 +32,6 @@ export const BUILTIN_TAB_IDS = [
   'skills-hub',
   'tools',
   'webui',
-  'enterprise',
   'system',
   'about',
   'gemini',
@@ -60,8 +57,6 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
 
   const { extensionTabs } = useExtensionSettingsTabs();
   const { resolveExtTabName } = useExtI18n();
-  const { showEnterpriseSettingsNav } = useWebuiEnterpriseMode();
-
   const menus: SiderItem[] = useMemo(() => {
     // Build builtin items
     const builtinMap: Record<string, SiderItem> = {
@@ -92,22 +87,11 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
         icon: isDesktop ? <Earth /> : <Communication />,
         path: 'webui',
       },
-      enterprise: {
-        id: 'enterprise',
-        label: t('settings.enterprise', { defaultValue: '企业后台' }),
-        icon: <People />,
-        path: 'enterprise',
-      },
       system: { id: 'system', label: t('settings.system'), icon: <System />, path: 'system' },
       about: { id: 'about', label: t('settings.about'), icon: <Info />, path: 'about' },
     };
 
-  const builtinIds = showEnterpriseSettingsNav
-      ? BUILTIN_TAB_IDS
-      : BUILTIN_TAB_IDS.filter((id) => id !== 'enterprise');
-
-    // Start with ordered builtin IDs
-    const result: SiderItem[] = builtinIds.map((id) => builtinMap[id]);
+    const result: SiderItem[] = BUILTIN_TAB_IDS.map((id) => builtinMap[id]);
 
     // Extension tabs with position anchoring
     const beforeMap = new Map<string, IExtensionSettingsTab[]>();
@@ -162,7 +146,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
     }
 
     return result;
-  }, [t, isDesktop, extensionTabs, resolveExtTabName, showEnterpriseSettingsNav]);
+  }, [t, isDesktop, extensionTabs, resolveExtTabName]);
 
   const siderTooltipProps = getSiderTooltipProps(tooltipEnabled);
   return (
@@ -173,10 +157,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
     >
       {menus.map((item) => {
         const itemRoute = `/settings/${item.path}`;
-        const isSelected =
-          item.id === 'enterprise'
-            ? pathname === itemRoute || pathname.startsWith(`${itemRoute}/`)
-            : pathname === itemRoute;
+        const isSelected = pathname === itemRoute;
         return (
           <Tooltip key={item.id} {...siderTooltipProps} content={item.label} position='right'>
             <div

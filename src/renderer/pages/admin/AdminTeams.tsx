@@ -6,8 +6,10 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Form, Input, Message, Modal, Popconfirm, Select, Space, Table, Tag } from '@arco-design/web-react';
+import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
 import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
 import AdminPageWrapper from './components/AdminPageWrapper';
+import TeamAddMemberModal, { type TeamMemberRole } from './components/TeamAddMemberModal';
 
 type TeamRow = {
   id: string;
@@ -29,15 +31,7 @@ type TeamMemberRow = {
 };
 
 async function api<T>(path: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(path, { credentials: 'include', ...(opts ?? {}) });
-  const body = (await res.json().catch((): null => null)) as {
-    success?: boolean;
-    message?: string;
-    error?: string;
-    data?: T;
-  };
-  if (!res.ok || !body?.success) throw new Error(body?.message ?? body?.error ?? 'Request failed');
-  return body.data as T;
+  return fetchWebuiApiJson<T>(path, opts);
 }
 
 /** POST/PATCH/DELETE JSON with CSRF body field for tiny-csrf */
@@ -85,7 +79,6 @@ const AdminTeams: React.FC = () => {
   const [taskForm, setTaskForm] = useState({ subject: '', description: '', owner: '' });
 
   const [addVisible, setAddVisible] = useState(false);
-  const [addForm, setAddForm] = useState({ userId: '', role: 'member' as TeamMemberRow['role'] });
 
   const loadTeams = useCallback(async () => {
     const data = await api<TeamRow[]>('/api/admin/teams');
@@ -211,28 +204,29 @@ const AdminTeams: React.FC = () => {
     [loadTeamTasks, selectedTeam]
   );
 
-  const handleAddMember = useCallback(async () => {
-    if (!selectedTeam) return;
-    if (!addForm.userId.trim()) {
-      Message.warning('userId 不能为空');
-      return;
-    }
-    setSaving(true);
-    try {
-      await apiMutate(`/api/admin/teams/${selectedTeam.id}/members`, 'POST', {
-        userId: addForm.userId.trim(),
-        role: addForm.role,
-      });
-      Message.success('成员已添加/更新');
-      setAddVisible(false);
-      setAddForm({ userId: '', role: 'member' });
-      await loadMembers(selectedTeam.id);
-    } catch (e) {
-      Message.error(e instanceof Error ? e.message : '操作失败');
-    } finally {
-      setSaving(false);
-    }
-  }, [addForm, loadMembers, selectedTeam]);
+  const memberUserIds = useMemo(() => new Set(members.map((m) => m.user_id)), [members]);
+
+  const handleAddMember = useCallback(
+    async (userId: string, role: TeamMemberRole) => {
+      if (!selectedTeam) return;
+      setSaving(true);
+      try {
+        await apiMutate(`/api/admin/teams/${selectedTeam.id}/members`, 'POST', {
+          userId,
+          role,
+        });
+        Message.success('成员已添加/更新');
+        setAddVisible(false);
+        await loadMembers(selectedTeam.id);
+      } catch (e) {
+        Message.error(e instanceof Error ? e.message : '操作失败');
+        throw e;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [loadMembers, selectedTeam]
+  );
 
   const handleUpdateRole = useCallback(
     async (userId: string, role: TeamMemberRow['role']) => {
@@ -481,29 +475,13 @@ const AdminTeams: React.FC = () => {
         </Form>
       </Modal>
 
-      <Modal
-        title='添加成员'
+      <TeamAddMemberModal
         visible={addVisible}
-        onCancel={() => setAddVisible(false)}
-        onOk={handleAddMember}
         confirmLoading={saving}
-        okText='保存'
-        cancelText='取消'
-      >
-        <Form layout='vertical'>
-          <Form.Item label='userId' required>
-            <Input value={addForm.userId} onChange={(v) => setAddForm((s) => ({ ...s, userId: v }))} placeholder='复制用户管理页里的 userId' />
-          </Form.Item>
-          <Form.Item label='role' required>
-            <Select value={addForm.role} onChange={(v) => setAddForm((s) => ({ ...s, role: v as any }))}>
-              <Select.Option value='owner'>Owner</Select.Option>
-              <Select.Option value='admin'>Admin</Select.Option>
-              <Select.Option value='member'>Member</Select.Option>
-              <Select.Option value='viewer'>Viewer</Select.Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
+        memberUserIds={memberUserIds}
+        onCancel={() => setAddVisible(false)}
+        onConfirm={handleAddMember}
+      />
     </AdminPageWrapper>
   );
 };

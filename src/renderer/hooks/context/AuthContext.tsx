@@ -13,6 +13,7 @@ type AuthStatus = 'checking' | 'authenticated' | 'unauthenticated';
 export interface AuthUser {
   id: string;
   username: string;
+  tenant_id?: string;
   role?: 'member' | 'org_admin' | 'system_admin' | 'user' | 'admin';
 }
 

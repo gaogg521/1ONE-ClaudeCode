@@ -56,11 +56,9 @@ import './services/i18n';
 import { registerPwa } from './services/registerPwa';
 
 // Components and utilities
-import Layout from './components/layout/Layout';
 import Router from './components/layout/Router';
-import Sider from './components/layout/Sider';
 import { useAuth } from './hooks/context/AuthContext';
-import { ConversationHistoryProvider } from './hooks/context/ConversationHistoryContext';
+import { WebuiEnterpriseModeProvider } from './hooks/webui/WebuiEnterpriseModeProvider';
 import HOC from './utils/ui/HOC';
 
 // Patch Korean locale with missing properties from English locale
@@ -96,9 +94,13 @@ const AppProviders: React.FC<PropsWithChildren> = ({ children }) =>
     AuthProvider,
     null,
     React.createElement(
-      ThemeProvider,
+      WebuiEnterpriseModeProvider,
       null,
-      React.createElement(PreviewProvider, null, React.createElement(ConversationTabsProvider, null, children))
+      React.createElement(
+        ThemeProvider,
+        null,
+        React.createElement(PreviewProvider, null, React.createElement(ConversationTabsProvider, null, children))
+      )
     )
   );
 
@@ -118,15 +120,7 @@ const Main = () => {
     return null;
   }
 
-  return (
-    <Router
-      layout={
-        <ConversationHistoryProvider>
-          <Layout sider={<Sider />} />
-        </ConversationHistoryProvider>
-      }
-    />
-  );
+  return <Router />;
 };
 
 const App = HOC.Wrapper(Config)(Main);

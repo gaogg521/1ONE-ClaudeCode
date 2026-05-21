@@ -60,6 +60,7 @@ export const authenticatedActionLimiter = rateLimit({
   message: {
     success: false,
     error: 'Too many sensitive actions, please try again later.',
+    message: 'Too many sensitive actions, please try again later.',
   },
   keyGenerator: (req: Request) => {
     if (req.user?.id) {
