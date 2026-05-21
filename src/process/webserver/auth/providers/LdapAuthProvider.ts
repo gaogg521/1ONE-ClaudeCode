@@ -121,13 +121,93 @@ function unbindSafe(client: ldap.Client): void {
   } catch {}
 }
 
+/** Decode ldapjs DN / attribute hex escapes (e.g. CN=\\e8\\b5\\b5 → 赵). */
+function decodeLdapEscapedUtf8(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (!/\\[0-9a-fA-F]{2}/.test(trimmed)) {
+    return trimmed.replace(/\\([\\,#+<>;"=])/g, '$1');
+  }
+  const bytes: number[] = [];
+  for (let i = 0; i < trimmed.length; i++) {
+    if (trimmed[i] === '\\' && i + 2 < trimmed.length) {
+      const hex = trimmed.slice(i + 1, i + 3);
+      if (/^[0-9a-fA-F]{2}$/.test(hex)) {
+        bytes.push(Number.parseInt(hex, 16));
+        i += 2;
+        continue;
+      }
+    }
+    bytes.push(trimmed.charCodeAt(i));
+  }
+  try {
+    return Buffer.from(bytes).toString('utf8');
+  } catch {
+    return trimmed;
+  }
+}
+
+function parseCnFromDn(dn: string): string {
+  const match = dn.match(/(?:^|,)CN=([^,]+)/i);
+  if (!match?.[1]) return '';
+  return decodeLdapEscapedUtf8(match[1]);
+}
+
+function resolveLoginAttribute(config: LdapProviderConfig): string {
+  const raw = (config.loginAttribute || 'sAMAccountName').trim();
+  if (!raw || raw.toLowerCase() === 'dn') return 'sAMAccountName';
+  return raw;
+}
+
+function ldapAttributesToRecord(entry: unknown): Record<string, unknown> {
+  const e = entry as {
+    object?: Record<string, unknown>;
+    pojo?: Record<string, unknown>;
+    attributes?: Array<{ type?: string; values?: string[]; vals?: string[] }>;
+  };
+  const legacy = e.pojo ?? e.object;
+  if (legacy && typeof legacy === 'object' && Object.keys(legacy).length > 0) {
+    return legacy;
+  }
+
+  const record: Record<string, unknown> = {};
+  const attrs = e.attributes;
+  if (!Array.isArray(attrs)) return record;
+
+  for (const attr of attrs) {
+    const type = String(attr.type ?? '').trim();
+    if (!type) continue;
+    const vals = attr.values ?? attr.vals ?? [];
+    const normalized = (Array.isArray(vals) ? vals : [vals]).map((v) => String(v).trim()).filter(Boolean);
+    if (normalized.length === 0) continue;
+    const value = normalized.length === 1 ? normalized[0] : normalized;
+    record[type] = value;
+    const lower = type.toLowerCase();
+    if (!(lower in record)) record[lower] = value;
+  }
+  return record;
+}
+
 function readEntryObject(entry: unknown): { dn: string; entry: SearchEntryObject } {
   const e = entry as {
-    dn: { toString(): string };
-    object?: unknown;
-    pojo?: unknown;
+    dn?: { toString(): string };
+    objectName?: { toString(): string } | string;
   };
-  return { dn: e.dn.toString(), entry: (e.pojo ?? e.object ?? {}) as SearchEntryObject };
+  const dn =
+    e.dn?.toString?.() ??
+    (typeof e.objectName === 'string' ? e.objectName : e.objectName?.toString?.()) ??
+    '';
+  return { dn, entry: ldapAttributesToRecord(entry) as unknown as SearchEntryObject };
+}
+
+function pickAttr(record: Record<string, unknown>, key: string): string {
+  const candidates = [key, key.toLowerCase(), key.toUpperCase()];
+  for (const k of candidates) {
+    const arr = toArray(record[k]);
+    const s = arr[0]?.trim() ?? '';
+    if (s) return s;
+  }
+  return '';
 }
 
 function ldapEntryToDirectoryRow(
@@ -136,24 +216,31 @@ function ldapEntryToDirectoryRow(
   loginAttr: string
 ): LdapDirectoryEntry {
   const record = entry as unknown as Record<string, unknown>;
-  const pick = (key: string): string => {
-    const v = record[key];
-    const arr = toArray(v);
-    return arr[0]?.trim() ?? '';
-  };
-  const mail = pick('mail');
+  const mail = pickAttr(record, 'mail');
+  const sam = pickAttr(record, 'sAMAccountName');
+  const upn = pickAttr(record, 'userPrincipalName');
+  const cnDecoded = decodeLdapEscapedUtf8(pickAttr(record, 'cn')) || parseCnFromDn(dn);
+  const displayName = pickAttr(record, 'displayName') || cnDecoded || undefined;
+
   const username =
-    pick(loginAttr) ||
-    pick('sAMAccountName') ||
-    pick('userPrincipalName').split('@')[0] ||
-    pick('uid') ||
-    pick('cn') ||
+    sam ||
+    (loginAttr.toLowerCase() !== 'samaccountname' ? pickAttr(record, loginAttr) : '') ||
+    (upn.includes('@') ? upn.split('@')[0] : upn) ||
+    pickAttr(record, 'uid') ||
     (mail.includes('@') ? mail.split('@')[0] : '') ||
-    dn;
+    cnDecoded ||
+    '';
+
+  if (!username) {
+    throw Object.assign(new Error('LDAP entry is missing sAMAccountName/cn — cannot provision a local login name'), {
+      code: 'LDAP_ENTRY_MISSING_LOGIN',
+    });
+  }
+
   return {
     dn,
     username,
-    displayName: pick('displayName') || pick('cn') || undefined,
+    displayName,
     mail: mail || undefined,
   };
 }
@@ -229,9 +316,9 @@ export async function searchLdapDirectory(
     throw Object.assign(new Error('LDAP is not configured'), { code: 'LDAP_NOT_CONFIGURED' });
   }
 
-  const loginAttr = (config.loginAttribute || 'sAMAccountName').trim();
+  const loginAttr = resolveLoginAttribute(config);
   const safe = escapeLdapFilterValue(q);
-  const filter = `(&(|(objectClass=user)(objectClass=person)(objectClass=inetOrgPerson))(|(${loginAttr}=*${safe}*)(cn=*${safe}*)(mail=*${safe}*)(userPrincipalName=*${safe}*)))`;
+  const filter = `(&(|(objectClass=user)(objectClass=person)(objectClass=inetOrgPerson)(objectClass=organizationalPerson))(|(${loginAttr}=*${safe}*)(sAMAccountName=*${safe}*)(cn=*${safe}*)(displayName=*${safe}*)(sn=*${safe}*)(givenName=*${safe}*)(mail=*${safe}*)(userPrincipalName=*${safe}*)))`;
   const attrs = Array.from(
     new Set(['dn', loginAttr, 'sAMAccountName', 'userPrincipalName', 'uid', 'cn', 'displayName', 'mail'])
   );
@@ -264,7 +351,7 @@ export async function authenticateWithLdap(
   userDn: string;
   debug?: { memberOf?: string[] };
 }> {
-    const loginAttr = (config.loginAttribute || 'uid').trim();
+    const loginAttr = resolveLoginAttribute(config);
     const rawFilter = (config.searchFilter || `(${loginAttr}={{username}})`).trim();
     const safeUser = escapeLdapFilterValue(username.trim());
     const filter = rawFilter.replace(/\{\{\s*username\s*\}\}/gi, safeUser);
@@ -375,4 +462,6 @@ export async function testLdapConnection(config: LdapProviderConfig): Promise<vo
     unbindSafe(client);
   }
 }
+
+export { decodeLdapEscapedUtf8, parseCnFromDn, ldapEntryToDirectoryRow };
 

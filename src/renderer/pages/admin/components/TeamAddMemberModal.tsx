@@ -160,14 +160,15 @@ const TeamAddMemberModal: React.FC<TeamAddMemberModalProps> = ({
   const ldapColumns = useMemo(
     () => [
       {
-        title: '账号',
-        dataIndex: 'username',
+        title: '姓名',
         render: (_: unknown, r: LdapDirectoryEntry) => (
-          <div>
-            <div className='text-t-primary'>{r.username}</div>
-            {r.displayName ? <div className='text-12px text-t-tertiary'>{r.displayName}</div> : null}
-          </div>
+          <div className='text-t-primary'>{r.displayName || r.username}</div>
         ),
+      },
+      {
+        title: '登录名',
+        dataIndex: 'username',
+        render: (v: unknown) => <span className='font-mono text-12px'>{String(v ?? '')}</span>,
       },
       {
         title: '邮箱',

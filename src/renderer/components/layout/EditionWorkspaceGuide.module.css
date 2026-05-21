@@ -1,0 +1,30 @@
+.guide {
+  margin: 0 12px 8px;
+  flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .guide {
+    margin: 0 16px 10px;
+  }
+}
+
+.guideBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.guideText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-2);
+}
+
+.guideActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

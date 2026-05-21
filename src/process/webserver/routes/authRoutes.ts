@@ -160,13 +160,34 @@ export function registerAuthRoutes(app: Express): void {
    */
   app.get('/api/auth/login-ui', apiRateLimiter, async (_req: Request, res: Response) => {
     try {
-      const providers = await AuthProviderRepository.listProviders();
-      const ldapEnabled = providers.some((p) => p.type === 'ldap' && p.enabled);
-      const feishuEnabled = providers.some((p) => p.type === 'feishu' && p.enabled);
-      const mode = ldapEnabled || feishuEnabled ? 'enterprise' : 'standalone';
+      const rows = await AuthProviderRepository.listProviders();
+      const ldapRow = rows.find((p) => p.provider === 'ldap');
+      const feishuRow = rows.find((p) => p.provider === 'feishu');
+      const dingtalkRow = rows.find((p) => p.provider === 'dingtalk');
+      const wecomRow = rows.find((p) => p.provider === 'wecom');
+      const ldapEnabled = Boolean(ldapRow?.enabled);
+      const feishuEnabled = Boolean(feishuRow?.enabled);
+      const dingtalkEnabled = Boolean(dingtalkRow?.enabled);
+      const wecomEnabled = Boolean(wecomRow?.enabled);
+      const ldapConfigured = Boolean(ldapRow?.hasConfig);
+      const feishuConfigured = Boolean(feishuRow?.hasConfig);
+      const dingtalkConfigured = Boolean(dingtalkRow?.hasConfig);
+      const wecomConfigured = Boolean(wecomRow?.hasConfig);
+      const mode =
+        ldapEnabled || feishuEnabled || dingtalkEnabled || wecomEnabled ? 'enterprise' : 'standalone';
       res.json({
         success: true,
-        data: { mode, ldapEnabled, feishuEnabled },
+        data: {
+          mode,
+          ldapEnabled,
+          feishuEnabled,
+          dingtalkEnabled,
+          wecomEnabled,
+          ldapConfigured,
+          feishuConfigured,
+          dingtalkConfigured,
+          wecomConfigured,
+        },
       });
     } catch (error) {
       console.error('[AuthRoute] login-ui error:', error);
@@ -448,6 +469,7 @@ export function registerAuthRoutes(app: Express): void {
         success: true,
         data: {
           ...data,
+          role: req.user?.role,
           canCreateEnterprise: !joined && req.user?.role === 'system_admin',
         },
       });

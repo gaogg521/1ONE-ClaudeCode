@@ -22,6 +22,7 @@ import SiderSearchEntry from './SiderSearchEntry';
 import SiderScheduledEntry from './SiderScheduledEntry';
 import SiderFooter from './SiderFooter';
 import CronJobSiderSection from './CronJobSiderSection';
+import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 
 const TEAM_PINNED_KEY = 'team-pinned-ids';
 
@@ -97,6 +98,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     return [...pinned, ...unpinned];
   }, [teams, pinnedIds]);
   const { jobs: cronJobs } = useAllCronJobs();
+  const { showTeamsFeature, isEnterpriseEdition, hasJoinedEnterprise } = useEditionFeatures();
   const isSettings = pathname.startsWith('/settings');
   const lastNonSettingsPathRef = useRef('/guid');
 
@@ -233,11 +235,32 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
             />
             {/* Scrollable content: team + scheduled tasks + conversation history */}
             <div className='flex-1 min-h-0 overflow-y-auto'>
-              {/* Team section */}
-              {collapsed ? (
-                sortedTeams.length > 0 && (
-                  <div className='shrink-0 mb-4px'>
-                    {sortedTeams.map((team) => {
+              {/* Team section — 企业版且已加入企业 */}
+              {isEnterpriseEdition && !hasJoinedEnterprise && !collapsed ? (
+                <div className='shrink-0 mb-8px px-12px py-8px rd-8px border border-dashed border-border-2 bg-fill-2'>
+                  <span className='text-12px text-t-tertiary leading-relaxed'>
+                    {t('settings.edition.teamsNeedJoin', {
+                      defaultValue: '加入企业后，可在此创建与管理「团队」协作会话。',
+                    })}
+                  </span>
+                </div>
+              ) : null}
+              {showTeamsFeature && collapsed ? (
+                <div className='shrink-0 mb-4px'>
+                  <Tooltip
+                    {...siderTooltipProps}
+                    content={t('team.sider.createTeam', { defaultValue: '新建团队' })}
+                    position='right'
+                  >
+                    <div
+                      className='w-full py-6px flex items-center justify-center cursor-pointer transition-colors rd-8px hover:bg-fill-3 active:bg-fill-4'
+                      onClick={() => setCreateTeamVisible(true)}
+                    >
+                      <Plus theme='outline' size='20' fill={iconColors.primary} style={{ lineHeight: 0 }} />
+                    </div>
+                  </Tooltip>
+                  {sortedTeams.length > 0 &&
+                    sortedTeams.map((team) => {
                       const isActive = pathname.startsWith(`/team/${team.id}`);
                       return (
                         <Tooltip key={team.id} {...siderTooltipProps} content={team.name} position='right'>
@@ -265,12 +288,13 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                         </Tooltip>
                       );
                     })}
-                  </div>
-                )
-              ) : (
+                </div>
+              ) : showTeamsFeature ? (
                 <div className='shrink-0 mb-4px'>
                   <div className='flex items-center justify-between px-12px py-8px'>
-                    <span className='text-13px text-t-secondary font-bold leading-20px'>{t('team.sider.title')}</span>
+                    <span className='text-13px text-t-secondary font-bold leading-20px'>
+                      {t('team.sider.titleEnterprise', { defaultValue: '团队（企业版）' })}
+                    </span>
                     <div
                       className='h-20px w-20px rd-4px flex items-center justify-center cursor-pointer hover:bg-fill-3 transition-all shrink-0'
                       onClick={() => setCreateTeamVisible(true)}
@@ -346,7 +370,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                       );
                     })}
                 </div>
-              )}
+              ) : null}
               {/* Scheduled section */}
               {!collapsed && (
                 <CronJobSiderSection jobs={cronJobs} pathname={pathname} onNavigate={handleCronNavigate} />

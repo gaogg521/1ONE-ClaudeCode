@@ -290,7 +290,7 @@
   "webui.managementModeTitle": "Yönetim modu",
   "webui.managementModeDesc": "Varsayılan olarak bu makinenin WebUI'sini (etkinleştirme, port, yerel admin, parola) yönetirsiniz. \"{{tenant}}\" kuruluşuna katıldıktan sonra kullanıcılar, LDAP, Feishu ve daha fazlası için kurumsal yönetime geçebilirsiniz.",
   "webui.managementModeStandalone": "Bağımsız WebUI",
-  "webui.managementModeEnterprise": "Kurumsal yönetim",
+  "webui.managementModeEnterprise": "Kurumsal çalışma alanı",
   "webui.enterpriseDesktopHint": "Kurumsal yönetim (kullanıcılar, LDAP, Feishu, SMTP vb.) tarayıcıda WebUI açıp kurumsal yönetici hesabıyla oturum açmayı gerektirir.",
   "webui.enterpriseDesktopOnlyBrowser": "Masaüstü uygulamasında tam kurumsal yönetim yoktur. Yönetmek için tarayıcıda WebUI açın.",
   "webui.openEnterpriseInBrowser": "Kurumsal yönetimi tarayıcıda aç",

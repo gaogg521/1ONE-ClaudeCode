@@ -36,6 +36,7 @@ interface LoginResult {
   message?: string;
   code?: LoginErrorCode;
   shouldClearCache?: boolean;
+  user?: AuthUser;
 }
 
 interface AuthContextValue {
@@ -237,7 +238,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         (window as any).__websocketReconnect();
       }
 
-      return { success: true };
+      return { success: true, user: data.user };
     } catch (error) {
       console.error('Login request failed:', error);
 
@@ -299,7 +300,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       if (typeof window !== 'undefined' && (window as any).__websocketReconnect) {
         (window as any).__websocketReconnect();
       }
-      return { success: true };
+      return { success: true, user: data.user };
     } catch (error) {
       console.error('LDAP login request failed:', error);
       return { success: false, message: 'Network error. Please try again.', code: 'networkError' };
@@ -311,6 +312,9 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       setUser(null);
       setStatus('authenticated');
       setReady(true);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+      }
       return;
     }
 

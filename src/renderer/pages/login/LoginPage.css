@@ -138,6 +138,33 @@ body.login-page-active {
   background-color: #fff;
 }
 
+/* Force light inputs on the login card (global dark theme otherwise paints fields black) */
+.login-page__card :global(.arco-input-wrapper),
+.login-page__card :global(.arco-input-inner-wrapper),
+.login-page__card :global(.arco-input),
+.login-page__card :global(.arco-input-password) {
+  background-color: #fff !important;
+  color: #1d2129 !important;
+  border-color: #e5e6eb !important;
+}
+
+.login-page__card :global(.arco-input::placeholder) {
+  color: #86909c !important;
+}
+
+.login-page__card :global(.arco-input-group-prefix),
+.login-page__card :global(.arco-input-group-suffix),
+.login-page__card :global(.arco-input-prefix),
+.login-page__card :global(.arco-input-suffix) {
+  color: #86909c !important;
+}
+
+.login-page__card :global(.arco-alert) {
+  background-color: #f2f3f5 !important;
+  border-color: #e5e6eb !important;
+  color: #4e5969 !important;
+}
+
 .login-page__card-head {
   text-align: center;
   margin-bottom: 20px;

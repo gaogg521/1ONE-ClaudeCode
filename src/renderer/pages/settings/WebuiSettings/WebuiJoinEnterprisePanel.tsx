@@ -88,7 +88,7 @@ const WebuiJoinEnterprisePanel: React.FC = () => {
       );
       setInviteCode('');
       setPreviewName(null);
-      void navigate('/enterprise');
+      void navigate('/sessions');
     } catch (e) {
       Message.error(mapJoinError(e));
     } finally {
@@ -112,11 +112,11 @@ const WebuiJoinEnterprisePanel: React.FC = () => {
       Message.success(
         t('settings.webui.createEnterpriseSuccess', {
           tenant: name,
-          defaultValue: '已创建企业「{{tenant}}」，可切换到企业版管理',
+          defaultValue: '已创建企业「{{tenant}}」。请在标题栏切换到「企业版」进入工作区；组织管理请用侧栏「管理后台」。',
         })
       );
       setOrgName('');
-      void navigate('/enterprise');
+      void navigate('/sessions');
     } catch (e) {
       Message.error(mapJoinError(e));
     } finally {

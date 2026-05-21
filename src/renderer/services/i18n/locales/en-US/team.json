@@ -1,6 +1,7 @@
 {
   "sider": {
     "title": "Teams",
+    "titleEnterprise": "Teams (Enterprise)",
     "createTeam": "New Team",
     "pin": "Pin",
     "unpin": "Unpin",

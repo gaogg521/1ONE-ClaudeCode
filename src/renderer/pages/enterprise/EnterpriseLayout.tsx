@@ -7,10 +7,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Input, Menu, Message, Modal, Select, Spin, Tag, Typography } from '@arco-design/web-react';
 import { ArrowLeft, Copy, EveryUser, Globe, Mail, Setting, TicketOne } from '@icon-park/react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { EnterpriseElevationPasswordMethod } from '@/common/types/enterpriseElevation';
 import Titlebar from '@/renderer/components/layout/Titlebar';
+import EditionModeSwitcher from '@/renderer/components/layout/EditionModeSwitcher';
 import { EnterpriseGateProvider } from '@/renderer/pages/settings/enterpriseGateContext';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
@@ -21,7 +22,7 @@ import {
   postEnterpriseElevateRevoke,
 } from '@/renderer/utils/enterpriseElevationApi';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
-import EnterpriseOnboarding from '@/renderer/pages/enterprise/EnterpriseOnboarding';
+import { ENTERPRISE_JOIN_PATH, ENTERPRISE_WORKSPACE_PATH } from '@/renderer/pages/enterprise/paths';
 import {
   ENTERPRISE_NAV_ITEMS,
   enterpriseNavKeyFromPath,
@@ -35,6 +36,7 @@ import {
   VERIFY_CHOICE_STORAGE_KEY,
 } from '@/renderer/pages/enterprise/enterpriseElevationUi';
 import { ENTERPRISE_HOME_PATH, ENTERPRISE_USERS_PATH } from '@/renderer/pages/enterprise/paths';
+import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import styles from '@/renderer/pages/enterprise/EnterpriseLayout.module.css';
 
 const EnterpriseLayout: React.FC = () => {
@@ -48,6 +50,7 @@ const EnterpriseLayout: React.FC = () => {
     hasJoinedEnterprise,
     showEnterpriseConsoleNav,
     enterpriseContext,
+    effectiveRole,
     openEnterpriseAdminInBrowser,
     webuiApiBase,
   } = useWebuiEnterpriseMode();
@@ -146,9 +149,7 @@ const EnterpriseLayout: React.FC = () => {
     elevatePasswordMethod,
     hasLdapPassword,
     hasLocalPassword,
-    selectedVerifyOption?.kind,
-    selectedVerifyOption?.locked,
-    selectedVerifyOption?.lockedReason,
+    selectedVerifyOption,
     showPasswordForm,
     t,
   ]);
@@ -210,6 +211,8 @@ const EnterpriseLayout: React.FC = () => {
   }, [enterpriseModeLoading, hasJoinedEnterprise, isDesktop, loadElevation, t]);
 
   const fullAccess = eligible && elevated;
+  const isOrgAdmin = isEnterpriseAdminRole(effectiveRole ?? user?.role);
+  const memberWorkspacePath = ENTERPRISE_WORKSPACE_PATH;
   const activeNavKey = enterpriseNavKeyFromPath(location.pathname);
   const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId ?? '';
 
@@ -440,20 +443,20 @@ const EnterpriseLayout: React.FC = () => {
   }
 
   if (!hasJoinedEnterprise) {
-    return (
-      <div className='app-shell flex flex-col size-full min-h-0 bg-1'>
-        <Titlebar workspaceAvailable={false} />
-        <div className='flex-1 overflow-y-auto'>
-          <EnterpriseOnboarding />
-        </div>
-      </div>
-    );
+    return <Navigate to={ENTERPRISE_JOIN_PATH} replace />;
+  }
+
+  if (!isOrgAdmin) {
+    return <Navigate to={memberWorkspacePath} replace />;
   }
 
   if (isDesktop) {
     return (
       <div className='app-shell flex flex-col size-full min-h-0'>
         <Titlebar workspaceAvailable={false} />
+        <div className='px-16px pt-8px'>
+          <EditionModeSwitcher variant='bar' />
+        </div>
         <div className={styles.desktopShell}>
           <div className={styles.desktopInner}>
             <div className={styles.desktopCard}>
@@ -581,6 +584,9 @@ const EnterpriseLayout: React.FC = () => {
     <EnterpriseGateProvider value={gateValue}>
       <div className='app-shell flex flex-col size-full min-h-0 bg-1'>
         <Titlebar workspaceAvailable={false} />
+        <div className='px-16px pt-8px shrink-0'>
+          <EditionModeSwitcher variant='bar' />
+        </div>
         <div className='flex flex-1 min-h-0'>
           <aside className={styles.sidebar}>
             <div className='px-16px pt-16px pb-12px border-b border-border-2'>

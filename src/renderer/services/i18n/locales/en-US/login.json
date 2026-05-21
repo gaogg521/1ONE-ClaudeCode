@@ -37,11 +37,20 @@
     "feishu": "Feishu account",
     "feishuOauth": "Sign in with Feishu",
     "feishuQrTitle": "Or scan with Feishu",
-    "feishuQrError": "Failed to initialize Feishu QR"
+    "feishuQrError": "Failed to initialize Feishu QR",
+    "dingtalk": "DingTalk",
+    "wecom": "WeCom",
+    "dingtalkOauth": "Sign in with DingTalk",
+    "wecomOauth": "Sign in with WeCom",
+    "oauthPending": "{{provider}} OAuth callback is not wired yet. Use LDAP, Feishu, or local sign-in, or join with an invite code after login."
   },
+  "enterpriseRedirectHint": "After sign-in you will enter the enterprise workspace. You can also join an org with an invite code.",
   "orDivider": "Or",
   "showFeishuQr": "Show Feishu QR sign-in",
   "hideFeishuQr": "Hide Feishu QR",
+  "providersDisabledHint": "Enterprise sign-in methods are configured but not enabled. Ask your org admin to enable LDAP, Feishu, DingTalk, or WeCom under Enterprise console → Authentication.",
+  "inviteTitle": "Or join with an invite code",
+  "inviteCoexist": "Invite codes work alongside enterprise sign-in: sign in with any method above (local, LDAP, Feishu, etc.), then open Enterprise and enter your invite code.",
   "errors": {
     "empty": "Please enter username and password",
     "invalidCredentials": "Invalid username or password",

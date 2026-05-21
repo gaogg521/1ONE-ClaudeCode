@@ -290,7 +290,7 @@
   "webui.managementModeTitle": "管理模式",
   "webui.managementModeDesc": "預設管理本機 WebUI（啟用、連接埠、本機 admin 與密碼）。已加入企業「{{tenant}}」時，可切換到企業版後台管理使用者、LDAP、飛書等。",
   "webui.managementModeStandalone": "單機 WebUI",
-  "webui.managementModeEnterprise": "企業版管理",
+  "webui.managementModeEnterprise": "企業版（工作區）",
   "webui.enterpriseDesktopHint": "企業版後台（使用者、LDAP、飛書、SMTP 等）需在瀏覽器中開啟 WebUI 並以企業管理員帳號登入後使用。",
   "webui.enterpriseDesktopOnlyBrowser": "桌面應用內不提供完整企業後台，請使用瀏覽器開啟 WebUI 進行管理。",
   "webui.openEnterpriseInBrowser": "在瀏覽器中開啟企業後台",

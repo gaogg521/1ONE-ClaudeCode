@@ -5,6 +5,7 @@
   "tasks": "Tasks",
   "admin": "Admin",
   "enterpriseConsole": "Enterprise",
+  "enterpriseAdmin": "Admin console",
   "hooks": "Hooks",
   "mcp": "MCP",
   "memory": "Memory",

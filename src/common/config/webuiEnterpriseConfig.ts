@@ -17,6 +17,8 @@ export type EnterpriseContextSnapshot = {
   joined: boolean;
   tenantId: string;
   tenantName: string | null;
+  /** 桌面端 IPC 返回本地 WebUI 管理员角色；Web 端通常由 AuthContext.user 提供 */
+  role?: string;
   /** True when user may create a new enterprise (system_admin, not yet in a tenant). */
   canCreateEnterprise?: boolean;
 };

@@ -13,6 +13,7 @@
   - `docs/development.md`：本地开发、常用脚本、环境说明
   - `docs/WEBUI_GUIDE.md`：WebUI 使用与注意事项
   - `docs/SERVER_DEPLOY_GUIDE.md`：服务端部署（如果涉及）
+  - `docs/product/edition-personal-vs-enterprise.md`：个人版 / 企业版工作区 / 管理后台（产品文案源，改 UI 文案时先读）
 
 - **架构与约束**
   - `docs/tech/architecture.md`：三进程架构、边界、IPC 约束

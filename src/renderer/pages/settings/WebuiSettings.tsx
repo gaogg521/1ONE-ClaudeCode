@@ -7,11 +7,13 @@
 import React from 'react';
 import WebuiModalContent from '@/renderer/components/settings/SettingsModal/contents/WebuiModalContent';
 import SettingsPageWrapper from './components/SettingsPageWrapper';
+import WebuiEditionHelpPanel from '@/renderer/pages/settings/WebuiSettings/WebuiEditionHelpPanel';
 import WebuiStandaloneBanner from '@/renderer/pages/settings/WebuiSettings/WebuiStandaloneBanner';
 
 const WebuiSettings: React.FC = () => {
   return (
     <SettingsPageWrapper>
+      <WebuiEditionHelpPanel />
       <WebuiStandaloneBanner />
       <WebuiModalContent />
     </SettingsPageWrapper>

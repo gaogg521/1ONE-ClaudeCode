@@ -207,8 +207,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-.desktopUrlInput :global(.arco-input-inner-wrapper) {
-  background: var(--color-fill-2) !important;
+.desktopUrlInput :global(.arco-input-wrapper),
+.desktopUrlInput :global(.arco-input-inner-wrapper),
+.desktopUrlInput :global(.arco-input) {
+  background: #fff !important;
+  color: #1d2129 !important;
+  border-color: #e5e6eb !important;
 }
 
 .desktopActions {

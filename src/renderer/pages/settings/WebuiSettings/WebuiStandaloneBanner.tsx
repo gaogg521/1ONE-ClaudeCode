@@ -8,27 +8,44 @@ import React from 'react';
 import { Alert, Button } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 
-/** Shown on standalone WebUI settings only — links to the separate enterprise console. */
+/** 单机 WebUI 设置页提示：企业版工作区与管理后台是不同入口 */
 const WebuiStandaloneBanner: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const isDesktop = isElectronDesktop();
-  const { loading, hasJoinedEnterprise } = useWebuiEnterpriseMode();
+  const { user } = useAuth();
+  const {
+    loading,
+    hasJoinedEnterprise,
+    effectiveRole,
+    setManagementMode,
+    openEnterpriseAdminInBrowser,
+  } = useWebuiEnterpriseMode();
 
   if (loading || !hasJoinedEnterprise) {
     return null;
   }
 
-  const openEnterprise = () => {
+  const openEnterpriseWorkspace = () => {
+    void setManagementMode('enterprise').then(() => {
+      void navigate('/sessions');
+    });
+  };
+
+  const openAdminConsole = () => {
     if (isDesktop) {
-      void navigate('/enterprise');
+      void openEnterpriseAdminInBrowser();
       return;
     }
     void navigate('/enterprise');
   };
+
+  const isAdmin = isEnterpriseAdminRole(effectiveRole ?? user?.role);
 
   return (
     <Alert
@@ -38,19 +55,24 @@ const WebuiStandaloneBanner: React.FC = () => {
         isDesktop
           ? t('settings.webui.standalonePageHintDesktop', {
               defaultValue:
-                '此页仅配置本机 WebUI（端口、admin 密码等）。企业治理请在侧栏进入「企业控制台」，完整后台需在浏览器中打开。',
+                '此页仅配置本机 WebUI。已加入企业后：「企业版」工作区在会话侧栏切换；组织管理（LDAP、邀请码）请点「管理后台」。',
             })
           : t('settings.webui.standalonePageHint', {
               defaultValue:
-                '此页仅配置本机 WebUI（端口、admin 密码等）。企业成员、LDAP、邀请码等请使用独立的企业控制台。',
+                '此页仅配置本机 WebUI。「企业版」工作区与管理后台是独立入口，请使用标题栏版本切换或侧栏管理后台。',
             })
       }
       action={
-        <Button size='small' type='primary' onClick={openEnterprise}>
-          {isDesktop
-            ? t('settings.webui.openEnterpriseConsoleDesktop', { defaultValue: '企业控制台' })
-            : t('settings.webui.openEnterpriseConsole', { defaultValue: '打开企业控制台' })}
-        </Button>
+        <div className='flex flex-col gap-8px items-end'>
+          <Button size='small' type='primary' onClick={openEnterpriseWorkspace}>
+            {t('settings.webui.openEnterpriseWorkspace', { defaultValue: '进入企业版工作区' })}
+          </Button>
+          {isAdmin ? (
+            <Button size='small' type='outline' onClick={openAdminConsole}>
+              {t('settings.webui.openEnterpriseAdmin', { defaultValue: '打开管理后台' })}
+            </Button>
+          ) : null}
+        </div>
       }
     />
   );

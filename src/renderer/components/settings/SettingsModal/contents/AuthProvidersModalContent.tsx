@@ -12,7 +12,7 @@ import { fetchWebuiApiJson, type WebuiApiJsonError } from '@/renderer/utils/webu
 import { buildLdapUrl, LDAP_DEFAULT_PORT, parseLdapUrl } from '@/renderer/utils/ldapProviderFormUtils';
 import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
 
-type ProviderId = 'ldap' | 'feishu';
+type ProviderId = 'ldap' | 'feishu' | 'dingtalk' | 'wecom' | 'smtp';
 
 type ProviderResponse = {
   provider: ProviderId;
@@ -67,18 +67,29 @@ function coerceLdapConfig(row: Record<string, unknown>): LdapEditableConfig {
   };
 }
 
-/** Persisted LDAP row: advanced keys stay server-side defaulted; clearing on save avoids stale merged values */
-function ldapConfigForPersist(
-  form: LdapEditableConfig
-): Omit<LdapEditableConfig, 'tlsSkipCertVerify' | 'bindPasswordIsMasked'> & {
+type LdapPersistedConfig = {
+  url: string;
+  baseDN: string;
+  bindDN: string;
+  bindAccount: string;
+  bindPassword: string;
   searchFilter: string;
   externalIdAttribute: string;
   tlsRejectUnauthorized: boolean;
-} {
+  loginAttribute: string;
+  adminGroupDN: string;
+};
+
+/** Persisted LDAP row: advanced keys stay server-side defaulted; clearing on save avoids stale merged values */
+function ldapConfigForPersist(form: LdapEditableConfig): LdapPersistedConfig {
   const { tlsSkipCertVerify, bindPasswordIsMasked, bindPassword, host, port, useTls, ...rest } = form;
   const trimmedPwd = bindPassword.trim();
   return {
-    ...rest,
+    baseDN: rest.baseDN,
+    bindDN: rest.bindDN,
+    bindAccount: rest.bindAccount,
+    loginAttribute: rest.loginAttribute,
+    adminGroupDN: rest.adminGroupDN,
     url: buildLdapUrl({ host, port, useTls }),
     bindPassword: trimmedPwd || (bindPasswordIsMasked ? '******' : ''),
     searchFilter: '',
@@ -142,6 +153,7 @@ const AuthProvidersModalContent: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [testingLdap, setTestingLdap] = useState(false);
   const [testingFeishu, setTestingFeishu] = useState(false);
+  const [testingSmtp, setTestingSmtp] = useState(false);
   const saveBusyRef = useRef(false);
 
   const [ldapEnabled, setLdapEnabled] = useState(false);
@@ -165,6 +177,36 @@ const AuthProvidersModalContent: React.FC = () => {
     appSecret: '',
     redirectUri: '',
     externalIdField: 'union_id',
+  });
+
+  const [dingtalkEnabled, setDingtalkEnabled] = useState(false);
+  const [dingtalkSecretMasked, setDingtalkSecretMasked] = useState(false);
+  const [dingtalkConfig, setDingtalkConfig] = useState({
+    appKey: '',
+    appSecret: '',
+    corpId: '',
+    redirectUri: '',
+  });
+
+  const [wecomEnabled, setWecomEnabled] = useState(false);
+  const [wecomSecretMasked, setWecomSecretMasked] = useState(false);
+  const [wecomConfig, setWecomConfig] = useState({
+    corpId: '',
+    agentId: '',
+    secret: '',
+    redirectUri: '',
+  });
+
+  const [smtpEnabled, setSmtpEnabled] = useState(false);
+  const [smtpConfig, setSmtpConfig] = useState({
+    host: '',
+    port: '587',
+    secure: false,
+    user: '',
+    pass: '',
+    passIsMasked: false,
+    from: '',
+    testToEmail: '',
   });
 
   const feishuCallbackUrl = useMemo(
@@ -193,16 +235,57 @@ const AuthProvidersModalContent: React.FC = () => {
     if (provider === 'ldap') {
       setLdapEnabled(Boolean(data.enabled));
       setLdapConfig(coerceLdapConfig(data.config));
-    } else {
+      return;
+    }
+    if (provider === 'feishu') {
       setFeishuEnabled(Boolean(data.enabled));
       setFeishuConfig((prev) => ({ ...prev, ...data.config }));
+      return;
     }
+    if (provider === 'dingtalk') {
+      setDingtalkEnabled(Boolean(data.enabled));
+      setDingtalkSecretMasked(data.config.appSecret === '******');
+      setDingtalkConfig((prev) => ({
+        appKey: String(data.config.appKey ?? prev.appKey),
+        appSecret: data.config.appSecret === '******' ? '' : String(data.config.appSecret ?? prev.appSecret),
+        corpId: String(data.config.corpId ?? prev.corpId),
+        redirectUri: String(data.config.redirectUri ?? prev.redirectUri),
+      }));
+      return;
+    }
+    if (provider === 'wecom') {
+      setWecomEnabled(Boolean(data.enabled));
+      setWecomSecretMasked(data.config.secret === '******');
+      setWecomConfig((prev) => ({
+        corpId: String(data.config.corpId ?? prev.corpId),
+        agentId: String(data.config.agentId ?? prev.agentId),
+        secret: data.config.secret === '******' ? '' : String(data.config.secret ?? prev.secret),
+        redirectUri: String(data.config.redirectUri ?? prev.redirectUri),
+      }));
+      return;
+    }
+    setSmtpEnabled(Boolean(data.enabled));
+    setSmtpConfig((prev) => ({
+      host: String(data.config.host ?? prev.host),
+      port: String(data.config.port ?? prev.port),
+      secure: data.config.secure === true || String(data.config.secure) === 'true',
+      user: String(data.config.user ?? prev.user),
+      pass: data.config.pass === '******' ? '' : String(data.config.pass ?? prev.pass),
+      passIsMasked: data.config.pass === '******',
+      from: String(data.config.from ?? prev.from),
+      testToEmail: prev.testToEmail,
+    }));
   }, []);
 
   useEffect(() => {
     setLoading(true);
-    loadProvider('ldap')
-      .then(() => loadProvider('feishu'))
+    Promise.all([
+      loadProvider('ldap'),
+      loadProvider('feishu'),
+      loadProvider('dingtalk'),
+      loadProvider('wecom'),
+      loadProvider('smtp'),
+    ])
       .catch((error) => {
         Message.error(formatAuthProviderError(error, t));
       })
@@ -226,10 +309,47 @@ const AuthProvidersModalContent: React.FC = () => {
             method: 'PUT',
             body: JSON.stringify({ enabled: ldapEnabled, config: ldapConfigForPersist(ldapConfig) }),
           });
-        } else {
+        } else if (provider === 'feishu') {
           await apiFetch(`/api/admin/auth/providers/${provider}`, {
             method: 'PUT',
             body: JSON.stringify({ enabled: feishuEnabled, config: feishuConfig }),
+          });
+        } else if (provider === 'dingtalk') {
+          await apiFetch(`/api/admin/auth/providers/${provider}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              enabled: dingtalkEnabled,
+              config: {
+                ...dingtalkConfig,
+                appSecret: dingtalkConfig.appSecret.trim() || (dingtalkSecretMasked ? '******' : ''),
+              },
+            }),
+          });
+        } else if (provider === 'wecom') {
+          await apiFetch(`/api/admin/auth/providers/${provider}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              enabled: wecomEnabled,
+              config: {
+                ...wecomConfig,
+                secret: wecomConfig.secret.trim() || (wecomSecretMasked ? '******' : ''),
+              },
+            }),
+          });
+        } else {
+          await apiFetch(`/api/admin/auth/providers/${provider}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              enabled: smtpEnabled,
+              config: {
+                host: smtpConfig.host.trim(),
+                port: smtpConfig.port.trim(),
+                secure: smtpConfig.secure,
+                user: smtpConfig.user.trim(),
+                from: smtpConfig.from.trim(),
+                pass: smtpConfig.pass.trim() || (smtpConfig.passIsMasked ? '******' : ''),
+              },
+            }),
           });
         }
         Message.success(t('settings.authProviders.saveOk', { defaultValue: '已保存' }));
@@ -241,7 +361,22 @@ const AuthProvidersModalContent: React.FC = () => {
         saveBusyRef.current = false;
       }
     },
-    [feishuConfig, feishuEnabled, ldapConfig, ldapEnabled, loadProvider, t]
+    [
+      dingtalkConfig,
+      dingtalkEnabled,
+      dingtalkSecretMasked,
+      feishuConfig,
+      feishuEnabled,
+      ldapConfig,
+      ldapEnabled,
+      loadProvider,
+      smtpConfig,
+      smtpEnabled,
+      t,
+      wecomConfig,
+      wecomEnabled,
+      wecomSecretMasked,
+    ]
   );
 
   const testLdap = useCallback(async () => {
@@ -277,6 +412,41 @@ const AuthProvidersModalContent: React.FC = () => {
       setTestingFeishu(false);
     }
   }, [feishuConfig, t]);
+
+  const testSmtp = useCallback(async () => {
+    setTestingSmtp(true);
+    try {
+      await apiFetch(`/api/admin/auth/providers/smtp/test`, {
+        method: 'POST',
+        body: JSON.stringify({
+          config: {
+            host: smtpConfig.host.trim(),
+            port: smtpConfig.port.trim(),
+            secure: smtpConfig.secure,
+            user: smtpConfig.user.trim(),
+            from: smtpConfig.from.trim(),
+            pass: smtpConfig.pass.trim() || (smtpConfig.passIsMasked ? '******' : ''),
+          },
+          toEmail: smtpConfig.testToEmail.trim() || smtpConfig.from.trim(),
+        }),
+      });
+      Message.success(t('settings.authProviders.smtpTestSuccess', { defaultValue: 'SMTP 测试成功（已验证连接并尝试发送测试邮件）' }));
+    } catch (error) {
+      Message.error(formatAuthProviderError(error, t));
+    } finally {
+      setTestingSmtp(false);
+    }
+  }, [smtpConfig, t]);
+
+  const oauthLoginPendingAlert = (
+    <Alert
+      className='mb-12px'
+      type='info'
+      content={t('settings.authProviders.oauthLoginPending', {
+        defaultValue: '配置保存后可在登录页显示入口；OAuth 登录回调流程仍在接入中，启用前请确认已在对应开放平台配置回调地址。',
+      })}
+    />
+  );
 
   return (
     <Tabs defaultActiveTab='ldap' type='rounded'>
@@ -549,19 +719,156 @@ const AuthProvidersModalContent: React.FC = () => {
       </Tabs.TabPane>
 
       <Tabs.TabPane key='dingtalk' title={t('settings.authProviders.tabDingTalk', { defaultValue: '钉钉' })}>
-        <Typography.Paragraph type='secondary' className='mt-16px'>
-          {t('settings.authProviders.providerComingSoonBody', {
-            defaultValue: '该企业登录方式将后续在此提供，可与 LDAP、飞书等方式并存启用。',
-          })}
-        </Typography.Paragraph>
+        <Card bordered className='mt-12px'>
+          {oauthLoginPendingAlert}
+          <div className='flex items-center justify-between mb-12px flex-wrap gap-8px'>
+            <span className='text-13px text-t-secondary'>
+              {t('settings.authProviders.dingtalkHint', {
+                defaultValue: '配置钉钉开放平台应用，用于企业扫码/免登登录（与 LDAP、飞书可并存）。',
+              })}
+            </span>
+            <Space>
+              <span className='text-13px text-t-tertiary'>{t('settings.authProviders.enableProvider', { defaultValue: '启用' })}</span>
+              <Switch checked={dingtalkEnabled} onChange={(v) => setDingtalkEnabled(Boolean(v))} disabled={loading} />
+            </Space>
+          </div>
+          <Form layout='vertical' disabled={loading}>
+            <Form.Item label={t('settings.authProviders.dingtalkAppKey', { defaultValue: 'AppKey / Client ID' })} required>
+              <Input value={dingtalkConfig.appKey} onChange={(v) => setDingtalkConfig((s) => ({ ...s, appKey: v }))} />
+            </Form.Item>
+            <Form.Item label={t('settings.authProviders.dingtalkAppSecret', { defaultValue: 'AppSecret' })} required>
+              <Input.Password
+                value={dingtalkConfig.appSecret}
+                onChange={(v) => {
+                  setDingtalkConfig((s) => ({ ...s, appSecret: v }));
+                  setDingtalkSecretMasked(false);
+                }}
+              />
+            </Form.Item>
+            <Form.Item label={t('settings.authProviders.dingtalkCorpId', { defaultValue: 'CorpId（可选）' })}>
+              <Input value={dingtalkConfig.corpId} onChange={(v) => setDingtalkConfig((s) => ({ ...s, corpId: v }))} />
+            </Form.Item>
+            <Form.Item label={t('settings.authProviders.dingtalkRedirectUri', { defaultValue: 'Redirect URI' })}>
+              <Input
+                value={dingtalkConfig.redirectUri}
+                onChange={(v) => setDingtalkConfig((s) => ({ ...s, redirectUri: v }))}
+                placeholder={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/auth/dingtalk/callback`}
+              />
+            </Form.Item>
+          </Form>
+          <div className='flex justify-end gap-8px flex-wrap mt-16px'>
+            <Button type='primary' loading={loading} onClick={() => void save('dingtalk')}>
+              {t('common.save', { defaultValue: '保存' })}
+            </Button>
+          </div>
+        </Card>
       </Tabs.TabPane>
 
       <Tabs.TabPane key='wecom' title={t('settings.authProviders.tabWeCom', { defaultValue: '企业微信' })}>
-        <Typography.Paragraph type='secondary' className='mt-16px'>
-          {t('settings.authProviders.providerComingSoonBody', {
-            defaultValue: '该企业登录方式将后续在此提供，可与 LDAP、飞书等方式并存启用。',
-          })}
-        </Typography.Paragraph>
+        <Card bordered className='mt-12px'>
+          {oauthLoginPendingAlert}
+          <div className='flex items-center justify-between mb-12px flex-wrap gap-8px'>
+            <span className='text-13px text-t-secondary'>
+              {t('settings.authProviders.wecomHint', {
+                defaultValue: '配置企业微信自建应用，用于成员扫码登录（与 LDAP、飞书可并存）。',
+              })}
+            </span>
+            <Space>
+              <span className='text-13px text-t-tertiary'>{t('settings.authProviders.enableProvider', { defaultValue: '启用' })}</span>
+              <Switch checked={wecomEnabled} onChange={(v) => setWecomEnabled(Boolean(v))} disabled={loading} />
+            </Space>
+          </div>
+          <Form layout='vertical' disabled={loading}>
+            <Form.Item label={t('settings.authProviders.wecomCorpId', { defaultValue: '企业 ID（CorpId）' })} required>
+              <Input value={wecomConfig.corpId} onChange={(v) => setWecomConfig((s) => ({ ...s, corpId: v }))} />
+            </Form.Item>
+            <Form.Item label={t('settings.authProviders.wecomAgentId', { defaultValue: '应用 AgentId' })} required>
+              <Input value={wecomConfig.agentId} onChange={(v) => setWecomConfig((s) => ({ ...s, agentId: v }))} />
+            </Form.Item>
+            <Form.Item label={t('settings.authProviders.wecomSecret', { defaultValue: '应用 Secret' })} required>
+              <Input.Password
+                value={wecomConfig.secret}
+                onChange={(v) => {
+                  setWecomConfig((s) => ({ ...s, secret: v }));
+                  setWecomSecretMasked(false);
+                }}
+              />
+            </Form.Item>
+            <Form.Item label={t('settings.authProviders.wecomRedirectUri', { defaultValue: 'Redirect URI' })}>
+              <Input
+                value={wecomConfig.redirectUri}
+                onChange={(v) => setWecomConfig((s) => ({ ...s, redirectUri: v }))}
+                placeholder={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/auth/wecom/callback`}
+              />
+            </Form.Item>
+          </Form>
+          <div className='flex justify-end gap-8px flex-wrap mt-16px'>
+            <Button type='primary' loading={loading} onClick={() => void save('wecom')}>
+              {t('common.save', { defaultValue: '保存' })}
+            </Button>
+          </div>
+        </Card>
+      </Tabs.TabPane>
+
+      <Tabs.TabPane key='smtp' title={t('settings.authProviders.tabSmtp', { defaultValue: '邮件 SMTP' })}>
+        <Card bordered className='mt-12px'>
+          <div className='flex items-center justify-between mb-12px flex-wrap gap-8px'>
+            <span className='text-13px text-t-secondary'>
+              {t('settings.authProviders.smtpHint', {
+                defaultValue:
+                  '用于管理员密码重置邮件、企业通知等。保存后优先于环境变量 ONE_SMTP_*；未启用时仍可使用环境变量。',
+              })}
+            </span>
+            <Space>
+              <span className='text-13px text-t-tertiary'>{t('settings.authProviders.enableProvider', { defaultValue: '启用' })}</span>
+              <Switch checked={smtpEnabled} onChange={(v) => setSmtpEnabled(Boolean(v))} disabled={loading} />
+            </Space>
+          </div>
+          <Form layout='vertical' disabled={loading}>
+            <Form.Item label={t('settings.authProviders.smtpHost', { defaultValue: 'SMTP 主机' })} required>
+              <Input value={smtpConfig.host} onChange={(v) => setSmtpConfig((s) => ({ ...s, host: v }))} placeholder='smtp.example.com' />
+            </Form.Item>
+            <Form.Item label={t('settings.authProviders.smtpPort', { defaultValue: '端口' })} required>
+              <Input value={smtpConfig.port} onChange={(v) => setSmtpConfig((s) => ({ ...s, port: v.replace(/\D/g, '') }))} placeholder='587' />
+            </Form.Item>
+            <Form.Item label={t('settings.authProviders.smtpSecure', { defaultValue: 'TLS / SSL（secure）' })}>
+              <Switch checked={smtpConfig.secure} onChange={(v) => setSmtpConfig((s) => ({ ...s, secure: Boolean(v) }))} />
+            </Form.Item>
+            <Form.Item label={t('settings.authProviders.smtpUser', { defaultValue: '用户名' })} required>
+              <Input value={smtpConfig.user} onChange={(v) => setSmtpConfig((s) => ({ ...s, user: v }))} />
+            </Form.Item>
+            <Form.Item label={t('settings.authProviders.smtpPass', { defaultValue: '密码' })} required={!smtpConfig.passIsMasked}>
+              <Input.Password
+                value={smtpConfig.pass}
+                onChange={(v) => setSmtpConfig((s) => ({ ...s, pass: v, passIsMasked: false }))}
+                placeholder={
+                  smtpConfig.passIsMasked
+                    ? t('settings.authProviders.ldapBindPasswordMaskedPlaceholder', {
+                        defaultValue: '已保存密码，留空则不修改；输入新密码可覆盖',
+                      })
+                    : undefined
+                }
+              />
+            </Form.Item>
+            <Form.Item label={t('settings.authProviders.smtpFrom', { defaultValue: '发件人地址（From）' })} required>
+              <Input value={smtpConfig.from} onChange={(v) => setSmtpConfig((s) => ({ ...s, from: v }))} placeholder='noreply@example.com' />
+            </Form.Item>
+            <Form.Item
+              label={t('settings.authProviders.smtpTestTo', { defaultValue: '测试收件人（可选）' })}
+              extra={t('settings.authProviders.smtpTestToHint', { defaultValue: '留空则向发件人地址发送测试邮件' })}
+            >
+              <Input value={smtpConfig.testToEmail} onChange={(v) => setSmtpConfig((s) => ({ ...s, testToEmail: v }))} />
+            </Form.Item>
+          </Form>
+          <div className='flex justify-end gap-8px flex-wrap mt-16px'>
+            <Button type='primary' loading={loading} onClick={() => void save('smtp')}>
+              {t('common.save', { defaultValue: '保存' })}
+            </Button>
+            <Button loading={testingSmtp} onClick={() => void testSmtp()} disabled={loading}>
+              {t('settings.authProviders.smtpTestSend', { defaultValue: '测试发信' })}
+            </Button>
+          </div>
+        </Card>
       </Tabs.TabPane>
     </Tabs>
   );

@@ -22,7 +22,9 @@ import { useMultiAgentDetection } from '@renderer/hooks/agent/useMultiAgentDetec
 import { cleanupSiderTooltips } from '@renderer/utils/ui/siderTooltip';
 import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShortcuts';
 import { isElectronDesktop } from '@renderer/utils/platform';
-import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import EditionRouteGuard from '@/renderer/components/layout/EditionRouteGuard';
+import EditionWorkspaceGuide from '@/renderer/components/layout/EditionWorkspaceGuide';
+import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import '@renderer/styles/layout.css';
 
 const useDebug = () => {
@@ -61,13 +63,20 @@ type NavItem = {
   labelDefault: string;
   path: string;
   paths?: string[];
+  /** 仅企业版工作区显示 */
+  enterpriseOnly?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
   { icon: <CommentOne theme='outline' size={18} />, labelKey: 'nav.sessions', labelDefault: 'Sessions', path: '/sessions', paths: ['/conversation'] },
   { icon: <FolderOpen theme='outline' size={18} />, labelKey: 'nav.workspace', labelDefault: 'Workspace', path: '/workspace' },
   { icon: <Checklist theme='outline' size={18} />, labelKey: 'nav.tasks', labelDefault: 'Tasks', path: '/tasks' },
-  { icon: <People theme='outline' size={18} />, labelKey: 'nav.enterpriseConsole', labelDefault: 'Enterprise', path: '/enterprise' },
+  {
+    icon: <People theme='outline' size={18} />,
+    labelKey: 'nav.enterpriseAdmin',
+    labelDefault: 'Admin console',
+    path: '/enterprise',
+  },
   { icon: <Lightning theme='outline' size={18} />, labelKey: 'nav.hooks', labelDefault: 'Hooks', path: '/hooks' },
   { icon: <Server theme='outline' size={18} />, labelKey: 'nav.mcp', labelDefault: 'MCP', path: '/mcp' },
   { icon: <Brain theme='outline' size={18} />, labelKey: 'nav.memory', labelDefault: 'Memory', path: '/memory' },
@@ -79,8 +88,14 @@ const SidebarNavIcons: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { showEnterpriseConsoleNav } = useWebuiEnterpriseMode();
-  const items = showEnterpriseConsoleNav ? NAV_ITEMS : NAV_ITEMS.filter((x) => x.path !== '/enterprise');
+  const { isEnterpriseEdition, showEnterpriseAdminNav } = useEditionFeatures();
+  let items = NAV_ITEMS;
+  if (!showEnterpriseAdminNav) {
+    items = items.filter((x) => x.path !== '/enterprise');
+  }
+  if (!isEnterpriseEdition) {
+    items = items.filter((x) => !x.enterpriseOnly);
+  }
   return (
     <div style={{
       display: 'flex',
@@ -475,6 +490,8 @@ const Layout: React.FC<{
                 : undefined
             }
           >
+            <EditionRouteGuard />
+            <EditionWorkspaceGuide />
             <Outlet />
             {multiAgentContextHolder}
             {directorySelectionContextHolder}

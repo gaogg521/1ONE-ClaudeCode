@@ -817,6 +817,7 @@ export type IWebUIEnterpriseContext = {
   joined: boolean;
   tenantId: string;
   tenantName: string | null;
+  role?: string;
   canCreateEnterprise?: boolean;
 };
 

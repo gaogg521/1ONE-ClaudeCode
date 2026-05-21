@@ -115,26 +115,9 @@ export class WebuiService {
     return createHash('sha256').update(code).digest('hex');
   }
 
-  private static getSmtpConfig():
-    | {
-        host: string;
-        port: number;
-        secure: boolean;
-        user: string;
-        pass: string;
-        from: string;
-      }
-    | null {
-    const host = String(process.env.ONE_SMTP_HOST ?? '').trim();
-    const portRaw = String(process.env.ONE_SMTP_PORT ?? '').trim();
-    const user = String(process.env.ONE_SMTP_USER ?? '').trim();
-    const pass = String(process.env.ONE_SMTP_PASS ?? '').trim();
-    const from = String(process.env.ONE_SMTP_FROM ?? '').trim();
-    if (!host || !portRaw || !user || !pass || !from) return null;
-    const port = Number.parseInt(portRaw, 10);
-    if (!Number.isFinite(port) || port <= 0) return null;
-    const secure = String(process.env.ONE_SMTP_SECURE ?? '').trim().toLowerCase() === 'true' || port === 465;
-    return { host, port, secure, user, pass, from };
+  private static async getSmtpConfig() {
+    const { resolveSmtpConfig } = await import('@process/webserver/auth/smtpConfig');
+    return resolveSmtpConfig();
   }
 
   static async requestResetPasswordEmailCode(): Promise<{ maskedEmail: string }> {
@@ -144,7 +127,7 @@ export class WebuiService {
       throw new Error('ADMIN_EMAIL_NOT_CONFIGURED');
     }
 
-    const smtp = this.getSmtpConfig();
+    const smtp = await this.getSmtpConfig();
     if (!smtp) {
       throw new Error('SMTP_NOT_CONFIGURED');
     }
@@ -372,6 +355,7 @@ export class WebuiService {
     const ctx = await resolveEnterpriseContext(adminUser.tenant_id);
     return {
       ...ctx,
+      role: adminUser.role,
       canCreateEnterprise: !ctx.joined && adminUser.role === 'system_admin',
     };
   }

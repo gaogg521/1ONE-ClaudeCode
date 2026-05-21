@@ -2,6 +2,8 @@ import React, { Suspense } from 'react';
 import { HashRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { resolvePostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
 import {
   consumePostLoginRedirect,
   readRedirectFromSearch,
@@ -15,6 +17,7 @@ const AdminUsers = React.lazy(() => import('@renderer/pages/admin/AdminUsers'));
 const AdminAuth = React.lazy(() => import('@renderer/pages/admin/AdminAuth'));
 const AdminInvites = React.lazy(() => import('@renderer/pages/admin/AdminInvites'));
 const AdminTeams = React.lazy(() => import('@renderer/pages/admin/AdminTeams'));
+const EnterpriseJoinLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseJoinLayout'));
 const EnterpriseLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseLayout'));
 const EnterpriseHome = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseHome'));
 const EnterpriseUsagePage = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseUsagePage'));
@@ -70,12 +73,17 @@ const ProtectedLayout: React.FC = () => {
 };
 
 const LoginRoute: React.FC = () => {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const location = useLocation();
+  const { loading: enterpriseLoading } = useWebuiEnterpriseMode();
 
   if (status === 'authenticated') {
+    if (enterpriseLoading) {
+      return <AppLoader />;
+    }
     const fromQuery = readRedirectFromSearch(location.search);
-    const target = fromQuery ?? consumePostLoginRedirect();
+    let target = fromQuery ?? consumePostLoginRedirect();
+    target = resolvePostLoginRedirectPath(target, user?.role, user?.tenant_id);
     return <Navigate to={target} replace />;
   }
 
@@ -159,6 +167,7 @@ const PanelRoute: React.FC = () => {
             <Route path='/scheduled/:jobId' element={withRouteFallback(TaskDetailPage)} />
           </Route>
 
+          <Route path='/enterprise/join' element={withRouteFallback(EnterpriseJoinLayout)} />
           <Route path='/enterprise' element={withRouteFallback(EnterpriseLayout)}>
             <Route index element={withRouteFallback(EnterpriseHome)} />
             <Route path='users' element={withRouteFallback(AdminUsers)} />

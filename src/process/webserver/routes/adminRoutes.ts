@@ -17,6 +17,8 @@ import { getDatabase } from '@process/services/database';
 import { testLdapConnection, type LdapProviderConfig } from '../auth/providers/LdapAuthProvider';
 import { resolveLocalUserForLdapEntry, searchLdapDirectoryForAdmin } from '../auth/ldapDirectorySearch';
 import { testFeishuAppCredentials } from '../auth/providers/FeishuAuthProvider';
+import nodemailer from 'nodemailer';
+import { resolvedSmtpFromConfig } from '../auth/smtpConfig';
 import { requireEnterpriseElevation } from '../auth/middleware/enterpriseElevationMiddleware';
 import { isEnterpriseAdminRole } from '../auth/enterpriseRoles';
 import { DEFAULT_TENANT_ID, isEnterpriseTenantId } from '@/common/config/webuiEnterpriseConfig';
@@ -31,7 +33,7 @@ import {
 const PROTECTED_IDS = new Set(['system_default_user']);
 
 /** Stored in `auth_providers` — extend when adding DingTalk/WeCom admin UI / login flows. */
-const CONFIGURABLE_AUTH_PROVIDERS = ['ldap', 'feishu', 'dingtalk', 'wecom'] as const;
+const CONFIGURABLE_AUTH_PROVIDERS = ['ldap', 'feishu', 'dingtalk', 'wecom', 'smtp'] as const;
 type ConfigurableAuthProvider = (typeof CONFIGURABLE_AUTH_PROVIDERS)[number];
 
 function isConfigurableAuthProvider(p: string): p is ConfigurableAuthProvider {
@@ -44,6 +46,7 @@ const MASK_SECRET_KEYS: Record<ConfigurableAuthProvider, string[]> = {
   feishu: ['appSecret'],
   dingtalk: ['appSecret', 'clientSecret'],
   wecom: ['secret'],
+  smtp: ['pass'],
 };
 
 /** admin-only 中间件（与侧栏企业入口、二次验证资格一致，含旧版 `admin` 角色） */
@@ -192,6 +195,45 @@ export function registerAdminRoutes(app: Express): void {
     } catch (err) {
       console.error('[AdminRoute] ldap user resolve error:', err);
       const message = err instanceof Error ? err.message : 'LDAP resolve failed';
+      res.status(400).json({ success: false, message });
+    }
+  });
+
+  // POST /api/admin/auth/providers/smtp/test — SMTP 连通性 / 试发
+  app.post('/api/admin/auth/providers/smtp/test', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+    try {
+      const bodyConfig =
+        req.body?.config && typeof req.body.config === 'object' ? (req.body.config as Record<string, unknown>) : {};
+      const existing = await AuthProviderRepository.getProvider('smtp');
+      const merged = { ...existing?.config, ...bodyConfig } as Record<string, unknown>;
+      if (merged.pass === '******') {
+        merged.pass = (existing?.config as { pass?: string })?.pass ?? '';
+      }
+      const smtp = resolvedSmtpFromConfig(merged);
+      if (!smtp) {
+        res.status(400).json({ success: false, message: 'SMTP host, port, user, pass, and from are required' });
+        return;
+      }
+      const transporter = nodemailer.createTransport({
+        host: smtp.host,
+        port: smtp.port,
+        secure: smtp.secure,
+        auth: { user: smtp.user, pass: smtp.pass },
+      });
+      await transporter.verify();
+      const toEmail = String(req.body?.toEmail ?? smtp.from).trim();
+      if (toEmail) {
+        await transporter.sendMail({
+          from: smtp.from,
+          to: toEmail,
+          subject: '1ONE SMTP 测试邮件',
+          text: '这是一封来自 1ONE 企业控制台的 SMTP 连通性测试邮件。',
+        });
+      }
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[AdminRoute] smtp test error:', err);
+      const message = err instanceof Error ? err.message : 'SMTP test failed';
       res.status(400).json({ success: false, message });
     }
   });

@@ -37,11 +37,20 @@
     "feishu": "飞书账号",
     "feishuOauth": "使用飞书登录",
     "feishuQrTitle": "或使用飞书扫码登录",
-    "feishuQrError": "飞书二维码初始化失败"
+    "feishuQrError": "飞书二维码初始化失败",
+    "dingtalk": "钉钉",
+    "wecom": "企业微信",
+    "dingtalkOauth": "使用钉钉登录",
+    "wecomOauth": "使用企业微信登录",
+    "oauthPending": "{{provider}} 登录回调正在接入。请先用 LDAP/飞书/本地账户登录，或使用邀请码加入。"
   },
+  "enterpriseRedirectHint": "登录成功后将进入企业版。您也可在登录后使用邀请码加入组织。",
   "orDivider": "或",
   "showFeishuQr": "显示飞书扫码登录",
   "hideFeishuQr": "收起飞书扫码",
+  "providersDisabledHint": "LDAP/飞书已在后台配置但未启用。请组织管理员在「企业控制台 → 认证与邮件」中启用后再使用域控/飞书登录。",
+  "inviteTitle": "或使用邀请码加入",
+  "inviteCoexist": "邀请码与企业账号登录可并存：先用上方任一方式登录（本地账户、LDAP、飞书等），登录成功后进入「企业」页输入邀请码即可加入。",
   "errors": {
     "empty": "请输入用户名和密码",
     "invalidCredentials": "用户名或密码错误",

@@ -31,7 +31,7 @@ export interface IUser {
   last_login?: number | null;
 }
 
-export type AuthProviderType = 'local' | 'ldap' | 'feishu' | 'dingtalk' | 'wecom';
+export type AuthProviderType = 'local' | 'ldap' | 'feishu' | 'dingtalk' | 'wecom' | 'smtp';
 
 export interface IAuthProviderRow {
   provider: AuthProviderType;

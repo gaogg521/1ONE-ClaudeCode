@@ -290,7 +290,7 @@
   "webui.managementModeTitle": "관리 모드",
   "webui.managementModeDesc": "기본적으로 이 기기의 WebUI(활성화, 포트, 로컬 admin, 비밀번호)를 관리합니다. 기업 \"{{tenant}}\"에 가입한 후 사용자, LDAP, Feishu 등 기업 관리로 전환할 수 있습니다.",
   "webui.managementModeStandalone": "단독 WebUI",
-  "webui.managementModeEnterprise": "기업 관리",
+  "webui.managementModeEnterprise": "기업판(워크스페이스)",
   "webui.enterpriseDesktopHint": "기업 관리(사용자, LDAP, Feishu, SMTP 등)는 브라우저에서 WebUI를 열고 기업 관리자 계정으로 로그인해야 합니다.",
   "webui.enterpriseDesktopOnlyBrowser": "데스크톱 앱에서는 전체 기업 관리를 사용할 수 없습니다. 브라우저에서 WebUI를 열어 관리하세요.",
   "webui.openEnterpriseInBrowser": "브라우저에서 기업 관리 열기",

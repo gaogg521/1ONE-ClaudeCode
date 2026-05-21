@@ -15,7 +15,7 @@ import ChannelLarkLogo from '@/renderer/assets/channel-logos/lark.svg';
 import ChannelSlackLogo from '@/renderer/assets/channel-logos/slack.svg';
 import ChannelTelegramLogo from '@/renderer/assets/channel-logos/telegram.svg';
 import ChannelWeixinLogo from '@/renderer/assets/channel-logos/weixin.svg';
-import { isElectronDesktop } from '@/renderer/utils/platform';
+import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
 import { Button, Collapse, Form, Input, Message, Switch, Tabs, Tooltip } from '@arco-design/web-react';
 import { Communication, Copy, Earth, EditTwo, Refresh } from '@icon-park/react';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
@@ -24,6 +24,7 @@ import { useSettingsViewMode } from '../settingsViewContext';
 import WebuiJoinEnterprisePanel from '@/renderer/pages/settings/WebuiSettings/WebuiJoinEnterprisePanel';
 import WebuiStandaloneBanner from '@/renderer/pages/settings/WebuiSettings/WebuiStandaloneBanner';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import EditionModeSwitcher from '@/renderer/components/layout/EditionModeSwitcher';
 
 /**
  * 偏好设置行组件
@@ -653,6 +654,13 @@ const WebuiModalContent: React.FC = () => {
   const webuiPanel = (
     <AionScrollArea className='flex-1 min-h-0 pb-16px' disableOverflow={isPageMode}>
       <div className='space-y-12px px-[12px] md:px-[28px]'>
+        <EditionModeSwitcher variant='bar' />
+        <p className='m-0 text-12px text-t-tertiary leading-relaxed'>
+          {t('settings.webui.editionSwitcherHint', {
+            defaultValue:
+              '上方切换的是「个人版 / 企业版工作区」，不是管理后台。组织治理请用侧栏「管理后台」或本页下方「打开管理后台」。',
+          })}
+        </p>
         {/* 标题 / Title */}
         <h2 className='text-20px font-500 text-t-primary m-0'>WebUI</h2>
 
@@ -860,19 +868,45 @@ const WebuiModalContent: React.FC = () => {
           )}
         </div>
 
-        {!enterpriseModeLoading && hasJoinedEnterprise ? <WebuiStandaloneBanner /> : null}
+        {!enterpriseModeLoading && hasJoinedEnterprise && !isPageMode ? <WebuiStandaloneBanner /> : null}
         {!enterpriseModeLoading && !hasJoinedEnterprise ? (
-          <Collapse
-            bordered={false}
-            className='bg-2 rd-16px overflow-hidden [&_.arco-collapse-item-header]:px-16px'
-          >
-            <Collapse.Item
-              header={t('settings.webui.enterpriseOptionalTitle', { defaultValue: '企业版（可选）' })}
-              name='enterprise'
+          <div className='mt-16px flex flex-col gap-12px'>
+            {isDesktop ? (
+              <div className='p-16px rd-12px border border-border-2 bg-2'>
+                <div className='text-14px font-600 text-t-primary mb-4px'>
+                  {t('settings.webui.enterpriseLoginTitle', { defaultValue: '企业登录（LDAP / 飞书）' })}
+                </div>
+                <p className='m-0 text-12px text-t-secondary leading-relaxed mb-12px'>
+                  {t('settings.webui.enterpriseLoginDesktopHint', {
+                    defaultValue:
+                      '桌面端不显示域控/飞书登录页。请先启用 WebUI，再在浏览器打开登录地址；管理员在「企业控制台 → 认证与邮件」启用 LDAP/飞书。',
+                  })}
+                </p>
+                <Button
+                  type='primary'
+                  onClick={() => {
+                    const webuiPort = status?.port ?? port;
+                    void openExternalUrl(`http://127.0.0.1:${webuiPort}/#/login`);
+                  }}
+                  disabled={!status?.running}
+                >
+                  {t('settings.webui.openWebuiLogin', { defaultValue: '在浏览器打开 WebUI 登录页' })}
+                </Button>
+              </div>
+            ) : null}
+            <Collapse
+              bordered={false}
+              defaultActiveKey={['enterprise']}
+              className='bg-2 rd-16px overflow-hidden [&_.arco-collapse-item-header]:px-16px'
             >
-              <WebuiJoinEnterprisePanel />
-            </Collapse.Item>
-          </Collapse>
+              <Collapse.Item
+                header={t('settings.webui.enterpriseOptionalTitle', { defaultValue: '加入企业（邀请码）' })}
+                name='enterprise'
+              >
+                <WebuiJoinEnterprisePanel />
+              </Collapse.Item>
+            </Collapse>
+          </div>
         ) : null}
       </div>
     </AionScrollArea>
