@@ -311,7 +311,7 @@ const AdminMcp: React.FC = () => {
                 const items = JSON.parse(json);
                 if (!Array.isArray(items)) { Message.error('必须是JSON数组'); return; }
                 const res = await apiMutate<{success:boolean;data:{count:number}}>('/api/admin/mcp/batch', 'POST', { items });
-                if (res?.success) { Message.success(`成功导入 ${res.data?.count??items.length} 个MCP工具`); await loadServers(); }
+                if (res?.success) { Message.success(`成功导入 ${res.data?.count??items.length} 个MCP工具`); await loadConnectors(); }
               } catch { Message.error('JSON格式错误'); }
             }}>{t('admin.mcp.batchImport', { defaultValue: '批量导入' })}</Button>
             <Button

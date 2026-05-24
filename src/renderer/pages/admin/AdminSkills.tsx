@@ -46,14 +46,14 @@ const AdminSkills: React.FC = () => {
 
   const handleSave = async () => {
     if (!form.name.trim()) { Message.warning(t('admin.skills.nameRequired', { defaultValue: '名称不能为空' })); return; }
-    setSaving(true);
+    setBatchSaving(true);
     try {
       await apiMutate('/api/admin/skills', 'POST', { id: editId, ...form, content: form.content.trim() });
       Message.success(editId ? t('admin.skills.updated', { defaultValue: '已更新' }) : t('admin.skills.created', { defaultValue: '已创建' }));
       setModalVisible(false);
       await load();
     } catch { Message.error(t('admin.skills.saveFailed', { defaultValue: '保存失败' })); }
-    finally { setSaving(false); }
+    finally { setBatchSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
