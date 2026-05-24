@@ -19,6 +19,22 @@ vi.mock('../../src/common', () => ({
       stopAll: makeChannel('stopAll'),
       getRunningCount: makeChannel('getRunningCount'),
     },
+    kanban: {
+      list: makeChannel('kanban.list'),
+      create: makeChannel('kanban.create'),
+      update: makeChannel('kanban.update'),
+      remove: makeChannel('kanban.remove'),
+      listUsers: makeChannel('kanban.listUsers'),
+      me: makeChannel('kanban.me'),
+    },
+    adminUsers: {
+      list: makeChannel('adminUsers.list'),
+      create: makeChannel('adminUsers.create'),
+      setRole: makeChannel('adminUsers.setRole'),
+      sendResetPasswordCode: makeChannel('adminUsers.sendResetPasswordCode'),
+      resetPassword: makeChannel('adminUsers.resetPassword'),
+      remove: makeChannel('adminUsers.remove'),
+    },
   },
 }));
 

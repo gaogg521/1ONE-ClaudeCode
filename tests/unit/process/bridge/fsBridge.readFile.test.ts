@@ -75,6 +75,8 @@ vi.mock('@/common', () => {
         removeCustomExternalPath: makeProvider('removeCustomExternalPath'),
         enableSkillsMarket: makeProvider('enableSkillsMarket'),
         disableSkillsMarket: makeProvider('disableSkillsMarket'),
+        listAutoSkills: makeProvider('listAutoSkills'),
+        listAutoSkills: makeProvider('listAutoSkills'),
       },
       fileStream: { contentUpdate: { emit: vi.fn() } },
     },

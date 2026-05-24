@@ -190,6 +190,8 @@ const WorkspaceTabBar: React.FC<WorkspaceTabBarProps> = ({
     >
       <Tabs.TabPane key='files' title={t('conversation.workspace.changes.filesTab')} />
       <Tabs.TabPane key='changes' title={changesTitle} />
+      <Tabs.TabPane key='kanban' title={t('admin.kanban.pageTitle', { defaultValue: '敏捷看板' })} />
+      <Tabs.TabPane key='pipeline' title={t('admin.pipeline.tabTitle', { defaultValue: 'CI 流水线' })} />
     </Tabs>
   );
 };

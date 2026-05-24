@@ -1370,6 +1370,267 @@ const migration_v29: IMigration = {
 };
 
 /**
+ * Migration v29 -> v30: Add DevOps & RAG & MCP tables for phase-1
+ */
+const migration_v30: IMigration = {
+  version: 30,
+  name: 'Add CTeam Requirements, RAG and MCP Registry tables',
+  up: (db) => {
+    // 1) requirements table + indexes
+    db.exec(`CREATE TABLE IF NOT EXISTS requirements (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT 'default',
+      parent_id TEXT NULL,
+      type TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'backlog',
+      priority TEXT NOT NULL DEFAULT 'medium',
+      assigned_to TEXT,
+      creator_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY(parent_id) REFERENCES requirements(id) ON DELETE CASCADE
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_parent ON requirements(parent_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_assigned ON requirements(assigned_to)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_tenant_id ON requirements(tenant_id)');
+
+    // 2) RAG tables + indexes
+    db.exec(`CREATE TABLE IF NOT EXISTS rag_documents (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT 'default',
+      title TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      file_size INTEGER NOT NULL,
+      mime_type TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      chunk_count INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_rag_documents_tenant_id ON rag_documents(tenant_id)');
+
+    db.exec(`CREATE TABLE IF NOT EXISTS rag_document_chunks (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      chunk_index INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      token_count INTEGER NOT NULL,
+      embedding BLOB NOT NULL,
+      FOREIGN KEY(document_id) REFERENCES rag_documents(id) ON DELETE CASCADE
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_rag_chunks_document ON rag_document_chunks(document_id)');
+
+    // 3) MCP table + unique constraint
+    db.exec(`CREATE TABLE IF NOT EXISTS mcp_registry (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT 'default',
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      env_json TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(tenant_id, name)
+    )`);
+    console.log('[Migration v30] Added requirements, RAG and MCP Registry tables');
+  },
+  down: (db) => {
+    db.exec('DROP TABLE IF EXISTS mcp_registry');
+    db.exec('DROP INDEX IF EXISTS idx_rag_chunks_document');
+    db.exec('DROP TABLE IF EXISTS rag_document_chunks');
+    db.exec('DROP INDEX IF EXISTS idx_rag_documents_tenant_id');
+    db.exec('DROP TABLE IF EXISTS rag_documents');
+    db.exec('DROP INDEX IF EXISTS idx_requirements_tenant_id');
+    db.exec('DROP INDEX IF EXISTS idx_requirements_assigned');
+    db.exec('DROP INDEX IF EXISTS idx_requirements_status');
+    db.exec('DROP INDEX IF EXISTS idx_requirements_parent');
+    db.exec('DROP TABLE IF EXISTS requirements');
+    console.log('[Migration v30] Rolled back: dropped requirements, RAG and MCP Registry tables');
+  },
+};
+
+/**
+ * Migration v30 -> v31: Add DevOps Pipeline and Runs tables
+ */
+const migration_v31: IMigration = {
+  version: 31,
+  name: 'Add DevOps Pipeline and Runs tables',
+  up: (db) => {
+    // 1) devops_pipelines table
+    db.exec(`CREATE TABLE IF NOT EXISTS devops_pipelines (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT 'default',
+      name TEXT NOT NULL,
+      associated_team_id TEXT,
+      definition_json TEXT NOT NULL DEFAULT '{}',
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`);
+
+    // 2) devops_pipeline_runs table
+    db.exec(`CREATE TABLE IF NOT EXISTS devops_pipeline_runs (
+      id TEXT PRIMARY KEY,
+      pipeline_id TEXT NOT NULL,
+      trigger_type TEXT NOT NULL,
+      trigger_by TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      stages_status_json TEXT NOT NULL DEFAULT '[]',
+      log_content TEXT,
+      duration_ms INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      finished_at INTEGER,
+      FOREIGN KEY(pipeline_id) REFERENCES devops_pipelines(id) ON DELETE CASCADE
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_devops_pipeline_runs_pipeline ON devops_pipeline_runs(pipeline_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_devops_pipelines_tenant_id ON devops_pipelines(tenant_id)');
+    console.log('[Migration v31] Added DevOps pipeline tables and indexes');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_devops_pipelines_tenant_id');
+    db.exec('DROP INDEX IF EXISTS idx_devops_pipeline_runs_pipeline');
+    db.exec('DROP TABLE IF EXISTS devops_pipeline_runs');
+    db.exec('DROP TABLE IF EXISTS devops_pipelines');
+    console.log('[Migration v31] Rolled back devops pipeline tables');
+  },
+};
+
+/**
+ * Migration v31 -> v32: Add scope/team_id/created_by columns for scoped RAG & MCP
+ */
+const migration_v32: IMigration = {
+  version: 32,
+  name: 'Add scope columns for scoped RAG documents & MCP registry',
+  up: (db) => {
+    const ensureColumn = (table: string, col: string, ddl: string) => {
+      const cols = new Set((db.pragma(`table_info(${table})`) as Array<{ name: string }>).map((c) => c.name));
+      if (!cols.has(col)) db.exec(ddl);
+    };
+    ensureColumn('rag_documents', 'scope', `ALTER TABLE rag_documents ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`);
+    ensureColumn('rag_documents', 'team_id', `ALTER TABLE rag_documents ADD COLUMN team_id TEXT`);
+    ensureColumn('rag_documents', 'created_by', `ALTER TABLE rag_documents ADD COLUMN created_by TEXT NOT NULL DEFAULT ''`);
+    ensureColumn('mcp_registry', 'scope', `ALTER TABLE mcp_registry ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`);
+    ensureColumn('mcp_registry', 'team_id', `ALTER TABLE mcp_registry ADD COLUMN team_id TEXT`);
+    console.log('[Migration v32] Added scope/team_id/created_by to rag_documents and mcp_registry');
+  },
+  down: (_db) => {
+    // SQLite cannot drop columns, only mark as ignored
+    console.log('[Migration v32] Rolled back: columns retained (SQLite cannot drop columns)');
+  },
+};
+
+/**
+ * Migration v32 -> v33: Add Skills Registry table for enterprise skill management
+ */
+const migration_v33: IMigration = {
+  version: 33,
+  name: 'Add enterprise Skills Registry table',
+  up: (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS skills_registry (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL DEFAULT 'default',
+      name TEXT NOT NULL,
+      description TEXT,
+      content TEXT NOT NULL DEFAULT '',
+      enabled INTEGER NOT NULL DEFAULT 1,
+      scope TEXT NOT NULL DEFAULT 'personal',
+      team_id TEXT,
+      created_by TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(tenant_id, name)
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_skills_tenant ON skills_registry(tenant_id)');
+    console.log('[Migration v33] Added skills_registry table');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_skills_tenant');
+    db.exec('DROP TABLE IF EXISTS skills_registry');
+    console.log('[Migration v33] Rolled back skills_registry');
+  },
+};
+
+/**
+ * Migration v33 -> v34: Add milestones and code_repos tables
+ */
+const migration_v34: IMigration = {
+  version: 34,
+  name: 'Add milestones and code repos tables',
+  up: (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS milestones (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', name TEXT NOT NULL, description TEXT, due_date TEXT, epic_count INTEGER DEFAULT 0, completed_count INTEGER DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_milestones_tenant ON milestones(tenant_id)');
+    db.exec(`CREATE TABLE IF NOT EXISTS code_repos (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', name TEXT NOT NULL, url TEXT NOT NULL, provider TEXT NOT NULL DEFAULT 'gitlab', credential_id TEXT, default_branch TEXT DEFAULT 'main', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+    console.log('[Migration v34] Added milestones and code_repos tables');
+  },
+  down: (db) => {
+    db.exec('DROP TABLE IF EXISTS code_repos');
+    db.exec('DROP INDEX IF EXISTS idx_milestones_tenant');
+    db.exec('DROP TABLE IF EXISTS milestones');
+    console.log('[Migration v34] Rolled back');
+  },
+};
+
+/**
+ * Migration v34 -> v35: Add artifact repos and artifacts tables (CPack)
+ */
+const migration_v35: IMigration = {
+  version: 35,
+  name: 'Add CPack artifact repos and artifacts tables',
+  up: (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS artifact_repos (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', name TEXT NOT NULL, repo_type TEXT NOT NULL DEFAULT 'generic', endpoint TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+    db.exec(`CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, repo_id TEXT NOT NULL, name TEXT NOT NULL, version TEXT NOT NULL, file_size INTEGER NOT NULL DEFAULT 0, checksum TEXT, scope TEXT NOT NULL DEFAULT 'personal', created_by TEXT NOT NULL, download_count INTEGER DEFAULT 0, created_at INTEGER NOT NULL, FOREIGN KEY(repo_id) REFERENCES artifact_repos(id) ON DELETE CASCADE)`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_artifacts_repo ON artifacts(repo_id)');
+    console.log('[Migration v35] Added CPack artifact tables');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_artifacts_repo');
+    db.exec('DROP TABLE IF EXISTS artifacts');
+    db.exec('DROP TABLE IF EXISTS artifact_repos');
+    console.log('[Migration v35] Rolled back CPack tables');
+  },
+};
+
+/**
+ * Migration v35 -> v36: Add CTest test_plans and test_cases tables
+ */
+const migration_v36: IMigration = {
+  version: 36, name: 'Add CTest tables', up: (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS test_plans (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', name TEXT NOT NULL, description TEXT, linked_requirement_id TEXT, status TEXT DEFAULT 'active', created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+    db.exec(`CREATE TABLE IF NOT EXISTS test_cases (id TEXT PRIMARY KEY, plan_id TEXT NOT NULL, subject TEXT NOT NULL, steps TEXT, expected TEXT, status TEXT DEFAULT 'pending', assigned_to TEXT, created_at INTEGER NOT NULL, FOREIGN KEY(plan_id) REFERENCES test_plans(id) ON DELETE CASCADE)`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_test_cases_plan ON test_cases(plan_id)');
+    console.log('[Migration v36] Added CTest tables'); }, down: (db) => { db.exec('DROP TABLE IF EXISTS test_cases'); db.exec('DROP TABLE IF EXISTS test_plans'); }
+};
+
+const migration_v37: IMigration = {
+  version: 37, name: 'Add CMeas metrics table', up: (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS metrics_snapshots (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', metric_type TEXT NOT NULL, metric_name TEXT NOT NULL, value REAL NOT NULL, period TEXT, recorded_at INTEGER NOT NULL)`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_metrics_tenant_type ON metrics_snapshots(tenant_id, metric_type)');
+    console.log('[Migration v37] Added CMeas metrics table'); }, down: (db) => { db.exec('DROP TABLE IF EXISTS metrics_snapshots'); }
+};
+
+const migration_v38: IMigration = {
+  version: 38, name: 'Add CFlow value stream stages', up: (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS value_stream_stages (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', requirement_id TEXT, stage_name TEXT NOT NULL, entry_time INTEGER, exit_time INTEGER, wait_duration_ms INTEGER DEFAULT 0, process_duration_ms INTEGER DEFAULT 0, FOREIGN KEY(requirement_id) REFERENCES requirements(id) ON DELETE CASCADE)`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_flow_requirement ON value_stream_stages(requirement_id)');
+    console.log('[Migration v38] Added CFlow stages'); }, down: (db) => { db.exec('DROP TABLE IF EXISTS value_stream_stages'); }
+};
+
+/**
+ * Migration v38 -> v39: Add audit_logs table
+ */
+const migration_v39: IMigration = {
+  version: 39, name: 'Add audit logs table', up: (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS audit_logs (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', user_id TEXT, username TEXT, action TEXT NOT NULL, resource TEXT, ip_address TEXT, user_agent TEXT, created_at INTEGER NOT NULL)`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_logs(tenant_id, created_at DESC)');
+    console.log('[Migration v39] Added audit_logs'); }, down: (db) => { db.exec('DROP TABLE IF EXISTS audit_logs'); }
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -1383,6 +1644,16 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v27,
   migration_v28,
   migration_v29,
+  migration_v30,
+  migration_v31,
+  migration_v32,
+  migration_v33,
+  migration_v34,
+  migration_v35,
+  migration_v36,
+  migration_v37,
+  migration_v38,
+  migration_v39,
 ];
 
 /**

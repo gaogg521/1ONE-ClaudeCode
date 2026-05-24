@@ -25,6 +25,7 @@ import { registerWeixinLoginRoutes } from './weixinLoginRoutes';
 import { registerKanbanRoutes } from './kanbanRoutes';
 import { registerAdminRoutes } from './adminRoutes';
 import { registerTeamTasksRoutes } from './teamTasksRoutes';
+import { registerDevOpsRoutes } from './devopsRoutes';
 
 /** Max upload size in bytes (30MB per Issue #1233) */
 const MAX_UPLOAD_SIZE = 30 * 1024 * 1024;
@@ -697,6 +698,7 @@ export function registerApiRoutes(app: Express): void {
   registerKanbanRoutes(app);
   registerAdminRoutes(app);
   registerTeamTasksRoutes(app, { rateLimit: apiRateLimiter, auth: validateApiAccess });
+  registerDevOpsRoutes(app);
 
   /**
    * 通用 API 端点 - Generic API endpoint

@@ -17,6 +17,17 @@ const AdminUsers = React.lazy(() => import('@renderer/pages/admin/AdminUsers'));
 const AdminAuth = React.lazy(() => import('@renderer/pages/admin/AdminAuth'));
 const AdminInvites = React.lazy(() => import('@renderer/pages/admin/AdminInvites'));
 const AdminTeams = React.lazy(() => import('@renderer/pages/admin/AdminTeams'));
+const AdminKanban = React.lazy(() => import('@renderer/pages/admin/AdminKanban'));
+const AdminRag = React.lazy(() => import('@renderer/pages/admin/AdminRag'));
+const AdminMcp = React.lazy(() => import('@renderer/pages/admin/AdminMcp'));
+const AdminSkills = React.lazy(() => import('@renderer/pages/admin/AdminSkills'));
+const AdminPipelineEditor = React.lazy(() => import('@renderer/pages/admin/AdminPipelineEditor'));
+const MilestoneView = React.lazy(() => import('@renderer/pages/admin/MilestoneView'));
+const CPackArtifactRepo = React.lazy(() => import('@renderer/pages/admin/CPackArtifactRepo'));
+const CCodeRepoList = React.lazy(() => import('@renderer/pages/admin/CCodeRepoList'));
+const CMeasDashboard = React.lazy(() => import('@renderer/pages/admin/CMeasDashboard'));
+const CTestManagement = React.lazy(() => import('@renderer/pages/admin/CTestManagement'));
+const CFlowBoard = React.lazy(() => import('@renderer/pages/admin/CFlowBoard'));
 const EnterpriseJoinLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseJoinLayout'));
 const EnterpriseLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseLayout'));
 const EnterpriseHome = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseHome'));
@@ -46,6 +57,16 @@ const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTa
 const TeamIndex = React.lazy(() => import('@renderer/pages/team'));
 const WorkspacePage = React.lazy(() => import('@renderer/pages/workspace'));
 const WorkspaceSettingsShell = React.lazy(() => import('@renderer/pages/workspace/WorkspaceSettings'));
+
+/** Legacy redirect map: old paths → new enterprise paths. */
+const LEGACY_REDIRECTS = [
+  { from: '/users', to: '/enterprise/users' },
+  { from: '/admin', to: '/enterprise/users' },
+  { from: '/admin/users', to: '/enterprise/users' },
+  { from: '/admin/teams', to: '/enterprise/teams' },
+  { from: '/admin/auth', to: '/enterprise/auth' },
+  { from: '/settings/auth', to: '/enterprise/auth' },
+] as const;
 
 const withRouteFallback = (Component: React.LazyExoticComponent<React.ComponentType>) => (
   <Suspense fallback={<AppLoader />}>
@@ -174,17 +195,25 @@ const PanelRoute: React.FC = () => {
             <Route path='teams' element={withRouteFallback(AdminTeams)} />
             <Route path='auth' element={withRouteFallback(AdminAuth)} />
             <Route path='invites' element={withRouteFallback(AdminInvites)} />
+            <Route path='kanban' element={withRouteFallback(AdminKanban)} />
+            <Route path='rag' element={withRouteFallback(AdminRag)} />
+            <Route path='mcp' element={withRouteFallback(AdminMcp)} />
+            <Route path='skills' element={withRouteFallback(AdminSkills)} />
+            <Route path='pipeline-editor' element={withRouteFallback(AdminPipelineEditor)} />
+            <Route path='milestones' element={withRouteFallback(MilestoneView)} />
+            <Route path='cpack' element={withRouteFallback(CPackArtifactRepo)} />
+            <Route path='ccode' element={withRouteFallback(CCodeRepoList)} />
+            <Route path='cmeas' element={withRouteFallback(CMeasDashboard)} />
+            <Route path='ctest' element={withRouteFallback(CTestManagement)} />
+            <Route path='cflow' element={withRouteFallback(CFlowBoard)} />
             <Route path='usage' element={withRouteFallback(EnterpriseUsagePage)} />
             <Route path='security' element={withRouteFallback(EnterpriseSecurityPage)} />
           </Route>
 
           <Route path='/settings/enterprise/*' element={withRouteFallback(LegacyEnterpriseRedirect)} />
-          <Route path='/users' element={<Navigate to='/enterprise/users' replace />} />
-          <Route path='/admin' element={<Navigate to='/enterprise/users' replace />} />
-          <Route path='/admin/users' element={<Navigate to='/enterprise/users' replace />} />
-          <Route path='/admin/teams' element={<Navigate to='/enterprise/teams' replace />} />
-          <Route path='/admin/auth' element={<Navigate to='/enterprise/auth' replace />} />
-          <Route path='/settings/auth' element={<Navigate to='/enterprise/auth' replace />} />
+          {LEGACY_REDIRECTS.map(({ from, to }) => (
+            <Route key={from} path={from} element={<Navigate to={to} replace />} />
+          ))}
         </Route>
         <Route path='*' element={<Navigate to={status === 'authenticated' ? '/sessions' : '/login'} replace />} />
       </Routes>

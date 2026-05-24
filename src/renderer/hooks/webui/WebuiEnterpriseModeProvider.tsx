@@ -46,12 +46,8 @@ export type WebuiEnterpriseModeValue = {
   effectiveRole: string | undefined;
   managementMode: WebuiManagementMode;
   enterpriseContext: EnterpriseContextSnapshot | null;
-  /** @deprecated Use showEnterpriseAdminNav */
-  showEnterpriseSettingsNav: boolean;
   /** 侧栏「管理后台」入口：已加入企业且为组织管理员 */
   showEnterpriseAdminNav: boolean;
-  /** @deprecated Use showEnterpriseAdminNav */
-  showEnterpriseConsoleNav: boolean;
   webuiApiBase: string | null;
   setManagementMode: (mode: WebuiManagementMode) => Promise<void>;
   refreshEnterpriseContext: () => Promise<void>;
@@ -257,7 +253,6 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   }, [openUrlInBrowser]);
 
   const showEnterpriseAdminNav = hasJoinedEnterprise && isEnterpriseAdminRole(effectiveRole);
-  const showEnterpriseConsoleNav = showEnterpriseAdminNav;
 
   const canCreateEnterprise = enterpriseContext?.canCreateEnterprise === true;
 
@@ -291,9 +286,7 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
       effectiveRole,
       managementMode,
       enterpriseContext,
-      showEnterpriseSettingsNav: showEnterpriseAdminNav,
       showEnterpriseAdminNav,
-      showEnterpriseConsoleNav,
       webuiApiBase,
       setManagementMode,
       refreshEnterpriseContext,
@@ -317,7 +310,6 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
       refreshEnterpriseContext,
       setManagementMode,
       showEnterpriseAdminNav,
-      showEnterpriseConsoleNav,
       webuiApiBase,
     ]
   );

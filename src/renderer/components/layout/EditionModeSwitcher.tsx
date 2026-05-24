@@ -45,18 +45,19 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
     (next: WebuiManagementMode) => {
       void setManagementMode(next).then(async () => {
         if (next === 'enterprise') {
-          const landing = resolveEnterpriseEditionPath(hasJoinedEnterprise);
           if (isDesktop && !hasJoinedEnterprise) {
-            void navigate(landing);
+            void navigate('/enterprise/join');
             await openEnterpriseLoginInBrowser();
             return;
           }
           if (status !== 'authenticated') {
-            setPostLoginRedirect(landing);
-            void navigate(`/login?redirect=${encodeURIComponent(landing)}`);
+            setPostLoginRedirect('/sessions');
+            void navigate(`/login?redirect=${encodeURIComponent('/sessions')}`);
             return;
           }
-          void navigate(landing);
+          // 切换到企业版，同样瞬间回到日常开发聊天主台
+          // Switch to enterprise, also instantly navigate back to normal developer workspace
+          void navigate('/sessions');
           return;
         }
         void navigate('/sessions');

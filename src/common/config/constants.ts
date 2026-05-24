@@ -63,3 +63,9 @@ export const WEBUI_DEFAULT_PORT = (() => {
 // Stable ID for the Google Auth virtual provider.
 // Shared between frontend (useModelProviderList) and backend (SystemActions).
 export const GOOGLE_AUTH_PROVIDER_ID = 'google-auth-gemini';
+
+// ===== Enterprise / Auth 相关常量 =====
+
+/** Mask placeholder for hidden passwords in UI/config (LDAP, SMTP, etc.) */
+export const PASSWORD_MASK = '******';
+

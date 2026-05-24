@@ -57,6 +57,7 @@ vi.mock('@/common', () => ({
       readSkillInfo: { provider: vi.fn() },
       importSkill: { provider: vi.fn() },
       scanForSkills: { provider: vi.fn() },
+      listAutoSkills: { provider: vi.fn() },
       detectCommonSkillPaths: { provider: vi.fn() },
       detectAndCountExternalSkills: { provider: vi.fn() },
       importSkillWithSymlink: { provider: vi.fn() },

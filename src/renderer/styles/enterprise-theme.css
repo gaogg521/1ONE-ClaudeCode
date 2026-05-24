@@ -1,0 +1,271 @@
+/**
+ * @license
+ * Copyright 2025 1ONE ClaudeCode
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* ═══════════════════════════════════════════════════════
+   企业版主题: 深蓝靛青 + 琥珀金点缀
+   Enterprise Theme: Deep Indigo + Amber Gold Accent
+   设计理念: 严谨 B 端 + 精美大气 + 高识别度
+   ═══════════════════════════════════════════════════════ */
+
+[data-enterprise-theme='true'] {
+  /* ── 品牌色阶 (Brand Light Blue-Indigo) ── */
+  --ep-brand-1:  #f8fafc;
+  --ep-brand-2:  #f1f5f9;
+  --ep-brand-3:  #e2e8f0;
+  --ep-brand-4:  #cbd5e1;
+  --ep-brand-5:  #94a3b8;
+  --ep-brand-6:  #4f46e5;
+  --ep-brand-7:  #4338ca;
+  --ep-brand-8:  #1e3a8a;
+  --ep-brand-9:  #1e1b4b;
+
+  /* ── 琥珀点缀色 (Amber Accent) ── */
+  --ep-accent-1: #fffbeb;
+  --ep-accent-2: #fde68a;
+  --ep-accent-3: #f59e0b;
+  --ep-accent-4: #d97706;
+  --ep-accent-5: #b45309;
+  --ep-accent-6: #78350f;
+
+  /* ── 背景色阶 (雅致浅色 SaaS 质感) ── */
+  --ep-bg-sidebar:       #f1f5f9; /* 优雅的灰底色，彻底消灭死黑 */
+  --ep-bg-sidebar-hover: #e2e8f0;
+  --ep-bg-content:       #f8fafc;
+  --ep-bg-card:          #ffffff;
+  --ep-bg-elevated:      #f8fafc;
+  --ep-bg-overlay:       rgba(15, 23, 42, 0.45);
+
+  /* ── 文字色阶 (浅色模式深字) ── */
+  --ep-text-primary:   #0f172a;
+  --ep-text-secondary: #334155;
+  --ep-text-tertiary:  #64748b;
+  --ep-text-inverse:   #ffffff;
+  --ep-text-brand:     #4f46e5;
+
+  /* ── 边框色阶 ── */
+  --ep-border-sidebar: #cbd5e1;
+  --ep-border-card:    #e2e8f0;
+  --ep-border-divider: #e2e8f0;
+
+  /* ── 状态色 ── */
+  --ep-success: #10b981;
+  --ep-warning: #f59e0b;
+  --ep-error:   #ef4444;
+  --ep-info:    #3b82f6;
+
+  /* ── 阴影系统 ── */
+  --ep-shadow-sm:  0 1px 2px rgba(15, 23, 42, 0.08);
+  --ep-shadow-md:  0 4px 12px rgba(15, 23, 42, 0.12);
+  --ep-shadow-lg:  0 12px 40px rgba(15, 23, 42, 0.18);
+
+  /* ── 字体系统 ── */
+  --ep-font-sans: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --ep-font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+
+  /* ── 间距系统 ── */
+  --ep-radius-sm:  6px;
+  --ep-radius-md:  10px;
+  --ep-radius-lg:  16px;
+  --ep-radius-xl:  20px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Enterprise Theme — Dark Mode Variant
+   企业版深色模式变体
+   ═══════════════════════════════════════════════════════ */
+
+[data-theme='dark'] [data-enterprise-theme='true'] {
+  /* ── 品牌色阶 ( brighter for dark mode ) ── */
+  --ep-brand-1: #020617;
+  --ep-brand-2: #0f172a;
+  --ep-brand-3: #1e293b;
+  --ep-brand-4: #334155;
+  --ep-brand-5: #475569;
+  --ep-brand-6: #a5b4fc;
+  --ep-brand-7: #818cf8;
+  --ep-brand-8: #6366f1;
+  --ep-brand-9: #4f46e5;
+
+  /* ── 琥珀点缀色 ( brighter for dark mode ) ── */
+  --ep-accent-4: #fbbf24;
+  --ep-accent-5: #f59e0b;
+  --ep-accent-6: #d97706;
+
+  /* ── 背景色阶 ── */
+  --ep-bg-sidebar:     #020617;
+  --ep-bg-sidebar-hover: #0f172a;
+  --ep-bg-content:    #0f172a;
+  --ep-bg-card:       #1e293b;
+  --ep-bg-elevated:   #162032;
+  --ep-bg-overlay:    rgba(2, 6, 23, 0.85);
+
+  /* ── 文字色阶 ── */
+  --ep-text-primary:   #f1f5f9;
+  --ep-text-secondary: #94a3b8;
+  --ep-text-tertiary:  #64748b;
+  --ep-text-inverse:   #f8fafc;
+  --ep-text-brand:     #a5b4fc;
+
+  /* ── 边框色阶 ── */
+  --ep-border-sidebar: rgba(148, 163, 184, 0.15);
+  --ep-border-card:    #334155;
+  --ep-border-divider: rgba(148, 163, 184, 0.15);
+
+  /* ── 阴影系统 ( lighter for dark mode ) ── */
+  --ep-shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.25);
+  --ep-shadow-md:  0 4px 12px rgba(0, 0, 0, 0.35);
+  --ep-shadow-lg:  0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Enterprise Theme — Dark Mode
+   企业版深色模式变体
+   ═══════════════════════════════════════════════════════ */
+
+[data-theme='dark'] [data-enterprise-theme='true'] {
+  /* ── 品牌色阶 ( brighter for dark bg ) ── */
+  --ep-brand-6:  #a5b4fc;
+  --ep-brand-7:  #818cf8;
+  --ep-brand-8:  #6366f1;
+  --ep-brand-9:  #4f46e5;
+
+  /* ── 琥珀点缀色 ( brighter gold ) ── */
+  --ep-accent-4: #fbbf24;
+  --ep-accent-5: #f59e0b;
+  --ep-accent-6: #d97706;
+
+  /* ── 背景色阶 ( darker navy ) ── */
+  --ep-bg-sidebar:     #020617;
+  --ep-bg-sidebar-hover: #0f172a;
+  --ep-bg-content:    #0b1120;
+  --ep-bg-card:       #0f172a;
+  --ep-bg-elevated:   #1e293b;
+
+  /* ── 文字色阶 ( lighter for contrast ) ── */
+  --ep-text-primary:   #f1f5f9;
+  --ep-text-secondary: #94a3b8;
+  --ep-text-tertiary:  #64748b;
+  --ep-text-inverse:   #f8fafc;
+  --ep-text-brand:     #a5b4fc;
+
+  /* ── 边框色阶 ( subtle in dark ) ── */
+  --ep-border-sidebar: rgba(148, 163, 184, 0.1);
+  --ep-border-card:    #1e293b;
+  --ep-border-divider: rgba(148, 163, 184, 0.15);
+
+  /* ── 阴影 ( softer glow ) ── */
+  --ep-shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.2);
+  --ep-shadow-md:  0 4px 12px rgba(0, 0, 0, 0.3);
+  --ep-shadow-lg:  0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Enterprise Theme — Dark Mode Overrides
+   企业版深色模式变体
+   ═══════════════════════════════════════════════════════ */
+
+[data-theme='dark'] [data-enterprise-theme='true'] {
+  /* ── 品牌色阶（更亮的靛青，暗背景上的高对比）── */
+  --ep-brand-1:  #020617;
+  --ep-brand-2:  #0f172a;
+  --ep-brand-3:  #1e293b;
+  --ep-brand-4:  #334155;
+  --ep-brand-5:  #475569;
+  --ep-brand-6:  #818cf8;
+  --ep-brand-7:  #a5b4fc;
+  --ep-brand-8:  #c7d2fe;
+  --ep-brand-9:  #e0e7ff;
+
+  /* ── 琥珀点缀色（暗背景上更亮更饱和）── */
+  --ep-accent-1: #451a03;
+  --ep-accent-2: #78350f;
+  --ep-accent-3: #b45309;
+  --ep-accent-4: #f59e0b;
+  --ep-accent-5: #fbbf24;
+  --ep-accent-6: #fcd34d;
+
+  /* ── 背景色阶 ── */
+  --ep-bg-sidebar:     #020617;
+  --ep-bg-sidebar-hover: #0f172a;
+  --ep-bg-content:    #0f172a;
+  --ep-bg-card:       #1e293b;
+  --ep-bg-elevated:   #162032;
+  --ep-bg-overlay:    rgba(2, 6, 23, 0.88);
+
+  /* ── 文字色阶 ── */
+  --ep-text-primary:   #f1f5f9;
+  --ep-text-secondary: #94a3b8;
+  --ep-text-tertiary:  #64748b;
+  --ep-text-inverse:   #f8fafc;
+  --ep-text-brand:     #a5b4fc;
+
+  /* ── 边框色阶 ── */
+  --ep-border-sidebar: rgba(148, 163, 184, 0.15);
+  --ep-border-card:    #334155;
+  --ep-border-divider: rgba(148, 163, 184, 0.15);
+
+  /* ── 阴影系统（暗模式下更柔和）── */
+  --ep-shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.25);
+  --ep-shadow-md:  0 4px 12px rgba(0, 0, 0, 0.35);
+  --ep-shadow-lg:  0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Enterprise Theme — Dark Mode
+   企业版深色模式变体
+   ═══════════════════════════════════════════════════════ */
+
+[data-theme='dark'] [data-enterprise-theme='true'] {
+  /* ── 品牌色阶 (Darker Indigo) ── */
+  --ep-brand-1:  #020617;
+  --ep-brand-2:  #0f172a;
+  --ep-brand-3:  #1e293b;
+  --ep-brand-4:  #334155;
+  --ep-brand-5:  #475569;
+  --ep-brand-6:  #818cf8;
+  --ep-brand-7:  #a5b4fc;
+  --ep-brand-8:  #c7d2fe;
+  --ep-brand-9:  #e0e7ff;
+
+  /* ── 琥珀点缀色 (Brighter Amber for dark) ── */
+  --ep-accent-1: #451a03;
+  --ep-accent-2: #78350f;
+  --ep-accent-3: #b45309;
+  --ep-accent-4: #f59e0b;
+  --ep-accent-5: #fbbf24;
+  --ep-accent-6: #fde68a;
+
+  /* ── 背景色阶 ── */
+  --ep-bg-sidebar:     #020617;
+  --ep-bg-sidebar-hover: #0f172a;
+  --ep-bg-content:    #0f172a;
+  --ep-bg-card:       #1e293b;
+  --ep-bg-elevated:   #162032;
+  --ep-bg-overlay:    rgba(2, 6, 23, 0.88);
+
+  /* ── 文字色阶 ── */
+  --ep-text-primary:   #f1f5f9;
+  --ep-text-secondary: #94a3b8;
+  --ep-text-tertiary:  #64748b;
+  --ep-text-inverse:   #f8fafc;
+  --ep-text-brand:     #a5b4fc;
+
+  /* ── 边框色阶 ── */
+  --ep-border-sidebar: rgba(148, 163, 184, 0.10);
+  --ep-border-card:    #334155;
+  --ep-border-divider: rgba(148, 163, 184, 0.15);
+
+  /* ── 状态色 ── */
+  --ep-success: #34d399;
+  --ep-warning: #fbbf24;
+  --ep-error:   #f87171;
+  --ep-info:    #60a5fa;
+
+  /* ── 阴影系统 (softer in dark) ── */
+  --ep-shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.30);
+  --ep-shadow-md:  0 4px 12px rgba(0, 0, 0, 0.40);
+  --ep-shadow-lg:  0 12px 40px rgba(0, 0, 0, 0.50);
+}

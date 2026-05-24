@@ -7,6 +7,8 @@
 import ldap from 'ldapjs';
 import type { SearchEntryObject } from 'ldapjs';
 
+import { PASSWORD_MASK } from '@/common/config/constants';
+
 export type LdapProviderConfig = {
   url: string;
   baseDN: string;
@@ -82,7 +84,7 @@ export function resolveLdapBindPrincipal(config: LdapProviderConfig): string {
 export function hasLdapServiceBind(config: LdapProviderConfig): boolean {
   const principal = resolveLdapBindPrincipal(config);
   const pwd = String(config.bindPassword ?? '').trim();
-  return Boolean(principal && pwd && pwd !== '******');
+  return Boolean(principal && pwd && pwd !== PASSWORD_MASK);
 }
 
 function toArray(value: unknown): string[] {
@@ -325,7 +327,7 @@ export async function searchLdapDirectory(
 
   const bindPrincipal = resolveLdapBindPrincipal(config);
   const bindPassword = String(config.bindPassword ?? '').trim();
-  if (!bindPrincipal || !bindPassword || bindPassword === '******') {
+  if (!bindPrincipal || !bindPassword || bindPassword === PASSWORD_MASK) {
     throw Object.assign(new Error('Bind DN (or bind account) and password are required for directory search'), {
       code: 'LDAP_SEARCH_MISSING_BIND',
     });
@@ -422,7 +424,7 @@ export async function testLdapConnection(config: LdapProviderConfig): Promise<vo
         { code: 'LDAP_TEST_MISSING_BIND' }
       );
     }
-    if (!bindPassword || bindPassword === '******') {
+    if (!bindPassword || bindPassword === PASSWORD_MASK) {
       throw Object.assign(new Error('Bind password is required for connection test'), {
         code: 'LDAP_TEST_MISSING_BIND_PASSWORD',
       });

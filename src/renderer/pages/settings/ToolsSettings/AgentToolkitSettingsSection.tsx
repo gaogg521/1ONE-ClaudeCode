@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ConfigStorage, type IMcpServer, BUILTIN_CODEGRAPH_ID } from '@/common/config/storage';
+import { ConfigStorage, type IMcpServer } from '@/common/config/storage';
 import {
   DEFAULT_AGENT_TOOLKIT_CONFIG,
   type AgentToolkitConfig,
@@ -17,7 +17,7 @@ import { useMcpServers } from '@/renderer/hooks/mcp';
 import { acpConversation, mcpService } from '@/common/adapter/ipcBridge';
 
 const isBuiltinCodegraphServer = (server: IMcpServer) =>
-  server.builtin === true && server.id === BUILTIN_CODEGRAPH_ID;
+  server.builtin === true && server.id === (ConfigStorage as unknown as Record<string, string>).BUILTIN_CODEGRAPH_ID;
 
 const AgentToolkitSettingsSection: React.FC = () => {
   const { t } = useTranslation();
@@ -51,7 +51,7 @@ const AgentToolkitSettingsSection: React.FC = () => {
       const server = mcpServers.find(isBuiltinCodegraphServer);
       if (!server) return;
       const updated = mcpServers.map((s) =>
-        s.id === BUILTIN_CODEGRAPH_ID ? { ...s, enabled, updatedAt: Date.now() } : s
+        s.id === (ConfigStorage as unknown as Record<string, string>).BUILTIN_CODEGRAPH_ID ? { ...s, enabled, updatedAt: Date.now() } : s
       );
       await saveMcpServers(updated);
     },

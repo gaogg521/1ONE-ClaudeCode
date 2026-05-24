@@ -6,6 +6,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Form, Input, Message, Modal, Popconfirm, Select, Space, Table, Tag } from '@arco-design/web-react';
+import { useTranslation } from 'react-i18next';
 import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
 import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
 import AdminPageWrapper from './components/AdminPageWrapper';
@@ -62,6 +63,7 @@ const ROLE_TAG: Record<TeamMemberRow['role'], { color: string; label: string }> 
 };
 
 const AdminTeams: React.FC = () => {
+  const { t } = useTranslation();
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -91,12 +93,12 @@ const AdminTeams: React.FC = () => {
       const data = await api<TeamTaskRow[]>(`/api/team-tasks?teamId=${encodeURIComponent(teamId)}`);
       setTeamTasks(data ?? []);
     } catch (e) {
-      Message.error(e instanceof Error ? e.message : '加载团队任务失败');
+      Message.error(e instanceof Error ? e.message : t('admin.teams.messages.loadTasksFailed', { defaultValue: '加载团队任务失败' }));
       setTeamTasks([]);
     } finally {
       setTasksLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadMembers = useCallback(async (teamId: string) => {
     setMembersLoading(true);
@@ -111,13 +113,13 @@ const AdminTeams: React.FC = () => {
   useEffect(() => {
     setLoading(true);
     loadTeams()
-      .catch((e) => Message.error(e instanceof Error ? e.message : '加载失败'))
+      .catch((e) => Message.error(e instanceof Error ? e.message : t('admin.teams.messages.loadFailed', { defaultValue: '加载失败' })))
       .finally(() => setLoading(false));
-  }, [loadTeams]);
+  }, [loadTeams, t]);
 
   const handleCreate = useCallback(async () => {
     if (!createForm.name.trim() || !createForm.workspace.trim()) {
-      Message.warning('name/workspace 不能为空');
+      Message.warning(t('admin.teams.validation.nameWorkspaceRequired', { defaultValue: 'name/workspace 不能为空' }));
       return;
     }
     setSaving(true);
@@ -127,16 +129,16 @@ const AdminTeams: React.FC = () => {
         workspace: createForm.workspace.trim(),
         workspace_mode: createForm.workspace_mode,
       });
-      Message.success('团队已创建');
+      Message.success(t('admin.teams.messages.created', { defaultValue: '团队已创建' }));
       setCreateVisible(false);
       setCreateForm({ name: '', workspace: '', workspace_mode: 'shared' });
       await loadTeams();
     } catch (e) {
-      Message.error(e instanceof Error ? e.message : '创建失败');
+      Message.error(e instanceof Error ? e.message : t('admin.teams.messages.createFailed', { defaultValue: '创建失败' }));
     } finally {
       setSaving(false);
     }
-  }, [createForm, loadTeams]);
+  }, [createForm, loadTeams, t]);
 
   const openTeam = useCallback(
     async (team: TeamRow) => {
@@ -149,7 +151,7 @@ const AdminTeams: React.FC = () => {
 
   const handleCreateTeamTask = useCallback(async () => {
     if (!selectedTeam || !taskForm.subject.trim()) {
-      Message.warning('请填写任务标题');
+      Message.warning(t('admin.teams.validation.taskSubjectRequired', { defaultValue: '请填写任务标题' }));
       return;
     }
     setSaving(true);
@@ -160,16 +162,16 @@ const AdminTeams: React.FC = () => {
         description: taskForm.description.trim() ? taskForm.description.trim() : null,
         owner: taskForm.owner.trim() ? taskForm.owner.trim() : null,
       });
-      Message.success('任务已创建');
+      Message.success(t('admin.teams.messages.taskCreated', { defaultValue: '任务已创建' }));
       setTaskModalVisible(false);
       setTaskForm({ subject: '', description: '', owner: '' });
       await loadTeamTasks(selectedTeam.id);
     } catch (e) {
-      Message.error(e instanceof Error ? e.message : '创建失败');
+      Message.error(e instanceof Error ? e.message : t('admin.teams.messages.createFailed', { defaultValue: '创建失败' }));
     } finally {
       setSaving(false);
     }
-  }, [loadTeamTasks, selectedTeam, taskForm]);
+  }, [loadTeamTasks, selectedTeam, taskForm, t]);
 
   const handleDeleteTeamTask = useCallback(
     async (taskId: string) => {
@@ -177,15 +179,15 @@ const AdminTeams: React.FC = () => {
       setSaving(true);
       try {
         await apiMutate(`/api/team-tasks/${encodeURIComponent(taskId)}`, 'DELETE', {});
-        Message.success('已删除');
+        Message.success(t('admin.teams.messages.deleted', { defaultValue: '已删除' }));
         await loadTeamTasks(selectedTeam.id);
       } catch (e) {
-        Message.error(e instanceof Error ? e.message : '删除失败');
+        Message.error(e instanceof Error ? e.message : t('admin.teams.messages.deleteFailed', { defaultValue: '删除失败' }));
       } finally {
         setSaving(false);
       }
     },
-    [loadTeamTasks, selectedTeam]
+    [loadTeamTasks, selectedTeam, t]
   );
 
   const handleTeamTaskStatus = useCallback(
@@ -196,12 +198,12 @@ const AdminTeams: React.FC = () => {
         await apiMutate(`/api/team-tasks/${encodeURIComponent(taskId)}`, 'PATCH', { status });
         await loadTeamTasks(selectedTeam.id);
       } catch (e) {
-        Message.error(e instanceof Error ? e.message : '更新失败');
+        Message.error(e instanceof Error ? e.message : t('admin.teams.messages.updateFailed', { defaultValue: '更新失败' }));
       } finally {
         setSaving(false);
       }
     },
-    [loadTeamTasks, selectedTeam]
+    [loadTeamTasks, selectedTeam, t]
   );
 
   const memberUserIds = useMemo(() => new Set(members.map((m) => m.user_id)), [members]);
@@ -215,17 +217,17 @@ const AdminTeams: React.FC = () => {
           userId,
           role,
         });
-        Message.success('成员已添加/更新');
+        Message.success(t('admin.teams.messages.memberAdded', { defaultValue: '成员已添加/更新' }));
         setAddVisible(false);
         await loadMembers(selectedTeam.id);
       } catch (e) {
-        Message.error(e instanceof Error ? e.message : '操作失败');
+        Message.error(e instanceof Error ? e.message : t('admin.teams.messages.operationFailed', { defaultValue: '操作失败' }));
         throw e;
       } finally {
         setSaving(false);
       }
     },
-    [loadMembers, selectedTeam]
+    [loadMembers, selectedTeam, t]
   );
 
   const handleUpdateRole = useCallback(
@@ -234,15 +236,15 @@ const AdminTeams: React.FC = () => {
       setSaving(true);
       try {
         await apiMutate(`/api/admin/teams/${selectedTeam.id}/members/${userId}`, 'PATCH', { role });
-        Message.success('角色已更新');
+        Message.success(t('admin.teams.messages.roleUpdated', { defaultValue: '角色已更新' }));
         await loadMembers(selectedTeam.id);
       } catch (e) {
-        Message.error(e instanceof Error ? e.message : '更新失败');
+        Message.error(e instanceof Error ? e.message : t('admin.teams.messages.updateFailed', { defaultValue: '更新失败' }));
       } finally {
         setSaving(false);
       }
     },
-    [loadMembers, selectedTeam]
+    [loadMembers, selectedTeam, t]
   );
 
   const handleRemove = useCallback(
@@ -251,22 +253,22 @@ const AdminTeams: React.FC = () => {
       setSaving(true);
       try {
         await apiMutate(`/api/admin/teams/${selectedTeam.id}/members/${userId}`, 'DELETE', {});
-        Message.success('成员已移除');
+        Message.success(t('admin.teams.messages.memberRemoved', { defaultValue: '成员已移除' }));
         await loadMembers(selectedTeam.id);
       } catch (e) {
-        Message.error(e instanceof Error ? e.message : '移除失败');
+        Message.error(e instanceof Error ? e.message : t('admin.teams.messages.removeFailed', { defaultValue: '移除失败' }));
       } finally {
         setSaving(false);
       }
     },
-    [loadMembers, selectedTeam]
+    [loadMembers, selectedTeam, t]
   );
 
   const memberColumns = useMemo(
     () => [
-      { title: '用户名', dataIndex: 'username' },
+      { title: t('admin.teams.table.username', { defaultValue: '用户名' }), dataIndex: 'username' },
       {
-        title: '角色',
+        title: t('admin.teams.table.role', { defaultValue: '角色' }),
         dataIndex: 'role',
         render: (_: unknown, r: TeamMemberRow) => {
           const cfg = ROLE_TAG[r.role] ?? ROLE_TAG.member;
@@ -274,7 +276,7 @@ const AdminTeams: React.FC = () => {
         },
       },
       {
-        title: '操作',
+        title: t('admin.teams.table.actions', { defaultValue: '操作' }),
         render: (_: unknown, r: TeamMemberRow) => (
           <Space size='mini'>
             <Select size='mini' value={r.role} style={{ width: 110 }} onChange={(v) => void handleUpdateRole(r.user_id, v as any)}>
@@ -284,20 +286,20 @@ const AdminTeams: React.FC = () => {
               <Select.Option value='viewer'>Viewer</Select.Option>
             </Select>
             <Button size='mini' status='danger' onClick={() => void handleRemove(r.user_id)}>
-              移除
+              {t('admin.teams.button.remove', { defaultValue: '移除' })}
             </Button>
           </Space>
         ),
       },
     ],
-    [handleRemove, handleUpdateRole]
+    [handleRemove, handleUpdateRole, t]
   );
 
   const taskColumns = useMemo(
     () => [
-      { title: '标题', dataIndex: 'subject' },
+      { title: t('admin.teams.table.taskTitle', { defaultValue: '标题' }), dataIndex: 'subject' },
       {
-        title: '状态',
+        title: t('admin.teams.table.status', { defaultValue: '状态' }),
         dataIndex: 'status',
         render: (_: unknown, r: TeamTaskRow) => (
           <Select
@@ -314,38 +316,38 @@ const AdminTeams: React.FC = () => {
         ),
       },
       {
-        title: '负责人',
+        title: t('admin.teams.table.owner', { defaultValue: '负责人' }),
         dataIndex: 'owner',
         render: (v: unknown) => (typeof v === 'string' && v ? v : '—'),
       },
       {
-        title: '操作',
+        title: t('admin.teams.table.actions', { defaultValue: '操作' }),
         render: (_: unknown, r: TeamTaskRow) => (
-          <Popconfirm title='确定删除该任务？' onOk={() => void handleDeleteTeamTask(r.id)}>
+          <Popconfirm title={t('admin.teams.confirm.deleteTask', { defaultValue: '确定删除该任务？' })} onOk={() => void handleDeleteTeamTask(r.id)}>
             <Button size='mini' status='danger'>
-              删除
+              {t('admin.teams.button.delete', { defaultValue: '删除' })}
             </Button>
           </Popconfirm>
         ),
       },
     ],
-    [handleDeleteTeamTask, handleTeamTaskStatus]
+    [handleDeleteTeamTask, handleTeamTaskStatus, t]
   );
 
   return (
     <AdminPageWrapper>
       <div className='flex items-center justify-between mb-16px'>
-        <div className='text-18px font-700 text-t-primary'>团队与权限</div>
+        <div className='text-18px font-700 text-t-primary'>{t('admin.teams.page.title', { defaultValue: '团队与权限' })}</div>
         <Space>
-          <Button onClick={() => void loadTeams()}>刷新</Button>
+          <Button onClick={() => void loadTeams()}>{t('admin.teams.button.refresh', { defaultValue: '刷新' })}</Button>
           <Button type='primary' onClick={() => setCreateVisible(true)}>
-            创建团队
+            {t('admin.teams.button.createTeam', { defaultValue: '创建团队' })}
           </Button>
         </Space>
       </div>
 
       <div className='grid grid-cols-1 md:grid-cols-2 gap-16px'>
-        <Card bordered={false} title='团队列表'>
+        <Card bordered={false} title={t('admin.teams.card.teamList', { defaultValue: '团队列表' })}>
           <Table
             loading={loading}
             data={teams}
@@ -353,13 +355,13 @@ const AdminTeams: React.FC = () => {
             pagination={false}
             size='small'
             columns={[
-              { title: '名称', dataIndex: 'name' },
-              { title: '工作区', dataIndex: 'workspace' },
+              { title: t('admin.teams.table.name', { defaultValue: '名称' }), dataIndex: 'name' },
+              { title: t('admin.teams.table.workspace', { defaultValue: '工作区' }), dataIndex: 'workspace' },
               {
-                title: '操作',
+                title: t('admin.teams.table.actions', { defaultValue: '操作' }),
                 render: (_: unknown, r: TeamRow) => (
                   <Button size='mini' onClick={() => void openTeam(r)}>
-                    管理成员
+                    {t('admin.teams.button.manageMembers', { defaultValue: '管理成员' })}
                   </Button>
                 ),
               },
@@ -369,11 +371,11 @@ const AdminTeams: React.FC = () => {
 
         <Card
           bordered={false}
-          title={selectedTeam ? `成员：${selectedTeam.name}` : '成员'}
+          title={selectedTeam ? t('admin.teams.card.membersOf', { defaultValue: '成员：{{name}}', name: selectedTeam.name }) : t('admin.teams.card.members', { defaultValue: '成员' })}
           extra={
             selectedTeam ? (
               <Button type='primary' size='small' onClick={() => setAddVisible(true)}>
-                添加成员
+                {t('admin.teams.button.addMember', { defaultValue: '添加成员' })}
               </Button>
             ) : null
           }
@@ -388,7 +390,7 @@ const AdminTeams: React.FC = () => {
               columns={memberColumns as any}
             />
           ) : (
-            <div className='text-t-tertiary text-13px'>从左侧选择一个团队以管理成员</div>
+            <div className='text-t-tertiary text-13px'>{t('admin.teams.placeholder.selectTeam', { defaultValue: '从左侧选择一个团队以管理成员' })}</div>
           )}
         </Card>
       </div>
@@ -397,14 +399,14 @@ const AdminTeams: React.FC = () => {
         <Card
           bordered={false}
           className='mt-16px'
-          title={`团队任务：${selectedTeam.name}`}
+          title={t('admin.teams.card.tasksOf', { defaultValue: '团队任务：{{name}}', name: selectedTeam.name })}
           extra={
             <Space>
               <Button size='small' onClick={() => void loadTeamTasks(selectedTeam.id)}>
-                刷新
+                {t('admin.teams.button.refresh', { defaultValue: '刷新' })}
               </Button>
               <Button type='primary' size='small' onClick={() => setTaskModalVisible(true)}>
-                新建任务
+                {t('admin.teams.button.createTask', { defaultValue: '新建任务' })}
               </Button>
             </Space>
           }
@@ -421,22 +423,22 @@ const AdminTeams: React.FC = () => {
       ) : null}
 
       <Modal
-        title='创建团队'
+        title={t('admin.teams.modal.createTeam', { defaultValue: '创建团队' })}
         visible={createVisible}
         onCancel={() => setCreateVisible(false)}
         onOk={handleCreate}
         confirmLoading={saving}
-        okText='创建'
-        cancelText='取消'
+        okText={t('admin.teams.button.create', { defaultValue: '创建' })}
+        cancelText={t('admin.teams.button.cancel', { defaultValue: '取消' })}
       >
         <Form layout='vertical'>
-          <Form.Item label='名称' required>
+          <Form.Item label={t('admin.teams.form.name', { defaultValue: '名称' })} required>
             <Input value={createForm.name} onChange={(v) => setCreateForm((s) => ({ ...s, name: v }))} />
           </Form.Item>
-          <Form.Item label='工作区' required>
-            <Input value={createForm.workspace} onChange={(v) => setCreateForm((s) => ({ ...s, workspace: v }))} placeholder='例如：D:\\workspace\\teamA' />
+          <Form.Item label={t('admin.teams.form.workspace', { defaultValue: '工作区' })} required>
+            <Input value={createForm.workspace} onChange={(v) => setCreateForm((s) => ({ ...s, workspace: v }))} placeholder={t('admin.teams.form.workspacePlaceholder', { defaultValue: '例如：D:\\workspace\\teamA' })} />
           </Form.Item>
-          <Form.Item label='workspace_mode'>
+          <Form.Item label={t('admin.teams.form.workspaceMode', { defaultValue: '工作区模式' })}>
             <Select value={createForm.workspace_mode} onChange={(v) => setCreateForm((s) => ({ ...s, workspace_mode: String(v) }))}>
               <Select.Option value='shared'>shared</Select.Option>
               <Select.Option value='isolated'>isolated</Select.Option>
@@ -446,30 +448,30 @@ const AdminTeams: React.FC = () => {
       </Modal>
 
       <Modal
-        title='新建团队任务'
+        title={t('admin.teams.modal.createTask', { defaultValue: '新建团队任务' })}
         visible={taskModalVisible}
         onCancel={() => setTaskModalVisible(false)}
         onOk={handleCreateTeamTask}
         confirmLoading={saving}
-        okText='创建'
-        cancelText='取消'
+        okText={t('admin.teams.button.create', { defaultValue: '创建' })}
+        cancelText={t('admin.teams.button.cancel', { defaultValue: '取消' })}
       >
         <Form layout='vertical'>
-          <Form.Item label='标题' required>
+          <Form.Item label={t('admin.teams.form.taskTitle', { defaultValue: '标题' })} required>
             <Input value={taskForm.subject} onChange={(v) => setTaskForm((s) => ({ ...s, subject: v }))} />
           </Form.Item>
-          <Form.Item label='描述'>
+          <Form.Item label={t('admin.teams.form.description', { defaultValue: '描述' })}>
             <Input.TextArea
               value={taskForm.description}
               onChange={(v) => setTaskForm((s) => ({ ...s, description: v }))}
               autoSize={{ minRows: 2, maxRows: 8 }}
             />
           </Form.Item>
-          <Form.Item label='负责人 userId（可选）'>
+          <Form.Item label={t('admin.teams.form.ownerUserId', { defaultValue: '负责人 userId（可选）' })}>
             <Input
               value={taskForm.owner}
               onChange={(v) => setTaskForm((s) => ({ ...s, owner: v }))}
-              placeholder='对应用户管理中的 user id'
+              placeholder={t('admin.teams.form.ownerPlaceholder', { defaultValue: '对应用户管理中的 user id' })}
             />
           </Form.Item>
         </Form>

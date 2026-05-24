@@ -11,6 +11,7 @@ import type { TFunction } from 'i18next';
 import { fetchWebuiApiJson, type WebuiApiJsonError } from '@/renderer/utils/webuiApiBase';
 import { buildLdapUrl, LDAP_DEFAULT_PORT, parseLdapUrl } from '@/renderer/utils/ldapProviderFormUtils';
 import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
+import { PASSWORD_MASK } from '@/common/config/constants';
 
 type ProviderId = 'ldap' | 'feishu' | 'dingtalk' | 'wecom' | 'smtp';
 
@@ -59,8 +60,8 @@ function coerceLdapConfig(row: Record<string, unknown>): LdapEditableConfig {
     bindDN,
     bindAccount,
     bindPassword:
-      typeof row.bindPassword === 'string' && row.bindPassword !== '******' ? row.bindPassword : '',
-    bindPasswordIsMasked: typeof row.bindPassword === 'string' && row.bindPassword === '******',
+      typeof row.bindPassword === 'string' && row.bindPassword !== PASSWORD_MASK ? row.bindPassword : '',
+    bindPasswordIsMasked: typeof row.bindPassword === 'string' && row.bindPassword === PASSWORD_MASK,
     tlsSkipCertVerify: row.tlsRejectUnauthorized === false,
     loginAttribute: typeof row.loginAttribute === 'string' ? row.loginAttribute : '',
     adminGroupDN: typeof row.adminGroupDN === 'string' ? row.adminGroupDN : '',
@@ -91,7 +92,7 @@ function ldapConfigForPersist(form: LdapEditableConfig): LdapPersistedConfig {
     loginAttribute: rest.loginAttribute,
     adminGroupDN: rest.adminGroupDN,
     url: buildLdapUrl({ host, port, useTls }),
-    bindPassword: trimmedPwd || (bindPasswordIsMasked ? '******' : ''),
+    bindPassword: trimmedPwd || (bindPasswordIsMasked ? PASSWORD_MASK : ''),
     searchFilter: '',
     externalIdAttribute: '',
     tlsRejectUnauthorized: useTls ? !tlsSkipCertVerify : true,

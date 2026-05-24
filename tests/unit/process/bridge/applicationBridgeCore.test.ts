@@ -15,6 +15,7 @@ vi.mock('@/common', () => ({
       updateCdpConfig: { provider: vi.fn() },
       logStream: { emit: vi.fn() },
       devToolsStateChanged: { emit: vi.fn() },
+      restoreHiddenBuiltinAssistants: { provider: vi.fn() },
     },
   },
 }));

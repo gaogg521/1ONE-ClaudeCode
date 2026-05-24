@@ -17,6 +17,7 @@ vi.mock('@/common', () => ({
   ipcBridge: {
     openclawConversation: {
       getRuntime: mockProvider('openclawConversation.getRuntime'),
+      getModels: mockProvider('openclawConversation.getModels'),
     },
     conversation: {
       create: mockProvider('conversation.create'),

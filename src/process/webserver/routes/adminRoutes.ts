@@ -340,15 +340,22 @@ export function registerAdminRoutes(app: Express): void {
       const driver = db.getDriver();
       const id = randomUUID();
       const now = Date.now();
-      driver.prepare(
-        `INSERT INTO teams (id, tenant_id, user_id, name, workspace, workspace_mode, lead_agent_id, agents, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?)`
-      ).run(id, tenantId, req.user!.id, name, workspace, workspaceMode, now, now);
-      driver.prepare(
-        `INSERT INTO team_memberships (tenant_id, team_id, user_id, role, created_at, updated_at)
-         VALUES (?, ?, ?, 'owner', ?, ?)
-         ON CONFLICT(team_id, user_id) DO UPDATE SET role='owner', updated_at=excluded.updated_at`
-      ).run(tenantId, id, req.user!.id, now, now);
+      // 使用事务保护：创建团队 + 添加成员必须原子操作
+      // Transaction protection: create team + add member must be atomic
+      const createTeamTransaction = driver.transaction(() => {
+        // 使用 NULL 而非硬编码空字符串，提高可维护性
+        // Use NULL instead of hardcoded empty strings for better maintainability
+        driver.prepare(
+          `INSERT INTO teams (id, tenant_id, user_id, name, workspace, workspace_mode, lead_agent_id, agents, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, NULL, '[]', ?, ?)`
+        ).run(id, tenantId, req.user!.id, name, workspace, workspaceMode, now, now);
+        driver.prepare(
+          `INSERT INTO team_memberships (tenant_id, team_id, user_id, role, created_at, updated_at)
+           VALUES (?, ?, ?, 'owner', ?, ?)
+           ON CONFLICT(team_id, user_id) DO UPDATE SET role='owner', updated_at=excluded.updated_at`
+        ).run(tenantId, id, req.user!.id, now, now);
+      });
+      createTeamTransaction();
 
       res.json({ success: true, data: { id } });
     } catch (err) {
@@ -549,7 +556,17 @@ export function registerAdminRoutes(app: Express): void {
         res.status(403).json({ success: false, message: '不能修改系统用户' });
         return;
       }
-      const mapped = role === 'admin' ? 'org_admin' : role === 'user' ? 'member' : (role as any);
+      // 类型安全的角色映射：前端可能传入 'admin'/'user'，映射为数据库实际存储的 'org_admin'/'member'
+      // Type-safe role mapping: frontend may send 'admin'/'user', map to actual DB values 'org_admin'/'member'
+      type DbRole = 'member' | 'org_admin' | 'system_admin';
+      const roleMap: Record<string, DbRole> = {
+        admin: 'org_admin',
+        user: 'member',
+        member: 'member',
+        org_admin: 'org_admin',
+        system_admin: 'system_admin',
+      };
+      const mapped = roleMap[role];
       await UserRepository.setRole(id, mapped);
       res.json({ success: true });
     } catch (err) {

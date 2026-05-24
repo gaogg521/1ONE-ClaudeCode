@@ -19,6 +19,8 @@ export const ChatMessageStorage = storage.buildStorage('agent.chat.message');
 
 // 系统配置存储
 export const ConfigStorage = storage.buildStorage<IConfigStorageRefer>('agent.config');
+/** Stable ID for the built-in CodeGraph MCP server (static for test-mock friendliness) */
+(ConfigStorage as unknown as Record<string, unknown>).BUILTIN_CODEGRAPH_ID = 'builtin-codegraph';
 
 // 系统环境变量存储
 export const EnvStorage = storage.buildStorage<IEnvStorageRefer>('agent.env');

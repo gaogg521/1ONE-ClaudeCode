@@ -1,0 +1,929 @@
+/**
+ * @license
+ * Copyright 2025 1ONE ClaudeCode
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import type { Express, Request, Response, NextFunction } from 'express';
+import { randomUUID } from 'node:crypto';
+import { TokenMiddleware } from '../auth/middleware/TokenMiddleware';
+import { apiRateLimiter } from '../middleware/security';
+import { getDatabase } from '@process/services/database';
+import { isEnterpriseAdminRole } from '../auth/enterpriseRoles';
+import { RAGService } from '@process/services/rag/RAGService';
+import { PipelineService } from '@process/services/pipeline/PipelineService';
+
+/**
+ * 校验管理员权限中间件
+ */
+function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user || !isEnterpriseAdminRole(req.user.role)) {
+    res.status(403).json({ success: false, message: 'Admin only' });
+    return;
+  }
+  next();
+}
+
+/**
+ * 获取当前用户的租户 ID 兜底
+ */
+function resolveTenantId(req: Request): string {
+  return (req.user?.tenant_id ?? 'default').trim() || 'default';
+}
+
+export function registerDevOpsRoutes(app: Express): void {
+  const auth = TokenMiddleware.validateToken({ responseType: 'json' });
+
+  // ==========================================
+  // 1. CTeam 敏捷协同：需求看板 API
+  // ==========================================
+
+  // GET /api/admin/requirements/tree — 以树形层级列出所有需求
+  app.get('/api/admin/requirements/tree', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const db = await getDatabase();
+      const driver = db.getDriver();
+
+      // 查询所有需求记录
+      const rows = driver
+        .prepare(
+          `SELECT id, tenant_id, parent_id, type, subject, description, status, priority, assigned_to, creator_id, created_at, updated_at
+           FROM requirements
+           WHERE tenant_id = ?
+           ORDER BY created_at ASC`
+        )
+        .all(tenantId) as any[];
+
+      // 在内存中构建多级层级树
+      const itemMap = new Map<string, any>();
+      const rootItems: any[] = [];
+
+      for (const row of rows) {
+        itemMap.set(row.id, { ...row, children: [] });
+      }
+
+      for (const item of itemMap.values()) {
+        if (item.parent_id && itemMap.has(item.parent_id)) {
+          itemMap.get(item.parent_id).children.push(item);
+        } else {
+          rootItems.push(item);
+        }
+      }
+
+      res.json({ success: true, data: rootItems });
+    } catch (err) {
+      console.error('[DevOpsRoute] list requirements tree error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // POST /api/admin/requirements — 创建需求卡片
+  app.post('/api/admin/requirements', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const { parent_id, type, subject, description, status, priority, assigned_to } = req.body;
+
+      if (!subject?.trim()) {
+        res.status(400).json({ success: false, message: 'Subject is required' });
+        return;
+      }
+
+      const allowedTypes = ['epic', 'feature', 'story', 'bug', 'task'];
+      if (!allowedTypes.includes(type)) {
+        res.status(400).json({ success: false, message: 'Invalid requirement type' });
+        return;
+      }
+
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const id = randomUUID();
+      const now = Date.now();
+
+      driver
+        .prepare(
+          `INSERT INTO requirements (id, tenant_id, parent_id, type, subject, description, status, priority, assigned_to, creator_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          id,
+          tenantId,
+          parent_id || null,
+          type,
+          subject.trim(),
+          description || null,
+          status || 'backlog',
+          priority || 'medium',
+          assigned_to || null,
+          req.user!.id,
+          now,
+          now
+        );
+
+      res.json({ success: true, data: { id } });
+    } catch (err) {
+      console.error('[DevOpsRoute] create requirement error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // PATCH /api/admin/requirements/:id — 更新需求状态、优先级、指派人
+  app.patch('/api/admin/requirements/:id', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const id = String(req.params.id);
+      const updates = req.body;
+
+      const db = await getDatabase();
+      const driver = db.getDriver();
+
+      // 验证是否属于当前租户
+      const existing = driver
+        .prepare(`SELECT 1 FROM requirements WHERE id = ? AND tenant_id = ?`)
+        .get(id, tenantId);
+
+      if (!existing) {
+        res.status(404).json({ success: false, message: 'Requirement not found' });
+        return;
+      }
+
+      const fieldsToUpdate: string[] = [];
+      const values: any[] = [];
+
+      const allowedFields = ['subject', 'description', 'status', 'priority', 'assigned_to'];
+      for (const field of allowedFields) {
+        if (updates[field] !== undefined) {
+          fieldsToUpdate.push(`${field} = ?`);
+          values.push(updates[field]);
+        }
+      }
+
+      if (fieldsToUpdate.length === 0) {
+        res.status(400).json({ success: false, message: 'No fields to update' });
+        return;
+      }
+
+      fieldsToUpdate.push('updated_at = ?');
+      values.push(Date.now());
+
+      // 条件
+      values.push(id);
+      values.push(tenantId);
+
+      driver
+        .prepare(
+          `UPDATE requirements SET ${fieldsToUpdate.join(', ')} WHERE id = ? AND tenant_id = ?`
+        )
+        .run(...values);
+
+      // CFlow 自动打点：当需求状态发生流转时，写入价值流阶段记录
+      if (updates.status) {
+        const stageMap: Record<string, string> = { backlog: '需求分析', planning: '设计规划', developing: '开发编码', testing: '测试验证', completed: '部署发布' };
+        const stageName = stageMap[updates.status];
+        if (stageName) {
+          const nowFl = Date.now();
+          try {
+            driver.prepare(`INSERT INTO value_stream_stages (id, tenant_id, requirement_id, stage_name, entry_time, exit_time, wait_duration_ms, process_duration_ms) VALUES (?,?,?,?,?,?,?,?)`).run(randomUUID(), tenantId, id, stageName, nowFl, nowFl, 0, 0);
+          } catch { /* ignore flow logging errors */ }
+        }
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[DevOpsRoute] update requirement error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // DELETE /api/admin/requirements/:id — 删除卡片（级联删除所有子卡片）
+  app.delete('/api/admin/requirements/:id', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const id = String(req.params.id);
+
+      const db = await getDatabase();
+      const driver = db.getDriver();
+
+      const result = driver
+        .prepare(`DELETE FROM requirements WHERE id = ? AND tenant_id = ?`)
+        .run(id, tenantId);
+
+      if (result.changes === 0) {
+        res.status(404).json({ success: false, message: 'Requirement not found' });
+        return;
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[DevOpsRoute] delete requirement error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // ==========================================
+  // 2. RAG 知识库核心 API
+  // ==========================================
+
+  // GET /api/admin/rag/documents — 列出当前企业所有文档元数据（按权限 scope 过滤）
+  app.get('/api/admin/rag/documents', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const isAdmin = isEnterpriseAdminRole(req.user!.role);
+      const db = await getDatabase();
+      const driver = db.getDriver();
+
+      // 管理员看全部，普通用户只看自己的+组织共享的
+      const rows = isAdmin
+        ? driver.prepare(`SELECT id, tenant_id, title, file_path, file_size, mime_type, status, chunk_count, scope, team_id, created_by, created_at, updated_at FROM rag_documents WHERE tenant_id = ? ORDER BY created_at DESC`).all(tenantId)
+        : driver.prepare(`SELECT id, tenant_id, title, file_path, file_size, mime_type, status, chunk_count, scope, team_id, created_by, created_at, updated_at FROM rag_documents WHERE tenant_id = ? AND (scope = 'organization' OR created_by = ?) ORDER BY created_at DESC`).all(tenantId, userId);
+
+      res.json({ success: true, data: rows });
+    } catch (err) {
+      console.error('[DevOpsRoute] list RAG documents error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // POST /api/admin/rag/documents — 提交文本知识（记录 scope 和 creator）
+  app.post('/api/admin/rag/documents', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const { title, content, scope } = req.body;
+
+      if (!title?.trim() || !content?.trim()) {
+        res.status(400).json({ success: false, message: 'Title and content are required' });
+        return;
+      }
+
+      const docScope = (scope === 'organization' && isEnterpriseAdminRole(req.user!.role)) ? 'organization' : 'personal';
+
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const docId = randomUUID();
+      const now = Date.now();
+
+      // Step 1: 写入 RAG 原始文档元数据，状态设为 indexing
+      driver
+        .prepare(
+          `INSERT INTO rag_documents (id, tenant_id, title, file_path, file_size, mime_type, status, chunk_count, scope, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'text/plain', 'indexing', 0, ?, ?, ?, ?)`
+        )
+        .run(docId, tenantId, title.trim(), 'memory://text', Buffer.byteLength(content), now, now, docScope, userId, now, now);
+
+      // Step 2: 异步跑本地向量化提取与切片（避免阻塞 HTTP 线程，优雅极速）
+      // Runs in background: slides chunks, gets local ONNX embeddings, inserts into chunks table
+      (async () => {
+        try {
+          // A. 智能滑动切片与异步特征提取（事务外部计算，避免更好更好的 better-sqlite3 事务 promise 异常）
+          // Slide chunks and fetch embeddings asynchronously OUTSIDE the transaction callback
+          const chunks = RAGService.chunkText(content, 500, 100);
+          const computedChunks: Array<{ id: string; index: number; content: string; blob: Buffer }> = [];
+
+          let index = 0;
+          for (const chunk of chunks) {
+            const vector = await RAGService.getEmbedding(chunk);
+            const blob = RAGService.vectorToBuffer(vector);
+            computedChunks.push({
+              id: randomUUID(),
+              index: index++,
+              content: chunk,
+              blob,
+            });
+          }
+
+          // 准备同步的 SQL 写入语句
+          const insertChunk = driver.prepare(
+            `INSERT INTO rag_document_chunks (id, document_id, chunk_index, content, token_count, embedding)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          );
+
+          // 纯同步的 batch 事务写入
+          // Synchronous better-sqlite3 batch transaction
+          const batchInsert = driver.transaction((items: typeof computedChunks) => {
+            for (const item of items) {
+              insertChunk.run(item.id, docId, item.index, item.content, item.content.length, item.blob);
+            }
+          });
+
+          batchInsert(computedChunks);
+
+          // B. 状态改为 completed 并写切片数量
+          driver
+            .prepare(
+              `UPDATE rag_documents SET status = 'completed', chunk_count = ?, updated_at = ? WHERE id = ?`
+            )
+            .run(chunks.length, Date.now(), docId);
+
+          console.log(`[RAG-Index] Document '${title}' indexed successfully with ${chunks.length} chunks.`);
+        } catch (indexError) {
+          console.error('[RAG-Index] Error indexing document in background:', indexError);
+          driver
+            .prepare(`UPDATE rag_documents SET status = 'failed', updated_at = ? WHERE id = ?`)
+            .run(Date.now(), docId);
+        }
+      })();
+
+      res.json({ success: true, data: { id: docId, status: 'indexing' } });
+    } catch (err) {
+      console.error('[DevOpsRoute] upload document error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // POST /api/admin/rag/query — 相似度语义检索测试（Top-K 余弦比对）
+  app.post('/api/admin/rag/query', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const query = String(req.body?.query ?? '').trim();
+      const limit = Math.min(Math.max(Number(req.body?.limit) || 5, 1), 20);
+
+      if (!query) {
+        res.json({ success: true, data: [] });
+        return;
+      }
+
+      const db = await getDatabase();
+      const driver = db.getDriver();
+
+      // 1. 将查询文本实时转化为向量 (384 维)
+      const queryVector = await RAGService.getEmbedding(query);
+
+      // 2. 从数据库加载所有当前租户的 Chunks（包含二进制 Blob）
+      const rows = driver
+        .prepare(
+          `SELECT c.content, c.chunk_index, c.embedding, d.title
+           FROM rag_document_chunks c
+           JOIN rag_documents d ON d.id = c.document_id
+           WHERE d.tenant_id = ?`
+        )
+        .all(tenantId) as any[];
+
+      // 3. 在内存中极速计算余弦相似度并排序
+      const scoredResults = rows
+        .map((row) => {
+          const chunkVector = RAGService.bufferToVector(row.embedding);
+          const score = RAGService.cosineSimilarity(queryVector, chunkVector);
+          return {
+            title: row.title,
+            chunk_index: row.chunk_index,
+            content: row.content,
+            score,
+          };
+        })
+        .filter((r) => r.score >= 0.3) // 过滤掉相关性极低的数据（余弦相似度阈值过滤）
+        .sort((a, b) => b.score - a.score) // 相关性从高到低排序
+        .slice(0, limit);
+
+      res.json({ success: true, data: scoredResults });
+    } catch (err) {
+      console.error('[DevOpsRoute] rag search error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // DELETE /api/admin/rag/documents/:id — 删除知识库文档（拥有者或管理员可删除）
+  app.delete('/api/admin/rag/documents/:id', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const isAdmin = isEnterpriseAdminRole(req.user!.role);
+      const id = String(req.params.id);
+
+      const db = await getDatabase();
+      const driver = db.getDriver();
+
+      const whereClause = isAdmin
+        ? 'id = ? AND tenant_id = ?'
+        : 'id = ? AND tenant_id = ? AND created_by = ?';
+      const params = isAdmin ? [id, tenantId] : [id, tenantId, userId];
+
+      const result = driver
+        .prepare(`DELETE FROM rag_documents WHERE ${whereClause}`)
+        .run(...params);
+
+      if (result.changes === 0) {
+        res.status(404).json({ success: false, message: 'Document not found' });
+        return;
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[DevOpsRoute] delete RAG document error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // ==========================================
+  // 3. MCP 统一工具箱：连接器 API
+  // ==========================================
+
+  // GET /api/admin/mcp/registry — 列出所有的工具服务（按权限 scope 过滤）
+  app.get('/api/admin/mcp/registry', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const isAdmin = isEnterpriseAdminRole(req.user!.role);
+      const db = await getDatabase();
+      const driver = db.getDriver();
+
+      const rows = (isAdmin
+        ? driver.prepare(`SELECT id, tenant_id, name, type, endpoint, env_json, enabled, scope, team_id, created_by, created_at, updated_at FROM mcp_registry WHERE tenant_id = ? ORDER BY name ASC`).all(tenantId)
+        : driver.prepare(`SELECT id, tenant_id, name, type, endpoint, env_json, enabled, scope, team_id, created_by, created_at, updated_at FROM mcp_registry WHERE tenant_id = ? AND (scope = 'organization' OR created_by = ?) ORDER BY name ASC`).all(tenantId, userId)) as any[];
+
+      // 为了安全，不返回具体的 env_json 明文，仅以布尔标记其是否配置过
+      const safeRows = rows.map((row) => {
+        let hasKeys = false;
+        try {
+          if (row.env_json) {
+            const parsed = JSON.parse(row.env_json);
+            hasKeys = Object.keys(parsed).length > 0;
+          }
+        } catch { /* ignore */ }
+
+        return {
+          id: row.id,
+          tenant_id: row.tenant_id,
+          name: row.name,
+          type: row.type,
+          endpoint: row.endpoint,
+          enabled: row.enabled === 1,
+          hasKeys,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+        };
+      });
+
+      res.json({ success: true, data: safeRows });
+    } catch (err) {
+      console.error('[DevOpsRoute] list MCP servers error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // POST /api/admin/mcp/registry — 注册或编辑外部 MCP 节点
+  app.post('/api/admin/mcp/registry', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const isAdmin = isEnterpriseAdminRole(req.user!.role);
+      const { id, name, type, endpoint, env, enabled, scope } = req.body;
+
+      if (!name?.trim() || !endpoint?.trim() || !type) {
+        res.status(400).json({ success: false, message: 'name, type and endpoint are required' });
+        return;
+      }
+
+      if (!['sse', 'stdio'].includes(type)) {
+        res.status(400).json({ success: false, message: 'Invalid MCP type' });
+        return;
+      }
+
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const now = Date.now();
+
+      const envJsonStr = env && typeof env === 'object' ? JSON.stringify(env) : '{}';
+
+      if (id) {
+        // 编辑模式
+        const existing = driver
+          .prepare(`SELECT 1 FROM mcp_registry WHERE id = ? AND tenant_id = ?`)
+          .get(id, tenantId);
+
+        if (!existing) {
+          res.status(404).json({ success: false, message: 'MCP registry not found' });
+          return;
+        }
+
+        // 保存时如果合并，我们做增量合并
+        const oldRow = driver
+          .prepare(`SELECT env_json FROM mcp_registry WHERE id = ?`)
+          .get(id) as { env_json: string } | undefined;
+        let finalEnv = envJsonStr;
+        try {
+          if (oldRow?.env_json) {
+            const oldEnv = JSON.parse(oldRow.env_json);
+            const newEnv = JSON.parse(envJsonStr);
+            // 客户端如果对已存在 Key 发送 '******' 占位，则保留老密码
+            for (const [k, v] of Object.entries(newEnv)) {
+              if (v === '******' && oldEnv[k]) {
+                newEnv[k] = oldEnv[k];
+              }
+            }
+            finalEnv = JSON.stringify(newEnv);
+          }
+        } catch { /* ignore */ }
+
+        driver
+          .prepare(
+            `UPDATE mcp_registry
+             SET name = ?, type = ?, endpoint = ?, env_json = ?, enabled = ?, updated_at = ?
+             WHERE id = ? AND tenant_id = ?`
+          )
+          .run(name.trim(), type, endpoint.trim(), finalEnv, enabled ? 1 : 0, now, id, tenantId);
+      } else {
+        // 新建模式
+        const nextId = randomUUID();
+        const mcpScope = (scope === 'organization' && isAdmin) ? 'organization' : 'personal';
+        driver
+          .prepare(
+            `INSERT INTO mcp_registry (id, tenant_id, name, type, endpoint, env_json, enabled, scope, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .run(nextId, tenantId, name.trim(), type, endpoint.trim(), envJsonStr, enabled ? 1 : 0, mcpScope, req.user!.id, now, now);
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[DevOpsRoute] set MCP server error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // DELETE /api/admin/mcp/registry/:id — 注销 MCP 连接
+  app.delete('/api/admin/mcp/registry/:id', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const id = String(req.params.id);
+
+      const db = await getDatabase();
+      const driver = db.getDriver();
+
+      const result = driver
+        .prepare(`DELETE FROM mcp_registry WHERE id = ? AND tenant_id = ?`)
+        .run(id, tenantId);
+
+      if (result.changes === 0) {
+        res.status(404).json({ success: false, message: 'MCP not found' });
+        return;
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[DevOpsRoute] delete MCP error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // ==========================================
+  // 5. CMeas 效能度量 API
+  // ==========================================
+
+  app.post('/api/admin/metrics', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const { metric_type, metric_name, value, period } = req.body;
+      if (!metric_type || !metric_name || value === undefined) { res.status(400).json({ success: false, message: 'invalid params' }); return; }
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      driver.prepare(`INSERT INTO metrics_snapshots (id, tenant_id, metric_type, metric_name, value, period, recorded_at) VALUES (?,?,?,?,?,?,?)`).run(randomUUID(), tenantId, metric_type, metric_name, value, period || '', Date.now());
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  app.get('/api/admin/metrics', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const metricType = String(req.query.type || '');
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const rows = metricType
+        ? driver.prepare(`SELECT * FROM metrics_snapshots WHERE tenant_id=? AND metric_type=? ORDER BY recorded_at DESC LIMIT 200`).all(tenantId, metricType)
+        : driver.prepare(`SELECT * FROM metrics_snapshots WHERE tenant_id=? ORDER BY recorded_at DESC LIMIT 200`).all(tenantId);
+      res.json({ success: true, data: rows });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  // ==========================================
+  // 6. CTest 测试管理 API
+  // ==========================================
+
+  app.get('/api/admin/test-plans', apiRateLimiter, auth, async (req, res) => {
+    try { const db = await getDatabase(); const rows = db.getDriver().prepare(`SELECT * FROM test_plans WHERE tenant_id=? ORDER BY created_at DESC`).all(resolveTenantId(req)); res.json({ success: true, data: rows }); }
+    catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  app.post('/api/admin/test-plans', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const { name, description, linked_requirement_id } = req.body;
+      if (!name?.trim()) { res.status(400).json({ success: false, message: 'name required' }); return; }
+      const db = await getDatabase(); const id = randomUUID(); const now = Date.now();
+      db.getDriver().prepare(`INSERT INTO test_plans (id, tenant_id, name, description, linked_requirement_id, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`).run(id, resolveTenantId(req), name.trim(), description||'', linked_requirement_id||null, req.user!.id, now, now);
+      res.json({ success: true, data: { id } });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  app.get('/api/admin/test-cases', apiRateLimiter, auth, async (req, res) => {
+    try { const planId = String(req.query.planId || ''); const db = await getDatabase(); const rows = db.getDriver().prepare(`SELECT * FROM test_cases WHERE plan_id=? ORDER BY created_at DESC`).all(planId); res.json({ success: true, data: rows }); }
+    catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  app.post('/api/admin/test-cases', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const { plan_id, subject, steps, expected, assigned_to } = req.body;
+      if (!plan_id || !subject?.trim()) { res.status(400).json({ success: false, message: 'plan_id and subject required' }); return; }
+      const db = await getDatabase(); const id = randomUUID();
+      db.getDriver().prepare(`INSERT INTO test_cases (id, plan_id, subject, steps, expected, assigned_to, created_at) VALUES (?,?,?,?,?,?,?)`).run(id, plan_id, subject.trim(), steps||'', expected||'', assigned_to||'', Date.now());
+      res.json({ success: true, data: { id } });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  // ==========================================
+  // 7. CFlow 价值流 API
+  // ==========================================
+
+  app.get('/api/admin/value-stream', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const db = await getDatabase();
+      const rows = db.getDriver().prepare(`SELECT vs.*, r.subject as req_subject FROM value_stream_stages vs LEFT JOIN requirements r ON vs.requirement_id = r.id WHERE vs.tenant_id = ? ORDER BY vs.entry_time DESC LIMIT 100`).all(tenantId);
+      res.json({ success: true, data: rows });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  app.post('/api/admin/value-stream', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const { requirement_id, stage_name, entry_time, exit_time, wait_duration_ms, process_duration_ms } = req.body;
+      const db = await getDatabase();
+      db.getDriver().prepare(`INSERT INTO value_stream_stages (id, tenant_id, requirement_id, stage_name, entry_time, exit_time, wait_duration_ms, process_duration_ms) VALUES (?,?,?,?,?,?,?,?)`).run(randomUUID(), tenantId, requirement_id||null, stage_name, entry_time||Date.now(), exit_time||null, wait_duration_ms||0, process_duration_ms||0);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  // ==========================================
+  // 9. 安全审计日志 API
+  // ==========================================
+
+  app.get('/api/admin/audit-logs', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const isAdmin = isEnterpriseAdminRole(req.user!.role);
+      const db = await getDatabase(); const driver = db.getDriver();
+      const rows = (isAdmin
+        ? driver.prepare(`SELECT * FROM audit_logs WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 200`).all(tenantId)
+        : driver.prepare(`SELECT * FROM audit_logs WHERE tenant_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 200`).all(tenantId, userId)) as any[];
+      res.json({ success: true, data: rows });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  // ==========================================
+  // 8. CTeam 版本里程碑 API
+  // ==========================================
+
+  app.get('/api/admin/milestones', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const rows = driver.prepare(`SELECT id, tenant_id, name, description, due_date, epic_count, completed_count, created_at FROM milestones WHERE tenant_id = ? ORDER BY created_at DESC`).all(tenantId);
+      res.json({ success: true, data: rows });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  app.post('/api/admin/milestones', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const { name, description, due_date } = req.body;
+      if (!name?.trim()) { res.status(400).json({ success: false, message: 'name required' }); return; }
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const id = randomUUID();
+      const now = Date.now();
+      driver.prepare(`INSERT INTO milestones (id, tenant_id, name, description, due_date, epic_count, completed_count, created_at, updated_at) VALUES (?,?,?,?,?,0,0,?,?)`).run(id, tenantId, name.trim(), description || '', due_date || '', now, now);
+      res.json({ success: true, data: { id } });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  // ==========================================
+  // 2.5 CPack 制品管理 API
+  // ==========================================
+
+  app.get('/api/admin/artifact-repos', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const rows = driver.prepare(`SELECT * FROM artifact_repos WHERE tenant_id = ? ORDER BY created_at DESC`).all(tenantId);
+      res.json({ success: true, data: rows });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  app.post('/api/admin/artifact-repos', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const { name, repo_type, endpoint } = req.body;
+      if (!name?.trim()) { res.status(400).json({ success: false, message: 'name required' }); return; }
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const id = randomUUID();
+      const now = Date.now();
+      driver.prepare(`INSERT INTO artifact_repos (id, tenant_id, name, repo_type, endpoint, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`).run(id, tenantId, name.trim(), repo_type || 'generic', endpoint || '', now, now);
+      res.json({ success: true, data: { id } });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  app.delete('/api/admin/artifact-repos/:id', apiRateLimiter, auth, async (req, res) => {
+    try { const db = await getDatabase(); db.getDriver().prepare(`DELETE FROM artifact_repos WHERE id=? AND tenant_id=?`).run(req.params.id, resolveTenantId(req)); res.json({ success: true }); } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  app.get('/api/admin/artifacts', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const isAdmin = isEnterpriseAdminRole(req.user!.role);
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const rows = (isAdmin
+        ? driver.prepare(`SELECT a.*, ar.name as repo_name FROM artifacts a JOIN artifact_repos ar ON a.repo_id = ar.id WHERE ar.tenant_id = ? ORDER BY a.created_at DESC`).all(tenantId)
+        : driver.prepare(`SELECT a.*, ar.name as repo_name FROM artifacts a JOIN artifact_repos ar ON a.repo_id = ar.id WHERE ar.tenant_id = ? AND (a.scope = 'organization' OR a.created_by = ?) ORDER BY a.created_at DESC`).all(tenantId, userId)) as any[];
+      res.json({ success: true, data: rows });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  // ==========================================
+  // 2.6 CCode 代码库 API
+  // ==========================================
+
+  app.get('/api/admin/code-repos', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const rows = driver.prepare(`SELECT * FROM code_repos WHERE tenant_id = ? ORDER BY created_at DESC`).all(tenantId);
+      res.json({ success: true, data: rows });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  app.post('/api/admin/code-repos', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const { name, url, provider, credential_id, default_branch } = req.body;
+      if (!name?.trim() || !url?.trim()) { res.status(400).json({ success: false, message: 'name and url required' }); return; }
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const id = randomUUID();
+      const now = Date.now();
+      driver.prepare(`INSERT INTO code_repos (id, tenant_id, name, url, provider, credential_id, default_branch, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`).run(id, tenantId, name.trim(), url.trim(), provider || 'gitlab', credential_id || '', default_branch || 'main', now, now);
+      res.json({ success: true, data: { id } });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  app.delete('/api/admin/code-repos/:id', apiRateLimiter, auth, async (req, res) => {
+    try { const db = await getDatabase(); db.getDriver().prepare(`DELETE FROM code_repos WHERE id=? AND tenant_id=?`).run(req.params.id, resolveTenantId(req)); res.json({ success: true }); } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  // ==========================================
+  // 3.5 企业 Skills 技能仓库 API
+  // ==========================================
+
+  // GET /api/admin/skills — 列出技能（按权限 scope 过滤）
+  app.get('/api/admin/skills', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const isAdmin = isEnterpriseAdminRole(req.user!.role);
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const rows = (isAdmin
+        ? driver.prepare(`SELECT id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at FROM skills_registry WHERE tenant_id = ? ORDER BY name ASC`).all(tenantId)
+        : driver.prepare(`SELECT id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at FROM skills_registry WHERE tenant_id = ? AND (scope = 'organization' OR created_by = ?) ORDER BY name ASC`).all(tenantId, userId)) as any[];
+      res.json({ success: true, data: rows });
+    } catch (err) {
+      console.error('[DevOpsRoute] list skills error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // POST /api/admin/skills — 创建/编辑技能
+  app.post('/api/admin/skills', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const isAdmin = isEnterpriseAdminRole(req.user!.role);
+      const { id, name, description, content, enabled, scope } = req.body;
+      if (!name?.trim()) { res.status(400).json({ success: false, message: 'name required' }); return; }
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const now = Date.now();
+      if (id) {
+        const existing = driver.prepare(`SELECT 1 FROM skills_registry WHERE id = ? AND tenant_id = ?`).get(id, tenantId);
+        if (!existing) { res.status(404).json({ success: false, message: 'Skill not found' }); return; }
+        driver.prepare(`UPDATE skills_registry SET name=?, description=?, content=?, enabled=?, updated_at=? WHERE id=? AND tenant_id=?`)
+          .run(name.trim(), description||'', content||'', enabled?1:0, now, id, tenantId);
+      } else {
+        const skillScope = (scope === 'organization' && isAdmin) ? 'organization' : 'personal';
+        const nextId = randomUUID();
+        driver.prepare(`INSERT INTO skills_registry (id, tenant_id, name, description, content, enabled, scope, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+          .run(nextId, tenantId, name.trim(), description||'', content||'', enabled?1:0, skillScope, userId, now, now);
+      }
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[DevOpsRoute] set skill error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // DELETE /api/admin/skills/:id — 删除技能
+  app.delete('/api/admin/skills/:id', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const isAdmin = isEnterpriseAdminRole(req.user!.role);
+      const id = String(req.params.id);
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const where = isAdmin ? 'id=? AND tenant_id=?' : 'id=? AND tenant_id=? AND created_by=?';
+      const params = isAdmin ? [id, tenantId] : [id, tenantId, userId];
+      const result = driver.prepare(`DELETE FROM skills_registry WHERE ${where}`).run(...params);
+      if (result.changes === 0) { res.status(404).json({ success: false, message: 'Skill not found' }); return; }
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[DevOpsRoute] delete skill error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // ==========================================
+  // 4. DevOps 持续集成流水线 API
+  // ==========================================
+
+  // GET /api/admin/pipelines — 获取当前企业的所有流水线
+  app.get('/api/admin/pipelines', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const pipelines = await PipelineService.getInstance().getPipelines(tenantId);
+      res.json({ success: true, data: pipelines });
+    } catch (err) {
+      console.error('[DevOpsRoute] list pipelines error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // POST /api/admin/pipelines — 创建流水线
+  app.post('/api/admin/pipelines', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const { name, definition, associatedTeamId } = req.body;
+
+      if (!name?.trim()) {
+        res.status(400).json({ success: false, message: 'Pipeline name is required' });
+        return;
+      }
+
+      if (!definition || !Array.isArray(definition.stages)) {
+        res.status(400).json({ success: false, message: 'Invalid pipeline definition' });
+        return;
+      }
+
+      const pipeline = await PipelineService.getInstance().createPipeline({
+        tenantId,
+        name: name.trim(),
+        associatedTeamId: associatedTeamId || null,
+        definition,
+      });
+
+      res.json({ success: true, data: pipeline });
+    } catch (err) {
+      console.error('[DevOpsRoute] create pipeline error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // POST /api/admin/pipelines/run/:pipelineId — 触发流水线运行
+  app.post('/api/admin/pipelines/run/:pipelineId', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const pipelineId = String(req.params.pipelineId);
+      const runId = await PipelineService.getInstance().triggerPipelineRun(
+        pipelineId,
+        req.user!.id,
+        'manual'
+      );
+      res.json({ success: true, data: { runId } });
+    } catch (err: any) {
+      console.error('[DevOpsRoute] trigger pipeline run error:', err);
+      res.status(500).json({ success: false, message: err.message || 'Internal server error' });
+    }
+  });
+
+  // GET /api/admin/pipelines/runs/:runId — 获取流水线运行状态和原始日志
+  app.get('/api/admin/pipelines/runs/:runId', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const runId = String(req.params.runId);
+      const run = await PipelineService.getInstance().getPipelineRun(runId);
+
+      if (!run) {
+        res.status(404).json({ success: false, message: 'Pipeline run not found' });
+        return;
+      }
+
+      res.json({ success: true, data: run });
+    } catch (err) {
+      console.error('[DevOpsRoute] get pipeline run error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+}

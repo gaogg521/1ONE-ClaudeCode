@@ -115,10 +115,13 @@ export async function joinEnterpriseWithInvite(userId: string, codeRaw: string):
   }
 
   const driver = await getSqliteDriver();
-  driver
-    .prepare(`UPDATE tenant_invites SET use_count = use_count + 1 WHERE id = ?`)
-    .run(invite.id);
-  await UserRepository.updateTenantId(userId, invite.tenant_id);
+  // 使用事务保护：更新邀请使用次数 + 更新用户租户ID 必须原子操作
+  // Transaction protection: update invite use_count + update user tenant_id must be atomic
+  const joinTransaction = driver.transaction(() => {
+    driver.prepare(`UPDATE tenant_invites SET use_count = use_count + 1 WHERE id = ?`).run(invite.id);
+    driver.prepare(`UPDATE users SET tenant_id = ?, updated_at = ? WHERE id = ?`).run(invite.tenant_id, Date.now(), userId);
+  });
+  joinTransaction();
   await AuthService.invalidateAllTokens();
 
   const ctx = await resolveEnterpriseContext(invite.tenant_id);
@@ -147,11 +150,20 @@ export async function createEnterpriseTenant(
   const tenantId = `tenant_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
   const now = Date.now();
   const driver = await getSqliteDriver();
-  driver
-    .prepare(`INSERT INTO tenants (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)`)
-    .run(tenantId, trimmed, now, now);
-  await UserRepository.updateTenantId(userId, tenantId);
-  await UserRepository.setRole(userId, 'org_admin');
+  // 使用事务保护：创建租户 + 更新用户 + 设置角色必须原子操作
+  // Transaction protection: create tenant + update user + set role must be atomic
+  const createTransaction = driver.transaction(() => {
+    driver
+      .prepare(`INSERT INTO tenants (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)`)
+      .run(tenantId, trimmed, now, now);
+    driver
+      .prepare(`UPDATE users SET tenant_id = ?, updated_at = ? WHERE id = ?`)
+      .run(tenantId, now, userId);
+    driver
+      .prepare(`UPDATE users SET role = ?, updated_at = ? WHERE id = ?`)
+      .run('org_admin', now, userId);
+  });
+  createTransaction();
   await AuthService.invalidateAllTokens();
 
   return { tenantId, tenantName: trimmed };

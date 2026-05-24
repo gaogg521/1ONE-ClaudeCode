@@ -14,7 +14,7 @@ import {
   isTemporaryWorkspace as checkIsTemporaryWorkspace,
   getWorkspaceDisplayName as getDisplayName,
 } from '@/renderer/utils/workspace/workspace';
-import { Empty, Message, Tree } from '@arco-design/web-react';
+import { Button, Empty, Message, Tag, Tree } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import FileChangeList from './components/FileChangeList';
@@ -24,7 +24,11 @@ import WorkspaceContextMenu from './components/WorkspaceContextMenu';
 import WorkspaceDialogs from './components/WorkspaceDialogs';
 import WorkspaceTabBar from './components/WorkspaceTabBar';
 import WorkspaceToolbar from './components/WorkspaceToolbar';
+import AdminKanban from '@/renderer/pages/admin/AdminKanban';
+import AdminPipelineLogs from '@/renderer/pages/admin/AdminPipelineLogs';
 import { useFileChanges } from './hooks/useFileChanges';
+import { useWorkspacePipeline } from './hooks/useWorkspacePipeline';
+import { useWorkspaceCodeReview, type ICodeReviewResult } from './hooks/useWorkspaceCodeReview';
 import { useWorkspaceCollapse } from './hooks/useWorkspaceCollapse';
 import { useWorkspaceDragImport } from './hooks/useWorkspaceDragImport';
 import { useWorkspaceEvents } from './hooks/useWorkspaceEvents';
@@ -67,6 +71,8 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
 
   // Initialize all hooks
   const { isWorkspaceCollapsed, setIsWorkspaceCollapsed } = useWorkspaceCollapse();
+  const pipelineHook = useWorkspacePipeline(workspace);
+  const codeReviewHook = useWorkspaceCodeReview();
   const treeHook = useWorkspaceTree({ workspace, conversation_id, eventPrefix });
   const modalsHook = useWorkspaceModals();
   const pasteHook = useWorkspacePaste({
@@ -537,6 +543,63 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
         {/* Changes tab content */}
         {!isWorkspaceCollapsed && activeTab === 'changes' && (
           <FlexFullContainer containerClassName='overflow-y-auto'>
+            {/* CCode-Master: AI Code Review Panel */}
+            <div className='px-12px pt-8px pb-8px border-b border-border-2'>
+              <div className='flex items-center justify-between mb-6px'>
+                <span className='text-12px font-600 text-t-secondary'>
+                  {t('admin.codeReview.title', { defaultValue: 'CCode-Master AI 代码审查' })}
+                </span>
+                <Button
+                  size='mini'
+                  type='primary'
+                  loading={codeReviewHook.reviewing}
+                  onClick={() =>
+                    void codeReviewHook.runCodeReview(
+                      workspace,
+                      fileChangesHook.staged,
+                      fileChangesHook.unstaged
+                    )
+                  }
+                >
+                  {codeReviewHook.reviewing
+                    ? t('admin.codeReview.reviewing', { defaultValue: '分析中...' })
+                    : t('admin.codeReview.run', { defaultValue: 'AI 评审代码变更' })}
+                </Button>
+              </div>
+              {codeReviewHook.reviewResult && (
+                <div className='mt-8px bg-fill-2 rd-6px p-10px'>
+                  <div className='flex items-center gap-8px mb-6px'>
+                    <Tag
+                      size='small'
+                      color={codeReviewHook.reviewResult.score >= 80 ? 'green' : codeReviewHook.reviewResult.score >= 60 ? 'orange' : 'red'}
+                    >
+                      {t('admin.codeReview.score', { score: codeReviewHook.reviewResult.score, defaultValue: '{{score}} 分' })}
+                    </Tag>
+                    <span className='text-12px text-t-secondary'>{codeReviewHook.reviewResult.summary}</span>
+                  </div>
+                  {codeReviewHook.reviewResult.issues.length > 0 && (
+                    <div className='flex flex-col gap-4px'>
+                      {codeReviewHook.reviewResult.issues.map((issue: ICodeReviewResult['issues'][number], idx: number) => (
+                        <div
+                          key={idx}
+                          className={`text-11px px-8px py-4px rd-4px ${
+                            issue.severity === 'critical'
+                              ? 'bg-[rgb(var(--danger-1))] text-[rgb(var(--danger-6))]'
+                              : issue.severity === 'warning'
+                              ? 'bg-[rgb(var(--warning-1))] text-[rgb(var(--warning-6))]'
+                              : 'bg-fill-3 text-t-secondary'
+                          }`}
+                        >
+                          <span className='font-600'>{issue.severity === 'critical' ? '🔴' : issue.severity === 'warning' ? '⚠️' : 'ℹ️'}</span>{' '}
+                          <span className='font-600'>{issue.title}</span> — {issue.description}
+                          {issue.suggestion && <span className='block mt-2px opacity-75'>{issue.suggestion}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <FileChangeList
               t={t}
               workspace={workspace}
@@ -554,6 +617,20 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
               onResetFile={fileChangesHook.resetFile}
             />
           </FlexFullContainer>
+        )}
+
+        {/* CTeam 敏捷协同看板工作区集成 / CTeam Kanban tab content */}
+        {!isWorkspaceCollapsed && activeTab === 'kanban' && (
+          <div className='flex-1 overflow-hidden bg-bg-1 flex flex-col min-h-0' style={{ height: 'calc(100% - 40px)', padding: '12px' }}>
+            <AdminKanban />
+          </div>
+        )}
+
+        {/* CCI 持续集成流水线控制台工作区集成 / CCI Pipeline tab content */}
+        {!isWorkspaceCollapsed && activeTab === 'pipeline' && (
+          <div className='flex-1 overflow-hidden bg-bg-1 flex flex-col min-h-0' style={{ height: 'calc(100% - 40px)' }}>
+            <AdminPipelineLogs />
+          </div>
         )}
       </div>
     </>

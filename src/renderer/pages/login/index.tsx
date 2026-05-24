@@ -21,7 +21,9 @@ import AppLoader from '@renderer/components/layout/AppLoader';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { useAuth } from '../../hooks/context/AuthContext';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import '@/renderer/styles/enterprise-theme.css';
 import './LoginPage.css';
+import '@/renderer/styles/enterprise-theme.css';
 
 type MessageState = {
   type: 'error' | 'success';
@@ -444,7 +446,10 @@ const LoginPage: React.FC = () => {
       });
 
   return (
-    <div className={`login-page${loginUiMode === 'enterprise' ? ' login-page--enterprise' : ''}`}>
+    <div
+      className={`login-page${loginUiMode === 'enterprise' ? ' login-page--enterprise' : ''}`}
+      data-enterprise-theme={loginUiMode === 'enterprise' ? 'true' : undefined}
+    >
       {isEnterpriseLogin ? (
         <div className='login-page__brand' aria-hidden={false}>
         <div className='login-page__brand-tag'>{t('login.enterprise.tag', { defaultValue: '1ONE' })}</div>
@@ -458,6 +463,17 @@ const LoginPage: React.FC = () => {
           })}
         </Typography.Paragraph>
         <div className='login-page__brand-visual' aria-hidden='true' />
+        <div className='login-page__brand-intro'>
+          <div className='login-page__brand-intro-title'>
+            {t('login.enterprise.introTitle', { defaultValue: '专注于企业级 AI 协作' })}
+          </div>
+          <div className='login-page__brand-intro-text'>
+            {t('login.enterprise.introText', {
+              defaultValue:
+                '支持多租户管理、LDAP 域控集成、飞书/钉钉/企微 SSO，为企业团队提供安全、高效的 AI 工作体验。',
+            })}
+          </div>
+        </div>
         </div>
       ) : null}
 
