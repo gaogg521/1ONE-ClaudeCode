@@ -303,10 +303,21 @@ const AdminMcp: React.FC = () => {
               })}
             </Typography.Paragraph>
           </div>
-          <Button
-            type='primary'
-            icon={<Plus theme='outline' size={16} />}
-            onClick={handleOpenAdd}
+          <Space>
+            <Button type='outline' onClick={async () => {
+              const json = prompt('粘贴 MCP 工具 JSON 数组:\n[{"name":"工具名","type":"sse","endpoint":"http://..."}]', '[{"name":"Jira Connector","type":"sse","endpoint":"https://jira.example.com/mcp"},{"name":"GitLab Agent","type":"sse","endpoint":"https://gitlab.example.com/mcp"},{"name":"Local DB","type":"stdio","endpoint":"sqlite3"}]');
+              if (!json?.trim()) return;
+              try {
+                const items = JSON.parse(json);
+                if (!Array.isArray(items)) { Message.error('必须是JSON数组'); return; }
+                const res = await apiMutate<{success:boolean;data:{count:number}}>('/api/admin/mcp/batch', 'POST', { items });
+                if (res?.success) { Message.success(`成功导入 ${res.data?.count??items.length} 个MCP工具`); await loadServers(); }
+              } catch { Message.error('JSON格式错误'); }
+            }}>{t('admin.mcp.batchImport', { defaultValue: '批量导入' })}</Button>
+            <Button
+              type='primary'
+              icon={<Plus theme='outline' size={16} />}
+              onClick={handleOpenAdd}
           >
             {t('admin.mcp.addConnector', { defaultValue: '注册服务' })}
           </Button>

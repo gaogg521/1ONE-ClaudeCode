@@ -326,6 +326,22 @@ const AdminKanban: React.FC = () => {
           >
             {t('admin.kanban.button.aiDecompose', { defaultValue: 'AI 需求一键拆单' })}
           </Button>
+          <Button type='outline' onClick={async () => {
+            const json = prompt(t('admin.kanban.batchImportPrompt', { defaultValue: '粘贴需求 JSON 数组:\n[{"type":"story","subject":"标题","description":"描述","priority":"medium","status":"backlog"}]' }), '[{"type":"story","subject":"用户登录","description":"实现LDAP+本地登录","priority":"high","status":"developing"},{"type":"task","subject":"RAG文件上传","description":"支持md/docx/pdf","priority":"urgent","status":"backlog"},{"type":"bug","subject":"修复密码框黑色","description":"企业版登录页输入框黑底","priority":"high","status":"testing"}]');
+            if (!json?.trim()) return;
+            try {
+              const items = JSON.parse(json);
+              if (!Array.isArray(items)) { Message.error('必须是JSON数组'); return; }
+              let count = 0;
+              for (const item of items) {
+                if (!item.subject?.trim()) continue;
+                await apiMutate('/api/admin/requirements', 'POST', { type: item.type||'story', subject: item.subject, description: item.description||'', priority: item.priority||'medium', status: item.status||'backlog', assigned_to: item.assigned_to||null });
+                count++;
+              }
+              Message.success(`成功导入 ${count} 个需求卡片`);
+              await loadRequirements();
+            } catch { Message.error('JSON格式错误'); }
+          }}>{t('admin.kanban.batchImport', { defaultValue: '批量导入' })}</Button>
           <Button type='primary' icon={<Plus />} onClick={() => setCreateVisible(true)}>
             {t('admin.kanban.button.newCard', { defaultValue: '新建卡片' })}
           </Button>
