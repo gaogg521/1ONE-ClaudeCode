@@ -100,7 +100,7 @@ const AdminSkills: React.FC = () => {
       </Card>
       {rows.length === 0 && !loading && <Empty className='mt-40px' description={t('admin.skills.empty', { defaultValue: '暂无技能，点击上方"新建技能"开始创建' })} />}
 
-      <Modal title={editId ? t('admin.skills.editTitle', { defaultValue: '编辑技能' }) : t('admin.skills.createTitle', { defaultValue: '新建技能' })} visible={modalVisible} onCancel={() => setModalVisible(false)} onOk={handleSave} confirmLoading={saving} okText={t('common.confirm', { defaultValue: '确定' })} cancelText={t('common.cancel', { defaultValue: '取消' })}>
+      <Modal title={editId ? t('admin.skills.editTitle', { defaultValue: '编辑技能' }) : t('admin.skills.createTitle', { defaultValue: '新建技能' })} visible={modalVisible} onCancel={() => setModalVisible(false)} onOk={handleSave} confirmLoading={batchSaving} okText={t('common.confirm', { defaultValue: '确定' })} cancelText={t('common.cancel', { defaultValue: '取消' })}>
         <Form layout='vertical'>
           <Form.Item label={t('admin.skills.name', { defaultValue: '名称' })} required><Input value={form.name} onChange={(v) => setForm((s) => ({ ...s, name: v }))} /></Form.Item>
           <Form.Item label={t('admin.skills.description', { defaultValue: '描述' })}><Input value={form.description} onChange={(v) => setForm((s) => ({ ...s, description: v }))} /></Form.Item>
