@@ -207,16 +207,38 @@ const AdminRag: React.FC = () => {
               })}
             </Typography.Paragraph>
           </div>
-          <Button
-            type='primary'
-            icon={<Plus theme='outline' size={16} />}
-            onClick={() => {
-              form.resetFields();
-              setAddVisible(true);
-            }}
-          >
-            {t('admin.rag.addDoc', { defaultValue: '导入文档' })}
-          </Button>
+          <Space wrap>
+            <Button type='outline' icon={<Plus />} onClick={() => { document.getElementById('rag-file-input')?.click(); }}>
+              {t('admin.rag.uploadFile', { defaultValue: '上传文件' })}
+            </Button>
+            <input id='rag-file-input' type='file' accept='.md,.txt,.docx,.html,.ts,.tsx,.js,.json,.css' style={{display:'none'}} onChange={async (e) => {
+              const file = e.target.files?.[0]; if (!file) return;
+              const fd = new FormData(); fd.append('file', file);
+              setAdding(true);
+              try {
+                const res = await fetchWebuiApiJson<{success:boolean;data:{id:string;status:string}}>('/api/admin/rag/upload', { method:'POST', body: fd });
+                if (res?.success) { Message.success(`已索引: ${file.name}`); await loadDocuments(); } else { Message.error('上传失败'); }
+              } catch { Message.error('上传失败'); } finally { setAdding(false); (e.target as HTMLInputElement).value = ''; }
+            }} />
+            <Button type='outline' icon={<Plus />} onClick={async () => {
+              const url = prompt('粘贴飞书/钉钉/在线文档 URL:');
+              if (!url?.trim()) return;
+              setAdding(true);
+              try {
+                const res = await apiMutate<{success:boolean;data:{id:string}}>('/api/admin/rag/import-url', 'POST', { url: url.trim() });
+                if (res?.success) { Message.success('URL 文档导入成功'); await loadDocuments(); } else { Message.error('导入失败'); }
+              } catch { Message.error('导入失败'); } finally { setAdding(false); }
+            }}>
+              {t('admin.rag.importUrl', { defaultValue: '粘贴 URL 导入' })}
+            </Button>
+            <Button
+              type='primary'
+              icon={<Plus theme='outline' size={16} />}
+              onClick={() => { form.resetFields(); setAddVisible(true); }}
+            >
+              {t('admin.rag.addDoc', { defaultValue: '粘贴文本' })}
+            </Button>
+          </Space>
         </div>
 
         {/* Grid: Left - Documents Table, Right - Search Playground */}

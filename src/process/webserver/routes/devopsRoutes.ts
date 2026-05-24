@@ -6,6 +6,11 @@
 
 import type { Express, Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';
+import multer from 'multer';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import mammoth from 'mammoth';
+import { readFile } from 'node:fs/promises';
 import { TokenMiddleware } from '../auth/middleware/TokenMiddleware';
 import { apiRateLimiter } from '../middleware/security';
 import { getDatabase } from '@process/services/database';
@@ -34,9 +39,71 @@ function resolveTenantId(req: Request): string {
 export function registerDevOpsRoutes(app: Express): void {
   const auth = TokenMiddleware.validateToken({ responseType: 'json' });
 
+  const ragUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB
+
   // ==========================================
-  // 1. CTeam 敏捷协同：需求看板 API
+  // 0. RAG 文件上传 & URL 导入
   // ==========================================
+
+  // POST /api/admin/rag/upload — 上传本地文件 (md/txt/docx/html/ts/json)
+  app.post('/api/admin/rag/upload', ragUpload.single('file'), auth, async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) { res.status(400).json({ success: false, message: 'No file uploaded' }); return; }
+      const tenantId = resolveTenantId(req); const userId = req.user!.id;
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      let content = '';
+      if (['.md', '.txt', '.ts', '.tsx', '.js', '.json', '.css'].includes(ext)) { content = file.buffer.toString('utf-8'); }
+      else if (ext === '.docx') { const r = await mammoth.extractRawText({ buffer: file.buffer }); content = r.value; }
+      else if (ext === '.html' || ext === '.htm') { content = file.buffer.toString('utf-8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(); }
+      else { res.status(400).json({ success: false, message: `Unsupported: ${ext}. Supported: md, txt, docx, html, ts, json` }); return; }
+      if (!content.trim()) { res.status(400).json({ success: false, message: 'Empty content' }); return; }
+
+      const db = await getDatabase(); const driver = db.getDriver();
+      const docId = randomUUID(); const now = Date.now();
+      driver.prepare(`INSERT INTO rag_documents (id, tenant_id, title, file_path, file_size, mime_type, status, chunk_count, scope, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,0,'personal',?,?,?)`).run(docId, tenantId, file.originalname, 'memory://'+file.originalname, file.size, file.mimetype||'application/octet-stream', 'indexing', userId, now, now);
+      (async () => {
+        try {
+          const chunks = RAGService.chunkText(content, 500, 100); const computed: any[] = []; let i = 0;
+          for (const chunk of chunks) { const vec = await RAGService.getEmbedding(chunk); computed.push({ id: randomUUID(), index: i++, content: chunk, blob: RAGService.vectorToBuffer(vec) }); }
+          const stmt = driver.prepare(`INSERT INTO rag_document_chunks (id, document_id, chunk_index, content, token_count, embedding) VALUES (?,?,?,?,?,?)`);
+          driver.transaction((items: typeof computed) => { for (const item of items) stmt.run(item.id, docId, item.index, item.content, item.content.length, item.blob); })(computed);
+          driver.prepare(`UPDATE rag_documents SET status='completed', chunk_count=?, updated_at=? WHERE id=?`).run(chunks.length, Date.now(), docId);
+        } catch { driver.prepare(`UPDATE rag_documents SET status='failed', updated_at=? WHERE id=?`).run(Date.now(), docId); }
+      })();
+      res.json({ success: true, data: { id: docId, status: 'indexing', title: file.originalname, size: file.size } });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  // POST /api/admin/rag/import-url — 粘贴飞书/钉钉/在线文档 URL 自动导入
+  app.post('/api/admin/rag/import-url', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req); const userId = req.user!.id;
+      const { url, title } = req.body;
+      if (!url?.trim()) { res.status(400).json({ success: false, message: 'URL required' }); return; }
+      let content = '';
+      try {
+        const fetchRes = await fetch(url.trim(), { headers: { 'User-Agent': '1ONE-RAG/1.0' }, signal: AbortSignal.timeout(30000) });
+        if (!fetchRes.ok) { res.status(400).json({ success: false, message: `HTTP ${fetchRes.status}` }); return; }
+        content = (await fetchRes.text()).replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200000);
+      } catch { res.status(400).json({ success: false, message: 'Fetch failed' }); return; }
+      if (!content) { res.status(400).json({ success: false, message: 'No content' }); return; }
+      const docTitle = title?.trim() || new URL(url).pathname.split('/').pop() || url;
+      const db = await getDatabase(); const driver = db.getDriver();
+      const docId = randomUUID(); const now = Date.now();
+      driver.prepare(`INSERT INTO rag_documents (id, tenant_id, title, file_path, file_size, mime_type, status, chunk_count, scope, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,0,'personal',?,?,?)`).run(docId, tenantId, docTitle, url, Buffer.byteLength(content), 'text/html', 'indexing', userId, now, now);
+      (async () => {
+        try {
+          const chunks = RAGService.chunkText(content, 500, 100); const computed: any[] = []; let i = 0;
+          for (const chunk of chunks) { const vec = await RAGService.getEmbedding(chunk); computed.push({ id: randomUUID(), index: i++, content: chunk, blob: RAGService.vectorToBuffer(vec) }); }
+          const stmt = driver.prepare(`INSERT INTO rag_document_chunks (id, document_id, chunk_index, content, token_count, embedding) VALUES (?,?,?,?,?,?)`);
+          driver.transaction((items: typeof computed) => { for (const item of items) stmt.run(item.id, docId, item.index, item.content, item.content.length, item.blob); })(computed);
+          driver.prepare(`UPDATE rag_documents SET status='completed', chunk_count=?, updated_at=? WHERE id=?`).run(chunks.length, Date.now(), docId);
+        } catch { driver.prepare(`UPDATE rag_documents SET status='failed', updated_at=? WHERE id=?`).run(Date.now(), docId); }
+      })();
+      res.json({ success: true, data: { id: docId, status: 'indexing', title: docTitle } });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
 
   // GET /api/admin/requirements/tree — 以树形层级列出所有需求
   app.get('/api/admin/requirements/tree', apiRateLimiter, auth, async (req, res) => {
