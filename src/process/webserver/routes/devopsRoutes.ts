@@ -45,7 +45,7 @@ export function registerDevOpsRoutes(app: Express): void {
   // 0. RAG 文件上传 & URL 导入
   // ==========================================
 
-  // POST /api/admin/rag/upload — 上传本地文件 (md/txt/docx/html/ts/json)
+  // POST /api/admin/rag/upload — 上传本地文件 (无需 CSRF，multipart)
   app.post('/api/admin/rag/upload', ragUpload.single('file'), auth, async (req, res) => {
     try {
       const file = req.file;
@@ -83,7 +83,7 @@ export function registerDevOpsRoutes(app: Express): void {
       if (!url?.trim()) { res.status(400).json({ success: false, message: 'URL required' }); return; }
       let content = '';
       try {
-        const fetchRes = await fetch(url.trim(), { headers: { 'User-Agent': '1ONE-RAG/1.0' }, signal: AbortSignal.timeout(30000) });
+        const fetchRes = await fetch(url.trim(), { headers: { 'User-Agent': '1ONE-RAG/1.0' } });
         if (!fetchRes.ok) { res.status(400).json({ success: false, message: `HTTP ${fetchRes.status}` }); return; }
         content = (await fetchRes.text()).replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200000);
       } catch { res.status(400).json({ success: false, message: 'Fetch failed' }); return; }

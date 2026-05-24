@@ -23,7 +23,7 @@ import {
 import { Delete, Plus, Search } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
-import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
+import { withCsrfToken, getCsrfToken } from '@process/webserver/middleware/csrfClient';
 import AdminPageWrapper from './components/AdminPageWrapper';
 
 type RagDocument = {
@@ -60,6 +60,10 @@ const AdminRag: React.FC = () => {
   // Index Document Modal
   const [addVisible, setAddVisible] = useState(false);
   const [adding, setAdding] = useState(false);
+  // URL Import Modal
+  const [urlVisible, setUrlVisible] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
+  const [urlTitle, setUrlTitle] = useState('');
   const [form] = Form.useForm<{ title: string; content: string }>();
 
   // Semantic Search Playground
@@ -213,23 +217,18 @@ const AdminRag: React.FC = () => {
             </Button>
             <input id='rag-file-input' type='file' accept='.md,.txt,.docx,.html,.ts,.tsx,.js,.json,.css' style={{display:'none'}} onChange={async (e) => {
               const file = e.target.files?.[0]; if (!file) return;
-              const fd = new FormData(); fd.append('file', file);
               setAdding(true);
               try {
-                const res = await fetchWebuiApiJson<{success:boolean;data:{id:string;status:string}}>('/api/admin/rag/upload', { method:'POST', body: fd });
-                if (res?.success) { Message.success(`已索引: ${file.name}`); await loadDocuments(); } else { Message.error('上传失败'); }
-              } catch { Message.error('上传失败'); } finally { setAdding(false); (e.target as HTMLInputElement).value = ''; }
+                const token = getCsrfToken();
+                const headers: Record<string,string> = {};
+                if (token) headers['x-csrf-token'] = token;
+                const res = await fetch('/api/admin/rag/upload', { method:'POST', headers, body: (() => { const fd = new FormData(); fd.append('file', file); return fd; })() });
+                const data = await res.json() as {success:boolean;data:{id:string;status:string}};
+                if (data?.success) { Message.success(t('admin.rag.uploadSuccess',{defaultValue:'文件上传成功，后台索引导入中'})); await loadDocuments(); } else { Message.error(data?.message || t('admin.rag.uploadFailed',{defaultValue:'上传失败'})); }
+              } catch { Message.error(t('admin.rag.uploadFailed',{defaultValue:'上传失败'})); } finally { setAdding(false); (e.target as HTMLInputElement).value = ''; }
             }} />
-            <Button type='outline' icon={<Plus />} onClick={async () => {
-              const url = prompt('粘贴飞书/钉钉/在线文档 URL:');
-              if (!url?.trim()) return;
-              setAdding(true);
-              try {
-                const res = await apiMutate<{success:boolean;data:{id:string}}>('/api/admin/rag/import-url', 'POST', { url: url.trim() });
-                if (res?.success) { Message.success('URL 文档导入成功'); await loadDocuments(); } else { Message.error('导入失败'); }
-              } catch { Message.error('导入失败'); } finally { setAdding(false); }
-            }}>
-              {t('admin.rag.importUrl', { defaultValue: '粘贴 URL 导入' })}
+            <Button type='outline' icon={<Plus />} onClick={() => { setUrlInput(''); setUrlTitle(''); setUrlVisible(true); }}>
+              {t('admin.rag.importUrl', { defaultValue: 'URL 导入' })}
             </Button>
             <Button
               type='primary'
@@ -357,6 +356,34 @@ const AdminRag: React.FC = () => {
                   defaultValue: '请输入文档全文，系统会自动对大段文本进行切片并向量化。',
                 })}
               />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* URL Import Modal */}
+        <Modal
+          title={t('admin.rag.urlImportTitle', { defaultValue: 'URL 导入文档' })}
+          visible={urlVisible}
+          onOk={async () => {
+            if (!urlInput.trim()) { Message.warning(t('admin.rag.urlRequired', { defaultValue: '请输入URL' })); return; }
+            setAdding(true);
+            try {
+              const res = await apiMutate<{success:boolean;data:{id:string}}>('/api/admin/rag/import-url', 'POST', { url: urlInput.trim(), title: urlTitle.trim() || undefined });
+              if (res?.success) { Message.success(t('admin.rag.urlSuccess', { defaultValue: 'URL 文档导入成功' })); setUrlVisible(false); setUrlInput(''); setUrlTitle(''); await loadDocuments(); }
+              else { Message.error(t('admin.rag.urlFailed', { defaultValue: '导入失败' })); }
+            } catch { Message.error(t('admin.rag.urlFailed', { defaultValue: '导入失败' })); } finally { setAdding(false); }
+          }}
+          okButtonProps={{ loading: adding }}
+          okText={t('common.import', { defaultValue: '导入' })}
+          onCancel={() => setUrlVisible(false)}
+          cancelText={t('common.cancel', { defaultValue: '取消' })}
+        >
+          <Form layout='vertical'>
+            <Form.Item label={t('admin.rag.urlLabel', { defaultValue: '文档 URL' })} required>
+              <Input value={urlInput} onChange={setUrlInput} placeholder='https://feishu.cn/docx/xxx 或 https://dingtalk.com/...' />
+            </Form.Item>
+            <Form.Item label={t('admin.rag.urlTitleLabel', { defaultValue: '标题（可选）' })}>
+              <Input value={urlTitle} onChange={setUrlTitle} placeholder={t('admin.rag.urlTitlePlaceholder', { defaultValue: '留空则自动从URL提取' })} />
             </Form.Item>
           </Form>
         </Modal>
