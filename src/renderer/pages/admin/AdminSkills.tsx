@@ -24,7 +24,9 @@ const AdminSkills: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<SkillRecord[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [batchVisible, setBatchVisible] = useState(false);
+  const [batchJson, setBatchJson] = useState('');
+  const [batchSaving, setBatchSaving] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', description: '', content: '', enabled: true, scope: 'personal' as string });
 
@@ -89,6 +91,7 @@ const AdminSkills: React.FC = () => {
         </div>
         <Space>
           <Button icon={<Refresh />} onClick={() => void load()}>{t('common.refresh', { defaultValue: '刷新' })}</Button>
+          <Button type='outline' onClick={() => { setBatchJson(JSON.stringify([{name:'代码审查Skill',description:'自动审查代码规范和安全',content:'# Code Review Skill\n\n检查: console.log, any类型, XSS, setTimeout(0)'},{name:'API文档生成Skill',description:'自动生成REST API文档',content:'# API Doc Skill\n\n解析Express路由生成OpenAPI文档'}],null,2)); setBatchVisible(true); }}>{t('admin.skills.batchImport', { defaultValue: '批量导入' })}</Button>
           <Button type='primary' icon={<Plus />} onClick={openCreate}>{t('admin.skills.create', { defaultValue: '新建技能' })}</Button>
         </Space>
       </div>
@@ -104,6 +107,12 @@ const AdminSkills: React.FC = () => {
           <Form.Item label={t('admin.skills.content', { defaultValue: 'Skill 内容 (Markdown)' })}><Input.TextArea value={form.content} onChange={(v) => setForm((s) => ({ ...s, content: v }))} autoSize={{ minRows: 4, maxRows: 12 }} /></Form.Item>
           <Form.Item label={t('admin.skills.scope', { defaultValue: '可见范围' })}><Select value={form.scope} onChange={(v) => setForm((s) => ({ ...s, scope: String(v) }))}><Select.Option value='personal'>{t('admin.scope.personal', { defaultValue: '个人' })}</Select.Option><Select.Option value='organization'>{t('admin.scope.organization', { defaultValue: '组织共享' })}</Select.Option></Select></Form.Item>
         </Form>
+      </Modal>
+
+      <Modal title={t('admin.skills.batchImport', { defaultValue: '批量导入技能 (JSON)' })} visible={batchVisible} onCancel={() => setBatchVisible(false)} onOk={async () => { try { const items = JSON.parse(batchJson); if (!Array.isArray(items)) { Message.error('必须是JSON数组'); return; } setBatchSaving(true); try { const res = await apiMutate<{success:boolean;data:{count:number}}>('/api/admin/skills/batch', 'POST', { items }); if (res?.success) { Message.success(`成功导入 ${res.data?.count??items.length} 个技能`); setBatchVisible(false); setBatchJson(''); await load(); } } catch { Message.error('导入失败'); } finally { setBatchSaving(false); } } catch { Message.error('JSON格式错误'); } }} confirmLoading={batchSaving} okText={t('common.import', { defaultValue: '导入' })} cancelText={t('common.cancel', { defaultValue: '取消' })}>
+        <Form layout='vertical'><Form.Item label='JSON (数组)'>
+          <Input.TextArea value={batchJson} onChange={setBatchJson} autoSize={{ minRows: 8, maxRows: 20 }} placeholder='[{"name":"Skill名称","description":"描述","content":"Markdown内容"},...]' />
+        </Form.Item></Form>
       </Modal>
     </AdminPageWrapper>
   );

@@ -670,6 +670,35 @@ export function registerDevOpsRoutes(app: Express): void {
     } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
   });
 
+
+  // ==========================================
+  // 10. 批量导入 API (Skills / MCP / RAG)
+  // ==========================================
+
+  app.post('/api/admin/skills/batch', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req); const userId = req.user!.id; const items = req.body?.items;
+      if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ success: false, message: 'items array required' }); return; }
+      const db = await getDatabase(); const driver = db.getDriver(); const now = Date.now();
+      const stmt = driver.prepare(`INSERT OR IGNORE INTO skills_registry (id, tenant_id, name, description, content, enabled, scope, created_by, created_at, updated_at) VALUES (?,?,?,?,?,1,'personal',?,?,?)`);
+      let count = 0;
+      driver.transaction(() => { for (const item of items) { if (item.name?.trim()) { stmt.run(randomUUID(), tenantId, item.name.trim(), item.description||'', item.content||'', userId, now, now); count++; } } })();
+      res.json({ success: true, data: { count } });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
+  app.post('/api/admin/mcp/batch', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req); const userId = req.user!.id; const items = req.body?.items;
+      if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ success: false, message: 'items array required' }); return; }
+      const db = await getDatabase(); const driver = db.getDriver(); const now = Date.now();
+      const stmt = driver.prepare(`INSERT OR IGNORE INTO mcp_registry (id, tenant_id, name, type, endpoint, env_json, enabled, scope, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,1,'personal',?,?,?)`);
+      let count = 0;
+      driver.transaction(() => { for (const item of items) { if (item.name?.trim()) { stmt.run(randomUUID(), tenantId, item.name.trim(), item.type||'sse', item.endpoint||'', item.env_json||'{}', userId, now, now); count++; } } })();
+      res.json({ success: true, data: { count } });
+    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+  });
+
   // ==========================================
   // 8. CTeam 版本里程碑 API
   // ==========================================
