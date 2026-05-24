@@ -321,6 +321,7 @@ const AdminMcp: React.FC = () => {
           >
             {t('admin.mcp.addConnector', { defaultValue: '注册服务' })}
           </Button>
+          </Space>
         </div>
 
         {/* Connectors Table Card */}
