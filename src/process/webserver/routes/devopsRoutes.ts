@@ -17,6 +17,13 @@ import { getDatabase } from '@process/services/database';
 import { isEnterpriseAdminRole } from '../auth/enterpriseRoles';
 import { RAGService } from '@process/services/rag/RAGService';
 import { PipelineService } from '@process/services/pipeline/PipelineService';
+import { registerCciRoutes } from './devops/cciRoutes';
+import { registerCcodeRoutes } from './devops/ccodeRoutes';
+import { registerCflowRoutes } from './devops/cflowRoutes';
+import { registerCmeasRoutes } from './devops/cmeasRoutes';
+import { registerCpackRoutes } from './devops/cpackRoutes';
+import { registerCteamRoutes } from './devops/cteamRoutes';
+import { registerCtestRoutes } from './devops/ctestRoutes';
 
 /**
  * 校验管理员权限中间件
@@ -40,6 +47,14 @@ export function registerDevOpsRoutes(app: Express): void {
   const auth = TokenMiddleware.validateToken({ responseType: 'json' });
 
   const ragUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB
+
+  registerCmeasRoutes(app, auth);
+  registerCtestRoutes(app, auth);
+  registerCflowRoutes(app, auth);
+  registerCteamRoutes(app, auth);
+  registerCpackRoutes(app, auth);
+  registerCcodeRoutes(app, auth);
+  registerCciRoutes(app, auth);
 
   // ==========================================
   // 0. RAG 文件上传 & URL 导入
@@ -530,7 +545,7 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // POST /api/admin/mcp/registry — 注册或编辑外部 MCP 节点
-  app.post('/api/admin/mcp/registry', apiRateLimiter, auth, async (req, res) => {
+  app.post('/api/admin/mcp/registry', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const userId = req.user!.id;
@@ -635,92 +650,6 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // ==========================================
-  // 5. CMeas 效能度量 API
-  // ==========================================
-
-  app.post('/api/admin/metrics', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const { metric_type, metric_name, value, period } = req.body;
-      if (!metric_type || !metric_name || value === undefined) { res.status(400).json({ success: false, message: 'invalid params' }); return; }
-      const db = await getDatabase();
-      const driver = db.getDriver();
-      driver.prepare(`INSERT INTO metrics_snapshots (id, tenant_id, metric_type, metric_name, value, period, recorded_at) VALUES (?,?,?,?,?,?,?)`).run(randomUUID(), tenantId, metric_type, metric_name, value, period || '', Date.now());
-      res.json({ success: true });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  app.get('/api/admin/metrics', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const metricType = String(req.query.type || '');
-      const db = await getDatabase();
-      const driver = db.getDriver();
-      const rows = metricType
-        ? driver.prepare(`SELECT * FROM metrics_snapshots WHERE tenant_id=? AND metric_type=? ORDER BY recorded_at DESC LIMIT 200`).all(tenantId, metricType)
-        : driver.prepare(`SELECT * FROM metrics_snapshots WHERE tenant_id=? ORDER BY recorded_at DESC LIMIT 200`).all(tenantId);
-      res.json({ success: true, data: rows });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  // ==========================================
-  // 6. CTest 测试管理 API
-  // ==========================================
-
-  app.get('/api/admin/test-plans', apiRateLimiter, auth, async (req, res) => {
-    try { const db = await getDatabase(); const rows = db.getDriver().prepare(`SELECT * FROM test_plans WHERE tenant_id=? ORDER BY created_at DESC`).all(resolveTenantId(req)); res.json({ success: true, data: rows }); }
-    catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  app.post('/api/admin/test-plans', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const { name, description, linked_requirement_id } = req.body;
-      if (!name?.trim()) { res.status(400).json({ success: false, message: 'name required' }); return; }
-      const db = await getDatabase(); const id = randomUUID(); const now = Date.now();
-      db.getDriver().prepare(`INSERT INTO test_plans (id, tenant_id, name, description, linked_requirement_id, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`).run(id, resolveTenantId(req), name.trim(), description||'', linked_requirement_id||null, req.user!.id, now, now);
-      res.json({ success: true, data: { id } });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  app.get('/api/admin/test-cases', apiRateLimiter, auth, async (req, res) => {
-    try { const planId = String(req.query.planId || ''); const db = await getDatabase(); const rows = db.getDriver().prepare(`SELECT * FROM test_cases WHERE plan_id=? ORDER BY created_at DESC`).all(planId); res.json({ success: true, data: rows }); }
-    catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  app.post('/api/admin/test-cases', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const { plan_id, subject, steps, expected, assigned_to } = req.body;
-      if (!plan_id || !subject?.trim()) { res.status(400).json({ success: false, message: 'plan_id and subject required' }); return; }
-      const db = await getDatabase(); const id = randomUUID();
-      db.getDriver().prepare(`INSERT INTO test_cases (id, plan_id, subject, steps, expected, assigned_to, created_at) VALUES (?,?,?,?,?,?,?)`).run(id, plan_id, subject.trim(), steps||'', expected||'', assigned_to||'', Date.now());
-      res.json({ success: true, data: { id } });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  // ==========================================
-  // 7. CFlow 价值流 API
-  // ==========================================
-
-  app.get('/api/admin/value-stream', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const db = await getDatabase();
-      const rows = db.getDriver().prepare(`SELECT vs.*, r.subject as req_subject FROM value_stream_stages vs LEFT JOIN requirements r ON vs.requirement_id = r.id WHERE vs.tenant_id = ? ORDER BY vs.entry_time DESC LIMIT 100`).all(tenantId);
-      res.json({ success: true, data: rows });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  app.post('/api/admin/value-stream', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const { requirement_id, stage_name, entry_time, exit_time, wait_duration_ms, process_duration_ms } = req.body;
-      const db = await getDatabase();
-      db.getDriver().prepare(`INSERT INTO value_stream_stages (id, tenant_id, requirement_id, stage_name, entry_time, exit_time, wait_duration_ms, process_duration_ms) VALUES (?,?,?,?,?,?,?,?)`).run(randomUUID(), tenantId, requirement_id||null, stage_name, entry_time||Date.now(), exit_time||null, wait_duration_ms||0, process_duration_ms||0);
-      res.json({ success: true });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  // ==========================================
   // 9. 安全审计日志 API
   // ==========================================
 
@@ -742,7 +671,7 @@ export function registerDevOpsRoutes(app: Express): void {
   // 10. 批量导入 API (Skills / MCP / RAG)
   // ==========================================
 
-  app.post('/api/admin/skills/batch', apiRateLimiter, auth, async (req, res) => {
+  app.post('/api/admin/skills/batch', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req); const userId = req.user!.id; const items = req.body?.items;
       if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ success: false, message: 'items array required' }); return; }
@@ -754,7 +683,7 @@ export function registerDevOpsRoutes(app: Express): void {
     } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
   });
 
-  app.post('/api/admin/mcp/batch', apiRateLimiter, auth, async (req, res) => {
+  app.post('/api/admin/mcp/batch', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req); const userId = req.user!.id; const items = req.body?.items;
       if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ success: false, message: 'items array required' }); return; }
@@ -764,112 +693,6 @@ export function registerDevOpsRoutes(app: Express): void {
       driver.transaction(() => { for (const item of items) { if (item.name?.trim()) { stmt.run(randomUUID(), tenantId, item.name.trim(), item.type||'sse', item.endpoint||'', item.env_json||'{}', userId, now, now); count++; } } })();
       res.json({ success: true, data: { count } });
     } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  // ==========================================
-  // 8. CTeam 版本里程碑 API
-  // ==========================================
-
-  app.get('/api/admin/milestones', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const db = await getDatabase();
-      const driver = db.getDriver();
-      const rows = driver.prepare(`SELECT id, tenant_id, name, description, due_date, epic_count, completed_count, created_at FROM milestones WHERE tenant_id = ? ORDER BY created_at DESC`).all(tenantId);
-      res.json({ success: true, data: rows });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  app.post('/api/admin/milestones', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const { name, description, due_date } = req.body;
-      if (!name?.trim()) { res.status(400).json({ success: false, message: 'name required' }); return; }
-      const db = await getDatabase();
-      const driver = db.getDriver();
-      const id = randomUUID();
-      const now = Date.now();
-      driver.prepare(`INSERT INTO milestones (id, tenant_id, name, description, due_date, epic_count, completed_count, created_at, updated_at) VALUES (?,?,?,?,?,0,0,?,?)`).run(id, tenantId, name.trim(), description || '', due_date || '', now, now);
-      res.json({ success: true, data: { id } });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  // ==========================================
-  // 2.5 CPack 制品管理 API
-  // ==========================================
-
-  app.get('/api/admin/artifact-repos', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const db = await getDatabase();
-      const driver = db.getDriver();
-      const rows = driver.prepare(`SELECT * FROM artifact_repos WHERE tenant_id = ? ORDER BY created_at DESC`).all(tenantId);
-      res.json({ success: true, data: rows });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  app.post('/api/admin/artifact-repos', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const { name, repo_type, endpoint } = req.body;
-      if (!name?.trim()) { res.status(400).json({ success: false, message: 'name required' }); return; }
-      const db = await getDatabase();
-      const driver = db.getDriver();
-      const id = randomUUID();
-      const now = Date.now();
-      driver.prepare(`INSERT INTO artifact_repos (id, tenant_id, name, repo_type, endpoint, created_at, updated_at) VALUES (?,?,?,?,?,?,?)`).run(id, tenantId, name.trim(), repo_type || 'generic', endpoint || '', now, now);
-      res.json({ success: true, data: { id } });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  app.delete('/api/admin/artifact-repos/:id', apiRateLimiter, auth, async (req, res) => {
-    try { const db = await getDatabase(); db.getDriver().prepare(`DELETE FROM artifact_repos WHERE id=? AND tenant_id=?`).run(req.params.id, resolveTenantId(req)); res.json({ success: true }); } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  app.get('/api/admin/artifacts', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const userId = req.user!.id;
-      const isAdmin = isEnterpriseAdminRole(req.user!.role);
-      const db = await getDatabase();
-      const driver = db.getDriver();
-      const rows = (isAdmin
-        ? driver.prepare(`SELECT a.*, ar.name as repo_name FROM artifacts a JOIN artifact_repos ar ON a.repo_id = ar.id WHERE ar.tenant_id = ? ORDER BY a.created_at DESC`).all(tenantId)
-        : driver.prepare(`SELECT a.*, ar.name as repo_name FROM artifacts a JOIN artifact_repos ar ON a.repo_id = ar.id WHERE ar.tenant_id = ? AND (a.scope = 'organization' OR a.created_by = ?) ORDER BY a.created_at DESC`).all(tenantId, userId)) as any[];
-      res.json({ success: true, data: rows });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  // ==========================================
-  // 2.6 CCode 代码库 API
-  // ==========================================
-
-  app.get('/api/admin/code-repos', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const db = await getDatabase();
-      const driver = db.getDriver();
-      const rows = driver.prepare(`SELECT * FROM code_repos WHERE tenant_id = ? ORDER BY created_at DESC`).all(tenantId);
-      res.json({ success: true, data: rows });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  app.post('/api/admin/code-repos', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const { name, url, provider, credential_id, default_branch } = req.body;
-      if (!name?.trim() || !url?.trim()) { res.status(400).json({ success: false, message: 'name and url required' }); return; }
-      const db = await getDatabase();
-      const driver = db.getDriver();
-      const id = randomUUID();
-      const now = Date.now();
-      driver.prepare(`INSERT INTO code_repos (id, tenant_id, name, url, provider, credential_id, default_branch, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`).run(id, tenantId, name.trim(), url.trim(), provider || 'gitlab', credential_id || '', default_branch || 'main', now, now);
-      res.json({ success: true, data: { id } });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
-  });
-
-  app.delete('/api/admin/code-repos/:id', apiRateLimiter, auth, async (req, res) => {
-    try { const db = await getDatabase(); db.getDriver().prepare(`DELETE FROM code_repos WHERE id=? AND tenant_id=?`).run(req.params.id, resolveTenantId(req)); res.json({ success: true }); } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
   });
 
   // ==========================================
@@ -895,7 +718,7 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // POST /api/admin/skills — 创建/编辑技能
-  app.post('/api/admin/skills', apiRateLimiter, auth, async (req, res) => {
+  app.post('/api/admin/skills', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const userId = req.user!.id;
@@ -924,7 +747,7 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // DELETE /api/admin/skills/:id — 删除技能
-  app.delete('/api/admin/skills/:id', apiRateLimiter, auth, async (req, res) => {
+  app.delete('/api/admin/skills/:id', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const userId = req.user!.id;
@@ -943,83 +766,4 @@ export function registerDevOpsRoutes(app: Express): void {
     }
   });
 
-  // ==========================================
-  // 4. DevOps 持续集成流水线 API
-  // ==========================================
-
-  // GET /api/admin/pipelines — 获取当前企业的所有流水线
-  app.get('/api/admin/pipelines', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const pipelines = await PipelineService.getInstance().getPipelines(tenantId);
-      res.json({ success: true, data: pipelines });
-    } catch (err) {
-      console.error('[DevOpsRoute] list pipelines error:', err);
-      res.status(500).json({ success: false, message: 'Internal server error' });
-    }
-  });
-
-  // POST /api/admin/pipelines — 创建流水线
-  app.post('/api/admin/pipelines', apiRateLimiter, auth, requireAdmin, async (req, res) => {
-    try {
-      const tenantId = resolveTenantId(req);
-      const { name, definition, associatedTeamId } = req.body;
-
-      if (!name?.trim()) {
-        res.status(400).json({ success: false, message: 'Pipeline name is required' });
-        return;
-      }
-
-      if (!definition || !Array.isArray(definition.stages)) {
-        res.status(400).json({ success: false, message: 'Invalid pipeline definition' });
-        return;
-      }
-
-      const pipeline = await PipelineService.getInstance().createPipeline({
-        tenantId,
-        name: name.trim(),
-        associatedTeamId: associatedTeamId || null,
-        definition,
-      });
-
-      res.json({ success: true, data: pipeline });
-    } catch (err) {
-      console.error('[DevOpsRoute] create pipeline error:', err);
-      res.status(500).json({ success: false, message: 'Internal server error' });
-    }
-  });
-
-  // POST /api/admin/pipelines/run/:pipelineId — 触发流水线运行
-  app.post('/api/admin/pipelines/run/:pipelineId', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const pipelineId = String(req.params.pipelineId);
-      const runId = await PipelineService.getInstance().triggerPipelineRun(
-        pipelineId,
-        req.user!.id,
-        'manual'
-      );
-      res.json({ success: true, data: { runId } });
-    } catch (err: any) {
-      console.error('[DevOpsRoute] trigger pipeline run error:', err);
-      res.status(500).json({ success: false, message: err.message || 'Internal server error' });
-    }
-  });
-
-  // GET /api/admin/pipelines/runs/:runId — 获取流水线运行状态和原始日志
-  app.get('/api/admin/pipelines/runs/:runId', apiRateLimiter, auth, async (req, res) => {
-    try {
-      const runId = String(req.params.runId);
-      const run = await PipelineService.getInstance().getPipelineRun(runId);
-
-      if (!run) {
-        res.status(404).json({ success: false, message: 'Pipeline run not found' });
-        return;
-      }
-
-      res.json({ success: true, data: run });
-    } catch (err) {
-      console.error('[DevOpsRoute] get pipeline run error:', err);
-      res.status(500).json({ success: false, message: 'Internal server error' });
-    }
-  });
 }

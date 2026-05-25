@@ -10,7 +10,6 @@ export {
   ENTERPRISE_WORKSPACE_PATH,
   hasEnterpriseTenant,
   isEnterpriseAdminRole,
-  isEnterpriseElevatableRole,
   isSystemAdminRole,
   resolveEnterpriseAdminPath,
   resolveEnterpriseEditionPath,

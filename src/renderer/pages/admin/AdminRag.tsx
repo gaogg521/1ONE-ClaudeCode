@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Button,
   Card,
@@ -22,40 +22,27 @@ import {
 } from '@arco-design/web-react';
 import { Delete, Plus, Search } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
-import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
-import { withCsrfToken, getCsrfToken } from '@process/webserver/middleware/csrfClient';
 import AdminPageWrapper from './components/AdminPageWrapper';
+import ModuleDataState from './components/ModuleDataState';
+import ModulePageHeader from './components/ModulePageHeader';
+import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
+import {
+  createRagDocument,
+  deleteRagDocument,
+  importRagUrl,
+  listRagDocuments,
+  queryRagDocuments,
+  type RagDocumentRecord,
+  type RagSearchResultRecord,
+  uploadRagDocument,
+} from '@/renderer/utils/enterpriseApi/modules';
 
-type RagDocument = {
-  id: string;
-  title: string;
-  content: string;
-  created_at?: number;
-};
-
-type SearchResult = {
-  title: string;
-  chunk_index: number;
-  content: string;
-  score: number;
-};
-
-async function api<T>(path: string, opts?: RequestInit): Promise<T> {
-  return fetchWebuiApiJson<T>(path, opts);
-}
-
-async function apiMutate<T>(path: string, method: string, payload: Record<string, unknown>): Promise<T> {
-  return api<T>(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(withCsrfToken(payload)),
-  });
-}
+type RagDocument = RagDocumentRecord;
+type SearchResult = RagSearchResultRecord;
 
 const AdminRag: React.FC = () => {
   const { t } = useTranslation();
-  const [documents, setDocuments] = useState<RagDocument[]>([]);
-  const [loading, setLoading] = useState(true);
 
   // Index Document Modal
   const [addVisible, setAddVisible] = useState(false);
@@ -72,66 +59,46 @@ const AdminRag: React.FC = () => {
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
-  const loadDocuments = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await api<RagDocument[]>('/api/admin/rag/documents');
-      setDocuments(data ?? []);
-    } catch (e) {
-      Message.error(
-        e instanceof Error ? e.message : t('admin.rag.messages.loadFailed', { defaultValue: '加载文档失败' })
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    void loadDocuments();
-  }, [loadDocuments]);
+  const documentsState = useEnterpriseAsyncData(
+    listRagDocuments,
+    [],
+    t('admin.rag.messages.loadFailed', { defaultValue: '加载文档失败' })
+  );
 
   const handleAddDocument = useCallback(async () => {
     try {
       const values = await form.validate();
       setAdding(true);
-      await apiMutate('/api/admin/rag/documents', 'POST', {
+      await createRagDocument({
         title: values.title.trim(),
         content: values.content.trim(),
       });
       Message.success(t('admin.rag.messages.addSuccess', { defaultValue: '文档索引成功' }));
       setAddVisible(false);
       form.resetFields();
-      await loadDocuments();
+      await documentsState.reload();
     } catch (e) {
       if (e && typeof e === 'object' && 'title' in e) {
         // Form validation error, ignore
         return;
       }
-      Message.error(
-        e instanceof Error ? e.message : t('admin.rag.messages.addFailed', { defaultValue: '索引文档失败' })
-      );
+      Message.error(getEnterpriseActionError(e, t('admin.rag.messages.addFailed', { defaultValue: '索引文档失败' })));
     } finally {
       setAdding(false);
     }
-  }, [form, loadDocuments, t]);
+  }, [documentsState, form, t]);
 
   const handleDeleteDocument = useCallback(
     async (id: string) => {
       try {
-        await api<void>(`/api/admin/rag/documents/${encodeURIComponent(id)}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(withCsrfToken({})),
-        });
+        await deleteRagDocument(encodeURIComponent(id));
         Message.success(t('admin.rag.messages.deleteSuccess', { defaultValue: '文档删除成功' }));
-        await loadDocuments();
+        await documentsState.reload();
       } catch (e) {
-        Message.error(
-          e instanceof Error ? e.message : t('admin.rag.messages.deleteFailed', { defaultValue: '删除文档失败' })
-        );
+        Message.error(getEnterpriseActionError(e, t('admin.rag.messages.deleteFailed', { defaultValue: '删除文档失败' })));
       }
     },
-    [loadDocuments, t]
+    [documentsState, t]
   );
 
   const handleSearch = useCallback(async () => {
@@ -140,15 +107,13 @@ const AdminRag: React.FC = () => {
     }
     setSearching(true);
     try {
-      const results = await apiMutate<SearchResult[]>('/api/admin/rag/query', 'POST', {
+      const results = await queryRagDocuments({
         query: searchQuery.trim(),
         limit: searchLimit,
       });
       setSearchResults(results ?? []);
     } catch (e) {
-      Message.error(
-        e instanceof Error ? e.message : t('admin.rag.messages.searchFailed', { defaultValue: '检索失败' })
-      );
+      Message.error(getEnterpriseActionError(e, t('admin.rag.messages.searchFailed', { defaultValue: '检索失败' })));
     } finally {
       setSearching(false);
     }
@@ -164,16 +129,24 @@ const AdminRag: React.FC = () => {
     },
     {
       title: t('admin.rag.table.content', { defaultValue: '内容摘要' }),
-      dataIndex: 'content',
-      key: 'content',
-      render: (val: string) => (
-        <Typography.Paragraph
-          ellipsis={{ rows: 2, showTooltip: true }}
-          style={{ marginBottom: 0 }}
-          className='text-t-secondary'
-        >
-          {val}
-        </Typography.Paragraph>
+      key: 'meta',
+      render: (_: unknown, record: RagDocument) => (
+        <div className='flex flex-col gap-4px'>
+          <Typography.Text type='secondary' className='text-12px'>
+            {record.file_path || 'memory://text'}
+          </Typography.Text>
+          <div className='flex gap-6px flex-wrap'>
+            <Tag size='small' color={record.status === 'completed' ? 'green' : record.status === 'failed' ? 'red' : 'orange'}>
+              {record.status || 'pending'}
+            </Tag>
+            <Tag size='small' color='arcoblue'>
+              chunks: {record.chunk_count ?? 0}
+            </Tag>
+            <Tag size='small' color='gray'>
+              {record.scope || 'personal'}
+            </Tag>
+          </div>
+        </div>
       ),
     },
     {
@@ -199,46 +172,38 @@ const AdminRag: React.FC = () => {
   return (
     <AdminPageWrapper>
       <div className='max-w-1200px mx-auto flex flex-col gap-24px'>
-        {/* Header */}
-        <div className='flex justify-between items-center flex-wrap gap-12px'>
-          <div>
-            <Typography.Title heading={4} style={{ margin: 0 }}>
-              {t('admin.rag.title', { defaultValue: 'RAG 知识库' })}
-            </Typography.Title>
-            <Typography.Paragraph type='secondary' style={{ margin: '4px 0 0 0' }}>
-              {t('admin.rag.desc', {
-                defaultValue: '管理企业级向量化文档。您可以在此上传文档构建私有知识库，并测试检索效果。',
-              })}
-            </Typography.Paragraph>
-          </div>
-          <Space wrap>
-            <Button type='outline' icon={<Plus />} onClick={() => { document.getElementById('rag-file-input')?.click(); }}>
-              {t('admin.rag.uploadFile', { defaultValue: '上传文件' })}
-            </Button>
+        <ModulePageHeader
+          title={t('admin.rag.title', { defaultValue: 'RAG 知识库' })}
+          description={t('admin.rag.desc', {
+            defaultValue: '管理企业级向量化文档。您可以在此上传文档构建私有知识库，并测试检索效果。',
+          })}
+          actions={
+            <>
+              <Button type='outline' icon={<Plus />} onClick={() => { document.getElementById('rag-file-input')?.click(); }}>
+                {t('admin.rag.uploadFile', { defaultValue: '上传文件' })}
+              </Button>
             <input id='rag-file-input' type='file' accept='.md,.txt,.docx,.html,.ts,.tsx,.js,.json,.css' style={{display:'none'}} onChange={async (e) => {
               const file = e.target.files?.[0]; if (!file) return;
               setAdding(true);
               try {
-                const token = getCsrfToken();
-                const headers: Record<string,string> = {};
-                if (token) headers['x-csrf-token'] = token;
-                const res = await fetch('/api/admin/rag/upload', { method:'POST', headers, body: (() => { const fd = new FormData(); fd.append('file', file); return fd; })() });
-                const data = await res.json() as {success:boolean;data:{id:string;status:string}};
-                if (data?.success) { Message.success(t('admin.rag.uploadSuccess',{defaultValue:'文件上传成功，后台索引导入中'})); await loadDocuments(); } else { Message.error(data?.message || t('admin.rag.uploadFailed',{defaultValue:'上传失败'})); }
-              } catch { Message.error(t('admin.rag.uploadFailed',{defaultValue:'上传失败'})); } finally { setAdding(false); (e.target as HTMLInputElement).value = ''; }
+                await uploadRagDocument(file);
+                Message.success(t('admin.rag.uploadSuccess',{defaultValue:'文件上传成功，后台索引导入中'}));
+                await documentsState.reload();
+              } catch (error) { Message.error(getEnterpriseActionError(error, t('admin.rag.uploadFailed',{defaultValue:'上传失败'}))); } finally { setAdding(false); (e.target as HTMLInputElement).value = ''; }
             }} />
-            <Button type='outline' icon={<Plus />} onClick={() => { setUrlInput(''); setUrlTitle(''); setUrlVisible(true); }}>
-              {t('admin.rag.importUrl', { defaultValue: 'URL 导入' })}
-            </Button>
-            <Button
-              type='primary'
-              icon={<Plus theme='outline' size={16} />}
-              onClick={() => { form.resetFields(); setAddVisible(true); }}
-            >
-              {t('admin.rag.addDoc', { defaultValue: '粘贴文本' })}
-            </Button>
-          </Space>
-        </div>
+              <Button type='outline' icon={<Plus />} onClick={() => { setUrlInput(''); setUrlTitle(''); setUrlVisible(true); }}>
+                {t('admin.rag.importUrl', { defaultValue: 'URL 导入' })}
+              </Button>
+              <Button
+                type='primary'
+                icon={<Plus theme='outline' size={16} />}
+                onClick={() => { form.resetFields(); setAddVisible(true); }}
+              >
+                {t('admin.rag.addDoc', { defaultValue: '粘贴文本' })}
+              </Button>
+            </>
+          }
+        />
 
         {/* Grid: Left - Documents Table, Right - Search Playground */}
         <div className='grid grid-cols-1 lg:grid-cols-3 gap-24px items-start'>
@@ -247,17 +212,23 @@ const AdminRag: React.FC = () => {
             title={t('admin.rag.documentsCard', { defaultValue: '已索引的文档' })}
             bordered={false}
           >
-            <Table
-              loading={loading}
-              rowKey='id'
-              columns={columns}
-              data={documents}
-              pagination={{
-                pageSize: 10,
-                showTotal: true,
-                size: 'small',
-              }}
-            />
+            <ModuleDataState
+              loading={documentsState.loading}
+              error={documentsState.error}
+              empty={documentsState.data.length === 0}
+              emptyDescription={t('admin.rag.empty', { defaultValue: '暂无文档，点击上方开始导入。' })}
+            >
+              <Table
+                rowKey='id'
+                columns={columns}
+                data={documentsState.data}
+                pagination={{
+                  pageSize: 10,
+                  showTotal: true,
+                  size: 'small',
+                }}
+              />
+            </ModuleDataState>
           </Card>
 
           <Card
@@ -368,9 +339,12 @@ const AdminRag: React.FC = () => {
             if (!urlInput.trim()) { Message.warning(t('admin.rag.urlRequired', { defaultValue: '请输入URL' })); return; }
             setAdding(true);
             try {
-              const res = await apiMutate<{success:boolean;data:{id:string}}>('/api/admin/rag/import-url', 'POST', { url: urlInput.trim(), title: urlTitle.trim() || undefined });
-              if (res?.success) { Message.success(t('admin.rag.urlSuccess', { defaultValue: 'URL 文档导入成功' })); setUrlVisible(false); setUrlInput(''); setUrlTitle(''); await loadDocuments(); }
-              else { Message.error(t('admin.rag.urlFailed', { defaultValue: '导入失败' })); }
+              await importRagUrl({ url: urlInput.trim(), title: urlTitle.trim() || undefined });
+              Message.success(t('admin.rag.urlSuccess', { defaultValue: 'URL 文档导入成功' }));
+              setUrlVisible(false);
+              setUrlInput('');
+              setUrlTitle('');
+              await documentsState.reload();
             } catch { Message.error(t('admin.rag.urlFailed', { defaultValue: '导入失败' })); } finally { setAdding(false); }
           }}
           okButtonProps={{ loading: adding }}

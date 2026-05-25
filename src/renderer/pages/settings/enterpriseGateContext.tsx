@@ -8,15 +8,11 @@ import React, { createContext, useContext } from 'react';
 
 export type EnterpriseGateValue = {
   status: 'loading' | 'ready';
-  eligible: boolean;
-  elevated: boolean;
   refetch: () => Promise<void>;
 };
 
 const defaultValue: EnterpriseGateValue = {
   status: 'ready',
-  eligible: false,
-  elevated: false,
   refetch: async () => {},
 };
 

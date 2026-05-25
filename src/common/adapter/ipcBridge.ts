@@ -824,6 +824,10 @@ export type IWebUIEnterpriseContext = {
 export const webui = {
   // 获取 WebUI 状态 / Get WebUI status
   getStatus: bridge.buildProvider<IBridgeResponse<IWebUIStatus>, void>('webui.get-status'),
+  // 桌面端本地 WebUI 会话 token / Desktop local WebUI session token
+  getDesktopSessionToken: bridge.buildProvider<IBridgeResponse<{ token: string }>, void>(
+    'webui.get-desktop-session-token'
+  ),
   getEnterpriseContext: bridge.buildProvider<IBridgeResponse<IWebUIEnterpriseContext>, void>(
     'webui.get-enterprise-context'
   ),

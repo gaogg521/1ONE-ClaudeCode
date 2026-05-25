@@ -6,6 +6,7 @@
 
 import { captureCsrfTokenFromResponse } from '@process/webserver/middleware/csrfClient';
 import { webui } from '@/common/adapter/ipcBridge';
+import { normalizeEnterpriseApiError } from '@/renderer/utils/enterpriseApi/error';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 
 /**
@@ -42,13 +43,39 @@ export async function getWebuiApiBaseUrl(): Promise<string | null> {
   return null;
 }
 
+async function getDesktopWebuiAuthHeaders(headers?: HeadersInit): Promise<HeadersInit | undefined> {
+  if (!isElectronDesktop()) {
+    return headers;
+  }
+
+  try {
+    const result = await webui.getDesktopSessionToken.invoke();
+    const token = result.success ? result.data?.token : undefined;
+    if (!token) {
+      return headers;
+    }
+
+    const mergedHeaders = new Headers(headers ?? {});
+    if (!mergedHeaders.has('Authorization')) {
+      mergedHeaders.set('Authorization', `Bearer ${token}`);
+    }
+    return Object.fromEntries(mergedHeaders.entries());
+  } catch {
+    return headers;
+  }
+}
+
 export async function fetchWebuiApi(path: string, init?: RequestInit): Promise<Response> {
   const base = await getWebuiApiBaseUrl();
   if (!base) {
     throw new Error('WEBUI_NOT_RUNNING');
   }
   const url = path.startsWith('/') ? `${base}${path}` : `${base}/${path}`;
-  const response = await fetch(url, { ...init, credentials: 'include' });
+  const response = await fetch(url, {
+    ...init,
+    headers: await getDesktopWebuiAuthHeaders(init?.headers),
+    credentials: 'include',
+  });
   captureCsrfTokenFromResponse(response);
   return response;
 }
@@ -59,23 +86,10 @@ export type WebuiApiJsonError = Error & { status?: number; code?: string };
 /**
  * Normalize API error payloads: `message`, `error` (express AppError/global handler), then status text.
  */
-/** Map common admin API failures to user-facing hints (elevation, permissions). */
-export function formatWebuiAdminError(error: unknown, elevationHint?: string): string {
-  if (!(error instanceof Error)) {
-    return 'Request failed';
-  }
-  const err = error as WebuiApiJsonError;
-  if (
-    err.code === 'ENTERPRISE_ELEVATION_REQUIRED' ||
-    /enterprise elevation/i.test(err.message ?? '')
-  ) {
-    return (
-      elevationHint ??
-      err.message ??
-      'Enterprise elevation required'
-    );
-  }
-  return err.message || 'Request failed';
+/** Map common admin API failures to user-facing hints. */
+export function formatWebuiAdminError(error: unknown): string {
+  const issue = normalizeEnterpriseApiError(error);
+  return issue.message;
 }
 
 export function readWebuiApiErrorMessage(body: Record<string, unknown> | null, res: Response): string {

@@ -913,5 +913,15 @@
     "pendingTimeout": "審批請求已過期（5 分鐘）。請重試。",
     "pendingCancel": "取消",
     "pendingTimeRemaining": "剩餘時間：{{time}}"
+  },
+  "authProviders": {
+    "enterprisePageTitle": "認證與郵件",
+    "enterprisePageDesc": "統一管理企業登入接入與組織郵件發信基礎設施，認證提供方與郵箱配置在同一層級維護。",
+    "authSectionTitle": "認證中心",
+    "mailSectionTitle": "郵件中心",
+    "tabSmtp": "郵箱配置",
+    "feishuBindingHint": "儲存飛書設定後，還需要到「使用者管理」為本地帳號綁定 union_id / open_id，否則 OAuth 回調會被拒絕。",
+    "feishuRedirectHint": "請填寫飛書開放平台可存取的回調地址，不能使用 localhost；建議填寫區域網 IP 或正式網域。",
+    "feishuRedirectPlaceholder": "http://your-lan-ip:25809/api/auth/feishu/callback"
   }
 }

@@ -7,53 +7,31 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Form, Input, Message, Modal, Popconfirm, Select, Space, Table, Tag } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
-import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
-import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
+import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
+import {
+  addTeamMember,
+  createTeam,
+  createTeamTask,
+  deleteTeamTask,
+  listTeamMembers,
+  listTeams,
+  listTeamTasks,
+  removeTeamMember,
+  type TeamMemberRecord,
+  type TeamRecord,
+  type TeamTaskRecord,
+  updateTeamMemberRole,
+  updateTeamTask,
+} from '@/renderer/utils/enterpriseApi/modules';
 import AdminPageWrapper from './components/AdminPageWrapper';
+import ModuleDataState from './components/ModuleDataState';
+import ModulePageHeader from './components/ModulePageHeader';
 import TeamAddMemberModal, { type TeamMemberRole } from './components/TeamAddMemberModal';
 
-type TeamRow = {
-  id: string;
-  name: string;
-  workspace: string;
-  workspace_mode: string;
-  user_id: string;
-  tenant_id: string;
-  created_at: number;
-  updated_at: number;
-};
-
-type TeamMemberRow = {
-  user_id: string;
-  username: string;
-  role: 'owner' | 'admin' | 'member' | 'viewer';
-  created_at: number;
-  updated_at: number;
-};
-
-async function api<T>(path: string, opts?: RequestInit): Promise<T> {
-  return fetchWebuiApiJson<T>(path, opts);
-}
-
-/** POST/PATCH/DELETE JSON with CSRF body field for tiny-csrf */
-async function apiMutate<T>(path: string, method: string, payload: Record<string, unknown>): Promise<T> {
-  return api<T>(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(withCsrfToken(payload)),
-  });
-}
-
-type TeamTaskRow = {
-  id: string;
-  team_id: string;
-  subject: string;
-  description: string | null;
-  status: string;
-  owner: string | null;
-  created_at: number;
-  updated_at: number;
-};
+type TeamRow = TeamRecord;
+type TeamMemberRow = TeamMemberRecord;
+type TeamTaskRow = TeamTaskRecord;
 
 const ROLE_TAG: Record<TeamMemberRow['role'], { color: string; label: string }> = {
   owner: { color: 'arcoblue', label: 'Owner' },
@@ -64,58 +42,55 @@ const ROLE_TAG: Record<TeamMemberRow['role'], { color: string; label: string }> 
 
 const AdminTeams: React.FC = () => {
   const { t } = useTranslation();
-  const [teams, setTeams] = useState<TeamRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const [createVisible, setCreateVisible] = useState(false);
   const [createForm, setCreateForm] = useState({ name: '', workspace: '', workspace_mode: 'shared' });
   const [saving, setSaving] = useState(false);
 
   const [selectedTeam, setSelectedTeam] = useState<TeamRow | null>(null);
-  const [members, setMembers] = useState<TeamMemberRow[]>([]);
-  const [membersLoading, setMembersLoading] = useState(false);
-
-  const [teamTasks, setTeamTasks] = useState<TeamTaskRow[]>([]);
-  const [tasksLoading, setTasksLoading] = useState(false);
   const [taskModalVisible, setTaskModalVisible] = useState(false);
   const [taskForm, setTaskForm] = useState({ subject: '', description: '', owner: '' });
 
   const [addVisible, setAddVisible] = useState(false);
 
-  const loadTeams = useCallback(async () => {
-    const data = await api<TeamRow[]>('/api/admin/teams');
-    setTeams(data ?? []);
-  }, []);
-
-  const loadTeamTasks = useCallback(async (teamId: string) => {
-    setTasksLoading(true);
-    try {
-      const data = await api<TeamTaskRow[]>(`/api/team-tasks?teamId=${encodeURIComponent(teamId)}`);
-      setTeamTasks(data ?? []);
-    } catch (e) {
-      Message.error(e instanceof Error ? e.message : t('admin.teams.messages.loadTasksFailed', { defaultValue: '加载团队任务失败' }));
-      setTeamTasks([]);
-    } finally {
-      setTasksLoading(false);
-    }
-  }, [t]);
-
-  const loadMembers = useCallback(async (teamId: string) => {
-    setMembersLoading(true);
-    try {
-      const data = await api<TeamMemberRow[]>(`/api/admin/teams/${teamId}/members`);
-      setMembers(data ?? []);
-    } finally {
-      setMembersLoading(false);
-    }
-  }, []);
+  const teamsState = useEnterpriseAsyncData(
+    listTeams,
+    [],
+    t('admin.teams.messages.loadFailed', { defaultValue: '加载失败' })
+  );
+  const membersState = useEnterpriseAsyncData(
+    useCallback(async () => {
+      if (!selectedTeam) {
+        return [];
+      }
+      return listTeamMembers(selectedTeam.id);
+    }, [selectedTeam]),
+    [],
+    t('admin.teams.messages.operationFailed', { defaultValue: '加载成员失败' })
+  );
+  const tasksState = useEnterpriseAsyncData(
+    useCallback(async () => {
+      if (!selectedTeam) {
+        return [];
+      }
+      return listTeamTasks(selectedTeam.id);
+    }, [selectedTeam]),
+    [],
+    t('admin.teams.messages.loadTasksFailed', { defaultValue: '加载团队任务失败' })
+  );
 
   useEffect(() => {
-    setLoading(true);
-    loadTeams()
-      .catch((e) => Message.error(e instanceof Error ? e.message : t('admin.teams.messages.loadFailed', { defaultValue: '加载失败' })))
-      .finally(() => setLoading(false));
-  }, [loadTeams, t]);
+    if (!selectedTeam) {
+      return;
+    }
+    const nextSelectedTeam = teamsState.data.find((team) => team.id === selectedTeam.id) ?? null;
+    if (nextSelectedTeam === null) {
+      setSelectedTeam(null);
+      return;
+    }
+    if (nextSelectedTeam !== selectedTeam) {
+      setSelectedTeam(nextSelectedTeam);
+    }
+  }, [selectedTeam, teamsState.data]);
 
   const handleCreate = useCallback(async () => {
     if (!createForm.name.trim() || !createForm.workspace.trim()) {
@@ -124,7 +99,7 @@ const AdminTeams: React.FC = () => {
     }
     setSaving(true);
     try {
-      await apiMutate('/api/admin/teams', 'POST', {
+      await createTeam({
         name: createForm.name.trim(),
         workspace: createForm.workspace.trim(),
         workspace_mode: createForm.workspace_mode,
@@ -132,22 +107,13 @@ const AdminTeams: React.FC = () => {
       Message.success(t('admin.teams.messages.created', { defaultValue: '团队已创建' }));
       setCreateVisible(false);
       setCreateForm({ name: '', workspace: '', workspace_mode: 'shared' });
-      await loadTeams();
+      await teamsState.reload();
     } catch (e) {
-      Message.error(e instanceof Error ? e.message : t('admin.teams.messages.createFailed', { defaultValue: '创建失败' }));
+      Message.error(getEnterpriseActionError(e, t('admin.teams.messages.createFailed', { defaultValue: '创建失败' })));
     } finally {
       setSaving(false);
     }
-  }, [createForm, loadTeams, t]);
-
-  const openTeam = useCallback(
-    async (team: TeamRow) => {
-      setSelectedTeam(team);
-      await loadMembers(team.id);
-      await loadTeamTasks(team.id);
-    },
-    [loadMembers, loadTeamTasks]
-  );
+  }, [createForm, t, teamsState]);
 
   const handleCreateTeamTask = useCallback(async () => {
     if (!selectedTeam || !taskForm.subject.trim()) {
@@ -156,7 +122,7 @@ const AdminTeams: React.FC = () => {
     }
     setSaving(true);
     try {
-      await apiMutate<unknown>('/api/team-tasks', 'POST', {
+      await createTeamTask({
         teamId: selectedTeam.id,
         subject: taskForm.subject.trim(),
         description: taskForm.description.trim() ? taskForm.description.trim() : null,
@@ -165,29 +131,29 @@ const AdminTeams: React.FC = () => {
       Message.success(t('admin.teams.messages.taskCreated', { defaultValue: '任务已创建' }));
       setTaskModalVisible(false);
       setTaskForm({ subject: '', description: '', owner: '' });
-      await loadTeamTasks(selectedTeam.id);
+      await tasksState.reload();
     } catch (e) {
-      Message.error(e instanceof Error ? e.message : t('admin.teams.messages.createFailed', { defaultValue: '创建失败' }));
+      Message.error(getEnterpriseActionError(e, t('admin.teams.messages.createFailed', { defaultValue: '创建失败' })));
     } finally {
       setSaving(false);
     }
-  }, [loadTeamTasks, selectedTeam, taskForm, t]);
+  }, [selectedTeam, t, taskForm, tasksState]);
 
   const handleDeleteTeamTask = useCallback(
     async (taskId: string) => {
       if (!selectedTeam) return;
       setSaving(true);
       try {
-        await apiMutate(`/api/team-tasks/${encodeURIComponent(taskId)}`, 'DELETE', {});
+        await deleteTeamTask(taskId);
         Message.success(t('admin.teams.messages.deleted', { defaultValue: '已删除' }));
-        await loadTeamTasks(selectedTeam.id);
+        await tasksState.reload();
       } catch (e) {
-        Message.error(e instanceof Error ? e.message : t('admin.teams.messages.deleteFailed', { defaultValue: '删除失败' }));
+        Message.error(getEnterpriseActionError(e, t('admin.teams.messages.deleteFailed', { defaultValue: '删除失败' })));
       } finally {
         setSaving(false);
       }
     },
-    [loadTeamTasks, selectedTeam, t]
+    [selectedTeam, t, tasksState]
   );
 
   const handleTeamTaskStatus = useCallback(
@@ -195,39 +161,39 @@ const AdminTeams: React.FC = () => {
       if (!selectedTeam) return;
       setSaving(true);
       try {
-        await apiMutate(`/api/team-tasks/${encodeURIComponent(taskId)}`, 'PATCH', { status });
-        await loadTeamTasks(selectedTeam.id);
+        await updateTeamTask(taskId, { status });
+        await tasksState.reload();
       } catch (e) {
-        Message.error(e instanceof Error ? e.message : t('admin.teams.messages.updateFailed', { defaultValue: '更新失败' }));
+        Message.error(getEnterpriseActionError(e, t('admin.teams.messages.updateFailed', { defaultValue: '更新失败' })));
       } finally {
         setSaving(false);
       }
     },
-    [loadTeamTasks, selectedTeam, t]
+    [selectedTeam, t, tasksState]
   );
 
-  const memberUserIds = useMemo(() => new Set(members.map((m) => m.user_id)), [members]);
+  const memberUserIds = useMemo(() => new Set(membersState.data.map((m) => m.user_id)), [membersState.data]);
 
   const handleAddMember = useCallback(
     async (userId: string, role: TeamMemberRole) => {
       if (!selectedTeam) return;
       setSaving(true);
       try {
-        await apiMutate(`/api/admin/teams/${selectedTeam.id}/members`, 'POST', {
+        await addTeamMember(selectedTeam.id, {
           userId,
           role,
         });
         Message.success(t('admin.teams.messages.memberAdded', { defaultValue: '成员已添加/更新' }));
         setAddVisible(false);
-        await loadMembers(selectedTeam.id);
+        await membersState.reload();
       } catch (e) {
-        Message.error(e instanceof Error ? e.message : t('admin.teams.messages.operationFailed', { defaultValue: '操作失败' }));
+        Message.error(getEnterpriseActionError(e, t('admin.teams.messages.operationFailed', { defaultValue: '操作失败' })));
         throw e;
       } finally {
         setSaving(false);
       }
     },
-    [loadMembers, selectedTeam, t]
+    [membersState, selectedTeam, t]
   );
 
   const handleUpdateRole = useCallback(
@@ -235,16 +201,16 @@ const AdminTeams: React.FC = () => {
       if (!selectedTeam) return;
       setSaving(true);
       try {
-        await apiMutate(`/api/admin/teams/${selectedTeam.id}/members/${userId}`, 'PATCH', { role });
+        await updateTeamMemberRole(selectedTeam.id, userId, { role });
         Message.success(t('admin.teams.messages.roleUpdated', { defaultValue: '角色已更新' }));
-        await loadMembers(selectedTeam.id);
+        await membersState.reload();
       } catch (e) {
-        Message.error(e instanceof Error ? e.message : t('admin.teams.messages.updateFailed', { defaultValue: '更新失败' }));
+        Message.error(getEnterpriseActionError(e, t('admin.teams.messages.updateFailed', { defaultValue: '更新失败' })));
       } finally {
         setSaving(false);
       }
     },
-    [loadMembers, selectedTeam, t]
+    [membersState, selectedTeam, t]
   );
 
   const handleRemove = useCallback(
@@ -252,16 +218,16 @@ const AdminTeams: React.FC = () => {
       if (!selectedTeam) return;
       setSaving(true);
       try {
-        await apiMutate(`/api/admin/teams/${selectedTeam.id}/members/${userId}`, 'DELETE', {});
+        await removeTeamMember(selectedTeam.id, userId);
         Message.success(t('admin.teams.messages.memberRemoved', { defaultValue: '成员已移除' }));
-        await loadMembers(selectedTeam.id);
+        await membersState.reload();
       } catch (e) {
-        Message.error(e instanceof Error ? e.message : t('admin.teams.messages.removeFailed', { defaultValue: '移除失败' }));
+        Message.error(getEnterpriseActionError(e, t('admin.teams.messages.removeFailed', { defaultValue: '移除失败' })));
       } finally {
         setSaving(false);
       }
     },
-    [loadMembers, selectedTeam, t]
+    [membersState, selectedTeam, t]
   );
 
   const memberColumns = useMemo(
@@ -336,37 +302,48 @@ const AdminTeams: React.FC = () => {
 
   return (
     <AdminPageWrapper>
-      <div className='flex items-center justify-between mb-16px'>
-        <div className='text-18px font-700 text-t-primary'>{t('admin.teams.page.title', { defaultValue: '团队与权限' })}</div>
-        <Space>
-          <Button onClick={() => void loadTeams()}>{t('admin.teams.button.refresh', { defaultValue: '刷新' })}</Button>
+      <ModulePageHeader
+        title={t('admin.teams.page.title', { defaultValue: '团队与权限' })}
+        description={t('admin.teams.pageDesc', {
+          defaultValue: '管理企业团队、成员角色与协同任务，作为 CTeam 的组织与执行入口。',
+        })}
+        actions={
+          <>
+          <Button onClick={() => void teamsState.reload()}>{t('admin.teams.button.refresh', { defaultValue: '刷新' })}</Button>
           <Button type='primary' onClick={() => setCreateVisible(true)}>
             {t('admin.teams.button.createTeam', { defaultValue: '创建团队' })}
           </Button>
-        </Space>
-      </div>
+          </>
+        }
+      />
 
       <div className='grid grid-cols-1 md:grid-cols-2 gap-16px'>
         <Card bordered={false} title={t('admin.teams.card.teamList', { defaultValue: '团队列表' })}>
-          <Table
-            loading={loading}
-            data={teams}
-            rowKey='id'
-            pagination={false}
-            size='small'
-            columns={[
-              { title: t('admin.teams.table.name', { defaultValue: '名称' }), dataIndex: 'name' },
-              { title: t('admin.teams.table.workspace', { defaultValue: '工作区' }), dataIndex: 'workspace' },
-              {
-                title: t('admin.teams.table.actions', { defaultValue: '操作' }),
-                render: (_: unknown, r: TeamRow) => (
-                  <Button size='mini' onClick={() => void openTeam(r)}>
-                    {t('admin.teams.button.manageMembers', { defaultValue: '管理成员' })}
-                  </Button>
-                ),
-              },
-            ]}
-          />
+          <ModuleDataState
+            loading={teamsState.loading}
+            error={teamsState.error}
+            empty={teamsState.data.length === 0}
+            emptyDescription={t('admin.teams.empty', { defaultValue: '暂无团队，请先创建团队。' })}
+          >
+            <Table
+              data={teamsState.data}
+              rowKey='id'
+              pagination={false}
+              size='small'
+              columns={[
+                { title: t('admin.teams.table.name', { defaultValue: '名称' }), dataIndex: 'name' },
+                { title: t('admin.teams.table.workspace', { defaultValue: '工作区' }), dataIndex: 'workspace' },
+                {
+                  title: t('admin.teams.table.actions', { defaultValue: '操作' }),
+                  render: (_: unknown, r: TeamRow) => (
+                    <Button size='mini' onClick={() => setSelectedTeam(r)}>
+                      {t('admin.teams.button.manageMembers', { defaultValue: '管理成员' })}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          </ModuleDataState>
         </Card>
 
         <Card
@@ -381,14 +358,20 @@ const AdminTeams: React.FC = () => {
           }
         >
           {selectedTeam ? (
-            <Table
-              loading={membersLoading}
-              data={members}
-              rowKey='user_id'
-              pagination={false}
-              size='small'
-              columns={memberColumns as any}
-            />
+            <ModuleDataState
+              loading={membersState.loading}
+              error={membersState.error}
+              empty={membersState.data.length === 0}
+              emptyDescription={t('admin.teams.emptyMembers', { defaultValue: '当前团队暂无成员。' })}
+            >
+              <Table
+                data={membersState.data}
+                rowKey='user_id'
+                pagination={false}
+                size='small'
+                columns={memberColumns as any}
+              />
+            </ModuleDataState>
           ) : (
             <div className='text-t-tertiary text-13px'>{t('admin.teams.placeholder.selectTeam', { defaultValue: '从左侧选择一个团队以管理成员' })}</div>
           )}
@@ -402,7 +385,7 @@ const AdminTeams: React.FC = () => {
           title={t('admin.teams.card.tasksOf', { defaultValue: '团队任务：{{name}}', name: selectedTeam.name })}
           extra={
             <Space>
-              <Button size='small' onClick={() => void loadTeamTasks(selectedTeam.id)}>
+              <Button size='small' onClick={() => void tasksState.reload()}>
                 {t('admin.teams.button.refresh', { defaultValue: '刷新' })}
               </Button>
               <Button type='primary' size='small' onClick={() => setTaskModalVisible(true)}>
@@ -411,14 +394,20 @@ const AdminTeams: React.FC = () => {
             </Space>
           }
         >
-          <Table
-            loading={tasksLoading}
-            data={teamTasks}
-            rowKey='id'
-            pagination={false}
-            size='small'
-            columns={taskColumns as any}
-          />
+          <ModuleDataState
+            loading={tasksState.loading}
+            error={tasksState.error}
+            empty={tasksState.data.length === 0}
+            emptyDescription={t('admin.teams.emptyTasks', { defaultValue: '当前团队暂无任务。' })}
+          >
+            <Table
+              data={tasksState.data}
+              rowKey='id'
+              pagination={false}
+              size='small'
+              columns={taskColumns as any}
+            />
+          </ModuleDataState>
         </Card>
       ) : null}
 

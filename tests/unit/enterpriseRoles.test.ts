@@ -21,6 +21,10 @@ describe('resolveEnterpriseEditionPath', () => {
 });
 
 describe('resolvePostLoginRedirectPath', () => {
+  it('allows joined members into enterprise home', () => {
+    expect(resolvePostLoginRedirectPath('/enterprise', 'member', 'tenant-a')).toBe('/enterprise');
+  });
+
   it('sends joined users away from join path to workspace', () => {
     expect(resolvePostLoginRedirectPath('/enterprise/join', 'member', 'tenant-a')).toBe('/sessions');
   });
@@ -30,7 +34,7 @@ describe('resolvePostLoginRedirectPath', () => {
   });
 
   it('blocks non-admins from admin console', () => {
-    expect(resolvePostLoginRedirectPath('/enterprise/users', 'member', 'tenant-a')).toBe('/sessions');
+    expect(resolvePostLoginRedirectPath('/enterprise/teams', 'member', 'tenant-a')).toBe('/enterprise');
   });
 
   it('allows org admins into admin console', () => {
@@ -41,5 +45,11 @@ describe('resolvePostLoginRedirectPath', () => {
 
   it('sends not-joined users targeting admin home to join', () => {
     expect(resolvePostLoginRedirectPath('/enterprise', 'org_admin', 'default')).toBe('/enterprise/join');
+  });
+
+  it('allows joined members into member-visible enterprise routes', () => {
+    expect(resolvePostLoginRedirectPath('/enterprise/users', 'member', 'tenant-a')).toBe(
+      '/enterprise/users'
+    );
   });
 });

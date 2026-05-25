@@ -360,6 +360,16 @@ export class WebuiService {
     };
   }
 
+  static async getDesktopSessionToken(): Promise<{ token: string }> {
+    const adminUser = await this.getAdminUser();
+    const token = await AuthService.generateToken({
+      id: adminUser.id,
+      username: adminUser.username,
+      role: adminUser.role,
+    });
+    return { token };
+  }
+
   static async previewEnterpriseInvite(code: string) {
     const { previewEnterpriseInvite } = await import('@process/webserver/auth/enterpriseJoinService');
     return previewEnterpriseInvite(code);

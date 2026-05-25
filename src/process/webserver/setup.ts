@@ -91,9 +91,6 @@ function shouldBypassCsrfByPath(pathOnly: string): boolean {
   if (pathOnly === '/api/upload' || pathOnly.startsWith('/api/upload/')) {
     return true;
   }
-  if (pathOnly === '/api/auth/enterprise-elevate' || pathOnly.startsWith('/api/auth/enterprise-elevate/')) {
-    return true;
-  }
   if (pathOnly === '/api/admin' || pathOnly.startsWith('/api/admin/')) {
     return true;
   }
@@ -177,6 +174,17 @@ function normalizeOrigin(origin: string): string | null {
 
 function getConfiguredOrigins(port: number, allowRemote: boolean): Set<string> {
   const baseOrigins = new Set<string>([`http://localhost:${port}`, `http://127.0.0.1:${port}`]);
+
+  if (process.env.NODE_ENV !== 'production') {
+    const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
+    const normalizedRendererOrigin = rendererUrl ? normalizeOrigin(rendererUrl) : null;
+    if (normalizedRendererOrigin) {
+      baseOrigins.add(normalizedRendererOrigin);
+    } else {
+      baseOrigins.add('http://localhost:5173');
+      baseOrigins.add('http://127.0.0.1:5173');
+    }
+  }
 
   // 允许远程访问时，自动添加所有网络接口 IP（LAN、VPN、Tailscale 等）
   // When remote access is enabled, add all network interface IPs (LAN, VPN, Tailscale, etc.)

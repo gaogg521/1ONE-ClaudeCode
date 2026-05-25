@@ -19,7 +19,6 @@ import { resolveLocalUserForLdapEntry, searchLdapDirectoryForAdmin } from '../au
 import { testFeishuAppCredentials } from '../auth/providers/FeishuAuthProvider';
 import nodemailer from 'nodemailer';
 import { resolvedSmtpFromConfig } from '../auth/smtpConfig';
-import { requireEnterpriseElevation } from '../auth/middleware/enterpriseElevationMiddleware';
 import { isEnterpriseAdminRole } from '../auth/enterpriseRoles';
 import { DEFAULT_TENANT_ID, isEnterpriseTenantId } from '@/common/config/webuiEnterpriseConfig';
 import {
@@ -68,7 +67,7 @@ export function registerAdminRoutes(app: Express): void {
   const auth = TokenMiddleware.validateToken({ responseType: 'json' });
 
   // GET /api/admin/auth/providers — 列出认证提供方（不含敏感配置）
-  app.get('/api/admin/auth/providers', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (_req, res) => {
+  app.get('/api/admin/auth/providers', apiRateLimiter, auth, requireAdmin, async (_req, res) => {
     try {
       const providers = await AuthProviderRepository.listProviders();
       res.json({ success: true, data: providers });
@@ -79,7 +78,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // GET /api/admin/auth/providers/:provider — 获取提供方配置（敏感字段不回传明文）
-  app.get('/api/admin/auth/providers/:provider', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.get('/api/admin/auth/providers/:provider', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const provider = String(req.params.provider);
       if (!isConfigurableAuthProvider(provider)) {
@@ -105,7 +104,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // PUT /api/admin/auth/providers/:provider — 更新提供方配置
-  app.put('/api/admin/auth/providers/:provider', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.put('/api/admin/auth/providers/:provider', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const provider = String(req.params.provider);
       if (!isConfigurableAuthProvider(provider)) {
@@ -132,7 +131,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // POST /api/admin/auth/providers/ldap/test — LDAP 连通性测试（合并已保存的密钥）
-  app.post('/api/admin/auth/providers/ldap/test', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.post('/api/admin/auth/providers/ldap/test', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const bodyConfig =
         req.body?.config && typeof req.body.config === 'object' ? (req.body.config as Record<string, unknown>) : {};
@@ -151,7 +150,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // POST /api/admin/ldap/users/search — LDAP 目录搜索（添加团队成员等）
-  app.post('/api/admin/ldap/users/search', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.post('/api/admin/ldap/users/search', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const query = String(req.body?.query ?? '').trim();
       if (!query) {
@@ -174,7 +173,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // POST /api/admin/ldap/users/resolve — 将 LDAP 条目解析为本地用户（不存在则创建并绑定）
-  app.post('/api/admin/ldap/users/resolve', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.post('/api/admin/ldap/users/resolve', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const dn = String(req.body?.dn ?? '').trim();
       const username = String(req.body?.username ?? '').trim();
@@ -200,7 +199,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // POST /api/admin/auth/providers/smtp/test — SMTP 连通性 / 试发
-  app.post('/api/admin/auth/providers/smtp/test', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.post('/api/admin/auth/providers/smtp/test', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const bodyConfig =
         req.body?.config && typeof req.body.config === 'object' ? (req.body.config as Record<string, unknown>) : {};
@@ -239,7 +238,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // POST /api/admin/auth/providers/feishu/test — 飞书 App 凭证测试
-  app.post('/api/admin/auth/providers/feishu/test', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.post('/api/admin/auth/providers/feishu/test', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const bodyConfig =
         req.body?.config && typeof req.body.config === 'object' ? (req.body.config as Record<string, unknown>) : {};
@@ -260,7 +259,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // GET /api/admin/users — 列出所有用户（admin）
-  app.get('/api/admin/users', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.get('/api/admin/users', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const adminTenantId = resolveAdminTenantId(req);
       const allUsers = await UserRepository.listUsers();
@@ -300,7 +299,7 @@ export function registerAdminRoutes(app: Express): void {
    */
 
   // GET /api/admin/teams — list teams in tenant
-  app.get('/api/admin/teams', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.get('/api/admin/teams', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const db = await getDatabase();
       const driver = db.getDriver();
@@ -321,7 +320,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // POST /api/admin/teams — create a team (owner = current admin user)
-  app.post('/api/admin/teams', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.post('/api/admin/teams', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const tenantId = resolveAdminTenantId(req);
       const name = String(req.body?.name ?? '').trim();
@@ -343,11 +342,11 @@ export function registerAdminRoutes(app: Express): void {
       // 使用事务保护：创建团队 + 添加成员必须原子操作
       // Transaction protection: create team + add member must be atomic
       const createTeamTransaction = driver.transaction(() => {
-        // 使用 NULL 而非硬编码空字符串，提高可维护性
-        // Use NULL instead of hardcoded empty strings for better maintainability
+        // Existing schema keeps lead_agent_id as NOT NULL with '' default,
+        // so new teams must follow the persisted contract until the schema changes.
         driver.prepare(
           `INSERT INTO teams (id, tenant_id, user_id, name, workspace, workspace_mode, lead_agent_id, agents, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, NULL, '[]', ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?)`
         ).run(id, tenantId, req.user!.id, name, workspace, workspaceMode, now, now);
         driver.prepare(
           `INSERT INTO team_memberships (tenant_id, team_id, user_id, role, created_at, updated_at)
@@ -365,7 +364,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // GET /api/admin/teams/:id/members — list members
-  app.get('/api/admin/teams/:id/members', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.get('/api/admin/teams/:id/members', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const tenantId = resolveAdminTenantId(req);
       const teamId = String(req.params.id);
@@ -388,7 +387,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // POST /api/admin/teams/:id/members — add member
-  app.post('/api/admin/teams/:id/members', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.post('/api/admin/teams/:id/members', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const tenantId = resolveAdminTenantId(req);
       const teamId = String(req.params.id);
@@ -423,7 +422,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // PATCH /api/admin/teams/:id/members/:userId — update member role
-  app.patch('/api/admin/teams/:id/members/:userId', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.patch('/api/admin/teams/:id/members/:userId', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const tenantId = resolveAdminTenantId(req);
       const teamId = String(req.params.id);
@@ -448,7 +447,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // DELETE /api/admin/teams/:id/members/:userId — remove member
-  app.delete('/api/admin/teams/:id/members/:userId', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.delete('/api/admin/teams/:id/members/:userId', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const tenantId = resolveAdminTenantId(req);
       const teamId = String(req.params.id);
@@ -464,7 +463,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // POST /api/admin/auth/identities — 绑定外部身份
-  app.post('/api/admin/auth/identities', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.post('/api/admin/auth/identities', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const provider = String(req.body?.provider ?? '');
       const userId = String(req.body?.userId ?? '');
@@ -496,7 +495,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // DELETE /api/admin/auth/identities — 解绑外部身份（按 userId）
-  app.delete('/api/admin/auth/identities', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.delete('/api/admin/auth/identities', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const provider = String(req.body?.provider ?? '');
       const userId = String(req.body?.userId ?? '');
@@ -521,7 +520,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // POST /api/admin/users — 创建用户
-  app.post('/api/admin/users', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.post('/api/admin/users', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const { username, password, role } = req.body;
       if (!username?.trim() || !password?.trim()) {
@@ -536,6 +535,7 @@ export function registerAdminRoutes(app: Express): void {
       const passwordHash = await AuthService.hashPassword(password);
       const mappedRole = role === 'admin' ? 'org_admin' : 'member';
       const user = await UserRepository.createUserWithRole(username.trim(), passwordHash, mappedRole);
+      await UserRepository.updateTenantId(user.id, resolveAdminTenantId(req));
       res.json({ success: true, data: { id: user.id, username: user.username, role: user.role } });
     } catch (err) {
       console.error('[AdminRoute] createUser error:', err);
@@ -544,7 +544,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // PATCH /api/admin/users/:id/role — 修改角色
-  app.patch('/api/admin/users/:id/role', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.patch('/api/admin/users/:id/role', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const id = String(req.params.id);
       const role = String(req.body.role);
@@ -576,7 +576,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // PATCH /api/admin/users/:id/password — 重置密码（admin）
-  app.patch('/api/admin/users/:id/password', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.patch('/api/admin/users/:id/password', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const id = String(req.params.id);
       const password = String(req.body.password ?? '');
@@ -601,7 +601,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // POST /api/admin/users/reset-password-email-code — 发送管理员重置密码邮箱验证码
-  app.post('/api/admin/users/reset-password-email-code', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.post('/api/admin/users/reset-password-email-code', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const data = await WebuiService.requestResetPasswordEmailCode();
       res.json({ success: true, data: { maskedEmail: data.maskedEmail } });
@@ -612,8 +612,42 @@ export function registerAdminRoutes(app: Express): void {
     }
   });
 
+  // GET /api/admin/system/admin-email — 当前管理员邮箱
+  app.get('/api/admin/system/admin-email', apiRateLimiter, auth, requireAdmin, async (_req, res) => {
+    try {
+      const adminUser = await UserRepository.getSystemUser();
+      res.json({
+        success: true,
+        data: {
+          email: adminUser?.email ?? '',
+        },
+      });
+    } catch (err) {
+      console.error('[AdminRoute] getAdminEmail error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // PUT /api/admin/system/admin-email — 设置管理员邮箱（浏览器可用）
+  app.put('/api/admin/system/admin-email', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+    try {
+      const email = String(req.body?.email ?? '').trim();
+      if (!email) {
+        res.status(400).json({ success: false, message: 'Email is required' });
+        return;
+      }
+
+      await WebuiService.setAdminEmail(email);
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[AdminRoute] setAdminEmail error:', err);
+      const message = err instanceof Error ? err.message : 'Internal server error';
+      res.status(400).json({ success: false, message });
+    }
+  });
+
   // DELETE /api/admin/users/:id — 删除用户
-  app.delete('/api/admin/users/:id', apiRateLimiter, auth, requireAdmin, requireEnterpriseElevation, async (req, res) => {
+  app.delete('/api/admin/users/:id', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const id = String(req.params.id);
       if (PROTECTED_IDS.has(id)) {
@@ -661,7 +695,6 @@ export function registerAdminRoutes(app: Express): void {
     apiRateLimiter,
     auth,
     requireAdmin,
-    requireEnterpriseElevation,
     async (req: Request, res: Response) => {
       try {
         const tenantId = req.user?.tenant_id ?? 'default';
@@ -691,7 +724,6 @@ export function registerAdminRoutes(app: Express): void {
     apiRateLimiter,
     auth,
     requireAdmin,
-    requireEnterpriseElevation,
     async (req: Request, res: Response) => {
       try {
         const tenantId = req.user?.tenant_id ?? 'default';
@@ -730,7 +762,6 @@ export function registerAdminRoutes(app: Express): void {
     apiRateLimiter,
     auth,
     requireAdmin,
-    requireEnterpriseElevation,
     async (req: Request, res: Response) => {
       try {
         const tenantId = req.user?.tenant_id ?? 'default';

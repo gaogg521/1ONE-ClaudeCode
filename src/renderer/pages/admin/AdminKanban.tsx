@@ -30,8 +30,13 @@ import {
   Delete,
 } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
-import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
-import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
+import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
+import {
+  createRequirement,
+  deleteRequirement,
+  listRequirementsTree,
+  updateRequirement,
+} from '@/renderer/utils/enterpriseApi/modules';
 import AdminPageWrapper from './components/AdminPageWrapper';
 
 const { Row, Col } = Grid;
@@ -71,18 +76,6 @@ const PRIORITY_TAGS: Record<RequirementPriority, { color: string; labelKey: stri
   urgent: { color: 'red', labelKey: 'admin.kanban.priority.urgent', defaultLabel: '紧急' },
 };
 
-async function api<T>(path: string, opts?: RequestInit): Promise<T> {
-  return fetchWebuiApiJson<T>(path, opts);
-}
-
-async function apiMutate<T>(path: string, method: string, payload: Record<string, unknown>): Promise<T> {
-  return api<T>(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(withCsrfToken(payload)),
-  });
-}
-
 const AdminKanban: React.FC = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
@@ -92,11 +85,14 @@ const AdminKanban: React.FC = () => {
   // Modals visibility
   const [createVisible, setCreateVisible] = useState(false);
   const [aiVisible, setAiVisible] = useState(false);
+  const [batchImportVisible, setBatchImportVisible] = useState(false);
   const [cardDetailVisible, setCardDetailVisible] = useState(false);
 
   // Form states
   const [saving, setSaving] = useState(false);
   const [aiInput, setAiInput] = useState('');
+  const [batchImportJson, setBatchImportJson] = useState('');
+  const [batchImportError, setBatchImportError] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<IRequirement | null>(null);
 
   const [createForm, setCreateForm] = useState({
@@ -112,17 +108,19 @@ const AdminKanban: React.FC = () => {
   const loadRequirements = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api<{ success: boolean; data: IRequirement[] }>('/api/admin/requirements/tree');
-      if (res?.success) {
-        const list = res.data ?? [];
-        setRequirements(list);
-        if (list.length > 0 && !selectedEpicId) {
-          // Default select the first epic to open kanban board
-          setSelectedEpicId(list[0].id);
-        }
+      const list = await listRequirementsTree();
+      setRequirements(list ?? []);
+      if ((list?.length ?? 0) > 0 && !selectedEpicId) {
+        // Default select the first epic to open kanban board
+        setSelectedEpicId(list[0].id);
       }
-    } catch (e) {
-      Message.error(t('admin.kanban.message.loadFailed', { defaultValue: '加载看板需求数据失败' }));
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('admin.kanban.message.loadFailed', { defaultValue: '加载看板需求数据失败' })
+        )
+      );
     } finally {
       setLoading(false);
     }
@@ -139,7 +137,7 @@ const AdminKanban: React.FC = () => {
     }
     setSaving(true);
     try {
-      await apiMutate('/api/admin/requirements', 'POST', {
+      await createRequirement({
         ...createForm,
         parent_id: createForm.parent_id || selectedEpicId || null,
       });
@@ -155,8 +153,13 @@ const AdminKanban: React.FC = () => {
         assigned_to: '',
       });
       await loadRequirements();
-    } catch (e) {
-      Message.error(t('admin.kanban.message.createFailed', { defaultValue: '创建失败' }));
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('admin.kanban.message.createFailed', { defaultValue: '创建失败' })
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -166,7 +169,7 @@ const AdminKanban: React.FC = () => {
     if (!subject.trim()) return;
     setSaving(true);
     try {
-      await apiMutate('/api/admin/requirements', 'POST', {
+      await createRequirement({
         type: 'epic',
         subject: subject.trim(),
         status: 'planning',
@@ -174,8 +177,13 @@ const AdminKanban: React.FC = () => {
       });
       Message.success(t('admin.kanban.message.epicCreated', { defaultValue: '已创建史诗：{{name}}', name: subject }));
       await loadRequirements();
-    } catch {
-      Message.error(t('admin.kanban.message.createFailed', { defaultValue: '创建失败' }));
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('admin.kanban.message.createFailed', { defaultValue: '创建失败' })
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -183,24 +191,69 @@ const AdminKanban: React.FC = () => {
 
   const handleStatusChange = async (cardId: string, newStatus: RequirementStatus) => {
     try {
-      await apiMutate(`/api/admin/requirements/${cardId}`, 'PATCH', { status: newStatus });
+      await updateRequirement(cardId, { status: newStatus });
       await loadRequirements();
-    } catch {
-      Message.error(t('admin.kanban.message.updateFailed', { defaultValue: '看板状态流转更新失败' }));
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('admin.kanban.message.updateFailed', { defaultValue: '看板状态流转更新失败' })
+        )
+      );
     }
   };
 
   const handleDeleteCard = async (cardId: string) => {
     try {
-      await apiMutate(`/api/admin/requirements/${cardId}`, 'DELETE', {});
+      await deleteRequirement(cardId);
       Message.success(t('admin.kanban.message.deleted', { defaultValue: '卡片已物理删除' }));
       if (selectedEpicId === cardId) {
         setSelectedEpicId(null);
       }
       setCardDetailVisible(false);
       await loadRequirements();
-    } catch {
-      Message.error(t('admin.kanban.message.deleteFailed', { defaultValue: '删除失败' }));
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('admin.kanban.message.deleteFailed', { defaultValue: '删除失败' })
+        )
+      );
+    }
+  };
+
+  const handleBatchImport = async () => {
+    try {
+      const items = JSON.parse(batchImportJson);
+      if (!Array.isArray(items)) {
+        setBatchImportError('必须是JSON数组');
+        return;
+      }
+      setSaving(true);
+      setBatchImportError(null);
+      let count = 0;
+      for (const item of items) {
+        if (!item?.subject?.trim()) continue;
+        await createRequirement({
+          type: item.type || 'story',
+          subject: item.subject,
+          description: item.description || '',
+          priority: item.priority || 'medium',
+          status: item.status || 'backlog',
+          assigned_to: item.assigned_to || null,
+        });
+        count++;
+      }
+      Message.success(`成功导入 ${count} 个需求卡片`);
+      setBatchImportVisible(false);
+      setBatchImportJson('');
+      await loadRequirements();
+    } catch (error) {
+      setBatchImportError(
+        error instanceof SyntaxError ? 'JSON格式错误' : getEnterpriseActionError(error, '导入失败')
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -216,7 +269,7 @@ const AdminKanban: React.FC = () => {
     try {
       // 1. 创建关联的 Feature 主卡片 / Create parent Feature card
       const epicId = selectedEpicId || '';
-      const featureRes = await apiMutate<{ success: boolean; data: { id: string } }>('/api/admin/requirements', 'POST', {
+      const featureRes = await createRequirement({
         parent_id: epicId || null,
         type: 'feature',
         subject: t('admin.kanban.ai.featureTitle', { defaultValue: 'AI 自动生成特性库', name: aiInput.slice(0, 8) }),
@@ -224,9 +277,7 @@ const AdminKanban: React.FC = () => {
         status: 'planning',
         priority: 'high',
       });
-
-      if (!featureRes?.success) throw new Error('Failed to create parent feature');
-      const featureId = featureRes.data.id;
+      const featureId = featureRes.id;
 
       // 2. 模拟智能切片出 3 张级联 Story/Task 开发卡片，并智能滑入各个泳道中！
       // Simulation of intelligent swarm split into Story / Task cards
@@ -252,23 +303,28 @@ const AdminKanban: React.FC = () => {
         parent_id: featureId,
         type: 'task' as const,
         subject: t('admin.kanban.ai.story3', { defaultValue: '开发企业端看板 UI 并集成管理员验证保护' }),
-        description: t('admin.kanban.ai.story3Desc', { defaultValue: '使用 Arco Design 新建多层泳道需求树，并配置 requiresElevation 拦截弹窗。' }),
+        description: t('admin.kanban.ai.story3Desc', { defaultValue: '使用 Arco Design 新建多层泳道需求树，并补齐管理员角色边界、表单交互与回归测试。' }),
         status: 'backlog' as const,
         priority: 'medium' as const,
       };
 
       await Promise.all([
-        apiMutate('/api/admin/requirements', 'POST', story1),
-        apiMutate('/api/admin/requirements', 'POST', story2),
-        apiMutate('/api/admin/requirements', 'POST', story3),
+        createRequirement(story1),
+        createRequirement(story2),
+        createRequirement(story3),
       ]);
 
       Message.success(t('admin.kanban.ai.success', { defaultValue: '🎉 AI Agent 成功为您拆解出 1 张特性和 3 张级联开发任务卡片并飘入泳道！' }));
       setAiVisible(false);
       setAiInput('');
       await loadRequirements();
-    } catch {
-      Message.error(t('admin.kanban.message.aiFailed', { defaultValue: 'AI 自动拆解失败，请检查数据库配置' }));
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('admin.kanban.message.aiFailed', { defaultValue: 'AI 自动拆解失败，请检查数据库配置' })
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -326,22 +382,18 @@ const AdminKanban: React.FC = () => {
           >
             {t('admin.kanban.button.aiDecompose', { defaultValue: 'AI 需求一键拆单' })}
           </Button>
-          <Button type='outline' onClick={async () => {
-            const json = prompt(t('admin.kanban.batchImportPrompt', { defaultValue: '粘贴需求 JSON 数组:\n[{"type":"story","subject":"标题","description":"描述","priority":"medium","status":"backlog"}]' }), '[{"type":"story","subject":"用户登录","description":"实现LDAP+本地登录","priority":"high","status":"developing"},{"type":"task","subject":"RAG文件上传","description":"支持md/docx/pdf","priority":"urgent","status":"backlog"},{"type":"bug","subject":"修复密码框黑色","description":"企业版登录页输入框黑底","priority":"high","status":"testing"}]');
-            if (!json?.trim()) return;
-            try {
-              const items = JSON.parse(json);
-              if (!Array.isArray(items)) { Message.error('必须是JSON数组'); return; }
-              let count = 0;
-              for (const item of items) {
-                if (!item.subject?.trim()) continue;
-                await apiMutate('/api/admin/requirements', 'POST', { type: item.type||'story', subject: item.subject, description: item.description||'', priority: item.priority||'medium', status: item.status||'backlog', assigned_to: item.assigned_to||null });
-                count++;
-              }
-              Message.success(`成功导入 ${count} 个需求卡片`);
-              await loadRequirements();
-            } catch { Message.error('JSON格式错误'); }
-          }}>{t('admin.kanban.batchImport', { defaultValue: '批量导入' })}</Button>
+          <Button
+            type='outline'
+            onClick={() => {
+              setBatchImportJson(
+                '[\n  {"type":"story","subject":"用户登录","description":"实现LDAP+本地登录","priority":"high","status":"developing"},\n  {"type":"task","subject":"RAG文件上传","description":"支持md/docx/pdf","priority":"urgent","status":"backlog"}\n]'
+              );
+              setBatchImportError(null);
+              setBatchImportVisible(true);
+            }}
+          >
+            {t('admin.kanban.batchImport', { defaultValue: '批量导入' })}
+          </Button>
           <Button type='primary' icon={<Plus />} onClick={() => setCreateVisible(true)}>
             {t('admin.kanban.button.newCard', { defaultValue: '新建卡片' })}
           </Button>
@@ -514,6 +566,31 @@ const AdminKanban: React.FC = () => {
         </Row>
       )}
 
+      <Modal
+        title={t('admin.kanban.batchImport', { defaultValue: '批量导入' })}
+        visible={batchImportVisible}
+        onCancel={() => setBatchImportVisible(false)}
+        onOk={() => void handleBatchImport()}
+        confirmLoading={saving}
+      >
+        <Form layout='vertical'>
+          <Form.Item
+            label={t('admin.kanban.batchImportPrompt', {
+              defaultValue: '粘贴需求 JSON 数组:\n[{"type":"story","subject":"标题","description":"描述","priority":"medium","status":"backlog"}]',
+            })}
+          >
+            <Input.TextArea
+              value={batchImportJson}
+              onChange={setBatchImportJson}
+              autoSize={{ minRows: 8, maxRows: 16 }}
+            />
+          </Form.Item>
+          {batchImportError ? (
+            <Typography.Text type='error'>{batchImportError}</Typography.Text>
+          ) : null}
+        </Form>
+      </Modal>
+
       {/* 新建卡片 Modal */}
       <Modal
         title={t('admin.kanban.modal.newCardTitle', { defaultValue: '创建需求卡片' })}
@@ -590,7 +667,7 @@ const AdminKanban: React.FC = () => {
               value={aiInput}
               onChange={setAiInput}
               placeholder={t('admin.kanban.ai.placeholder', {
-                defaultValue: '例如：在企业版中加一个 RAG 本地知识库。它需要有解析、切片、余弦搜索 playground，还要有 requiresElevation 拦截保护，最后写测试确保没有回归。',
+                defaultValue: '例如：在企业版中加一个 RAG 本地知识库。它需要有解析、切片、余弦搜索 playground，并补齐管理员角色边界与回归测试，最后确保没有回归。',
               })}
               autoSize={{ minRows: 4, maxRows: 8 }}
             />

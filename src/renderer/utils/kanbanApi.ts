@@ -37,11 +37,7 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
       body,
     });
   } catch (e) {
-    const err = e as Error & { code?: string; status?: number };
-    if (err.status === 403 && err.code === 'ENTERPRISE_ELEVATION_REQUIRED') {
-      throw new Error(err.message || 'Enterprise elevation required');
-    }
-    throw err instanceof Error ? err : new Error(String(e));
+    throw e instanceof Error ? e : new Error(String(e));
   }
 }
 

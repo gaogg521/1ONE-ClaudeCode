@@ -56,6 +56,12 @@
   font-family: var(--ep-font-sans);
 }
 
+.guardCard {
+  border: 1px solid var(--ep-border-card);
+  background: var(--ep-bg-card);
+  box-shadow: var(--ep-shadow-sm);
+}
+
 /* ── Header Row ── */
 .headerRow {
   display: flex;

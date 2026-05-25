@@ -29,14 +29,7 @@ const EnterpriseInvitesSection: React.FC = () => {
       const data = await listEnterpriseInvites();
       setRows(data);
     } catch (e) {
-      Message.error(
-        formatWebuiAdminError(
-          e,
-          t('settings.webui.inviteElevationRequired', {
-            defaultValue: '请先在页面顶部完成管理员二次验证后再管理邀请码。',
-          })
-        )
-      );
+      Message.error(formatWebuiAdminError(e));
     } finally {
       setLoading(false);
     }
@@ -61,14 +54,7 @@ const EnterpriseInvitesSection: React.FC = () => {
       );
       await load();
     } catch (e) {
-      Message.error(
-        formatWebuiAdminError(
-          e,
-          t('settings.webui.inviteElevationRequired', {
-            defaultValue: '请先在页面顶部完成管理员二次验证后再管理邀请码。',
-          })
-        )
-      );
+      Message.error(formatWebuiAdminError(e));
     } finally {
       setCreating(false);
     }
@@ -80,14 +66,7 @@ const EnterpriseInvitesSection: React.FC = () => {
       Message.success(t('settings.webui.inviteRevoked', { defaultValue: '邀请码已作废' }));
       await load();
     } catch (e) {
-      Message.error(
-        formatWebuiAdminError(
-          e,
-          t('settings.webui.inviteElevationRequired', {
-            defaultValue: '请先在页面顶部完成管理员二次验证后再管理邀请码。',
-          })
-        )
-      );
+      Message.error(formatWebuiAdminError(e));
     }
   };
 

@@ -1,46 +1,59 @@
 /**
  * CCode Code Repository Management
  */
-import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Card, Empty, Form, Input, Message, Modal, Select, Space, Table, Tag, Typography } from '@arco-design/web-react';
+import React, { useState } from 'react';
+import { Button, Card, Form, Input, Message, Modal, Select, Table, Tag } from '@arco-design/web-react';
 import { Delete, Plus, Refresh } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
-import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
-import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
+import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
+import ModulePageHeader from '@/renderer/pages/admin/components/ModulePageHeader';
 import AdminPageWrapper from '@/renderer/pages/admin/components/AdminPageWrapper';
-
-type CodeRepo = { id: string; name: string; url: string; provider: string; default_branch: string; credential_id: string };
-
-async function api<T>(path: string, opts?: RequestInit): Promise<T> { return fetchWebuiApiJson<T>(path, opts); }
-async function apiMutate<T>(path: string, method: string, payload: Record<string, unknown>): Promise<T> {
-  return api<T>(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withCsrfToken(payload)) });
-}
+import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
+import {
+  createCodeRepo,
+  deleteCodeRepo,
+  listCodeRepos,
+  type CodeRepo,
+} from '@/renderer/utils/enterpriseApi/modules';
 
 const PROVIDERS: Record<string, string> = { gitlab: 'GitLab', github: 'GitHub', gitee: 'Gitee', other: '其他' };
 
 const CCodeRepoList: React.FC = () => {
   const { t } = useTranslation();
-  const [repos, setRepos] = useState<CodeRepo[]>([]);
-  const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [form, setForm] = useState({ name: '', url: '', provider: 'gitlab', credential_id: '', default_branch: 'main' });
   const [saving, setSaving] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try { const res = await api<{ success: boolean; data: CodeRepo[] }>('/api/admin/code-repos'); if (res?.success) setRepos(res.data ?? []); } catch { /* ignore */ } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { void load(); }, [load]);
+  const reposState = useEnterpriseAsyncData(listCodeRepos, [], '加载代码仓库失败');
 
   const handleCreate = async () => {
-    if (!form.name.trim() || !form.url.trim()) { Message.warning('名称和URL不能为空'); return; }
+    if (!form.name.trim() || !form.url.trim()) {
+      Message.warning('名称和URL不能为空');
+      return;
+    }
     setSaving(true);
-    try { await apiMutate('/api/admin/code-repos', 'POST', form); Message.success('已绑定'); setModalVisible(false); setForm({ name: '', url: '', provider: 'gitlab', credential_id: '', default_branch: 'main' }); await load(); }
-    catch { Message.error('绑定失败'); } finally { setSaving(false); }
+    try {
+      await createCodeRepo(form);
+      Message.success('已绑定');
+      setModalVisible(false);
+      setForm({ name: '', url: '', provider: 'gitlab', credential_id: '', default_branch: 'main' });
+      await reposState.reload();
+    } catch (error) {
+      Message.error(getEnterpriseActionError(error, '绑定代码仓库失败'));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = async (id: string) => { try { await apiMutate(`/api/admin/code-repos/${id}`, 'DELETE', {}); await load(); } catch { /* ignore */ } };
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteCodeRepo(id);
+      Message.success('已删除');
+      await reposState.reload();
+    } catch (error) {
+      Message.error(getEnterpriseActionError(error, '删除代码仓库失败'));
+    }
+  };
 
   const columns = [
     { title: '名称', dataIndex: 'name' },
@@ -52,11 +65,36 @@ const CCodeRepoList: React.FC = () => {
 
   return (
     <AdminPageWrapper>
-      <div className='flex items-center justify-between mb-16px'><div><Typography.Title heading={5} className='mt-0 mb-4px'>CCode 代码库</Typography.Title><Typography.Paragraph type='secondary' className='mb-0 text-13px'>统一绑定 GitLab / GitHub / Gitee 代码仓库，支持 MR 管理与代码搜索</Typography.Paragraph></div>
-        <Space><Button icon={<Refresh />} onClick={() => void load()}>刷新</Button><Button type='primary' icon={<Plus />} onClick={() => setModalVisible(true)}>绑定代码仓库</Button></Space>
-      </div>
+      <ModulePageHeader
+        title='CCode 代码库'
+        description='统一绑定 GitLab / GitHub / Gitee 代码仓库，支持 MR 管理与代码搜索'
+        actions={
+          <>
+            <Button icon={<Refresh />} onClick={() => void reposState.reload()}>
+              刷新
+            </Button>
+            <Button type='primary' icon={<Plus />} onClick={() => setModalVisible(true)}>
+              绑定代码仓库
+            </Button>
+          </>
+        }
+      />
       <Card bordered={false} className='rd-12px'>
-        {repos.length === 0 && !loading ? <Empty description='暂无绑定的代码仓库' /> : <Table loading={loading} data={repos} rowKey='id' columns={columns} pagination={false} size='small' border={false} />}
+        <ModuleDataState
+          loading={reposState.loading}
+          error={reposState.error}
+          empty={reposState.data.length === 0}
+          emptyDescription='暂无绑定的代码仓库'
+        >
+          <Table
+            data={reposState.data}
+            rowKey='id'
+            columns={columns}
+            pagination={false}
+            size='small'
+            border={false}
+          />
+        </ModuleDataState>
       </Card>
       <Modal title='绑定代码仓库' visible={modalVisible} onCancel={() => setModalVisible(false)} onOk={handleCreate} confirmLoading={saving} okText='绑定' cancelText='取消'>
         <Form layout='vertical'>

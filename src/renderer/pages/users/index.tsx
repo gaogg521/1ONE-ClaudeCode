@@ -51,7 +51,7 @@ function meRowForProfile(m: { id: string; username: string; role?: string }): Ad
 }
 
 type UsersPageProps = {
-  /** full = list all users (after enterprise elevation); profile = current user only */
+  /** full = list all users; profile = current user only */
   enterpriseAccess?: 'full' | 'profile';
 };
 

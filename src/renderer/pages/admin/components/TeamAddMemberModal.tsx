@@ -7,8 +7,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Form, Input, Message, Modal, Radio, Select, Space, Spin, Table } from '@arco-design/web-react';
 import { adminApi, type AdminUser } from '@/renderer/utils/kanbanApi';
-import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
-import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
+import {
+  enterpriseGet,
+  enterpriseMutate,
+  getEnterpriseActionError,
+} from '@/renderer/utils/enterpriseApi/client';
 
 export type TeamMemberRole = 'owner' | 'admin' | 'member' | 'viewer';
 
@@ -26,14 +29,6 @@ type TeamAddMemberModalProps = {
   onCancel: () => void;
   onConfirm: (userId: string, role: TeamMemberRole) => Promise<void>;
 };
-
-async function apiMutate<T>(path: string, method: string, payload: Record<string, unknown>): Promise<T> {
-  return fetchWebuiApiJson<T>(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(withCsrfToken(payload)),
-  });
-}
 
 const ROLE_OPTIONS: Array<{ value: TeamMemberRole; label: string }> = [
   { value: 'owner', label: 'Owner' },
@@ -75,14 +70,14 @@ const TeamAddMemberModal: React.FC<TeamAddMemberModalProps> = ({
     setUsersLoading(true);
     Promise.all([
       adminApi.listUsers(),
-      fetchWebuiApiJson<{ enabled: number }>('/api/admin/auth/providers/ldap').catch(() => ({ enabled: 0 })),
+      enterpriseGet<{ enabled: number }>('/api/admin/auth/providers/ldap').catch(() => ({ enabled: 0 })),
     ])
       .then(([users, ldap]) => {
         setAdminUsers(users ?? []);
         setLdapEnabled(Boolean(ldap?.enabled));
       })
       .catch((e) => {
-        Message.error(e instanceof Error ? e.message : '加载用户列表失败');
+        Message.error(getEnterpriseActionError(e, '加载用户列表失败'));
       })
       .finally(() => setUsersLoading(false));
   }, [visible]);
@@ -108,14 +103,18 @@ const TeamAddMemberModal: React.FC<TeamAddMemberModalProps> = ({
     }
     setLdapSearching(true);
     try {
-      const data = await apiMutate<LdapDirectoryEntry[]>('/api/admin/ldap/users/search', 'POST', { query: q, limit: 30 });
+      const data = await enterpriseMutate<LdapDirectoryEntry[]>(
+        '/api/admin/ldap/users/search',
+        'POST',
+        { query: q, limit: 30 }
+      );
       setLdapResults(data ?? []);
       setSelectedLdapDn('');
       if (!data?.length) {
         Message.info('未找到匹配的目录用户');
       }
     } catch (e) {
-      Message.error(e instanceof Error ? e.message : 'LDAP 搜索失败');
+      Message.error(getEnterpriseActionError(e, 'LDAP 搜索失败'));
       setLdapResults([]);
     } finally {
       setLdapSearching(false);
@@ -139,7 +138,7 @@ const TeamAddMemberModal: React.FC<TeamAddMemberModalProps> = ({
         return;
       }
 
-      const resolved = await apiMutate<{ userId: string; username: string; created: boolean }>(
+      const resolved = await enterpriseMutate<{ userId: string; username: string; created: boolean }>(
         '/api/admin/ldap/users/resolve',
         'POST',
         { dn: entry.dn, username: entry.username }
@@ -153,7 +152,7 @@ const TeamAddMemberModal: React.FC<TeamAddMemberModalProps> = ({
         Message.info(`已创建本地账号「${resolved.username}」并绑定 LDAP`);
       }
     } catch (e) {
-      Message.error(e instanceof Error ? e.message : '添加成员失败');
+      Message.error(getEnterpriseActionError(e, '添加成员失败'));
     }
   }, [ldapResults, localUserId, memberUserIds, onConfirm, role, selectedLdapDn, source]);
 

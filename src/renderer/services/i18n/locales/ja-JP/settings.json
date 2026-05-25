@@ -913,5 +913,15 @@
     "pendingTimeout": "承認リクエストの期限が切れました（5分）。再試行してください。",
     "pendingCancel": "キャンセル",
     "pendingTimeRemaining": "残り時間：{{time}}"
+  },
+  "authProviders": {
+    "enterprisePageTitle": "認証とメール",
+    "enterprisePageDesc": "企業向けサインイン連携と組織メール送信基盤を 1 か所で管理し、メール設定も認証プロバイダーと同じ階層で扱います。",
+    "authSectionTitle": "認証センター",
+    "mailSectionTitle": "メールセンター",
+    "tabSmtp": "メール設定",
+    "feishuBindingHint": "Feishu 設定を保存した後、User Management でローカルユーザーに union_id / open_id を紐付けないと OAuth コールバックは拒否されます。",
+    "feishuRedirectHint": "Feishu から到達できるコールバック URL を入力してください。localhost は使用せず、LAN IP または実ドメインを利用してください。",
+    "feishuRedirectPlaceholder": "http://your-lan-ip:25809/api/auth/feishu/callback"
   }
 }

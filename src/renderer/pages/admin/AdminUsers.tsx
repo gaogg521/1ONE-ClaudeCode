@@ -18,8 +18,7 @@ const AdminUsers: React.FC = () => {
       </div>
     );
   }
-  const enterpriseAccess = gate.eligible && gate.elevated ? 'full' : 'profile';
-  return <UsersPage enterpriseAccess={enterpriseAccess} />;
+  return <UsersPage enterpriseAccess='full' />;
 };
 
 export default AdminUsers;

@@ -5,33 +5,55 @@
  */
 
 import {
-  ENTERPRISE_ADMIN_HOME_PATH,
   ENTERPRISE_JOIN_PATH,
   ENTERPRISE_WORKSPACE_PATH,
 } from '@/common/auth/enterpriseRoles';
+import {
+  ENTERPRISE_AUTH_PATH,
+  ENTERPRISE_CAGENT_PATH,
+  ENTERPRISE_CCODE_PATH,
+  ENTERPRISE_CFLOW_PATH,
+  ENTERPRISE_CMEAS_PATH,
+  ENTERPRISE_CPACK_PATH,
+  ENTERPRISE_CTEAM_PATH,
+  ENTERPRISE_CTEST_PATH,
+  ENTERPRISE_HOME_PATH,
+  ENTERPRISE_INVITES_PATH,
+  ENTERPRISE_KANBAN_PATH,
+  ENTERPRISE_MCP_PATH,
+  ENTERPRISE_MILESTONES_PATH,
+  ENTERPRISE_PIPELINE_EDITOR_PATH,
+  ENTERPRISE_RAG_PATH,
+  ENTERPRISE_SECURITY_PATH,
+  ENTERPRISE_SKILLS_PATH,
+  ENTERPRISE_TEAMS_PATH,
+  ENTERPRISE_USAGE_PATH,
+  ENTERPRISE_USERS_PATH,
+} from '@/common/auth/enterpriseRoutes';
 
 export { ENTERPRISE_JOIN_PATH, ENTERPRISE_WORKSPACE_PATH };
-
-/** 组织管理后台首页 */
-export const ENTERPRISE_HOME_PATH = ENTERPRISE_ADMIN_HOME_PATH;
-
-export const ENTERPRISE_USERS_PATH = '/enterprise/users';
-export const ENTERPRISE_TEAMS_PATH = '/enterprise/teams';
-export const ENTERPRISE_AUTH_PATH = '/enterprise/auth';
-export const ENTERPRISE_INVITES_PATH = '/enterprise/invites';
-export const ENTERPRISE_KANBAN_PATH = '/enterprise/kanban';
-export const ENTERPRISE_RAG_PATH = '/enterprise/rag';
-export const ENTERPRISE_MCP_PATH = '/enterprise/mcp';
-export const ENTERPRISE_SKILLS_PATH = '/enterprise/skills';
-export const ENTERPRISE_PIPELINE_EDITOR_PATH = '/enterprise/pipeline-editor';
-export const ENTERPRISE_MILESTONES_PATH = '/enterprise/milestones';
-export const ENTERPRISE_CPACK_PATH = '/enterprise/cpack';
-export const ENTERPRISE_CCODE_PATH = '/enterprise/ccode';
-export const ENTERPRISE_CMEAS_PATH = '/enterprise/cmeas';
-export const ENTERPRISE_CTEST_PATH = '/enterprise/ctest';
-export const ENTERPRISE_CFLOW_PATH = '/enterprise/cflow';
-export const ENTERPRISE_USAGE_PATH = '/enterprise/usage';
-export const ENTERPRISE_SECURITY_PATH = '/enterprise/security';
+export {
+  ENTERPRISE_AUTH_PATH,
+  ENTERPRISE_CAGENT_PATH,
+  ENTERPRISE_CCODE_PATH,
+  ENTERPRISE_CFLOW_PATH,
+  ENTERPRISE_CMEAS_PATH,
+  ENTERPRISE_CPACK_PATH,
+  ENTERPRISE_CTEAM_PATH,
+  ENTERPRISE_CTEST_PATH,
+  ENTERPRISE_HOME_PATH,
+  ENTERPRISE_INVITES_PATH,
+  ENTERPRISE_KANBAN_PATH,
+  ENTERPRISE_MCP_PATH,
+  ENTERPRISE_MILESTONES_PATH,
+  ENTERPRISE_PIPELINE_EDITOR_PATH,
+  ENTERPRISE_RAG_PATH,
+  ENTERPRISE_SECURITY_PATH,
+  ENTERPRISE_SKILLS_PATH,
+  ENTERPRISE_TEAMS_PATH,
+  ENTERPRISE_USAGE_PATH,
+  ENTERPRISE_USERS_PATH,
+};
 
 /** Legacy settings-scoped enterprise URLs (redirect targets). */
 export const LEGACY_ENTERPRISE_PREFIX = '/settings/enterprise';

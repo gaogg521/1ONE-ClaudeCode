@@ -1,65 +1,93 @@
 /**
  * CTest Test Management
  */
-import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Card, Empty, Form, Input, Message, Modal, Select, Space, Table, Tag, Typography } from '@arco-design/web-react';
-import { Delete, Plus, Refresh } from '@icon-park/react';
+import React, { useCallback, useState } from 'react';
+import { Button, Card, Form, Input, Message, Modal, Space, Table, Tag } from '@arco-design/web-react';
+import { Plus, Refresh } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
-import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
-import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
+import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
+import ModulePageHeader from '@/renderer/pages/admin/components/ModulePageHeader';
 import AdminPageWrapper from '@/renderer/pages/admin/components/AdminPageWrapper';
-
-type TestPlan = { id: string; name: string; description: string; linked_requirement_id: string; status: string };
-type TestCase = { id: string; plan_id: string; subject: string; steps: string; expected: string; status: string; assigned_to: string };
-
-async function api<T>(path: string, opts?: RequestInit): Promise<T> { return fetchWebuiApiJson<T>(path, opts); }
-async function apiMutate<T>(path: string, method: string, payload: Record<string, unknown>): Promise<T> {
-  return api<T>(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withCsrfToken(payload)) });
-}
+import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
+import {
+  createTestCase,
+  createTestPlan,
+  listTestCases,
+  listTestPlans,
+  type TestCaseRecord,
+  type TestPlan,
+} from '@/renderer/utils/enterpriseApi/modules';
 
 const CTestManagement: React.FC = () => {
   const { t } = useTranslation();
-  const [plans, setPlans] = useState<TestPlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<TestPlan | null>(null);
-  const [cases, setCases] = useState<TestCase[]>([]);
-  const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [caseModalVisible, setCaseModalVisible] = useState(false);
   const [form, setForm] = useState({ name: '', description: '', linked_requirement_id: '' });
   const [caseForm, setCaseForm] = useState({ subject: '', steps: '', expected: '', assigned_to: '' });
   const [saving, setSaving] = useState(false);
-
-  const loadPlans = useCallback(async () => {
-    setLoading(true);
-    try { const res = await api<{ success: boolean; data: TestPlan[] }>('/api/admin/test-plans'); if (res?.success) setPlans(res.data ?? []); }
-    catch { /* ignore */ } finally { setLoading(false); }
-  }, []);
-
-  const loadCases = useCallback(async (planId: string) => {
-    try { const res = await api<{ success: boolean; data: TestCase[] }>(`/api/admin/test-cases?planId=${planId}`); if (res?.success) setCases(res.data ?? []); }
-    catch { /* ignore */ }
-  }, []);
-
-  useEffect(() => { void loadPlans(); }, [loadPlans]);
+  const plansState = useEnterpriseAsyncData(listTestPlans, [], '加载测试计划失败');
+  const casesState = useEnterpriseAsyncData<TestCaseRecord[]>(
+    useCallback(async () => {
+      if (!selectedPlan) {
+        return [];
+      }
+      return listTestCases(selectedPlan.id);
+    }, [selectedPlan]),
+    [],
+    '加载测试用例失败'
+  );
 
   const handleCreatePlan = async () => {
-    if (!form.name.trim()) { Message.warning('名称不能为空'); return; }
+    if (!form.name.trim()) {
+      Message.warning('名称不能为空');
+      return;
+    }
     setSaving(true);
-    try { await apiMutate('/api/admin/test-plans', 'POST', form); Message.success('已创建'); setModalVisible(false); setForm({ name: '', description: '', linked_requirement_id: '' }); await loadPlans(); }
-    catch { Message.error('创建失败'); } finally { setSaving(false); }
+    try {
+      await createTestPlan(form);
+      Message.success('已创建');
+      setModalVisible(false);
+      setForm({ name: '', description: '', linked_requirement_id: '' });
+      await plansState.reload();
+    } catch (error) {
+      Message.error(getEnterpriseActionError(error, '创建测试计划失败'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCreateCase = async () => {
-    if (!selectedPlan || !caseForm.subject.trim()) { Message.warning('标题不能为空'); return; }
+    if (!selectedPlan || !caseForm.subject.trim()) {
+      Message.warning('标题不能为空');
+      return;
+    }
     setSaving(true);
-    try { await apiMutate('/api/admin/test-cases', 'POST', { ...caseForm, plan_id: selectedPlan.id }); Message.success('已添加用例'); setCaseModalVisible(false); setCaseForm({ subject: '', steps: '', expected: '', assigned_to: '' }); await loadCases(selectedPlan.id); }
-    catch { Message.error('添加失败'); } finally { setSaving(false); }
+    try {
+      await createTestCase({ ...caseForm, plan_id: selectedPlan.id });
+      Message.success('已添加用例');
+      setCaseModalVisible(false);
+      setCaseForm({ subject: '', steps: '', expected: '', assigned_to: '' });
+      await casesState.reload();
+    } catch (error) {
+      Message.error(getEnterpriseActionError(error, '添加测试用例失败'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const planColumns = [
     { title: '名称', dataIndex: 'name' },
     { title: '状态', dataIndex: 'status', render: (v: string) => <Tag color={v === 'active' ? 'green' : 'gray'}>{v}</Tag> },
-    { title: '操作', render: (_: unknown, r: TestPlan) => <Button size='mini' onClick={() => { setSelectedPlan(r); void loadCases(r.id); }}>管理用例</Button> },
+    {
+      title: '操作',
+      render: (_: unknown, r: TestPlan) => (
+        <Button size='mini' onClick={() => setSelectedPlan(r)}>
+          管理用例
+        </Button>
+      ),
+    },
   ];
 
   const caseColumns = [
@@ -71,15 +99,65 @@ const CTestManagement: React.FC = () => {
 
   return (
     <AdminPageWrapper>
-      <div className='flex items-center justify-between mb-16px'><div><Typography.Title heading={5} className='mt-0 mb-4px'>CTest 测试管理</Typography.Title><Typography.Paragraph type='secondary' className='mb-0 text-13px'>测试计划、用例编写与持续测试</Typography.Paragraph></div>
-        <Space><Button icon={<Refresh />} onClick={() => void loadPlans()}>刷新</Button><Button type='primary' icon={<Plus />} onClick={() => setModalVisible(true)}>新建测试计划</Button></Space>
-      </div>
+      <ModulePageHeader
+        title='CTest 测试管理'
+        description='测试计划、用例编写与持续测试'
+        actions={
+          <>
+            <Button icon={<Refresh />} onClick={() => void plansState.reload()}>
+              刷新
+            </Button>
+            <Button type='primary' icon={<Plus />} onClick={() => setModalVisible(true)}>
+              新建测试计划
+            </Button>
+          </>
+        }
+      />
       <div className='grid grid-cols-1 lg:grid-cols-2 gap-16px'>
         <Card bordered={false} className='rd-12px' title='测试计划'>
-          {plans.length === 0 ? <Empty description='暂无计划' /> : <Table loading={loading} data={plans} rowKey='id' columns={planColumns} pagination={false} size='small' border={false} />}
+          <ModuleDataState
+            loading={plansState.loading}
+            error={plansState.error}
+            empty={plansState.data.length === 0}
+            emptyDescription='暂无计划'
+          >
+            <Table
+              data={plansState.data}
+              rowKey='id'
+              columns={planColumns}
+              pagination={false}
+              size='small'
+              border={false}
+            />
+          </ModuleDataState>
         </Card>
         <Card bordered={false} className='rd-12px' title={selectedPlan ? `用例: ${selectedPlan.name}` : '测试用例'} extra={selectedPlan ? <Button size='mini' icon={<Plus />} onClick={() => setCaseModalVisible(true)}>添加用例</Button> : null}>
-          {!selectedPlan ? <Empty description='选择左侧测试计划' /> : cases.length === 0 ? <Empty description='暂无用例' /> : <Table data={cases} rowKey='id' columns={caseColumns} pagination={false} size='small' border={false} />}
+          {!selectedPlan ? (
+            <ModuleDataState
+              loading={false}
+              error={null}
+              empty={true}
+              emptyDescription='选择左侧测试计划'
+            >
+              <></>
+            </ModuleDataState>
+          ) : (
+            <ModuleDataState
+              loading={casesState.loading}
+              error={casesState.error}
+              empty={casesState.data.length === 0}
+              emptyDescription='暂无用例'
+            >
+              <Table
+                data={casesState.data}
+                rowKey='id'
+                columns={caseColumns}
+                pagination={false}
+                size='small'
+                border={false}
+              />
+            </ModuleDataState>
+          )}
         </Card>
       </div>
       <Modal title='新建测试计划' visible={modalVisible} onCancel={() => setModalVisible(false)} onOk={handleCreatePlan} confirmLoading={saving} okText='创建' cancelText='取消'>

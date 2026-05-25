@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
+  Alert,
   Button,
   Card,
   Form,
@@ -22,15 +23,20 @@ import {
 } from '@arco-design/web-react';
 import { Delete, Edit, Plus } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
-import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
-import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
+import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
 import AdminPageWrapper from './components/AdminPageWrapper';
+import ModuleDataState from './components/ModuleDataState';
+import ModulePageHeader from './components/ModulePageHeader';
+import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
+import {
+  deleteMcpRegistry,
+  importMcpRegistryBatch,
+  listMcpRegistry,
+  saveMcpRegistry,
+  type McpRegistryRecord,
+} from '@/renderer/utils/enterpriseApi/modules';
 
-type McpConnector = {
-  id: string;
-  name: string;
-  type: 'stdio' | 'sse';
-  endpoint: string;
+type McpConnector = McpRegistryRecord & {
   enabled: boolean;
   hasKeys: boolean;
 };
@@ -40,28 +46,17 @@ type EnvItem = {
   value: string;
 };
 
-async function api<T>(path: string, opts?: RequestInit): Promise<T> {
-  return fetchWebuiApiJson<T>(path, opts);
-}
-
-async function apiMutate<T>(path: string, method: string, payload: Record<string, unknown>): Promise<T> {
-  return api<T>(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(withCsrfToken(payload)),
-  });
-}
-
 const AdminMcp: React.FC = () => {
   const { t } = useTranslation();
-  const [connectors, setConnectors] = useState<McpConnector[]>([]);
-  const [loading, setLoading] = useState(true);
-
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
+  const [batchVisible, setBatchVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [batchSaving, setBatchSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [mcpType, setMcpType] = useState<'stdio' | 'sse'>('stdio');
+  const [batchJson, setBatchJson] = useState('');
+  const [batchError, setBatchError] = useState<string | null>(null);
 
   // Form instance
   const [form] = Form.useForm<{
@@ -74,23 +69,18 @@ const AdminMcp: React.FC = () => {
   // Custom environment variables state
   const [envList, setEnvList] = useState<EnvItem[]>([]);
 
-  const loadConnectors = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await api<McpConnector[]>('/api/admin/mcp/registry');
-      setConnectors(data ?? []);
-    } catch (e) {
-      Message.error(
-        e instanceof Error ? e.message : t('admin.mcp.messages.loadFailed', { defaultValue: '加载 MCP 服务失败' })
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    void loadConnectors();
-  }, [loadConnectors]);
+  const connectorsState = useEnterpriseAsyncData<McpConnector[]>(
+    useCallback(async () => {
+      const rows = await listMcpRegistry();
+      return (rows ?? []).map((row) => ({
+        ...row,
+        enabled: Boolean(row.enabled),
+        hasKeys: Boolean(row.hasKeys),
+      }));
+    }, []),
+    [],
+    t('admin.mcp.messages.loadFailed', { defaultValue: '加载 MCP 服务失败' })
+  );
 
   const handleOpenAdd = () => {
     setEditingId(null);
@@ -135,7 +125,7 @@ const AdminMcp: React.FC = () => {
         }
       }
 
-      await apiMutate('/api/admin/mcp/registry', 'POST', {
+      await saveMcpRegistry({
         ...(editingId ? { id: editingId } : {}),
         name: values.name.trim(),
         type: values.type,
@@ -148,43 +138,35 @@ const AdminMcp: React.FC = () => {
       setModalVisible(false);
       form.resetFields();
       setEnvList([]);
-      await loadConnectors();
+      await connectorsState.reload();
     } catch (e) {
       if (e && typeof e === 'object' && 'name' in e) {
         // Validation error
         return;
       }
-      Message.error(
-        e instanceof Error ? e.message : t('admin.mcp.messages.saveFailed', { defaultValue: '保存 MCP 服务失败' })
-      );
+      Message.error(getEnterpriseActionError(e, t('admin.mcp.messages.saveFailed', { defaultValue: '保存 MCP 服务失败' })));
     } finally {
       setSaving(false);
     }
-  }, [editingId, envList, form, loadConnectors, t]);
+  }, [connectorsState, editingId, envList, form, t]);
 
   const handleDelete = useCallback(
     async (id: string) => {
       try {
-        await api<void>(`/api/admin/mcp/registry/${encodeURIComponent(id)}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(withCsrfToken({})),
-        });
+        await deleteMcpRegistry(encodeURIComponent(id));
         Message.success(t('admin.mcp.messages.deleteSuccess', { defaultValue: '删除 MCP 服务成功' }));
-        await loadConnectors();
+        await connectorsState.reload();
       } catch (e) {
-        Message.error(
-          e instanceof Error ? e.message : t('admin.mcp.messages.deleteFailed', { defaultValue: '删除 MCP 服务失败' })
-        );
+        Message.error(getEnterpriseActionError(e, t('admin.mcp.messages.deleteFailed', { defaultValue: '删除 MCP 服务失败' })));
       }
     },
-    [loadConnectors, t]
+    [connectorsState, t]
   );
 
   const handleToggleStatus = useCallback(
     async (record: McpConnector, checked: boolean) => {
       try {
-        await apiMutate('/api/admin/mcp/registry', 'POST', {
+        await saveMcpRegistry({
           id: record.id,
           name: record.name,
           type: record.type,
@@ -193,13 +175,38 @@ const AdminMcp: React.FC = () => {
           env: {}, // Maintain existing env credentials
         });
         Message.success(t('admin.mcp.messages.saveSuccess', { defaultValue: '状态更新成功' }));
-        await loadConnectors();
+        await connectorsState.reload();
       } catch (e) {
-        Message.error(e instanceof Error ? e.message : 'Failed to update status');
+        Message.error(getEnterpriseActionError(e, 'Failed to update status'));
       }
     },
-    [loadConnectors]
+    [connectorsState]
   );
+
+  const handleBatchImport = useCallback(async () => {
+    try {
+      const items = JSON.parse(batchJson);
+      if (!Array.isArray(items)) {
+        setBatchError('必须是JSON数组');
+        return;
+      }
+      setBatchSaving(true);
+      setBatchError(null);
+      const result = await importMcpRegistryBatch(items);
+      Message.success(`成功导入 ${result.count ?? items.length} 个MCP工具`);
+      setBatchVisible(false);
+      setBatchJson('');
+      await connectorsState.reload();
+    } catch (error) {
+      setBatchError(
+        error instanceof SyntaxError
+          ? 'JSON格式错误'
+          : getEnterpriseActionError(error, '导入失败')
+      );
+    } finally {
+      setBatchSaving(false);
+    }
+  }, [batchJson, connectorsState]);
 
   const handleAddEnvRow = () => {
     setEnvList([...envList, { key: '', value: '' }]);
@@ -291,48 +298,51 @@ const AdminMcp: React.FC = () => {
   return (
     <AdminPageWrapper>
       <div className='max-w-1200px mx-auto flex flex-col gap-24px'>
-        {/* Header */}
-        <div className='flex justify-between items-center flex-wrap gap-12px'>
-          <div>
-            <Typography.Title heading={4} style={{ margin: 0 }}>
-              {t('admin.mcp.title', { defaultValue: 'MCP 代理注册' })}
-            </Typography.Title>
-            <Typography.Paragraph type='secondary' style={{ margin: '4px 0 0 0' }}>
-              {t('admin.mcp.desc', {
-                defaultValue: '注册并管理企业内部 Model Context Protocol (MCP) 代理服务器。支持配置 Stdio 或 SSE 服务，并加密托管环境变量。',
-              })}
-            </Typography.Paragraph>
-          </div>
-          <Space>
-            <Button type='outline' onClick={async () => {
-              const json = prompt('粘贴 MCP 工具 JSON 数组:\n[{"name":"工具名","type":"sse","endpoint":"http://..."}]', '[{"name":"Jira Connector","type":"sse","endpoint":"https://jira.example.com/mcp"},{"name":"GitLab Agent","type":"sse","endpoint":"https://gitlab.example.com/mcp"},{"name":"Local DB","type":"stdio","endpoint":"sqlite3"}]');
-              if (!json?.trim()) return;
-              try {
-                const items = JSON.parse(json);
-                if (!Array.isArray(items)) { Message.error('必须是JSON数组'); return; }
-                const res = await apiMutate<{success:boolean;data:{count:number}}>('/api/admin/mcp/batch', 'POST', { items });
-                if (res?.success) { Message.success(`成功导入 ${res.data?.count??items.length} 个MCP工具`); await loadConnectors(); }
-              } catch { Message.error('JSON格式错误'); }
-            }}>{t('admin.mcp.batchImport', { defaultValue: '批量导入' })}</Button>
-            <Button
-              type='primary'
-              icon={<Plus theme='outline' size={16} />}
-              onClick={handleOpenAdd}
-          >
-            {t('admin.mcp.addConnector', { defaultValue: '注册服务' })}
-          </Button>
-          </Space>
-        </div>
+        <ModulePageHeader
+          title={t('admin.mcp.title', { defaultValue: 'MCP 代理注册' })}
+          description={t('admin.mcp.desc', {
+            defaultValue: '注册并管理企业内部 Model Context Protocol (MCP) 代理服务器。支持配置 Stdio 或 SSE 服务，并加密托管环境变量。',
+          })}
+          actions={
+            <>
+              <Button
+                type='outline'
+                onClick={() => {
+                  setBatchJson(
+                    '[\n  {"name":"Jira Connector","type":"sse","endpoint":"https://jira.example.com/mcp"},\n  {"name":"GitLab Agent","type":"sse","endpoint":"https://gitlab.example.com/mcp"}\n]'
+                  );
+                  setBatchError(null);
+                  setBatchVisible(true);
+                }}
+              >
+                {t('admin.mcp.batchImport', { defaultValue: '批量导入' })}
+              </Button>
+              <Button
+                type='primary'
+                icon={<Plus theme='outline' size={16} />}
+                onClick={handleOpenAdd}
+              >
+                {t('admin.mcp.addConnector', { defaultValue: '注册服务' })}
+              </Button>
+            </>
+          }
+        />
 
         {/* Connectors Table Card */}
         <Card bordered={false}>
-          <Table
-            loading={loading}
-            rowKey='id'
-            columns={columns}
-            data={connectors}
-            pagination={false}
-          />
+          <ModuleDataState
+            loading={connectorsState.loading}
+            error={connectorsState.error}
+            empty={connectorsState.data.length === 0}
+            emptyDescription={t('admin.mcp.empty', { defaultValue: '暂无 MCP 服务，点击上方开始注册。' })}
+          >
+            <Table
+              rowKey='id'
+              columns={columns}
+              data={connectorsState.data}
+              pagination={false}
+            />
+          </ModuleDataState>
         </Card>
 
         {/* Save/Edit Modal */}
@@ -427,7 +437,7 @@ const AdminMcp: React.FC = () => {
                       <Input.Password
                         style={{ flex: 2 }}
                         placeholder={
-                          editingId && connectors.find((c) => c.id === editingId)?.hasKeys
+                          editingId && connectorsState.data.find((c) => c.id === editingId)?.hasKeys
                             ? t('admin.mcp.modal.envValuePlaceholderSaved', { defaultValue: '****** (保留已保存的值)' })
                             : t('admin.mcp.modal.envValue', { defaultValue: '凭证值 (Value)' })
                         }
@@ -450,6 +460,25 @@ const AdminMcp: React.FC = () => {
                 </div>
               )}
             </div>
+          </Form>
+        </Modal>
+
+        <Modal
+          title={t('admin.mcp.batchImport', { defaultValue: '批量导入 MCP 工具' })}
+          visible={batchVisible}
+          onCancel={() => setBatchVisible(false)}
+          onOk={() => void handleBatchImport()}
+          okButtonProps={{ loading: batchSaving }}
+        >
+          <Form layout='vertical'>
+            <Form.Item label='JSON (数组)'>
+              <Input.TextArea
+                value={batchJson}
+                onChange={setBatchJson}
+                autoSize={{ minRows: 8, maxRows: 16 }}
+              />
+            </Form.Item>
+            {batchError ? <Alert type='error' content={batchError} /> : null}
           </Form>
         </Modal>
       </div>

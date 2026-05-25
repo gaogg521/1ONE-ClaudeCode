@@ -911,5 +911,15 @@
     "pendingTimeout": "Onay isteği süresi doldu (5 dakika). Lütfen tekrar deneyin.",
     "pendingCancel": "İptal",
     "pendingTimeRemaining": "Kalan süre: {{time}}"
+  },
+  "authProviders": {
+    "enterprisePageTitle": "Kimlik doğrulama ve e-posta",
+    "enterprisePageDesc": "Kurumsal oturum açma sağlayıcılarını ve organizasyon e-posta altyapısını tek yerde yönetin; e-posta yapılandırması da kimlik sağlayıcılarıyla aynı düzeyde yer alır.",
+    "authSectionTitle": "Kimlik doğrulama merkezi",
+    "mailSectionTitle": "E-posta merkezi",
+    "tabSmtp": "E-posta yapılandırması",
+    "feishuBindingHint": "Feishu yapılandırmasını kaydettikten sonra, User Management içinde yerel kullanıcıya union_id / open_id bağlamazsanız OAuth callback reddedilir.",
+    "feishuRedirectHint": "Feishu'nun erişebileceği bir callback URL girin. localhost kullanmayın; LAN IP'si veya gerçek alan adı tercih edin.",
+    "feishuRedirectPlaceholder": "http://your-lan-ip:25809/api/auth/feishu/callback"
   }
 }

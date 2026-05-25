@@ -87,7 +87,7 @@ const EditionWorkspaceGuide: React.FC = () => {
         }),
         body: t('settings.edition.guideJoinedPersonalBody', {
           defaultValue:
-            '您已是企业成员（{{tenant}}），但标题栏仍为「个人版」，侧栏不会显示「团队」。切换到「企业版」后以公司身份使用，并启用团队协作。',
+            '您已是企业成员（{{tenant}}），当前仍为「个人版」视图。主工作台里的团队协同与企业能力入口已经可用；若切换到「企业版」，则会以公司身份作为默认工作上下文。',
           tenant: tenantLabel,
         }),
       };

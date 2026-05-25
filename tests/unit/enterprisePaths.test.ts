@@ -5,7 +5,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { enterpriseNavKeyFromPath } from '@/renderer/pages/enterprise/enterpriseNav';
+import {
+  ENTERPRISE_NAV_ITEMS,
+  enterpriseNavKeyFromPath,
+  getVisibleEnterpriseNavItems,
+} from '@/renderer/pages/enterprise/enterpriseNav';
 import {
   ENTERPRISE_HOME_PATH,
   isEnterpriseConsolePath,
@@ -35,5 +39,22 @@ describe('enterprise paths', () => {
     expect(enterpriseNavKeyFromPath('/enterprise/auth')).toBe('auth');
     expect(enterpriseNavKeyFromPath('/enterprise/teams')).toBe('teams');
     expect(enterpriseNavKeyFromPath('/enterprise/invites')).toBe('invites');
+    expect(enterpriseNavKeyFromPath('/enterprise/kanban')).toBe('cteam');
+  });
+
+  it('filters nav items by current role', () => {
+    expect(getVisibleEnterpriseNavItems('member', false).map((item) => item.key)).toEqual([
+      'home',
+      'users',
+      'cagent',
+    ]);
+
+    expect(getVisibleEnterpriseNavItems('org_admin', false).map((item) => item.key)).toContain(
+      'teams'
+    );
+  });
+
+  it('does not require secondary verification for enterprise navigation items', () => {
+    expect(ENTERPRISE_NAV_ITEMS.every((item) => item.requiresElevation === false)).toBe(true);
   });
 });

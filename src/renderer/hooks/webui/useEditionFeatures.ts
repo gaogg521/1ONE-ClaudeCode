@@ -14,7 +14,7 @@ export type EditionFeatures = {
   isEnterpriseEdition: boolean;
   hasJoinedEnterprise: boolean;
   tenantLabel: string | null;
-  /** 企业版且已加入：侧栏显示「团队」等企业协作能力 */
+  /** 已加入企业：主工作台显示「团队」等企业协作能力，不再要求先切版 */
   showTeamsFeature: boolean;
   showEnterpriseAdminNav: boolean;
 };
@@ -33,7 +33,7 @@ export function useEditionFeatures(): EditionFeatures {
     const isPersonalEdition = !isEnterpriseEdition;
     const tenantLabel =
       enterpriseContext?.tenantName ?? enterpriseContext?.tenantId ?? null;
-    const showTeamsFeature = isEnterpriseEdition && hasJoinedEnterprise;
+    const showTeamsFeature = hasJoinedEnterprise;
 
     return {
       managementMode,

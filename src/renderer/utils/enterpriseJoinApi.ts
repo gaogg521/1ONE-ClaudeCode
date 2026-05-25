@@ -81,6 +81,7 @@ export async function createEnterpriseInvite(input: {
   maxUses?: number;
   expiresInDays?: number;
 }): Promise<{ displayCode: string }> {
+  await ensureWebuiCsrfToken();
   const data = await fetchWebuiApiJson<{ displayCode?: string; invite?: { code?: string } }>(
     '/api/admin/enterprise/invites',
     {
@@ -100,6 +101,7 @@ export async function createEnterpriseInvite(input: {
 }
 
 export async function revokeEnterpriseInvite(id: string): Promise<void> {
+  await ensureWebuiCsrfToken();
   await fetchWebuiApiJson(`/api/admin/enterprise/invites/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },

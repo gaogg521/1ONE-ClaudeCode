@@ -112,10 +112,16 @@ export class PipelineService {
   /**
    * Get a pipeline by ID
    */
-  public async getPipeline(pipelineId: string): Promise<IPipeline | null> {
+  public async getPipeline(pipelineId: string, tenantId?: string): Promise<IPipeline | null> {
     const db = await getDatabase();
     const driver = db.getDriver();
-    const row = driver.prepare('SELECT * FROM devops_pipelines WHERE id = ?').get(pipelineId) as IPipeline | undefined;
+    const row = (
+      tenantId
+        ? driver
+            .prepare('SELECT * FROM devops_pipelines WHERE id = ? AND tenant_id = ?')
+            .get(pipelineId, tenantId)
+        : driver.prepare('SELECT * FROM devops_pipelines WHERE id = ?').get(pipelineId)
+    ) as IPipeline | undefined;
     return row ?? null;
   }
 
@@ -158,10 +164,21 @@ export class PipelineService {
   /**
    * Get a pipeline run by ID
    */
-  public async getPipelineRun(runId: string): Promise<IPipelineRun | null> {
+  public async getPipelineRun(runId: string, tenantId?: string): Promise<IPipelineRun | null> {
     const db = await getDatabase();
     const driver = db.getDriver();
-    const row = driver.prepare('SELECT * FROM devops_pipeline_runs WHERE id = ?').get(runId) as IPipelineRun | undefined;
+    const row = (
+      tenantId
+        ? driver
+            .prepare(
+              `SELECT r.*
+               FROM devops_pipeline_runs r
+               JOIN devops_pipelines p ON p.id = r.pipeline_id
+               WHERE r.id = ? AND p.tenant_id = ?`
+            )
+            .get(runId, tenantId)
+        : driver.prepare('SELECT * FROM devops_pipeline_runs WHERE id = ?').get(runId)
+    ) as IPipelineRun | undefined;
     return row ?? null;
   }
 
@@ -183,9 +200,10 @@ export class PipelineService {
   public async triggerPipelineRun(
     pipelineId: string,
     triggerBy = 'system',
-    triggerType = 'manual'
+    triggerType = 'manual',
+    tenantId?: string
   ): Promise<string> {
-    const pipeline = await this.getPipeline(pipelineId);
+    const pipeline = await this.getPipeline(pipelineId, tenantId);
     if (!pipeline) {
       throw new Error(`Pipeline ${pipelineId} not found`);
     }

@@ -4,6 +4,7 @@ import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { resolvePostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import {
   consumePostLoginRedirect,
   readRedirectFromSearch,
@@ -28,6 +29,9 @@ const CCodeRepoList = React.lazy(() => import('@renderer/pages/admin/CCodeRepoLi
 const CMeasDashboard = React.lazy(() => import('@renderer/pages/admin/CMeasDashboard'));
 const CTestManagement = React.lazy(() => import('@renderer/pages/admin/CTestManagement'));
 const CFlowBoard = React.lazy(() => import('@renderer/pages/admin/CFlowBoard'));
+const EnterpriseAgentWorkspace = React.lazy(
+  () => import('@renderer/pages/enterprise/components/EnterpriseAgentWorkspace')
+);
 const EnterpriseJoinLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseJoinLayout'));
 const EnterpriseLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseLayout'));
 const EnterpriseHome = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseHome'));
@@ -104,7 +108,12 @@ const LoginRoute: React.FC = () => {
     }
     const fromQuery = readRedirectFromSearch(location.search);
     let target = fromQuery ?? consumePostLoginRedirect();
-    target = resolvePostLoginRedirectPath(target, user?.role, user?.tenant_id);
+    target = resolvePostLoginRedirectPath(
+      target,
+      user?.role,
+      user?.tenant_id,
+      isElectronDesktop()
+    );
     return <Navigate to={target} replace />;
   }
 
@@ -195,6 +204,7 @@ const PanelRoute: React.FC = () => {
             <Route path='teams' element={withRouteFallback(AdminTeams)} />
             <Route path='auth' element={withRouteFallback(AdminAuth)} />
             <Route path='invites' element={withRouteFallback(AdminInvites)} />
+            <Route path='cteam' element={withRouteFallback(AdminKanban)} />
             <Route path='kanban' element={withRouteFallback(AdminKanban)} />
             <Route path='rag' element={withRouteFallback(AdminRag)} />
             <Route path='mcp' element={withRouteFallback(AdminMcp)} />
@@ -206,6 +216,7 @@ const PanelRoute: React.FC = () => {
             <Route path='cmeas' element={withRouteFallback(CMeasDashboard)} />
             <Route path='ctest' element={withRouteFallback(CTestManagement)} />
             <Route path='cflow' element={withRouteFallback(CFlowBoard)} />
+            <Route path='cagent' element={withRouteFallback(EnterpriseAgentWorkspace)} />
             <Route path='usage' element={withRouteFallback(EnterpriseUsagePage)} />
             <Route path='security' element={withRouteFallback(EnterpriseSecurityPage)} />
           </Route>

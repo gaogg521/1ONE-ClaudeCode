@@ -1,25 +1,24 @@
 /**
  * Enterprise Security & Audit Page
  */
-import React, { useEffect, useState } from 'react';
-import { Card, Spin, Table, Tag, Typography } from '@arco-design/web-react';
+import React from 'react';
+import { Card, Table, Tag } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
-import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
+import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import AdminPageWrapper from '@/renderer/pages/admin/components/AdminPageWrapper';
+import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
+import ModulePageHeader from '@/renderer/pages/admin/components/ModulePageHeader';
+import { listAuditLogs, type AuditLogRecord } from '@/renderer/utils/enterpriseApi/modules';
 
-type AuditLog = { id: string; username: string; action: string; resource: string; ip_address: string; created_at: number };
+type AuditLog = AuditLogRecord;
 
 const EnterpriseSecurityPage: React.FC = () => {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-
-  useEffect(() => { (async () => {
-    setLoading(true);
-    try {
-      const res = await fetchWebuiApiJson<{ success: boolean; data: AuditLog[] }>('/api/admin/audit-logs');
-      if (res?.success) setLogs(res.data ?? []);
-    } catch { /* ignore */ } finally { setLoading(false); }
-  })(); }, []);
+  const logsState = useEnterpriseAsyncData(
+    listAuditLogs,
+    [],
+    t('admin.security.loadFailed', { defaultValue: '加载审计日志失败' })
+  );
 
   const columns = [
     { title: '时间', dataIndex: 'created_at', render: (v: number) => new Date(v).toLocaleString() },
@@ -30,16 +29,35 @@ const EnterpriseSecurityPage: React.FC = () => {
   ];
 
   return (
-    <div className='max-w-1200px mx-auto'>
-      <Typography.Title heading={5} className='mt-0 mb-4px'>{t('settings.enterpriseConsole.navSecurity', { defaultValue: '安全与审计' })}</Typography.Title>
-      <Typography.Paragraph type='secondary' className='mb-20px text-13px'>{t('admin.security.desc', { defaultValue: '操作审计日志与安全事件追踪，保障企业数据合规。' })}</Typography.Paragraph>
-      <Card bordered={false} className='rd-12px'>
-        {loading ? <div className='flex justify-center py-40px'><Spin /></div> :
-          logs.length === 0 ? <Typography.Text type='secondary'>{t('admin.security.empty', { defaultValue: '暂无审计日志。操作记录将自动生成。' })}</Typography.Text> :
-          <Table data={logs} rowKey='id' columns={columns} pagination={{ pageSize: 20 }} size='small' border={false} />
-        }
-      </Card>
-    </div>
+    <AdminPageWrapper>
+      <div className='max-w-1200px mx-auto'>
+        <ModulePageHeader
+          title={t('settings.enterpriseConsole.navSecurity', { defaultValue: '安全与审计' })}
+          description={t('admin.security.desc', {
+            defaultValue: '操作审计日志与安全事件追踪，保障企业数据合规。',
+          })}
+        />
+        <Card bordered={false} className='rd-12px'>
+          <ModuleDataState
+            loading={logsState.loading}
+            error={logsState.error}
+            empty={logsState.data.length === 0}
+            emptyDescription={t('admin.security.empty', {
+              defaultValue: '暂无审计日志。操作记录将自动生成。',
+            })}
+          >
+            <Table
+              data={logsState.data}
+              rowKey='id'
+              columns={columns}
+              pagination={{ pageSize: 20 }}
+              size='small'
+              border={false}
+            />
+          </ModuleDataState>
+        </Card>
+      </div>
+    </AdminPageWrapper>
   );
 };
 

@@ -2,31 +2,22 @@
  * CMeas Performance Dashboard with DORA metrics
  */
 import React, { useEffect, useState } from 'react';
-import { Card, Empty, Grid, Progress, Spin, Statistic, Typography } from '@arco-design/web-react';
+import { Card, Empty, Grid, Progress, Statistic, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
-import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
+import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
 import AdminPageWrapper from '@/renderer/pages/admin/components/AdminPageWrapper';
+import { listDoraMetrics } from '@/renderer/utils/enterpriseApi/modules';
 
 const { Row, Col } = Grid;
 
 const CMeasDashboard: React.FC = () => {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
-  const [metrics, setMetrics] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await fetchWebuiApiJson<{ success: boolean; data: Array<{ metric_name: string; value: number }> }>('/api/admin/metrics?type=dora');
-        if (res?.success) {
-          const map: Record<string, number> = {};
-          (res.data || []).forEach((m) => { map[m.metric_name] = m.value; });
-          setMetrics(map);
-        }
-      } catch { /* ignore */ } finally { setLoading(false); }
-    })();
-  }, []);
+  const metricsState = useEnterpriseAsyncData(listDoraMetrics, [], '加载 DORA 指标失败');
+  const metrics = metricsState.data.reduce<Record<string, number>>((acc, item) => {
+    acc[item.metric_name] = item.value;
+    return acc;
+  }, {});
 
   const doraCards = [
     { key: 'deploy_freq', title: '部署频率', suffix: '次/周', target: 10, color: 'rgb(var(--primary-6))' },
@@ -39,7 +30,12 @@ const CMeasDashboard: React.FC = () => {
     <AdminPageWrapper>
       <Typography.Title heading={5} className='mt-0 mb-4px'>{t('admin.cmeas.title', { defaultValue: 'CMeas 效能洞察' })}</Typography.Title>
       <Typography.Paragraph type='secondary' className='mb-20px text-13px'>{t('admin.cmeas.desc', { defaultValue: 'DORA 四维指标 + 需求-代码-测试-部署全流程数据分析，助力精益改进决策' })}</Typography.Paragraph>
-      {loading ? <div className='flex justify-center py-80px'><Spin size={30} /></div> : (
+      <ModuleDataState
+        loading={metricsState.loading}
+        error={metricsState.error}
+        empty={false}
+        emptyDescription=''
+      >
         <>
           <Row gutter={[16, 16]} className='mb-24px'>
             {doraCards.map((c) => {
@@ -61,7 +57,7 @@ const CMeasDashboard: React.FC = () => {
               : <Typography.Paragraph type='secondary'>{t('admin.cmeas.aiSuggestion', { defaultValue: '基于当前 DORA 指标数据分析，团队在变更前置时间和部署频率上表现良好。建议关注变更失败率的降低，可通过加强 CCI 流水线中的质量红线（单元测试覆盖率 > 80%）来实现。' })}</Typography.Paragraph>}
           </Card>
         </>
-      )}
+      </ModuleDataState>
     </AdminPageWrapper>
   );
 };

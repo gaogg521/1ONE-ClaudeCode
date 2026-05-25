@@ -271,37 +271,7 @@ export class AuthService {
    * 验证 WebUI 会话 Token 是否有效
    * Verify standard WebUI session token validity
    */
-  private static readonly ENTERPRISE_ELEVATION_AUDIENCE = 'one-enterprise-panel';
   private static readonly JWT_ISSUER = '1one';
-
-  /**
-   * Short-lived JWT for enterprise admin panel (secondary password verification).
-   */
-  public static async signEnterpriseElevation(userId: string): Promise<string> {
-    return jwt.sign(
-      { userId: this.normalizeUserId(userId) },
-      await this.getJwtSecret(),
-      {
-        expiresIn: '8h',
-        issuer: this.JWT_ISSUER,
-        audience: this.ENTERPRISE_ELEVATION_AUDIENCE,
-      }
-    );
-  }
-
-  public static async verifyEnterpriseElevationToken(token: string): Promise<{ userId: string } | null> {
-    try {
-      const decoded = jwt.verify(token, await this.getJwtSecret(), {
-        issuer: this.JWT_ISSUER,
-        audience: this.ENTERPRISE_ELEVATION_AUDIENCE,
-      }) as { userId?: string | number };
-      const userId = decoded.userId != null ? this.normalizeUserId(decoded.userId) : '';
-      if (!userId) return null;
-      return { userId };
-    } catch {
-      return null;
-    }
-  }
 
   public static async verifyToken(token: string): Promise<TokenPayload | null> {
     try {

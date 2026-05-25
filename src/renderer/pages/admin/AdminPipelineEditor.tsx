@@ -7,12 +7,21 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Card, Divider, Empty, Form, Input, Message, Modal, Select, Space, Steps, Switch, Tag, Typography } from '@arco-design/web-react';
+import { Button, Card, Divider, Empty, Form, Input, Message, Modal, Space, Steps, Switch, Tag, Typography } from '@arco-design/web-react';
 import { Delete, Down, Edit, Move, Plus, Refresh, Save, Undo } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
-import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
-import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
+import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
+import ModulePageHeader from '@/renderer/pages/admin/components/ModulePageHeader';
 import AdminPageWrapper from '@/renderer/pages/admin/components/AdminPageWrapper';
+import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
+import {
+  getPipelineRun,
+  listPipelines,
+  savePipeline,
+  triggerPipelineRun,
+  type PipelineListItem,
+} from '@/renderer/utils/enterpriseApi/modules';
 
 const Step = Steps.Step;
 
@@ -41,17 +50,12 @@ const ATOMIC_TEMPLATES: StageDef[] = [
   { name: 'Maven 编译打包', command: 'mvn clean package -DskipTests', enabled: true },
 ];
 
-async function api<T>(path: string, opts?: RequestInit): Promise<T> { return fetchWebuiApiJson<T>(path, opts); }
-async function apiMutate<T>(path: string, method: string, payload: Record<string, unknown>): Promise<T> {
-  return api<T>(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withCsrfToken(payload)) });
-}
-
 const PipelineEditor: React.FC = () => {
   const { t } = useTranslation();
-  const [pipelines, setPipelines] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const pipelinesState = useEnterpriseAsyncData(listPipelines, [], '加载流水线列表失败');
 
   // Editor state
   const [pipelineName, setPipelineName] = useState('');
@@ -66,35 +70,33 @@ const PipelineEditor: React.FC = () => {
   const [runLog, setRunLog] = useState<string>('');
   const [runLoading, setRunLoading] = useState(false);
 
-  const loadPipelines = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await api<{ success: boolean; data: any[] }>('/api/admin/pipelines');
-      if (res?.success) setPipelines(res.data ?? []);
-    } catch { /* ignore */ } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { void loadPipelines(); }, [loadPipelines]);
-
   // Select pipeline → load definition
   useEffect(() => {
     if (!selectedId) { setStages([]); setPipelineName(''); return; }
-    const p = pipelines.find((p) => p.id === selectedId);
+    const p = pipelinesState.data.find((pipeline) => pipeline.id === selectedId);
     if (!p) return;
     setPipelineName(p.name || '');
     try {
       setStages(JSON.parse(p.definition_json || '{}')?.stages || []);
-    } catch { setStages([]); }
-  }, [selectedId, pipelines]);
+      setEditorError(null);
+    } catch (error) {
+      setStages([]);
+      setEditorError(getEnterpriseActionError(error, '解析流水线定义失败'));
+    }
+  }, [pipelinesState.data, selectedId]);
 
   // Auto poll run status
   useEffect(() => {
     if (!runId) return;
     const timer = setInterval(async () => {
       try {
-        const res = await api<{ success: boolean; data: { status: string; log_content: string; stages_status_json: string } }>(`/api/admin/pipelines/runs/${runId}`);
-        if (res?.success) { setRunStatus(res.data.status); setRunLog(res.data.log_content || ''); if (['success', 'failed', 'cancelled'].includes(res.data.status)) setRunId(null); }
-      } catch { /* ignore */ }
+        const data = await getPipelineRun(runId);
+        setRunStatus(data.status);
+        setRunLog(data.log_content || '');
+        if (['success', 'failed', 'cancelled'].includes(data.status)) setRunId(null);
+      } catch (error) {
+        setEditorError(getEnterpriseActionError(error, '加载流水线运行状态失败'));
+      }
     }, 1500);
     return () => clearInterval(timer);
   }, [runId]);
@@ -103,19 +105,35 @@ const PipelineEditor: React.FC = () => {
     if (!pipelineName.trim()) { Message.warning('请输入流水线名称'); return; }
     setSaving(true);
     try {
-      await apiMutate('/api/admin/pipelines', 'POST', { id: selectedId || undefined, name: pipelineName.trim(), definition: { stages }, associatedTeamId: null });
+      await savePipeline({
+        id: selectedId || undefined,
+        name: pipelineName.trim(),
+        definition: { stages },
+        associatedTeamId: null,
+      });
       Message.success(t('common.saved', { defaultValue: '已保存' }));
-      await loadPipelines();
-    } catch { Message.error(t('common.saveFailed', { defaultValue: '保存失败' })); } finally { setSaving(false); }
+      await pipelinesState.reload();
+    } catch (error) {
+      Message.error(getEnterpriseActionError(error, t('common.saveFailed', { defaultValue: '保存失败' })));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleRun = async () => {
     if (!selectedId) return;
     setRunLoading(true);
     try {
-      const res = await apiMutate<{ success: boolean; data: { runId: string } }>(`/api/admin/pipelines/run/${selectedId}`, 'POST', {});
-      if (res?.success) { setRunId(res.data.runId); setRunStatus('running'); Message.success('流水线已触发'); }
-    } catch { Message.error('触发失败'); } finally { setRunLoading(false); }
+      const data = await triggerPipelineRun(selectedId);
+      setRunId(data.runId);
+      setRunStatus('running');
+      setRunLog('');
+      Message.success('流水线已触发');
+    } catch (error) {
+      Message.error(getEnterpriseActionError(error, '触发流水线失败'));
+    } finally {
+      setRunLoading(false);
+    }
   };
 
   const addStage = (tpl?: StageDef) => {
@@ -143,33 +161,55 @@ const PipelineEditor: React.FC = () => {
 
   return (
     <AdminPageWrapper>
-      <div className='flex items-center justify-between mb-16px'>
-        <div>
-          <Typography.Title heading={5} className='mt-0 mb-4px'>{t('admin.pipeline.title', { defaultValue: 'CCI 持续集成流水线编排器' })}</Typography.Title>
-          <Typography.Paragraph type='secondary' className='mb-0 text-13px'>{t('admin.pipeline.editorDesc', { defaultValue: '可视化拖拽编排 Stage/Job，内置 50+ 原子模板，支持质量红线拦截与多环境部署。' })}</Typography.Paragraph>
-        </div>
-        <Space>
-          <Button icon={<Refresh />} onClick={() => void loadPipelines()}>{t('common.refresh', { defaultValue: '刷新' })}</Button>
-          {selectedId && (
-            <>
-              <Button type='primary' icon={<Save />} loading={saving} onClick={handleSave}>{t('common.save', { defaultValue: '保存' })}</Button>
-              <Button type='primary' status='success' loading={runLoading} onClick={handleRun}>{t('admin.pipeline.button.run', { defaultValue: '▶ 运行流水线' })}</Button>
-            </>
-          )}
-        </Space>
-      </div>
+      <ModulePageHeader
+        title={t('admin.pipeline.title', { defaultValue: 'CCI 持续集成流水线编排器' })}
+        description={t('admin.pipeline.editorDesc', { defaultValue: '可视化拖拽编排 Stage/Job，内置 50+ 原子模板，支持质量红线拦截与多环境部署。' })}
+        actions={
+          <>
+            <Button icon={<Refresh />} onClick={() => void pipelinesState.reload()}>
+              {t('common.refresh', { defaultValue: '刷新' })}
+            </Button>
+            {selectedId ? (
+              <>
+                <Button type='primary' icon={<Save />} loading={saving} onClick={handleSave}>
+                  {t('common.save', { defaultValue: '保存' })}
+                </Button>
+                <Button type='primary' status='success' loading={runLoading} onClick={handleRun}>
+                  {t('admin.pipeline.button.run', { defaultValue: '▶ 运行流水线' })}
+                </Button>
+              </>
+            ) : null}
+          </>
+        }
+      />
+      {editorError ? (
+        <Card bordered={false} className='rd-12px mb-16px'>
+          <Typography.Text type='error'>{editorError}</Typography.Text>
+        </Card>
+      ) : null}
 
       <div className='flex gap-16px' style={{ minHeight: 'calc(100vh - 220px)' }}>
         {/* 左侧流水线列表 */}
         <Card bordered={false} title={t('admin.pipeline.list', { defaultValue: '流水线列表' })} className='rd-12px' style={{ width: 260, flexShrink: 0 }}>
-          {pipelines.length === 0 ? <Empty description={t('admin.pipeline.empty', { defaultValue: '暂无流水线' })} /> : pipelines.map((p) => (
-            <div key={p.id} className={`px-12px py-8px rd-6px cursor-pointer mb-4px transition-colors ${selectedId === p.id ? 'bg-[var(--primary-1)] text-[rgb(var(--primary-6))] font-600' : 'bg-fill-1 hover:bg-fill-2'}`} onClick={() => setSelectedId(p.id)}>
-              <div className='text-13px truncate'>{p.name}</div>
-              <div className='text-11px text-t-tertiary mt-2px'>{p.enabled === 1 ? '✅ 已启用' : '⏸ 已暂停'}</div>
-            </div>
-          ))}
+          <ModuleDataState
+            loading={pipelinesState.loading}
+            error={pipelinesState.error}
+            empty={pipelinesState.data.length === 0}
+            emptyDescription={t('admin.pipeline.empty', { defaultValue: '暂无流水线' })}
+          >
+            <>
+              {pipelinesState.data.map((p: PipelineListItem) => (
+                <div key={p.id} className={`px-12px py-8px rd-6px cursor-pointer mb-4px transition-colors ${selectedId === p.id ? 'bg-[var(--primary-1)] text-[rgb(var(--primary-6))] font-600' : 'bg-fill-1 hover:bg-fill-2'}`} onClick={() => setSelectedId(p.id)}>
+                  <div className='text-13px truncate'>{p.name}</div>
+                  <div className='text-11px text-t-tertiary mt-2px'>{p.enabled === 1 ? '✅ 已启用' : '⏸ 已暂停'}</div>
+                </div>
+              ))}
+            </>
+          </ModuleDataState>
           <Divider />
-          <Button type='outline' long icon={<Plus />} onClick={() => { setSelectedId(''); setPipelineName(''); setStages([]); }}>{t('admin.pipeline.create', { defaultValue: '新建流水线' })}</Button>
+          <Button type='outline' long icon={<Plus />} onClick={() => { setSelectedId(''); setPipelineName(''); setStages([]); }}>
+            {t('admin.pipeline.create', { defaultValue: '新建流水线' })}
+          </Button>
         </Card>
 
         {/* 右侧编排区域 */}

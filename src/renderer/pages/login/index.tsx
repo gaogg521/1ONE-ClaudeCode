@@ -66,7 +66,12 @@ const LoginPage: React.FC = () => {
     (loggedInUser?: { role?: string; tenant_id?: string }) => {
       const fromQuery = readRedirectFromSearch(location.search);
       let target = fromQuery ?? consumePostLoginRedirect();
-      return resolvePostLoginRedirectPath(target, loggedInUser?.role, loggedInUser?.tenant_id);
+      return resolvePostLoginRedirectPath(
+        target,
+        loggedInUser?.role,
+        loggedInUser?.tenant_id,
+        isElectronDesktop()
+      );
     },
     [location.search]
   );
@@ -300,22 +305,6 @@ const LoginPage: React.FC = () => {
     window.location.href = '/api/auth/feishu/authorize?mode=oauth';
   }, []);
 
-  const handleOauthPending = useCallback(
-    (provider: 'dingtalk' | 'wecom') => {
-      Message.info(
-        t('login.methods.oauthPending', {
-          defaultValue:
-            '{{provider}} 登录回调正在接入。请先用 LDAP/飞书/本地账户登录，或使用邀请码加入；配置可在企业控制台 → 认证与邮件 中保存。',
-          provider:
-            provider === 'dingtalk'
-              ? t('login.methods.dingtalk', { defaultValue: '钉钉' })
-              : t('login.methods.wecom', { defaultValue: '企业微信' }),
-        })
-      );
-    },
-    [t]
-  );
-
   const ensureScriptLoaded = useCallback(async (src: string): Promise<void> => {
     if (typeof window === 'undefined') return;
     const existing = document.querySelector(`script[data-one-feishu-qr="1"][src="${src}"]`);
@@ -425,8 +414,10 @@ const LoginPage: React.FC = () => {
   const isEnterpriseLogin = isBrowserWebUi && (loginUiMode === 'enterprise' || enterpriseIntent);
   const showLdapOption = ldapEnabled;
   const showFeishuLogin = feishuEnabled;
-  const showDingtalkLogin = dingtalkEnabled;
-  const showWecomLogin = wecomEnabled;
+  // DingTalk / WeCom admin config is available, but login callbacks are not wired yet.
+  // Do not expose dead-end login buttons until the backend flow exists.
+  const showDingtalkLogin = false && dingtalkEnabled;
+  const showWecomLogin = false && wecomEnabled;
   const anyOauthLogin = showFeishuLogin || showDingtalkLogin || showWecomLogin;
   const anyProviderConfigured =
     ldapConfigured || feishuConfigured || dingtalkConfigured || wecomConfigured;
@@ -597,30 +588,6 @@ const LoginPage: React.FC = () => {
                     disabled={loading}
                   >
                     {t('login.methods.feishuOauth', { defaultValue: '使用飞书登录' })}
-                  </Button>
-                ) : null}
-
-                {showDingtalkLogin ? (
-                  <Button
-                    long
-                    size='large'
-                    className='mb-8px'
-                    onClick={() => handleOauthPending('dingtalk')}
-                    disabled={loading}
-                  >
-                    {t('login.methods.dingtalkOauth', { defaultValue: '使用钉钉登录' })}
-                  </Button>
-                ) : null}
-
-                {showWecomLogin ? (
-                  <Button
-                    long
-                    size='large'
-                    className='mb-8px'
-                    onClick={() => handleOauthPending('wecom')}
-                    disabled={loading}
-                  >
-                    {t('login.methods.wecomOauth', { defaultValue: '使用企业微信登录' })}
                   </Button>
                 ) : null}
 

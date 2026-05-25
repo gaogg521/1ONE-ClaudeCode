@@ -6,16 +6,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {
+  canAccessEnterpriseRoute,
+  ENTERPRISE_HOME_PATH,
+  getEnterpriseRouteMetaByPath,
+} from './enterpriseRoutes';
+
 export const ENTERPRISE_JOIN_PATH = '/enterprise/join';
-export const ENTERPRISE_ADMIN_HOME_PATH = '/enterprise';
+export const ENTERPRISE_ADMIN_HOME_PATH = ENTERPRISE_HOME_PATH;
 export const ENTERPRISE_WORKSPACE_PATH = '/sessions';
 
 export function isEnterpriseAdminRole(role: string | undefined): boolean {
   return role === 'system_admin' || role === 'org_admin' || role === 'admin';
-}
-
-export function isEnterpriseElevatableRole(role: string | undefined): boolean {
-  return isEnterpriseAdminRole(role);
 }
 
 export function isSystemAdminRole(role: string | undefined): boolean {
@@ -44,16 +46,27 @@ export function resolveEnterpriseAdminPath(): string {
 export function resolvePostLoginRedirectPath(
   rawTarget: string,
   role: string | undefined,
-  tenantId: string | undefined
+  tenantId: string | undefined,
+  isDesktop = false
 ): string {
   const joined = hasEnterpriseTenant(tenantId);
   if (rawTarget === ENTERPRISE_JOIN_PATH || rawTarget.startsWith(`${ENTERPRISE_JOIN_PATH}/`)) {
     return joined ? ENTERPRISE_WORKSPACE_PATH : ENTERPRISE_JOIN_PATH;
   }
-  if (rawTarget === ENTERPRISE_ADMIN_HOME_PATH || rawTarget.startsWith(`${ENTERPRISE_ADMIN_HOME_PATH}/`)) {
-    if (!joined) return ENTERPRISE_JOIN_PATH;
-    if (!isEnterpriseAdminRole(role)) return ENTERPRISE_WORKSPACE_PATH;
+
+  const route = getEnterpriseRouteMetaByPath(rawTarget);
+  if (route) {
+    if (!joined) {
+      return ENTERPRISE_JOIN_PATH;
+    }
+    if (!canAccessEnterpriseRoute(route, role, isDesktop)) {
+      return ENTERPRISE_ADMIN_HOME_PATH;
+    }
     return rawTarget;
+  }
+
+  if (rawTarget === ENTERPRISE_ADMIN_HOME_PATH || rawTarget.startsWith(`${ENTERPRISE_ADMIN_HOME_PATH}/`)) {
+    return joined ? ENTERPRISE_ADMIN_HOME_PATH : ENTERPRISE_JOIN_PATH;
   }
   return rawTarget;
 }

@@ -10,16 +10,26 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { fetchWebuiApiJson, type WebuiApiJsonError } from '@/renderer/utils/webuiApiBase';
 import { buildLdapUrl, LDAP_DEFAULT_PORT, parseLdapUrl } from '@/renderer/utils/ldapProviderFormUtils';
+import { resolveDisplayedFeishuRedirectUri } from '@/renderer/utils/feishuProviderDisplay';
 import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
 import { PASSWORD_MASK } from '@/common/config/constants';
 
 type ProviderId = 'ldap' | 'feishu' | 'dingtalk' | 'wecom' | 'smtp';
+
+type AuthProvidersModalContentProps = {
+  visibleProviders?: ProviderId[];
+  defaultActiveTab?: ProviderId;
+};
 
 type ProviderResponse = {
   provider: ProviderId;
   enabled: number;
   updated_at?: number;
   config: Record<string, unknown>;
+};
+
+type AdminEmailResponse = {
+  email?: string;
 };
 
 type LdapEditableConfig = {
@@ -104,20 +114,10 @@ function formatAuthProviderError(error: unknown, t: TFunction): string {
     return t('common.saveFailed', { defaultValue: '保存失败' });
   }
   const err = error as WebuiApiJsonError;
-  if (err.code === 'ENTERPRISE_ELEVATION_REQUIRED') {
-    return t('settings.authProviders.errorElevationRequired', {
-      defaultValue: '请先完成企业管理二次验证（页面顶部提示）后再保存。',
-    });
-  }
   const msg = err.message ?? '';
   if (/system admin only/i.test(msg)) {
     return t('settings.authProviders.errorPermissionOutdated', {
       defaultValue: '权限校验未通过（多为应用未重启）。请重启应用/WebUI 后重试；组织管理员应可保存。',
-    });
-  }
-  if (/enterprise elevation/i.test(msg)) {
-    return t('settings.authProviders.errorElevationRequired', {
-      defaultValue: '请先完成企业管理二次验证（页面顶部提示）后再保存。',
     });
   }
   if (/issuer certificate|unable to get local|UNABLE_TO_VERIFY|certificate/i.test(msg)) {
@@ -148,8 +148,19 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   });
 }
 
-const AuthProvidersModalContent: React.FC = () => {
+const DEFAULT_VISIBLE_PROVIDERS: ProviderId[] = ['ldap', 'feishu', 'dingtalk', 'wecom', 'smtp'];
+
+const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
+  visibleProviders = DEFAULT_VISIBLE_PROVIDERS,
+  defaultActiveTab,
+}) => {
   const { t } = useTranslation();
+  const enabledProviders = useMemo(
+    () => DEFAULT_VISIBLE_PROVIDERS.filter((provider) => visibleProviders.includes(provider)),
+    [visibleProviders]
+  );
+  const visibleProviderSet = useMemo(() => new Set(enabledProviders), [enabledProviders]);
+  const initialActiveTab = defaultActiveTab && visibleProviderSet.has(defaultActiveTab) ? defaultActiveTab : (enabledProviders[0] ?? 'ldap');
 
   const [loading, setLoading] = useState(false);
   const [testingLdap, setTestingLdap] = useState(false);
@@ -209,10 +220,16 @@ const AuthProvidersModalContent: React.FC = () => {
     from: '',
     testToEmail: '',
   });
+  const [adminEmail, setAdminEmail] = useState('');
+  const [savingAdminEmail, setSavingAdminEmail] = useState(false);
 
   const feishuCallbackUrl = useMemo(
-    () => (typeof window !== 'undefined' ? `${window.location.origin}/api/auth/feishu/callback` : ''),
-    []
+    () =>
+      resolveDisplayedFeishuRedirectUri(
+        feishuConfig.redirectUri,
+        typeof window !== 'undefined' ? window.location.origin : ''
+      ),
+    [feishuConfig.redirectUri]
   );
 
   const ldapPreviewUrl = useMemo(
@@ -278,20 +295,23 @@ const AuthProvidersModalContent: React.FC = () => {
     }));
   }, []);
 
+  const loadAdminEmail = useCallback(async () => {
+    const data = await apiFetch<AdminEmailResponse>('/api/admin/system/admin-email');
+    setAdminEmail(String(data.email ?? ''));
+  }, []);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      loadProvider('ldap'),
-      loadProvider('feishu'),
-      loadProvider('dingtalk'),
-      loadProvider('wecom'),
-      loadProvider('smtp'),
-    ])
+    const tasks: Array<Promise<unknown>> = enabledProviders.map((provider) => loadProvider(provider));
+    if (enabledProviders.includes('smtp')) {
+      tasks.push(loadAdminEmail());
+    }
+    Promise.all(tasks)
       .catch((error) => {
         Message.error(formatAuthProviderError(error, t));
       })
       .finally(() => setLoading(false));
-  }, [loadProvider, t]);
+  }, [enabledProviders, loadAdminEmail, loadProvider, t]);
 
   const save = useCallback(
     async (provider: ProviderId) => {
@@ -439,6 +459,22 @@ const AuthProvidersModalContent: React.FC = () => {
     }
   }, [smtpConfig, t]);
 
+  const saveAdminEmail = useCallback(async () => {
+    setSavingAdminEmail(true);
+    try {
+      await apiFetch('/api/admin/system/admin-email', {
+        method: 'PUT',
+        body: JSON.stringify({ email: adminEmail.trim() }),
+      });
+      Message.success(t('settings.webui.adminEmailChanged', { defaultValue: '管理员邮箱已更新' }));
+      await loadAdminEmail();
+    } catch (error) {
+      Message.error(formatAuthProviderError(error, t));
+    } finally {
+      setSavingAdminEmail(false);
+    }
+  }, [adminEmail, loadAdminEmail, t]);
+
   const oauthLoginPendingAlert = (
     <Alert
       className='mb-12px'
@@ -450,8 +486,9 @@ const AuthProvidersModalContent: React.FC = () => {
   );
 
   return (
-    <Tabs defaultActiveTab='ldap' type='rounded'>
-      <Tabs.TabPane
+    <Tabs defaultActiveTab={initialActiveTab} type='rounded'>
+      {visibleProviderSet.has('ldap') ? (
+        <Tabs.TabPane
         key='ldap'
         title={t('settings.authProviders.tabLdap', { defaultValue: 'LDAP / 域控' })}
       >
@@ -657,8 +694,10 @@ const AuthProvidersModalContent: React.FC = () => {
           </div>
         </Card>
       </Tabs.TabPane>
+      ) : null}
 
-      <Tabs.TabPane
+      {visibleProviderSet.has('feishu') ? (
+        <Tabs.TabPane
         key='feishu'
         title={t('settings.authProviders.tabFeishu', { defaultValue: '飞书' })}
       >
@@ -683,16 +722,25 @@ const AuthProvidersModalContent: React.FC = () => {
               <Input.Password value={feishuConfig.appSecret} onChange={(v) => setFeishuConfig((s) => ({ ...s, appSecret: v }))} placeholder='******' />
             </Form.Item>
             <Form.Item
-              label={t('settings.authProviders.feishuRedirectFrontend', { defaultValue: '飞书 Redirect URI（前端 / OAuth）' })}
+              label={t('settings.authProviders.feishuRedirectFrontend', { defaultValue: '飞书 Redirect URI（开放平台）' })}
+              extra={t('settings.authProviders.feishuRedirectHint', {
+                defaultValue: '请填写飞书开放平台可访问的回调地址，不能使用 localhost；建议填写局域网 IP 或正式域名。',
+              })}
               required
             >
               <Input
                 value={feishuConfig.redirectUri}
                 onChange={(v) => setFeishuConfig((s) => ({ ...s, redirectUri: v }))}
-                placeholder={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/auth/feishu/callback`}
+                placeholder={t('settings.authProviders.feishuRedirectPlaceholder', {
+                  defaultValue: 'http://your-lan-ip:25809/api/auth/feishu/callback',
+                })}
               />
             </Form.Item>
-            <Form.Item label={t('settings.authProviders.feishuCallbackBackend', { defaultValue: 'OAuth 回调地址（服务端，只读）' })}>
+            <Form.Item
+              label={t('settings.authProviders.feishuCallbackBackend', {
+                defaultValue: '当前生效回调地址（登录实际使用）',
+              })}
+            >
               <Input value={feishuCallbackUrl} disabled />
             </Form.Item>
             <Form.Item label={t('settings.authProviders.externalIdField', { defaultValue: '外部 ID 字段（externalIdField）' })}>
@@ -702,6 +750,12 @@ const AuthProvidersModalContent: React.FC = () => {
                 placeholder='union_id 或 open_id'
               />
             </Form.Item>
+            <Typography.Paragraph type='secondary' className='text-12px mb-8px'>
+              {t('settings.authProviders.feishuBindingHint', {
+                defaultValue:
+                  '保存飞书配置后，还需要到「用户管理」里为本地账号绑定 union_id / open_id，否则 OAuth 回调会被拒绝。',
+              })}
+            </Typography.Paragraph>
           </Form>
           <Typography.Paragraph type='secondary' className='text-12px mb-8px mt-16px'>
             {t('settings.authProviders.saveWithoutTestHint', {
@@ -718,8 +772,10 @@ const AuthProvidersModalContent: React.FC = () => {
           </div>
         </Card>
       </Tabs.TabPane>
+      ) : null}
 
-      <Tabs.TabPane key='dingtalk' title={t('settings.authProviders.tabDingTalk', { defaultValue: '钉钉' })}>
+      {visibleProviderSet.has('dingtalk') ? (
+        <Tabs.TabPane key='dingtalk' title={t('settings.authProviders.tabDingTalk', { defaultValue: '钉钉' })}>
         <Card bordered className='mt-12px'>
           {oauthLoginPendingAlert}
           <div className='flex items-center justify-between mb-12px flex-wrap gap-8px'>
@@ -764,8 +820,10 @@ const AuthProvidersModalContent: React.FC = () => {
           </div>
         </Card>
       </Tabs.TabPane>
+      ) : null}
 
-      <Tabs.TabPane key='wecom' title={t('settings.authProviders.tabWeCom', { defaultValue: '企业微信' })}>
+      {visibleProviderSet.has('wecom') ? (
+        <Tabs.TabPane key='wecom' title={t('settings.authProviders.tabWeCom', { defaultValue: '企业微信' })}>
         <Card bordered className='mt-12px'>
           {oauthLoginPendingAlert}
           <div className='flex items-center justify-between mb-12px flex-wrap gap-8px'>
@@ -810,8 +868,10 @@ const AuthProvidersModalContent: React.FC = () => {
           </div>
         </Card>
       </Tabs.TabPane>
+      ) : null}
 
-      <Tabs.TabPane key='smtp' title={t('settings.authProviders.tabSmtp', { defaultValue: '邮件 SMTP' })}>
+      {visibleProviderSet.has('smtp') ? (
+        <Tabs.TabPane key='smtp' title={t('settings.authProviders.tabSmtp', { defaultValue: '邮箱配置' })}>
         <Card bordered className='mt-12px'>
           <div className='flex items-center justify-between mb-12px flex-wrap gap-8px'>
             <span className='text-13px text-t-secondary'>
@@ -826,6 +886,20 @@ const AuthProvidersModalContent: React.FC = () => {
             </Space>
           </div>
           <Form layout='vertical' disabled={loading}>
+            <Form.Item label={t('settings.webui.adminEmail', { defaultValue: '管理员邮箱' })}>
+              <Input
+                value={adminEmail}
+                onChange={setAdminEmail}
+                placeholder={t('settings.webui.adminEmailPlaceholder', {
+                  defaultValue: '例如: admin@company.com',
+                })}
+              />
+            </Form.Item>
+            <div className='flex justify-end mb-12px'>
+              <Button loading={savingAdminEmail} onClick={() => void saveAdminEmail()} disabled={loading}>
+                {t('settings.webui.setAdminEmail', { defaultValue: '设置管理员邮箱' })}
+              </Button>
+            </div>
             <Form.Item label={t('settings.authProviders.smtpHost', { defaultValue: 'SMTP 主机' })} required>
               <Input value={smtpConfig.host} onChange={(v) => setSmtpConfig((s) => ({ ...s, host: v }))} placeholder='smtp.example.com' />
             </Form.Item>
@@ -871,6 +945,7 @@ const AuthProvidersModalContent: React.FC = () => {
           </div>
         </Card>
       </Tabs.TabPane>
+      ) : null}
     </Tabs>
   );
 };

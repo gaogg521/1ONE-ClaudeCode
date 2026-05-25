@@ -52,6 +52,13 @@ export function initWebuiBridge(): void {
     }, 'Get status');
   });
 
+  webui.getDesktopSessionToken.provider(async () => {
+    return WebuiService.handleAsync(async () => {
+      const data = await WebuiService.getDesktopSessionToken();
+      return { success: true, data };
+    }, 'Get desktop session token');
+  });
+
   webui.getEnterpriseContext.provider(async () => {
     return WebuiService.handleAsync(async () => {
       const data = await WebuiService.getEnterpriseContext();

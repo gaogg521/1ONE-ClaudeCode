@@ -178,7 +178,9 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   }, [isDesktop, refreshEnterpriseContext]);
 
   const hasJoinedEnterprise = enterpriseContext?.joined === true;
-  const effectiveRole = user?.role ?? enterpriseContext?.role;
+  const effectiveRole = isDesktop
+    ? enterpriseContext?.role ?? user?.role
+    : user?.role ?? enterpriseContext?.role;
 
   const authEditionSyncedRef = useRef(false);
   const prevWebUserIdRef = useRef<string | undefined>(undefined);

@@ -126,8 +126,8 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
   });
 
   // ─── 用户管理（桌面 admin IPC）────────────────────────────────────────────
-  // WebUI 管理接口走 HTTP + JWT + requireEnterpriseElevation；此处为 Electron 单机会话，
-  // 信任本机已登录用户，不做二次验证（与浏览器多用户场景区分）。
+  // WebUI 管理接口走 HTTP + JWT + requireAdmin；此处为 Electron 单机会话，
+  // 信任本机已登录用户，不额外追加企业后台二次验证。
 
   ipcBridge.adminUsers.list.provider(async () => {
     try {

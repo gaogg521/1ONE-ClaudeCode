@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
-import { Card, Grid, Message, PageHeader, Space, Spin, Statistic, Tag, Typography } from '@arco-design/web-react';
+import React, { useCallback } from 'react';
+import { Card, Grid, Statistic, Tag, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -20,13 +20,48 @@ import {
   Thunderbolt,
   TicketOne,
 } from '@icon-park/react';
-import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import { useEnterpriseRuntime } from '@/renderer/hooks/enterprise/useEnterpriseRuntime';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
-import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
-import { ENTERPRISE_NAV_ITEMS } from '@/renderer/pages/enterprise/enterpriseNav';
 import type { EnterpriseNavKey } from '@/renderer/pages/enterprise/enterpriseNav';
+import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
+import {
+  listCodeRepos,
+  listMcpRegistry,
+  listPipelines,
+  listRagDocuments,
+} from '@/renderer/utils/enterpriseApi/modules';
 
 const { Row, Col } = Grid;
+
+const DEFAULT_METRICS = {
+  mcpCount: 0,
+  ragCount: 0,
+  pipelineCount: 0,
+  repoCount: 0,
+};
+
+const CAPABILITY_KEYS = new Set<EnterpriseNavKey>([
+  'cteam',
+  'pipeline-editor',
+  'cpack',
+  'cmeas',
+  'ccode',
+  'ctest',
+  'cflow',
+  'cagent',
+]);
+
+const CAPABILITY_SUMMARY: Partial<Record<EnterpriseNavKey, string>> = {
+  cteam: '需求协同、任务拆解与跨角色推进。',
+  'pipeline-editor': '流水线编排、运行与质量闸口。',
+  cpack: '制品仓库、制品资产与分发出口。',
+  cmeas: 'DORA 指标与交付效能分析。',
+  ccode: '代码资产接入与交付链路关联。',
+  ctest: '测试计划、用例与状态聚合。',
+  cflow: '需求到发布的价值流打点与瓶颈分析。',
+  cagent: '企业知识与工具受控编排的 AI 助手入口。',
+};
 
 const CARD_ICONS: Record<EnterpriseNavKey, React.ReactNode> = {
   home: <Globe theme='outline' size={18} />,
@@ -34,6 +69,7 @@ const CARD_ICONS: Record<EnterpriseNavKey, React.ReactNode> = {
   teams: <Peoples theme='outline' size={18} />,
   auth: <Mail theme='outline' size={18} />,
   invites: <TicketOne theme='outline' size={18} />,
+  cteam: <Peoples theme='outline' size={18} />,
   rag: <Book theme='outline' size={18} />,
   mcp: <Plug theme='outline' size={18} />,
   skills: <Thunderbolt theme='outline' size={18} />,
@@ -44,6 +80,7 @@ const CARD_ICONS: Record<EnterpriseNavKey, React.ReactNode> = {
   cmeas: <Thunderbolt theme='outline' size={18} />,
   ctest: <Thunderbolt theme='outline' size={18} />,
   cflow: <Thunderbolt theme='outline' size={18} />,
+  cagent: <Thunderbolt theme='outline' size={18} />,
   usage: <Peoples theme='outline' size={18} />,
   security: <Lock theme='outline' size={18} />,
 };
@@ -51,41 +88,60 @@ const CARD_ICONS: Record<EnterpriseNavKey, React.ReactNode> = {
 const EnterpriseHome: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { enterpriseContext } = useWebuiEnterpriseMode();
+  const runtime = useEnterpriseRuntime();
+  const canViewOverviewMetrics = ['mcp', 'rag', 'pipeline-editor', 'ccode'].some((key) =>
+    runtime.visibleNavItems.some((item) => item.key === key)
+  );
+  const loadMetrics = useCallback(async () => {
+    if (!canViewOverviewMetrics) {
+      return DEFAULT_METRICS;
+    }
+    const [mcpRegistry, ragDocuments, pipelines, codeRepos] = await Promise.all([
+      listMcpRegistry(),
+      listRagDocuments(),
+      listPipelines(),
+      listCodeRepos(),
+    ]);
+    return {
+      mcpCount: mcpRegistry.filter((item) => Boolean(item.enabled)).length,
+      ragCount: ragDocuments.reduce((sum, doc) => sum + (Number(doc.chunk_count) || 0), 0),
+      pipelineCount: pipelines.length,
+      repoCount: codeRepos.length,
+    };
+  }, [canViewOverviewMetrics]);
+  const metricsState = useEnterpriseAsyncData(
+    loadMetrics,
+    DEFAULT_METRICS,
+    '加载企业概览指标失败'
+  );
 
-  const [loadingMetrics, setLoadingMetrics] = useState(true);
-  const [metrics, setMetrics] = useState({
-    userCount: 0,
-    mcpCount: 0,
-    ragCount: 0,
-  });
+  const metricExtraText = canViewOverviewMetrics
+    ? {
+        pipeline: '持续集成编排与执行入口',
+        mcp: '外部集成安全代理连通',
+        rag: '全离线 WASM 语义向量模型',
+        repo: '代码资产已接入交付链路',
+      }
+    : {
+        pipeline: '当前角色暂无流水线概览权限',
+        mcp: '当前角色暂无 MCP 概览权限',
+        rag: '当前角色暂无知识库概览权限',
+        repo: '当前角色暂无代码资产概览权限',
+      };
 
   const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId ?? '';
+  const handleOpenModule = useCallback(
+    (path: string) => {
+      void navigate(path);
+    },
+    [navigate]
+  );
 
-  // 获取后台的核心健康指标
-  useEffect(() => {
-    const loadMetrics = async (): Promise<void> => {
-      try {
-        const [usersRes, mcpRes, ragRes] = await Promise.all([
-          fetchWebuiApiJson<{ success: boolean; data: any[] }>('/api/admin/users').catch((): null => null),
-          fetchWebuiApiJson<{ success: boolean; data: any[] }>('/api/admin/mcp/registry').catch((): null => null),
-          fetchWebuiApiJson<{ success: boolean; data: any[] }>('/api/admin/rag/documents').catch((): null => null),
-        ]);
-
-        setMetrics({
-          userCount: usersRes?.success ? (usersRes.data ?? []).length : 0,
-          mcpCount: mcpRes?.success ? (mcpRes.data ?? []).filter((m: any): boolean => !!m.enabled).length : 0,
-          ragCount: ragRes?.success ? (ragRes.data ?? []).reduce((sum: number, d: any): number => sum + (Number(d.chunk_count) || 0), 0) : 0,
-        });
-      } catch { /* ignore */ } finally {
-        setLoadingMetrics(false);
-      }
-    };
-    void loadMetrics();
-  }, []);
-
-  const menuCards = ENTERPRISE_NAV_ITEMS.filter((item) => item.key !== 'home');
+  const capabilityCards = runtime.visibleNavItems.filter((item) => CAPABILITY_KEYS.has(item.key));
+  const foundationCards = runtime.visibleNavItems.filter(
+    (item) => item.key !== 'home' && !CAPABILITY_KEYS.has(item.key)
+  );
 
   return (
     <div className='max-w-1200px mx-auto w-full px-4px pb-40px'>
@@ -116,13 +172,14 @@ const EnterpriseHome: React.FC = () => {
       </div>
 
       {/* 2. 核心效能与资产指标卡 (3大指标大屏) */}
-      {loadingMetrics ? (
-        <div className='flex justify-center py-40px'>
-          <Spin />
-        </div>
-      ) : (
+      <ModuleDataState
+        loading={canViewOverviewMetrics ? metricsState.loading : false}
+        error={metricsState.error}
+        empty={false}
+        emptyDescription=''
+      >
         <Row gutter={[16, 16]} className='mb-24px'>
-          <Col xs={24} sm={8}>
+          <Col xs={24} sm={12} lg={6}>
             <Card
               bordered={false}
               className='rd-12px transition-all hover:-translate-y-2px'
@@ -132,16 +189,16 @@ const EnterpriseHome: React.FC = () => {
               }}
             >
               <Statistic
-                title={t('settings.enterpriseConsole.metricUsers', { defaultValue: '活跃成员与组织架构' })}
-                value={metrics.userCount}
-                prefix={<EveryUser theme='outline' size={18} className='text-blue-500 mr-8px' />}
-                suffix={t('settings.enterpriseConsole.metricUsersSuffix', { defaultValue: '人' })}
+                title={t('settings.enterpriseConsole.metricPipelines', { defaultValue: 'CCI 流水线' })}
+                value={canViewOverviewMetrics ? metricsState.data.pipelineCount : '--'}
+                prefix={<Thunderbolt theme='outline' size={18} className='text-blue-500 mr-8px' />}
+                suffix={t('settings.enterpriseConsole.metricPipelineSuffix', { defaultValue: '条' })}
                 style={{ color: 'rgb(var(--primary-6))', fontWeight: 'bold' } as React.CSSProperties}
-                extra={<span className='text-11px text-t-tertiary'>基于 LDAP / 飞书 实时同步</span>}
+                extra={<span className='text-11px text-t-tertiary'>{metricExtraText.pipeline}</span>}
               />
             </Card>
           </Col>
-          <Col xs={24} sm={8}>
+          <Col xs={24} sm={12} lg={6}>
             <Card
               bordered={false}
               className='rd-12px transition-all hover:-translate-y-2px'
@@ -152,15 +209,15 @@ const EnterpriseHome: React.FC = () => {
             >
               <Statistic
                 title={t('settings.enterpriseConsole.metricMcps', { defaultValue: '已启用 MCP 工具连接数' })}
-                value={metrics.mcpCount}
+                value={canViewOverviewMetrics ? metricsState.data.mcpCount : '--'}
                 prefix={<Plug theme='outline' size={18} className='text-green-500 mr-8px' />}
                 suffix={t('settings.enterpriseConsole.metricMcpsSuffix', { defaultValue: '个' })}
                 style={{ color: '#00b42a', fontWeight: 'bold' } as React.CSSProperties}
-                extra={<span className='text-11px text-t-tertiary'>外部集成安全代理连通</span>}
+                extra={<span className='text-11px text-t-tertiary'>{metricExtraText.mcp}</span>}
               />
             </Card>
           </Col>
-          <Col xs={24} sm={8}>
+          <Col xs={24} sm={12} lg={6}>
             <Card
               bordered={false}
               className='rd-12px transition-all hover:-translate-y-2px'
@@ -171,31 +228,84 @@ const EnterpriseHome: React.FC = () => {
             >
               <Statistic
                 title={t('settings.enterpriseConsole.metricRags', { defaultValue: 'RAG 离线语义知识切片' })}
-                value={metrics.ragCount}
+                value={canViewOverviewMetrics ? metricsState.data.ragCount : '--'}
                 prefix={<Book theme='outline' size={18} className='text-amber-500 mr-8px' />}
                 suffix={t('settings.enterpriseConsole.metricRagsSuffix', { defaultValue: '条' })}
                 style={{ color: '#ff7d00', fontWeight: 'bold' } as React.CSSProperties}
-                extra={<span className='text-11px text-t-tertiary'>全离线 WASM 语义向量模型</span>}
+                extra={<span className='text-11px text-t-tertiary'>{metricExtraText.rag}</span>}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <Card
+              bordered={false}
+              className='rd-12px transition-all hover:-translate-y-2px'
+              style={{
+                boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+                border: '1px solid var(--color-border-2)',
+              }}
+            >
+              <Statistic
+                title={t('settings.enterpriseConsole.metricRepos', { defaultValue: 'CCode 已绑定仓库' })}
+                value={canViewOverviewMetrics ? metricsState.data.repoCount : '--'}
+                prefix={<EveryUser theme='outline' size={18} className='text-cyan-500 mr-8px' />}
+                suffix={t('settings.enterpriseConsole.metricReposSuffix', { defaultValue: '个' })}
+                style={{ color: '#0fc6c2', fontWeight: 'bold' } as React.CSSProperties}
+                extra={<span className='text-11px text-t-tertiary'>{metricExtraText.repo}</span>}
               />
             </Card>
           </Col>
         </Row>
-      )}
+      </ModuleDataState>
+
+      <Typography.Title heading={6} className='mt-0 mb-16px text-14px font-700 text-t-secondary uppercase tracking-wider'>
+        {t('settings.enterpriseConsole.capabilityTitle', { defaultValue: '8 大 DevOps 能力' })}
+      </Typography.Title>
+
+      <Row gutter={[16, 16]} className='mb-24px'>
+        {capabilityCards.map((item) => (
+          <Col key={item.key} xs={24} sm={12} lg={6}>
+            <Card
+              className='cursor-pointer h-full rd-12px border border-solid border-border-2 hover:border-primary transition-all hover:-translate-y-2px'
+              style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.02)' }}
+              bodyStyle={{ padding: '16px 20px' }}
+              hoverable
+              onClick={() => handleOpenModule(item.path)}
+            >
+              <div className='flex flex-col gap-12px h-full'>
+                <div className='flex items-center justify-between gap-12px'>
+                  <div className='w-36px h-36px rd-8px flex items-center justify-center bg-fill-2 text-primary shrink-0'>
+                    {CARD_ICONS[item.key]}
+                  </div>
+                </div>
+                <div>
+                  <div className='text-14px font-600 text-t-primary mb-6px'>
+                    {t(item.labelKey, { defaultValue: item.labelDefault })}
+                  </div>
+                  <Typography.Paragraph type='secondary' className='mb-0 text-12px'>
+                    {CAPABILITY_SUMMARY[item.key] ?? item.labelDefault}
+                  </Typography.Paragraph>
+                </div>
+              </div>
+            </Card>
+          </Col>
+        ))}
+      </Row>
 
       {/* 3. 极简、严谨的后台管理快捷菜单 ( Arcodegree Border & Rounded-12px ) */}
       <Typography.Title heading={6} className='mt-0 mb-16px text-14px font-700 text-t-secondary uppercase tracking-wider'>
-        {t('settings.enterpriseConsole.menuTitle', { defaultValue: '组织架构与系统配置配置' })}
+        {t('settings.enterpriseConsole.menuTitle', { defaultValue: '组织管理与平台配置' })}
       </Typography.Title>
 
       <Row gutter={[16, 16]}>
-        {menuCards.map((item) => (
+        {foundationCards.map((item) => (
           <Col key={item.key} xs={24} sm={12} lg={8}>
             <Card
               className='cursor-pointer h-full rd-12px border border-solid border-border-2 hover:border-primary transition-all hover:-translate-y-2px'
               style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.02)' }}
               bodyStyle={{ padding: '16px 20px' }}
               hoverable
-              onClick={() => void navigate(item.path)}
+              onClick={() => handleOpenModule(item.path)}
             >
               <div className='flex items-center justify-between gap-12px'>
                 <div className='flex items-center gap-12px min-w-0 flex-1'>

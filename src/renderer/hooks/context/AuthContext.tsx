@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { webui } from '@/common/adapter/ipcBridge';
 import {
   withCsrfToken,
   hasValidCsrfToken,
@@ -112,6 +113,28 @@ async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> 
   return null;
 }
 
+async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
+  try {
+    const [statusResult, enterpriseResult] = await Promise.all([
+      webui.getStatus.invoke(),
+      webui.getEnterpriseContext.invoke(),
+    ]);
+    if (!statusResult.success || !statusResult.data) {
+      return null;
+    }
+    const enterpriseContext = enterpriseResult.success ? enterpriseResult.data : undefined;
+    return {
+      id: 'desktop-local-admin',
+      username: statusResult.data.adminUsername || 'admin',
+      tenant_id: enterpriseContext?.tenantId,
+      role: (enterpriseContext?.role as AuthUser['role']) ?? 'system_admin',
+    };
+  } catch (error) {
+    console.error('Failed to fetch desktop current user:', error);
+    return null;
+  }
+}
+
 export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthStatus>('checking');
@@ -120,8 +143,9 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const refresh = useCallback(async () => {
     if (isDesktopRuntime) {
-      setStatus('authenticated');
-      setUser(null);
+      const currentUser = await fetchDesktopCurrentUser();
+      setStatus(currentUser ? 'authenticated' : 'unauthenticated');
+      setUser(currentUser);
       setReady(true);
       return;
     }

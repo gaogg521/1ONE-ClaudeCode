@@ -913,5 +913,15 @@
     "pendingTimeout": "승인 요청이 만료되었습니다 (5분). 다시 시도해주세요.",
     "pendingCancel": "취소",
     "pendingTimeRemaining": "남은 시간: {{time}}"
+  },
+  "authProviders": {
+    "enterprisePageTitle": "인증 및 메일",
+    "enterprisePageDesc": "기업 로그인 연동과 조직 메일 발송 인프라를 한곳에서 관리하며, 이메일 설정도 인증 제공자와 같은 레벨에서 유지합니다.",
+    "authSectionTitle": "인증 센터",
+    "mailSectionTitle": "메일 센터",
+    "tabSmtp": "이메일 설정",
+    "feishuBindingHint": "Feishu 설정을 저장한 뒤에도 User Management에서 로컬 계정에 union_id / open_id를 바인딩하지 않으면 OAuth 콜백이 거부됩니다.",
+    "feishuRedirectHint": "Feishu에서 접근 가능한 콜백 URL을 입력하세요. localhost는 사용할 수 없으며 LAN IP 또는 실제 도메인을 권장합니다.",
+    "feishuRedirectPlaceholder": "http://your-lan-ip:25809/api/auth/feishu/callback"
   }
 }

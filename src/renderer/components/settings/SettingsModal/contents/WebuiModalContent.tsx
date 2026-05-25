@@ -96,8 +96,11 @@ const WebuiModalContent: React.FC = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [setUsernameModalVisible, setSetUsernameModalVisible] = useState(false);
   const [usernameLoading, setUsernameLoading] = useState(false);
+  const [setAdminEmailModalVisible, setSetAdminEmailModalVisible] = useState(false);
+  const [adminEmailLoading, setAdminEmailLoading] = useState(false);
   const [form] = Form.useForm();
   const [usernameForm] = Form.useForm();
+  const [adminEmailForm] = Form.useForm();
 
   // 二维码登录相关状态 / QR code login related state
   const [qrUrl, setQrUrl] = useState<string | null>(null);
@@ -461,6 +464,13 @@ const WebuiModalContent: React.FC = () => {
     setSetUsernameModalVisible(true);
   };
 
+  const handleEditAdminEmail = () => {
+    adminEmailForm.setFieldsValue({
+      adminEmail: status?.adminEmail || '',
+    });
+    setSetAdminEmailModalVisible(true);
+  };
+
   // 提交新密码 / Submit new password
   const handleSetNewPassword = async () => {
     try {
@@ -539,6 +549,35 @@ const WebuiModalContent: React.FC = () => {
       Message.error(t('settings.webui.usernameChangeFailed'));
     } finally {
       setUsernameLoading(false);
+    }
+  };
+
+  const handleSetAdminEmail = async () => {
+    try {
+      const values = await adminEmailForm.validate();
+      const email = String(values.adminEmail ?? '').trim();
+      setAdminEmailLoading(true);
+
+      let result: { success: boolean; msg?: string };
+      if (window.electronAPI?.webuiSetAdminEmail) {
+        result = await window.electronAPI.webuiSetAdminEmail(email);
+      } else {
+        result = await webui.setAdminEmail.invoke({ email });
+      }
+
+      if (result.success) {
+        Message.success(t('settings.webui.adminEmailChanged'));
+        setSetAdminEmailModalVisible(false);
+        adminEmailForm.resetFields();
+        setStatus((prev) => (prev ? { ...prev, adminEmail: email } : null));
+      } else {
+        Message.error(result.msg || t('settings.webui.adminEmailChangeFailed'));
+      }
+    } catch (error) {
+      console.error('Set admin email error:', error);
+      Message.error(t('settings.webui.adminEmailChangeFailed'));
+    } finally {
+      setAdminEmailLoading(false);
     }
   };
 
@@ -803,6 +842,26 @@ const WebuiModalContent: React.FC = () => {
             </div>
           </div>
 
+          {/* 管理员邮箱 / Admin email */}
+          <div className='flex items-center justify-between gap-12px py-12px'>
+            <span className='text-14px text-t-secondary shrink-0'>{t('settings.webui.adminEmail')}:</span>
+            <div className='inline-flex items-center gap-8px rd-100px border border-line bg-fill-1 px-10px py-4px min-w-0'>
+              <span className='text-14px text-t-primary truncate'>
+                {status?.adminEmail || t('settings.webui.adminEmailNotSet')}
+              </span>
+              <Tooltip content={t('settings.webui.editAdminEmailTooltip')}>
+                <Button
+                  type='text'
+                  size='mini'
+                  className='rd-100px !px-6px inline-flex items-center !h-24px'
+                  onClick={handleEditAdminEmail}
+                >
+                  <EditTwo size={14} />
+                </Button>
+              </Tooltip>
+            </div>
+          </div>
+
           {/* 二维码登录（仅服务器运行且允许远程访问时显示）/ QR Code Login (only when server running and remote access allowed) */}
           {status?.running && status.allowRemote && (
             <>
@@ -1059,6 +1118,43 @@ const WebuiModalContent: React.FC = () => {
             ]}
           >
             <Input.Password placeholder={t('settings.webui.confirmPasswordPlaceholder')} />
+          </Form.Item>
+        </Form>
+      </AionModal>
+
+      <AionModal
+        visible={setAdminEmailModalVisible}
+        onCancel={() => setSetAdminEmailModalVisible(false)}
+        onOk={handleSetAdminEmail}
+        confirmLoading={adminEmailLoading}
+        title={t('settings.webui.setAdminEmail')}
+        size='small'
+      >
+        <Form form={adminEmailForm} layout='vertical' className='pt-16px'>
+          <Form.Item
+            label={t('settings.webui.adminEmail')}
+            field='adminEmail'
+            rules={[
+              { required: true, message: t('settings.webui.adminEmailRequired') },
+              {
+                validator: (value, callback) => {
+                  if (typeof value !== 'string') {
+                    callback();
+                    return;
+                  }
+
+                  const trimmed = value.trim();
+                  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+                    callback(t('settings.webui.adminEmailInvalid'));
+                    return;
+                  }
+
+                  callback();
+                },
+              },
+            ]}
+          >
+            <Input placeholder={t('settings.webui.adminEmailPlaceholder')} />
           </Form.Item>
         </Form>
       </AionModal>

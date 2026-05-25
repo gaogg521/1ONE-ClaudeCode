@@ -11,21 +11,34 @@ vi.mock('@/renderer/utils/platform', () => ({
 }));
 
 const fetchWebuiApiJsonMock = vi.hoisted(() => vi.fn());
+const fetchWebuiApiMock = vi.hoisted(() => vi.fn());
+const hasValidCsrfTokenMock = vi.hoisted(() => vi.fn(() => true));
 
 vi.mock('@/renderer/utils/webuiApiBase', () => ({
   fetchWebuiApiJson: fetchWebuiApiJsonMock,
+  fetchWebuiApi: fetchWebuiApiMock,
 }));
 
 vi.mock('@process/webserver/middleware/csrfClient', () => ({
   withCsrfToken: (body: Record<string, unknown>) => body,
-  hasValidCsrfToken: vi.fn(() => true),
+  hasValidCsrfToken: hasValidCsrfTokenMock,
 }));
 
-import { createEnterpriseInvite, joinEnterpriseWithCode, previewEnterpriseInvite } from '@/renderer/utils/enterpriseJoinApi';
+import {
+  createEnterpriseInvite,
+  joinEnterpriseWithCode,
+  previewEnterpriseInvite,
+  revokeEnterpriseInvite,
+} from '@/renderer/utils/enterpriseJoinApi';
 
 describe('enterpriseJoinApi (browser)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    hasValidCsrfTokenMock.mockReturnValue(true);
+    fetchWebuiApiMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
   });
 
   it('previewEnterpriseInvite calls preview endpoint with encoded code', async () => {
@@ -55,6 +68,34 @@ describe('enterpriseJoinApi (browser)', () => {
 
     const data = await createEnterpriseInvite({ maxUses: 5, expiresInDays: 7 });
     expect(data.displayCode).toBe('ABCD-1234');
+  });
+
+  it('createEnterpriseInvite primes csrf before posting when token is missing', async () => {
+    hasValidCsrfTokenMock.mockReturnValue(false);
+    fetchWebuiApiJsonMock.mockResolvedValueOnce({ displayCode: 'ABCD-1234' });
+
+    await createEnterpriseInvite({ maxUses: 1 });
+
+    expect(fetchWebuiApiMock).toHaveBeenCalledWith('/api/auth/user');
+    expect(fetchWebuiApiJsonMock).toHaveBeenCalledWith('/api/admin/enterprise/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxUses: 1 }),
+    });
+  });
+
+  it('revokeEnterpriseInvite primes csrf before deleting when token is missing', async () => {
+    hasValidCsrfTokenMock.mockReturnValue(false);
+    fetchWebuiApiJsonMock.mockResolvedValueOnce(undefined);
+
+    await revokeEnterpriseInvite('invite-1');
+
+    expect(fetchWebuiApiMock).toHaveBeenCalledWith('/api/auth/user');
+    expect(fetchWebuiApiJsonMock).toHaveBeenCalledWith('/api/admin/enterprise/invites/invite-1', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
   });
 
   it('throws when API returns an error', async () => {

@@ -10,7 +10,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 
-/** 个人版下访问 /team/* 时重定向并提示 */
+/** 未加入企业时访问 /team/* 重定向并提示 */
 const EditionRouteGuard: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
@@ -28,7 +28,7 @@ const EditionRouteGuard: React.FC = () => {
       warnedRef.current = true;
       Message.info(
         t('settings.edition.teamsPersonalBlocked', {
-          defaultValue: '「团队」为企业版能力。请在标题栏切换到「企业版」后再使用。',
+          defaultValue: '当前账号尚未加入企业。加入企业后，即可在主工作台直接使用团队协同。',
         })
       );
     }
