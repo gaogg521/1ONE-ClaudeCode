@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const locationMock = vi.hoisted(() => ({ pathname: '/enterprise/cteam', search: '' }));
 const listRequirementsTreeMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
+const createRequirementMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-router-dom', () => ({
   useLocation: () => locationMock,
@@ -39,12 +40,26 @@ vi.mock('@arco-design/web-react', () => {
     title,
     children,
     footer,
-  }: React.PropsWithChildren<{ visible?: boolean; title?: React.ReactNode; footer?: React.ReactNode }>) =>
+    onOk,
+    onCancel,
+    okText,
+    cancelText,
+  }: React.PropsWithChildren<{
+    visible?: boolean;
+    title?: React.ReactNode;
+    footer?: React.ReactNode;
+    onOk?: () => void;
+    onCancel?: () => void;
+    okText?: React.ReactNode;
+    cancelText?: React.ReactNode;
+  }>) =>
     visible ? (
       <div>
         {title}
         {children}
         {footer}
+        {cancelText ? <button onClick={onCancel}>{cancelText}</button> : null}
+        {okText ? <button onClick={onOk}>{okText}</button> : null}
       </div>
     ) : null;
   (Modal as unknown as { confirm: ReturnType<typeof vi.fn> }).confirm = vi.fn();
@@ -76,16 +91,36 @@ vi.mock('@arco-design/web-react', () => {
   );
   Select.Option = ({ children }: React.PropsWithChildren) => <div>{children}</div>;
 
-  const Input = ({ value, placeholder }: { value?: string; placeholder?: string }) => (
-    <input value={value} placeholder={placeholder} readOnly />
+  const Input = ({
+    value,
+    placeholder,
+    onChange,
+  }: {
+    value?: string;
+    placeholder?: string;
+    onChange?: (value: string) => void;
+  }) => (
+    <input
+      value={value}
+      placeholder={placeholder}
+      onChange={(event) => onChange?.(event.currentTarget.value)}
+    />
   );
   Input.TextArea = ({
     value,
     placeholder,
+    onChange,
   }: {
     value?: string;
     placeholder?: string;
-  }) => <textarea value={value} placeholder={placeholder} readOnly />;
+    onChange?: (value: string) => void;
+  }) => (
+    <textarea
+      value={value}
+      placeholder={placeholder}
+      onChange={(event) => onChange?.(event.currentTarget.value)}
+    />
+  );
 
   const Typography = {
     Title: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
@@ -132,7 +167,7 @@ vi.mock('@/renderer/utils/enterpriseApi/client', () => ({
 }));
 
 vi.mock('@/renderer/utils/enterpriseApi/modules', () => ({
-  createRequirement: vi.fn(),
+  createRequirement: (...args: unknown[]) => createRequirementMock(...args),
   deleteRequirement: vi.fn(),
   listRequirementsTree: () => listRequirementsTreeMock(),
   updateRequirement: vi.fn(),
@@ -149,6 +184,8 @@ describe('AdminKanban', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     navigateMock.mockReset();
+    createRequirementMock.mockReset();
+    createRequirementMock.mockResolvedValue({ id: 'feature-1' });
     locationMock.pathname = '/enterprise/cteam';
     locationMock.search = '';
     listRequirementsTreeMock.mockResolvedValue([
@@ -253,6 +290,16 @@ describe('AdminKanban', () => {
     expect(navigateMock).toHaveBeenLastCalledWith(
       '/team/team-1?issueId=story-2&issueSubject=%E8%A1%A5%E9%BD%90%E8%B6%85%E7%BA%A7%E5%8A%A9%E6%89%8B%E6%95%B0%E6%8D%AE%E6%8E%A5%E5%85%A5'
     );
+
+    fireEvent.click(screen.getByText('打开团队工作区'));
+    expect(navigateMock).toHaveBeenLastCalledWith(
+      '/team/team-1?issueId=story-2&issueSubject=%E8%A1%A5%E9%BD%90%E8%B6%85%E7%BA%A7%E5%8A%A9%E6%89%8B%E6%95%B0%E6%8D%AE%E6%8E%A5%E5%85%A5&workspaceTab=kanban'
+    );
+
+    fireEvent.click(screen.getByText('打开当前团队代码'));
+    expect(navigateMock).toHaveBeenLastCalledWith(
+      '/team/team-1?issueId=story-2&issueSubject=%E8%A1%A5%E9%BD%90%E8%B6%85%E7%BA%A7%E5%8A%A9%E6%89%8B%E6%95%B0%E6%8D%AE%E6%8E%A5%E5%85%A5&workspaceTab=files'
+    );
   });
 
   it('falls back to the default epic when the issueId query does not exist', async () => {
@@ -266,5 +313,52 @@ describe('AdminKanban', () => {
 
     expect(await screen.findByText('修复团队上下文深链')).toBeInTheDocument();
     expect(screen.queryByText('卡片详情')).not.toBeInTheDocument();
+  });
+
+  it('derives decomposition cards from the current requirement input instead of static demo content', async () => {
+    render(<AdminKanban />);
+
+    await waitFor(() => {
+      expect(listRequirementsTreeMock).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByText('AI 需求一键拆单'));
+    fireEvent.change(screen.getByPlaceholderText(/例如：在企业版中加一个 RAG 本地知识库/), {
+      target: {
+        value: `安全门户需求分析：首页
+1. 首页搜索安全知识库、个人中心和通知
+2. 中间 card 删除除险、紧急上报
+安全知识库
+1. 知识库描述补充
+2. 文章类型概念删除、分类修改`,
+      },
+    });
+    fireEvent.click(screen.getByText('AI 分析并拆解'));
+
+    await waitFor(() => {
+      expect(createRequirementMock).toHaveBeenCalled();
+    });
+
+    expect(createRequirementMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        type: 'feature',
+        subject: '安全门户需求分析',
+      })
+    );
+    expect(createRequirementMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parent_id: 'feature-1',
+        subject: '首页',
+        description: expect.stringContaining('首页搜索安全知识库、个人中心和通知'),
+      })
+    );
+    expect(createRequirementMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parent_id: 'feature-1',
+        subject: '安全知识库',
+        description: expect.stringContaining('文章类型概念删除、分类修改'),
+      })
+    );
   });
 });

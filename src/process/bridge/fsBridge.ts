@@ -242,6 +242,259 @@ function markShadowedSkills(skills: SkillMetadata[]): SkillMetadata[] {
   });
 }
 
+type RemoteBufferOptions = {
+  allowedHosts?: string[];
+  maxBytes?: number;
+  userAgent?: string;
+  referer?: string;
+  purpose?: string;
+};
+
+type GitHubSkillSource = {
+  sourceUrl: string;
+  owner: string;
+  repo: string;
+  ref?: string;
+  subdir: string;
+};
+
+function sanitizePathSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'item';
+}
+
+function normalizeGitHubRepoName(repo: string): string {
+  return repo.endsWith('.git') ? repo.slice(0, -4) : repo;
+}
+
+function toPosixSubdir(value: string): string {
+  return value
+    .split('/')
+    .map((segment) => decodeURIComponent(segment))
+    .filter(Boolean)
+    .join('/');
+}
+
+function buildGitHubTreeUrl(owner: string, repo: string, ref: string, subdir: string): string {
+  const encodedRef = ref
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+  const encodedSubdir = subdir
+    .split('/')
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+  return encodedSubdir
+    ? `https://github.com/${owner}/${repo}/tree/${encodedRef}/${encodedSubdir}`
+    : `https://github.com/${owner}/${repo}/tree/${encodedRef}`;
+}
+
+function parseGitHubSkillUrl(rawUrl: string): GitHubSkillSource {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl.trim());
+  } catch {
+    throw new Error('Please enter a valid GitHub URL');
+  }
+
+  const segments = parsed.pathname.split('/').filter(Boolean);
+  if (parsed.hostname === 'github.com') {
+    if (segments.length < 2) {
+      throw new Error('GitHub URL must include both owner and repository name');
+    }
+
+    const owner = decodeURIComponent(segments[0]);
+    const repo = normalizeGitHubRepoName(decodeURIComponent(segments[1]));
+    if (!owner || !repo) {
+      throw new Error('GitHub URL must include both owner and repository name');
+    }
+
+    if (segments.length === 2) {
+      return {
+        sourceUrl: rawUrl.trim(),
+        owner,
+        repo,
+        subdir: '',
+      };
+    }
+
+    if (segments[2] === 'tree' && segments[3]) {
+      return {
+        sourceUrl: rawUrl.trim(),
+        owner,
+        repo,
+        ref: decodeURIComponent(segments[3]),
+        subdir: toPosixSubdir(segments.slice(4).join('/')),
+      };
+    }
+
+    if (segments[2] === 'blob' && segments[3]) {
+      const filePath = toPosixSubdir(segments.slice(4).join('/'));
+      if (!filePath.endsWith('SKILL.md')) {
+        throw new Error('Only GitHub SKILL.md blob links are supported');
+      }
+      const subdir = path.posix.dirname(filePath);
+      return {
+        sourceUrl: rawUrl.trim(),
+        owner,
+        repo,
+        ref: decodeURIComponent(segments[3]),
+        subdir: subdir === '.' ? '' : subdir,
+      };
+    }
+  }
+
+  if (parsed.hostname === 'raw.githubusercontent.com') {
+    if (segments.length < 4) {
+      throw new Error('Raw GitHub URL must point to a SKILL.md file');
+    }
+    const owner = decodeURIComponent(segments[0]);
+    const repo = normalizeGitHubRepoName(decodeURIComponent(segments[1]));
+    const ref = decodeURIComponent(segments[2]);
+    const filePath = toPosixSubdir(segments.slice(3).join('/'));
+    if (!filePath.endsWith('SKILL.md')) {
+      throw new Error('Only raw GitHub SKILL.md links are supported');
+    }
+    const subdir = path.posix.dirname(filePath);
+    return {
+      sourceUrl: rawUrl.trim(),
+      owner,
+      repo,
+      ref,
+      subdir: subdir === '.' ? '' : subdir,
+    };
+  }
+
+  throw new Error('Only GitHub repository, tree, blob, or raw SKILL.md URLs are supported');
+}
+
+function resolveWithinDirectory(baseDir: string, relativePath: string): string {
+  const targetPath = path.resolve(baseDir, ...relativePath.split('/').filter(Boolean));
+  const resolvedBaseDir = path.resolve(baseDir);
+  if (targetPath !== resolvedBaseDir && !targetPath.startsWith(resolvedBaseDir + path.sep)) {
+    throw new Error('Resolved path is outside the extracted GitHub repository');
+  }
+  return targetPath;
+}
+
+async function listDirectoryEntriesSafe(directory: string) {
+  try {
+    return await fs.readdir(directory, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+async function discoverSkillsInFolder(folderPath: string): Promise<SkillMetadata[]> {
+  const discovered: SkillMetadata[] = [];
+  const seenDirectories = new Set<string>();
+
+  const addSkillIfPresent = (skillDir: string) => {
+    const resolvedSkillDir = path.resolve(skillDir);
+    if (seenDirectories.has(resolvedSkillDir)) {
+      return;
+    }
+    const metadata = readSkillMetadata(skillDir, {
+      sourceKind: 'external',
+      isCustom: false,
+      sourceLabel: 'GitHub URL',
+    });
+    if (metadata) {
+      seenDirectories.add(resolvedSkillDir);
+      discovered.push(metadata);
+    }
+  };
+
+  const scanSkillsSubdirectory = async (containerDir: string) => {
+    const entries = await listDirectoryEntriesSafe(containerDir);
+    for (const entry of entries) {
+      if (!isSkillDirectoryEntry(entry)) continue;
+      addSkillIfPresent(path.join(containerDir, entry.name));
+    }
+  };
+
+  addSkillIfPresent(folderPath);
+  await scanSkillsSubdirectory(path.join(folderPath, 'skills'));
+
+  const directEntries = await listDirectoryEntriesSafe(folderPath);
+  for (const entry of directEntries) {
+    if (!isSkillDirectoryEntry(entry)) continue;
+    const directPath = path.join(folderPath, entry.name);
+    addSkillIfPresent(directPath);
+    await scanSkillsSubdirectory(path.join(directPath, 'skills'));
+  }
+
+  return discovered.toSorted((a, b) => a.name.localeCompare(b.name));
+}
+
+async function importSkillDirectory(
+  skillPath: string,
+  options: {
+    useSymlink: boolean;
+  }
+): Promise<{ success: boolean; data?: { skillName: string }; msg: string }> {
+  const metadata = readSkillMetadata(skillPath, {
+    sourceKind: 'external',
+    isCustom: false,
+  });
+  if (!metadata) {
+    return {
+      success: false,
+      msg: 'SKILL.md file not found in selected directory',
+    };
+  }
+
+  const skillName = metadata.name;
+  const userSkillsDir = getSkillsDir();
+  const targetDir = path.join(userSkillsDir, skillName);
+  const builtinTargetDir = path.join(getBuiltinSkillsCopyDir(), skillName);
+
+  if (options.useSymlink) {
+    await fs.mkdir(userSkillsDir, { recursive: true });
+    try {
+      await fs.access(targetDir);
+      return { success: false, msg: `Skill "${skillName}" already exists` };
+    } catch {
+      // Continue when target does not exist.
+    }
+
+    await fs.symlink(skillPath, targetDir, 'junction');
+    return {
+      success: true,
+      data: { skillName },
+      msg: `Skill "${skillName}" imported successfully`,
+    };
+  }
+
+  try {
+    await fs.access(targetDir);
+    return {
+      success: true,
+      data: { skillName },
+      msg: `Skill "${skillName}" already exists`,
+    };
+  } catch {
+    // Continue when target does not exist.
+  }
+
+  try {
+    await fs.access(builtinTargetDir);
+    return {
+      success: false,
+      msg: `Skill "${skillName}" already exists in builtin skills`,
+    };
+  } catch {
+    // Continue when builtin target does not exist.
+  }
+
+  await copyDirectory(skillPath, targetDir);
+  return {
+    success: true,
+    data: { skillName },
+    msg: `Skill "${skillName}" imported successfully`,
+  };
+}
+
 export function initFsBridge(): void {
   const canceledZipRequests = new Set<string>();
 
@@ -283,7 +536,8 @@ export function initFsBridge(): void {
   // 下载远程图片并限制协议/重定向次数 / Download remote resource with protocol & redirect guard
   const downloadRemoteBuffer = (
     targetUrl: string,
-    redirectCount = 0
+    redirectCount = 0,
+    options: RemoteBufferOptions = {}
   ): Promise<{ buffer: Buffer; contentType?: string }> => {
     const allowedProtocols = new Set(['http:', 'https:']);
     const parsedUrl = new URL(targetUrl);
@@ -292,7 +546,12 @@ export function initFsBridge(): void {
     }
 
     // 仅允许白名单域名，避免随意访问 / Restrict to a whitelist of hosts for safety
-    const allowedHosts = ['github.com', 'raw.githubusercontent.com', 'contrib.rocks', 'img.shields.io'];
+    const allowedHosts = options.allowedHosts || [
+      'github.com',
+      'raw.githubusercontent.com',
+      'contrib.rocks',
+      'img.shields.io',
+    ];
     const isAllowedHost = allowedHosts.some(
       (host) => parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`)
     );
@@ -307,8 +566,8 @@ export function initFsBridge(): void {
           targetUrl,
           {
             headers: {
-              'User-Agent': 'one-Preview',
-              Referer: 'https://github.com/gaogg521/1ONE-Claude-Code',
+              'User-Agent': options.userAgent || 'one-Preview',
+              Referer: options.referer || 'https://github.com/gaogg521/1ONE-Claude-Code',
             },
           },
           (response) => {
@@ -317,24 +576,24 @@ export function initFsBridge(): void {
             if (statusCode >= 300 && statusCode < 400 && headers.location && redirectCount < 5) {
               const redirectUrl = new URL(headers.location, targetUrl).toString();
               response.resume();
-              resolve(downloadRemoteBuffer(redirectUrl, redirectCount + 1));
+              resolve(downloadRemoteBuffer(redirectUrl, redirectCount + 1, options));
               return;
             }
 
             if (statusCode >= 400) {
               response.resume();
-              reject(new Error(`Failed to fetch image: HTTP ${statusCode}`));
+              reject(new Error(`Failed to fetch ${options.purpose || 'remote resource'}: HTTP ${statusCode}`));
               return;
             }
 
             const chunks: Buffer[] = [];
             let receivedBytes = 0;
-            const MAX_BYTES = 5 * 1024 * 1024; // 5MB limit
+            const maxBytes = options.maxBytes || 5 * 1024 * 1024;
 
             response.on('data', (chunk: Buffer) => {
               receivedBytes += chunk.length;
-              if (receivedBytes > MAX_BYTES) {
-                response.destroy(new Error('Remote image exceeds size limit (5MB)'));
+              if (receivedBytes > maxBytes) {
+                response.destroy(new Error(`Remote ${options.purpose || 'resource'} exceeds size limit`));
                 return;
               }
               chunks.push(chunk);
@@ -351,7 +610,7 @@ export function initFsBridge(): void {
         );
 
         request.setTimeout(15000, () => {
-          request.destroy(new Error('Remote image request timed out'));
+          request.destroy(new Error(`Remote ${options.purpose || 'resource'} request timed out`));
         });
 
         request.on('error', (error) => reject(error));
@@ -359,6 +618,79 @@ export function initFsBridge(): void {
         reject(error);
       }
     });
+  };
+
+  const fetchGitHubDefaultBranch = async (owner: string, repo: string): Promise<string> => {
+    const { buffer } = await downloadRemoteBuffer(`https://api.github.com/repos/${owner}/${repo}`, 0, {
+      allowedHosts: ['api.github.com'],
+      maxBytes: 1024 * 1024,
+      userAgent: '1ONE-SkillsHub',
+      purpose: 'GitHub repository metadata',
+    });
+    const payload = JSON.parse(buffer.toString('utf-8')) as { default_branch?: string };
+    if (!payload.default_branch) {
+      throw new Error('Could not determine the default branch for this GitHub repository');
+    }
+    return payload.default_branch;
+  };
+
+  const extractGitHubArchive = async (archiveBuffer: Buffer, destinationDir: string) => {
+    const archive = await JSZip.loadAsync(archiveBuffer);
+    await fs.rm(destinationDir, { recursive: true, force: true });
+    await fs.mkdir(destinationDir, { recursive: true });
+
+    for (const entry of Object.values(archive.files)) {
+      if (entry.dir) continue;
+      const normalizedName = entry.name.replace(/\\/g, '/');
+      const relativeName = normalizedName.split('/').slice(1).join('/');
+      if (!relativeName) continue;
+      const targetPath = resolveWithinDirectory(destinationDir, relativeName);
+      await fs.mkdir(path.dirname(targetPath), { recursive: true });
+      const content = await entry.async('nodebuffer');
+      await fs.writeFile(targetPath, Buffer.isBuffer(content) ? content : Buffer.from(content));
+    }
+  };
+
+  const previewSkillsFromGitHubUrl = async (url: string) => {
+    const parsed = parseGitHubSkillUrl(url);
+    const ref = parsed.ref || (await fetchGitHubDefaultBranch(parsed.owner, parsed.repo));
+    const encodedRef = ref
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+    const { buffer } = await downloadRemoteBuffer(
+      `https://codeload.github.com/${parsed.owner}/${parsed.repo}/zip/refs/heads/${encodedRef}`,
+      0,
+      {
+        allowedHosts: ['codeload.github.com'],
+        maxBytes: 25 * 1024 * 1024,
+        userAgent: '1ONE-SkillsHub',
+        purpose: 'GitHub repository archive',
+      }
+    );
+
+    const { cacheDir } = getSystemDir();
+    const previewDir = path.join(
+      cacheDir,
+      'github-skill-imports',
+      `${Date.now()}-${sanitizePathSegment(parsed.owner)}-${sanitizePathSegment(parsed.repo)}`
+    );
+    await extractGitHubArchive(buffer, previewDir);
+
+    const skillRoot = parsed.subdir ? resolveWithinDirectory(previewDir, parsed.subdir) : previewDir;
+    await fs.access(skillRoot);
+
+    const skills = await discoverSkillsInFolder(skillRoot);
+    if (skills.length === 0) {
+      throw new Error('No supported skills were found at this GitHub URL');
+    }
+
+    return {
+      sourceUrl: parsed.sourceUrl,
+      resolvedUrl: buildGitHubTreeUrl(parsed.owner, parsed.repo, ref, parsed.subdir),
+      cacheDir: previewDir,
+      skills,
+    };
   };
 
   // 通过桥接层拉取远程图片并转成 base64 / Fetch remote image via bridge and return base64
@@ -940,62 +1272,37 @@ export function initFsBridge(): void {
   // 导入 skill 目录 / Import skill directory
   ipcBridge.fs.importSkill.provider(async ({ skillPath }) => {
     try {
-      const metadata = readSkillMetadata(skillPath, {
-        sourceKind: 'external',
-        isCustom: false,
-      });
-      if (!metadata) {
-        return {
-          success: false,
-          msg: 'No supported skill metadata found in the selected directory',
-        };
-      }
-
-      const skillName = metadata.name;
-
-      // 获取用户 skills 目录 / Get user skills directory
-      const userSkillsDir = getSkillsDir();
-      const targetDir = path.join(userSkillsDir, skillName);
-
-      // Check if skill already exists in both builtin and user directories
-      const builtinTargetDir = path.join(getBuiltinSkillsCopyDir(), skillName);
-
-      try {
-        await fs.access(targetDir);
-        // Skill already exists in user directory, treat as success (skip copy)
-        // 用户目录已存在同名 skill，视为成功（跳过复制）
-        console.log(`[fsBridge] Skill "${skillName}" already exists in user skills, skipping import`);
-        return {
-          success: true,
-          data: { skillName },
-          msg: `Skill "${skillName}" already exists`,
-        };
-      } catch {
-        // User skill doesn't exist
-      }
-
-      try {
-        await fs.access(builtinTargetDir);
-        return {
-          success: false,
-          msg: `Skill "${skillName}" already exists in builtin skills`,
-        };
-      } catch {
-        // Builtin skill doesn't exist, proceed with copy
-      }
-
-      // 复制整个目录 / Copy entire directory
-      await copyDirectory(skillPath, targetDir);
-
-      console.log(`[fsBridge] Successfully imported skill "${skillName}" to ${targetDir}`);
-
-      return {
-        success: true,
-        data: { skillName },
-        msg: `Skill "${skillName}" imported successfully`,
-      };
+      return await importSkillDirectory(skillPath, { useSymlink: false });
     } catch (error) {
       console.error('[fsBridge] Failed to import skill:', error);
+      return {
+        success: false,
+        msg: `Failed to import skill: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  });
+
+  ipcBridge.fs.previewSkillsFromUrl.provider(async ({ url }) => {
+    try {
+      return {
+        success: true,
+        data: await previewSkillsFromGitHubUrl(url),
+        msg: 'Skills preview loaded successfully',
+      };
+    } catch (error) {
+      console.error('[fsBridge] Failed to preview skills from URL:', error);
+      return {
+        success: false,
+        msg: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  ipcBridge.fs.importSkillFromUrl.provider(async ({ skillPath }) => {
+    try {
+      return await importSkillDirectory(skillPath, { useSymlink: false });
+    } catch (error) {
+      console.error('[fsBridge] Failed to import skill from URL preview:', error);
       return {
         success: false,
         msg: `Failed to import skill: ${error instanceof Error ? error.message : String(error)}`,
@@ -1007,46 +1314,12 @@ export function initFsBridge(): void {
   ipcBridge.fs.scanForSkills.provider(async ({ folderPath }) => {
     console.log(`[fsBridge] scanForSkills called with path: ${folderPath}`);
     try {
-      const skills: Array<{ name: string; description: string; path: string }> = [];
-
       await fs.access(folderPath);
-      const entries = await fs.readdir(folderPath, { withFileTypes: true });
-      console.log(`[fsBridge] Found ${entries.length} entries in ${folderPath}`);
-
-      for (const entry of entries) {
-        if (!isSkillDirectoryEntry(entry)) continue;
-
-        const skillDir = path.join(folderPath, entry.name);
-        const metadata = readSkillMetadata(skillDir, {
-          sourceKind: 'external',
-          isCustom: false,
-        });
-        if (metadata) {
-          skills.push({
-            name: metadata.name,
-            description: metadata.description,
-            path: skillDir,
-          });
-          console.log(`[fsBridge] Found skill in subdirectory: ${metadata.name}`);
-        }
-      }
-
-      // Si no se encontraron skills en subdirectorios, probamos si la carpeta seleccionada en sí es una skill
-      if (skills.length === 0) {
-        console.log(`[fsBridge] No skills in subdirectories, checking if ${folderPath} is a skill itself`);
-        const metadata = readSkillMetadata(folderPath, {
-          sourceKind: 'external',
-          isCustom: false,
-        });
-        if (metadata) {
-          skills.push({
-            name: metadata.name,
-            description: metadata.description,
-            path: folderPath,
-          });
-          console.log(`[fsBridge] Found skill in the folder itself: ${metadata.name}`);
-        }
-      }
+      const skills = (await discoverSkillsInFolder(folderPath)).map((metadata) => ({
+        name: metadata.name,
+        description: metadata.description,
+        path: metadata.directory,
+      }));
 
       console.log(`[fsBridge] scanForSkills finished. Found ${skills.length} skills.`);
       return {
@@ -1323,38 +1596,7 @@ export function initFsBridge(): void {
   // 符号链接方式导入 skill / Import skill via symlink
   ipcBridge.fs.importSkillWithSymlink.provider(async ({ skillPath }) => {
     try {
-      const metadata = readSkillMetadata(skillPath, {
-        sourceKind: 'external',
-        isCustom: false,
-      });
-      if (!metadata) {
-        return {
-          success: false,
-          msg: 'No supported skill metadata found in the selected directory',
-        };
-      }
-
-      const skillName = metadata.name;
-
-      const userSkillsDir = getSkillsDir();
-      const targetDir = path.join(userSkillsDir, skillName);
-
-      await fs.mkdir(userSkillsDir, { recursive: true });
-
-      try {
-        await fs.access(targetDir);
-        return { success: false, msg: `Skill "${skillName}" already exists` };
-      } catch {
-        // Does not exist, proceed
-      }
-
-      await fs.symlink(skillPath, targetDir, 'junction');
-      console.log(`[fsBridge] Created symlink for skill "${skillName}" at ${targetDir}`);
-      return {
-        success: true,
-        data: { skillName },
-        msg: `Skill "${skillName}" imported successfully`,
-      };
+      return await importSkillDirectory(skillPath, { useSymlink: true });
     } catch (error) {
       console.error('[fsBridge] Failed to import skill with symlink:', error);
       return {

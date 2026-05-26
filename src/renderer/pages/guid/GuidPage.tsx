@@ -28,6 +28,7 @@ import { useTypewriterPlaceholder } from './hooks/useTypewriterPlaceholder';
 import { ConfigStorage } from '@/common/config/storage';
 import { ACP_BACKENDS_ALL, type PresetAgentType } from '@/common/types/acpTypes';
 import { getAgentLogo } from '@/renderer/utils/model/agentLogo';
+import { getGuidRailStyle } from '@/renderer/utils/ui/contentRail';
 import type { AcpBackendConfig } from './types';
 import { Button, ConfigProvider, Dropdown, Menu, Message } from '@arco-design/web-react';
 import { Down, Left, Robot, Write } from '@icon-park/react';
@@ -491,7 +492,7 @@ const GuidPage: React.FC = () => {
     <ConfigProvider getPopupContainer={() => guidContainerRef.current || document.body}>
       <div ref={guidContainerRef} className={styles.guidContainer}>
         <SkillsMarketBanner />
-        <div className={styles.guidLayout}>
+        <div className={styles.guidLayout} style={getGuidRailStyle()}>
           <div className={styles.heroHeader}>
             {agentSelection.isPresetAgent ? (
               <div className={styles.heroHeaderControls}>

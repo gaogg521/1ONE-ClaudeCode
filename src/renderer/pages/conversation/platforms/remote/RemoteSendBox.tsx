@@ -26,6 +26,8 @@ import { useLatestRef } from '@/renderer/hooks/ui/useLatestRef';
 import { useOpenFileSelector } from '@/renderer/hooks/file/useOpenFileSelector';
 import FileAttachButton from '@/renderer/components/media/FileAttachButton';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 
 interface RemoteDraftData {
   _type: 'remote';
@@ -47,6 +49,7 @@ const EMPTY_UPLOAD_FILES: string[] = [];
 const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id }) => {
   const [workspacePath, setWorkspacePath] = useState('');
   const { t } = useTranslation();
+  const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
   const { checkAndUpdateTitle } = useAutoTitle();
   const addOrUpdateMessage = useAddOrUpdateMessage();
   const { setSendBoxHandler } = usePreviewContext();
@@ -370,7 +373,10 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
   };
 
   return (
-    <div className='max-w-800px w-full mx-auto flex flex-col mt-auto mb-16px'>
+    <div
+      className={`w-full flex flex-col mt-auto mb-16px ${stretchLayout ? '' : 'mx-auto'}`}
+      style={getChatRailSurfaceStyle('surface', stretchLayout)}
+    >
       <ThoughtDisplay thought={thought} running={aiProcessing} onStop={handleStop} />
 
       <SendBox

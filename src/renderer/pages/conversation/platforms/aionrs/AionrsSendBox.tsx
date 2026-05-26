@@ -37,6 +37,8 @@ import { Shield } from '@icon-park/react';
 import { iconColors } from '@/renderer/styles/colors';
 import AgentModeSelector from '@/renderer/components/agent/AgentModeSelector';
 import ThoughtDisplay from '@/renderer/components/chat/ThoughtDisplay';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
@@ -91,6 +93,7 @@ const AionrsSendBox: React.FC<{
 }> = ({ conversation_id, modelSelection }) => {
   const [workspacePath, setWorkspacePath] = useState('');
   const { t } = useTranslation();
+  const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
   const { checkAndUpdateTitle } = useAutoTitle();
   const isCommandQueueEnabled = useCommandQueueEnabled();
 
@@ -303,7 +306,10 @@ const AionrsSendBox: React.FC<{
   };
 
   return (
-    <div className='max-w-800px w-full mx-auto flex flex-col mt-auto mb-16px'>
+    <div
+      className={`w-full flex flex-col mt-auto mb-16px ${stretchLayout ? '' : 'mx-auto'}`}
+      style={getChatRailSurfaceStyle('surface', stretchLayout)}
+    >
       <ThoughtDisplay thought={thought} running={running} onStop={handleStop} />
       <CommandQueuePanel
         items={queuedCommands}

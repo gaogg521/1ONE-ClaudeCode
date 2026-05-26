@@ -30,6 +30,8 @@ import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/chat/Tho
 import FilePreview from '@/renderer/components/media/FilePreview';
 import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 import { useLatestRef } from '@/renderer/hooks/ui/useLatestRef';
 import { useOpenFileSelector } from '@/renderer/hooks/file/useOpenFileSelector';
 import FileAttachButton from '@/renderer/components/media/FileAttachButton';
@@ -57,6 +59,7 @@ const EMPTY_UPLOAD_FILES: string[] = [];
 const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id }) => {
   const [workspacePath, setWorkspacePath] = useState('');
   const { t } = useTranslation();
+  const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
   const { checkAndUpdateTitle } = useAutoTitle();
   const slashCommands = useSlashCommands(conversation_id);
   const isCommandQueueEnabled = useCommandQueueEnabled();
@@ -392,7 +395,10 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
   };
 
   return (
-    <div className='max-w-800px w-full mx-auto flex flex-col mt-auto mb-16px'>
+    <div
+      className={`w-full flex flex-col mt-auto mb-16px ${stretchLayout ? '' : 'mx-auto'}`}
+      style={getChatRailSurfaceStyle('surface', stretchLayout)}
+    >
       <ThoughtDisplay thought={thought} running={aiProcessing} onStop={handleStop} />
       <CommandQueuePanel
         items={items}

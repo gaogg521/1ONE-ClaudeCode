@@ -14,6 +14,7 @@ import AgentsTab from './components/AgentsTab';
 import SkillsTab from './components/SkillsTab';
 import RuntimesTab from './components/RuntimesTab';
 import SettingsTab from './components/SettingsTab';
+import type { SuperAssistantIssueAssignmentMap } from './hooks/useSuperAssistantData';
 import { useSuperAssistantData } from './hooks/useSuperAssistantData';
 
 type NavigationIssueContext = {
@@ -25,6 +26,8 @@ type NavigationTeamContext = {
   id: string;
   name: string;
 } | null;
+
+const SUPER_ASSISTANT_ISSUE_ASSIGNMENTS_KEY = 'super-assistant-issue-assignments';
 
 function appendIssueContext(params: URLSearchParams, issue: NavigationIssueContext): void {
   if (!issue) {
@@ -69,13 +72,28 @@ function buildKanbanPath(issue?: NavigationIssueContext, team?: NavigationTeamCo
   return `/enterprise/cteam?${params.toString()}`;
 }
 
-function buildTeamPath(teamId: string, issue?: NavigationIssueContext): string {
+function buildTeamPath(teamId: string, issue?: NavigationIssueContext, agentSlotId?: string): string {
   if (!issue) {
     return `/team/${teamId}`;
   }
   const params = new URLSearchParams();
   appendIssueContext(params, issue);
+  if (agentSlotId) {
+    params.set('agentSlotId', agentSlotId);
+  }
   return `/team/${teamId}?${params.toString()}`;
+}
+
+function loadIssueAssignments(): SuperAssistantIssueAssignmentMap {
+  try {
+    return JSON.parse(window.localStorage.getItem(SUPER_ASSISTANT_ISSUE_ASSIGNMENTS_KEY) ?? '{}') as SuperAssistantIssueAssignmentMap;
+  } catch {
+    return {};
+  }
+}
+
+function saveIssueAssignments(assignments: SuperAssistantIssueAssignmentMap): void {
+  window.localStorage.setItem(SUPER_ASSISTANT_ISSUE_ASSIGNMENTS_KEY, JSON.stringify(assignments));
 }
 
 function parseSuperAssistantSearch(search: string): {
@@ -100,9 +118,10 @@ const SuperAssistantPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
   const { hasJoinedEnterprise, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
-  const [activeTab, setActiveTab] = useState<SuperAssistantTab>('issues');
+  const [activeTab, setActiveTab] = useState<SuperAssistantTab>('overview');
+  const [issueAssignments, setIssueAssignments] = useState<SuperAssistantIssueAssignmentMap>(() => loadIssueAssignments());
   const isAdmin = isEnterpriseAdminRole(user?.role);
-  const superAssistantData = useSuperAssistantData(hasJoinedEnterprise, isAdmin);
+  const superAssistantData = useSuperAssistantData(hasJoinedEnterprise, isAdmin, issueAssignments);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const currentTeam = superAssistantData.primaryTeam
     ? {
@@ -124,6 +143,33 @@ const SuperAssistantPage: React.FC = () => {
   const currentIssue =
     (selectedIssueId ? superAssistantData.issueLookup[selectedIssueId] : null) ??
     superAssistantData.featuredIssue;
+  const currentIssueAssignment = currentIssue ? issueAssignments[currentIssue.id] ?? null : null;
+  const currentIssueActivityFeedback = useMemo(() => {
+    if (!currentIssueAssignment) {
+      return {
+        assignedAgentName: null,
+        assignedStatus: null,
+        blockerMessage: null,
+      } as const;
+    }
+    const matchedAgent =
+      superAssistantData.agentExecutionGroups
+        .find((group) => group.teamId === currentIssueAssignment.teamId)
+        ?.agents.find((agent) => agent.slotId === currentIssueAssignment.slotId) ?? null;
+    return {
+      assignedAgentName: currentIssueAssignment.agentName,
+      assignedStatus: matchedAgent?.status ?? null,
+      blockerMessage: matchedAgent?.blockerMessage ?? null,
+    } as const;
+  }, [currentIssueAssignment, superAssistantData.agentExecutionGroups]);
+  const assignableAgents = useMemo(
+    () =>
+      (superAssistantData.primaryTeam?.agents ?? []).map((agent) => ({
+        slotId: agent.slotId,
+        agentName: agent.agentName,
+      })),
+    [superAssistantData.primaryTeam]
+  );
   const routedState = useMemo(() => parseSuperAssistantSearch(location.search), [location.search]);
 
   useEffect(() => {
@@ -137,6 +183,59 @@ const SuperAssistantPage: React.FC = () => {
       setSelectedIssueId(routedState.issueId);
     }
   }, [routedState.issueId, superAssistantData.issueLookup]);
+
+  const handleBreakdownIssue = () => navigate(buildKanbanPath(currentIssue, currentTeam));
+  const handleOpenTeamFlow = () =>
+    navigate(
+      superAssistantData.primaryTeam
+        ? buildTeamPath(superAssistantData.primaryTeam.id, currentIssue, currentIssueAssignment?.slotId)
+        : '/enterprise/teams'
+    );
+  const handleOpenSharedTasks = () =>
+    navigate(
+      superAssistantData.primaryTeam
+        ? buildTeamScopedPath(
+            '/tasks',
+            superAssistantData.primaryTeam.id,
+            superAssistantData.primaryTeam.name,
+            currentIssue
+          )
+        : buildTeamScopedPath('/tasks', undefined, undefined, currentIssue)
+    );
+  const handleOpenSharedSessions = () =>
+    navigate(
+      superAssistantData.primaryTeam
+        ? buildTeamScopedPath(
+            '/sessions',
+            superAssistantData.primaryTeam.id,
+            superAssistantData.primaryTeam.name,
+            currentIssue
+          )
+        : buildTeamScopedPath('/sessions', undefined, undefined, currentIssue)
+    );
+  const handleOpenSkillsHub = () => navigate('/settings/skills-hub');
+  const handleOpenMcp = () => navigate('/mcp');
+  const handleOpenAgentSettings = () => navigate('/settings/agent');
+  const handleAssignIssue = (slotId: string, agentName: string) => {
+    if (!currentIssue || !superAssistantData.primaryTeam) {
+      return;
+    }
+    const nextAssignments: SuperAssistantIssueAssignmentMap = {
+      ...issueAssignments,
+      [currentIssue.id]: {
+        issueId: currentIssue.id,
+        issueSubject: currentIssue.subject,
+        teamId: superAssistantData.primaryTeam.id,
+        teamName: superAssistantData.primaryTeam.name,
+        slotId,
+        agentName,
+        assignedAt: Date.now(),
+      },
+    };
+    setIssueAssignments(nextAssignments);
+    saveIssueAssignments(nextAssignments);
+    navigate(buildTeamPath(superAssistantData.primaryTeam.id, currentIssue, slotId));
+  };
 
   const tabLabels = useMemo<Record<SuperAssistantTab, string>>(
     () => ({
@@ -179,6 +278,16 @@ const SuperAssistantPage: React.FC = () => {
             activeAgentCount={superAssistantData.activeAgentCount}
             teamConversationCount={superAssistantData.teamConversationCount}
             featuredIssueSubject={superAssistantData.featuredIssue?.subject}
+            skillCount={superAssistantData.skillCount}
+            enabledMcpCount={superAssistantData.enabledMcpCount}
+            teamCount={superAssistantData.teamSummaries.length}
+            onBreakdownIssue={handleBreakdownIssue}
+            onOpenTeamFlow={handleOpenTeamFlow}
+            onOpenSharedTasks={handleOpenSharedTasks}
+            onOpenSharedSessions={handleOpenSharedSessions}
+            onOpenSkills={handleOpenSkillsHub}
+            onOpenMcp={handleOpenMcp}
+            onOpenRuntimes={() => setActiveTab('runtimes')}
           />
         );
       case 'issues':
@@ -188,51 +297,24 @@ const SuperAssistantPage: React.FC = () => {
             loading={superAssistantData.loading}
             boardColumns={superAssistantData.boardColumns}
             currentIssue={currentIssue}
+            assignableAgents={assignableAgents}
+            currentAssignmentAgentName={currentIssueAssignment?.agentName ?? null}
+            currentIssueActivityFeedback={currentIssueActivityFeedback}
             onSelectIssue={setSelectedIssueId}
-            onBreakdownIssue={() => navigate(buildKanbanPath(currentIssue, currentTeam))}
-            onOpenKanban={() => navigate(buildKanbanPath(currentIssue, currentTeam))}
-            onOpenTeamFlow={() =>
-              navigate(
-                superAssistantData.primaryTeam
-                  ? buildTeamPath(superAssistantData.primaryTeam.id, currentIssue)
-                  : '/enterprise/teams'
-              )
-            }
-            onOpenSharedTasks={() =>
-              navigate(
-                superAssistantData.primaryTeam
-                  ? buildTeamScopedPath(
-                      '/tasks',
-                      superAssistantData.primaryTeam.id,
-                      superAssistantData.primaryTeam.name,
-                      currentIssue
-                    )
-                  : buildTeamScopedPath('/tasks', undefined, undefined, currentIssue)
-              )
-            }
-            onOpenSharedSessions={() =>
-              navigate(
-                superAssistantData.primaryTeam
-                  ? buildTeamScopedPath(
-                      '/sessions',
-                      superAssistantData.primaryTeam.id,
-                      superAssistantData.primaryTeam.name,
-                      currentIssue
-                    )
-                  : buildTeamScopedPath('/sessions', undefined, undefined, currentIssue)
-              )
-            }
+            onBreakdownIssue={handleBreakdownIssue}
+            onAssignIssue={handleAssignIssue}
+            onOpenKanban={handleBreakdownIssue}
+            onOpenTeamFlow={handleOpenTeamFlow}
+            onOpenSharedTasks={handleOpenSharedTasks}
+            onOpenSharedSessions={handleOpenSharedSessions}
             onOpenEnterpriseModule={() => navigate(showEnterpriseAdminNav ? '/enterprise/auth' : '/enterprise')}
-            onOpenSkills={() => navigate('/settings/skills-hub')}
-            onOpenMcp={() => navigate('/mcp')}
+            onOpenSkills={handleOpenSkillsHub}
+            onOpenMcp={handleOpenMcp}
           />
         );
       case 'agents':
         return (
-          <AgentsTab
-            teamSummaries={superAssistantData.teamSummaries}
-            teamConversationCount={superAssistantData.teamConversationCount}
-          />
+          <AgentsTab executionGroups={superAssistantData.agentExecutionGroups} />
         );
       case 'skills':
         return (
@@ -241,8 +323,8 @@ const SuperAssistantPage: React.FC = () => {
             skillNames={superAssistantData.skillNames}
             enabledMcpCount={superAssistantData.enabledMcpCount}
             mcpNames={superAssistantData.mcpNames}
-            onOpenSkillsHub={() => navigate('/settings/skills-hub')}
-            onOpenMcp={() => navigate('/mcp')}
+            onOpenSkillsHub={handleOpenSkillsHub}
+            onOpenMcp={handleOpenMcp}
           />
         );
       case 'runtimes':
@@ -251,7 +333,7 @@ const SuperAssistantPage: React.FC = () => {
             totalAgentCount={superAssistantData.totalAgentCount}
             activeAgentCount={superAssistantData.activeAgentCount}
             enabledMcpCount={superAssistantData.enabledMcpCount}
-            onOpenAgentSettings={() => navigate('/settings/agent')}
+            onOpenAgentSettings={handleOpenAgentSettings}
             onOpenModelSettings={() => navigate('/settings/model')}
           />
         );

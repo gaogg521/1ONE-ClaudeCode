@@ -27,47 +27,54 @@ export class RAGService {
     if (pipelinePromise) return pipelinePromise;
 
     pipelinePromise = (async () => {
-      // 注入 sharp 模块虚拟 Mock 拦截器，100% 避开 win32-x64 原生二进制文件丢失报错
-      // Intercept 'sharp' loading and return an empty mock to prevent native .node resolution failure
       try {
-        const moduleAlias = require('node:module');
-        const originalRequire = moduleAlias.prototype.require;
-        moduleAlias.prototype.require = function (this: any, name: string) {
-          if (name === 'sharp') {
-            return {}; // 返回空对象，绕过 native require 异常
-          }
-          return originalRequire.apply(this, arguments);
-        };
-      } catch (mockError) {
-        console.warn('[RAGService] Failed to inject sharp mock:', mockError);
+        // 注入 sharp 模块虚拟 Mock 拦截器，100% 避开 win32-x64 原生二进制文件丢失报错
+        // Intercept 'sharp' loading and return an empty mock to prevent native .node resolution failure
+        try {
+          const moduleAlias = require('node:module');
+          const originalRequire = moduleAlias.prototype.require;
+          moduleAlias.prototype.require = function (this: any, name: string) {
+            if (name === 'sharp') {
+              return {}; // 返回空对象，绕过 native require 异常
+            }
+            return originalRequire.apply(this, arguments);
+          };
+        } catch (mockError) {
+          console.warn('[RAGService] Failed to inject sharp mock:', mockError);
+        }
+
+        // 动态导入以避免非必要冷启动开销
+        const { pipeline, env } = await import('@xenova/transformers');
+
+        const { cacheDir } = getSystemDir();
+        const modelCachePath = path.join(cacheDir, 'models');
+        await fs.mkdir(modelCachePath, { recursive: true });
+
+        // 企业 RAG 安全配置：允许本地/缓存模型载入，并配置国内镜像兜底以防外网不通
+        env.allowLocalModels = true;
+        env.localModelPath = modelCachePath;
+        env.cacheDir = modelCachePath;
+
+        // 如果有中国大陆镜像需求，默认使用 hf-mirror 极速通道
+        // @ts-ignore
+        env.remoteHost = 'https://hf-mirror.com';
+
+        console.log(`[RAGService] Loading embedding model '${this.modelName}' into local cache:`, modelCachePath);
+
+        // 加载特征提取 pipeline (feature-extraction)
+        const extractor = await pipeline('feature-extraction', this.modelName, {
+          quantized: true, // 使用量化版，体积小一倍，速度快一倍
+        });
+
+        this.extractor = extractor;
+        console.log('[RAGService] Local embedding model loaded successfully.');
+        return extractor;
+      } catch (error) {
+        this.extractor = null;
+        pipelinePromise = null;
+        console.error('[RAGService] Failed to initialize embedding pipeline:', error);
+        throw error;
       }
-
-      // 动态导入以避免非必要冷启动开销
-      const { pipeline, env } = await import('@xenova/transformers');
-
-      const { cacheDir } = getSystemDir();
-      const modelCachePath = path.join(cacheDir, 'models');
-      await fs.mkdir(modelCachePath, { recursive: true });
-
-      // 企业 RAG 安全配置：允许本地/缓存模型载入，并配置国内镜像兜底以防外网不通
-      env.allowLocalModels = true;
-      env.localModelPath = modelCachePath;
-      env.cacheDir = modelCachePath;
-
-      // 如果有中国大陆镜像需求，默认使用 hf-mirror 极速通道
-      // @ts-ignore
-      env.remoteHost = 'https://hf-mirror.com';
-
-      console.log(`[RAGService] Loading embedding model '${this.modelName}' into local cache:`, modelCachePath);
-
-      // 加载特征提取 pipeline (feature-extraction)
-      const extractor = await pipeline('feature-extraction', this.modelName, {
-        quantized: true, // 使用量化版，体积小一倍，速度快一倍
-      });
-
-      this.extractor = extractor;
-      console.log('[RAGService] Local embedding model loaded successfully.');
-      return extractor;
     })();
 
     return pipelinePromise;

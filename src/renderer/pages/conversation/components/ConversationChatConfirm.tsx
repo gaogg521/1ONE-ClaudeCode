@@ -1,6 +1,7 @@
 import { ipcBridge } from '@/common';
 import type { IConfirmation } from '@/common/chat/chatLib';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 import { useTeamPermission } from '@/renderer/pages/team/hooks/TeamPermissionContext';
 import { Divider, Typography } from '@arco-design/web-react';
 import type { PropsWithChildren } from 'react';
@@ -20,6 +21,7 @@ const ConversationChatConfirm: React.FC<PropsWithChildren<{ conversation_id: str
   const { t } = useTranslation();
   const conversationContext = useConversationContextSafe();
   const agentType = conversationContext?.type || 'unknown';
+  const stretchLayout = Boolean(conversationContext?.stretchLayout);
   const teamPermission = useTeamPermission();
 
   // In team mode: confirmation UI is handled by TeamConfirmOverlay at the page level.
@@ -217,13 +219,16 @@ const ConversationChatConfirm: React.FC<PropsWithChildren<{ conversation_id: str
       <div>
         {/* 错误提示卡片 / Error notification card */}
         <div
-          className={`relative p-16px bg-white flex flex-col overflow-hidden m-b-20px rd-20px max-w-800px w-full mx-auto box-border`}
+          className={`relative p-16px bg-white flex flex-col overflow-hidden m-b-20px rd-20px w-full box-border ${
+            stretchLayout ? '' : 'mx-auto'
+          }`}
           style={{
+            ...getChatRailSurfaceStyle('surface', stretchLayout),
             boxShadow: '0px 2px 20px 0px rgba(74, 88, 250, 0.1)',
           }}
         >
           {/* 错误标题 / Error title */}
-          <div className='color-[rgba(217,45,32,1)] text-14px font-medium mb-8px'>
+          <div className='color-[rgba(217,45,32,1)] text-13px font-medium mb-8px'>
             {t('conversation.chat.confirmationLoadError', 'Failed to load confirmation dialog')}
           </div>
           {/* 错误详情 / Error details */}
@@ -263,17 +268,20 @@ const ConversationChatConfirm: React.FC<PropsWithChildren<{ conversation_id: str
     <>
       {hasConfirmation && confirmation && (
         <div
-          className={`relative p-16px bg-white flex flex-col overflow-hidden m-b-20px rd-20px max-w-800px max-h-[calc(100vh-200px)] w-full mx-auto box-border`}
+          className={`relative p-16px bg-white flex flex-col overflow-hidden m-b-20px rd-20px max-h-[calc(100vh-200px)] w-full box-border ${
+            stretchLayout ? '' : 'mx-auto'
+          }`}
           style={{
+            ...getChatRailSurfaceStyle('surface', stretchLayout),
             boxShadow: '0px 2px 20px 0px rgba(74, 88, 250, 0.1)',
           }}
         >
           <div className='flex-1 overflow-y-auto min-h-0'>
-            <Typography.Ellipsis className='text-16px font-bold color-[rgba(29,33,41,1)]' rows={2} expandable>
+            <Typography.Ellipsis className='text-15px font-bold color-[rgba(29,33,41,1)]' rows={2} expandable>
               {$t(confirmation.title) || 'Choose an action'}
             </Typography.Ellipsis>
             <Divider className={'!my-10px'}></Divider>
-            <Typography.Ellipsis className='text-14px color-[rgba(29,33,41,1)]' rows={5} expandable>
+            <Typography.Ellipsis className='text-13px color-[rgba(29,33,41,1)]' rows={5} expandable>
               {$t(confirmation.description)}
             </Typography.Ellipsis>
           </div>

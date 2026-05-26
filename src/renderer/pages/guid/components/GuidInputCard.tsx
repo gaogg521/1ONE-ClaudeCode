@@ -12,6 +12,7 @@ import { Input, Tooltip } from '@arco-design/web-react';
 import { IconClose } from '@arco-design/web-react/icon';
 import { FolderOpen } from '@icon-park/react';
 import { iconColors } from '@/renderer/styles/colors';
+import { getMobileRailBleedStyle } from '@/renderer/utils/ui/contentRail';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from '../index.module.css';
@@ -91,9 +92,7 @@ const GuidInputCard: React.FC<GuidInputCardProps> = ({
       style={{
         zIndex: 1,
         transition: 'box-shadow 0.25s ease, border-color 0.25s ease, border-width 0.25s ease',
-        width: isMobile ? 'calc(100% + 28px)' : undefined,
-        marginLeft: isMobile ? -14 : undefined,
-        marginRight: isMobile ? -14 : undefined,
+        ...getMobileRailBleedStyle(isMobile),
         ...(isFileDragging
           ? {
               backgroundColor: 'var(--color-primary-light-1)',

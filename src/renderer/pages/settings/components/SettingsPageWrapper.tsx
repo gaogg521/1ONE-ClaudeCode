@@ -1,6 +1,7 @@
 import classNames from 'classnames';
 import React from 'react';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import PageContentShell from '@/renderer/components/layout/PageContentShell';
 import { SettingsViewModeProvider } from '@/renderer/components/settings/SettingsModal/settingsViewContext';
 import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/platform';
 import type { IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
@@ -82,6 +83,7 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
   const { pathname } = useLocation();
   const { t } = useTranslation();
   const isDesktop = isElectronDesktop();
+  const isWorkspaceScoped = pathname.startsWith('/workspace/settings/');
 
   const { extensionTabs } = useExtensionSettingsTabs();
   const { resolveExtTabName } = useExtI18n();
@@ -167,42 +169,52 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
     return result;
   }, [isDesktop, t, extensionTabs, resolveExtTabName]);
 
-  const containerClass = classNames(
-    'settings-page-wrapper w-full min-h-full box-border overflow-y-auto',
-    isMobile ? 'px-16px py-14px' : 'px-12px md:px-40px py-32px',
-    className
-  );
-
   const contentClass = classNames('settings-page-content mx-auto w-full md:max-w-1024px', contentClassName);
+
+  if (isWorkspaceScoped) {
+    return (
+      <SettingsViewModeProvider value='page'>
+        <div className={classNames('settings-page-wrapper w-full', className)}>
+          <div className={classNames('settings-page-content w-full', contentClassName)}>{children}</div>
+        </div>
+      </SettingsViewModeProvider>
+    );
+  }
 
   return (
     <SettingsViewModeProvider value='page'>
-      <div className={containerClass} style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        {isMobile && (
-          <div className='settings-mobile-top-nav'>
-            {menuItems.map((item) => {
-              const itemRoute = `/settings/${item.path}`;
-              const active = pathname === itemRoute;
-              return (
-                <button
-                  key={item.path}
-                  type='button'
-                  className={classNames('settings-mobile-top-nav__item', {
-                    'settings-mobile-top-nav__item--active': active,
-                  })}
-                  onClick={() => {
-                    void navigate(itemRoute, { replace: true });
-                  }}
-                >
-                  <span className='settings-mobile-top-nav__icon'>{item.icon}</span>
-                  <span className='settings-mobile-top-nav__label'>{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <div className={contentClass}>{children}</div>
-      </div>
+      <PageContentShell
+        className={classNames('settings-page-wrapper', className)}
+        contentClassName={contentClass}
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        header={
+          isMobile ? (
+            <div className='settings-mobile-top-nav'>
+              {menuItems.map((item) => {
+                const itemRoute = `/settings/${item.path}`;
+                const active = pathname === itemRoute;
+                return (
+                  <button
+                    key={item.path}
+                    type='button'
+                    className={classNames('settings-mobile-top-nav__item', {
+                      'settings-mobile-top-nav__item--active': active,
+                    })}
+                    onClick={() => {
+                      void navigate(itemRoute, { replace: true });
+                    }}
+                  >
+                    <span className='settings-mobile-top-nav__icon'>{item.icon}</span>
+                    <span className='settings-mobile-top-nav__label'>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null
+        }
+      >
+        {children}
+      </PageContentShell>
     </SettingsViewModeProvider>
   );
 };

@@ -11,27 +11,48 @@ const listMcpRegistryMock = vi.hoisted(() => vi.fn());
 const useTeamListMock = vi.hoisted(() => vi.fn());
 const conversationHistoryMock = vi.hoisted(() => vi.fn());
 const locationMock = vi.hoisted(() => ({ pathname: '/super-assistant', search: '' }));
+const ensureSessionMock = vi.hoisted(() => vi.fn());
+const teamRuntimeState = vi.hoisted(() => ({
+  agentStatusListener: null as null | ((event: { teamId: string; slotId: string; status: string; lastMessage?: string }) => void),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (
-      _key: string,
-      options?: {
-        defaultValue?: string;
-        tenant?: string;
-        count?: number | string;
-        subject?: string;
-        agentCount?: number | string;
-        activeCount?: number | string;
+    t: (_key: string, options?: { defaultValue?: string; [key: string]: unknown }) => {
+      const template = options?.defaultValue;
+      if (!template) {
+        return _key;
       }
-    ) =>
-      options?.defaultValue
-        ?.replace('{{tenant}}', options?.tenant ?? '')
-        .replace('{{count}}', String(options?.count ?? ''))
-        .replace('{{subject}}', options?.subject ?? '')
-        .replace('{{agentCount}}', String(options?.agentCount ?? ''))
-        .replace('{{activeCount}}', String(options?.activeCount ?? '')) || _key,
+      return Object.entries(options ?? {}).reduce((result, [key, value]) => {
+        if (key === 'defaultValue') {
+          return result;
+        }
+        return result.replaceAll(`{{${key}}}`, String(value ?? ''));
+      }, template);
+    },
   }),
+}));
+
+vi.mock('@/common', () => ({
+  ipcBridge: {
+    team: {
+      ensureSession: {
+        invoke: ensureSessionMock,
+      },
+      agentStatusChanged: {
+        on: vi.fn(
+          (
+            listener: (event: { teamId: string; slotId: string; status: string; lastMessage?: string }) => void
+          ) => {
+            teamRuntimeState.agentStatusListener = listener;
+            return () => {
+              teamRuntimeState.agentStatusListener = null;
+            };
+          }
+        ),
+      },
+    },
+  },
 }));
 
 vi.mock('@/renderer/hooks/webui/useEditionFeatures', () => ({
@@ -97,6 +118,9 @@ import SuperAssistantPage from '@/renderer/pages/superAssistant';
 describe('SuperAssistantPage', () => {
   beforeEach(() => {
     navigateMock.mockReset();
+    ensureSessionMock.mockReset();
+    teamRuntimeState.agentStatusListener = null;
+    window.localStorage.clear();
     locationMock.pathname = '/super-assistant';
     locationMock.search = '';
     listRequirementsTreeMock.mockResolvedValue([
@@ -226,29 +250,50 @@ describe('SuperAssistantPage', () => {
     });
   });
 
-  it('renders the issues workbench with live requirement data by default for joined enterprise members', async () => {
+  it('renders the overview as the default super assistant home for joined enterprise members', async () => {
     render(<SuperAssistantPage />);
 
     expect(screen.getByText('超级助手')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Issues' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('共享 Issue 看板')).toBeInTheDocument();
-    expect((await screen.findAllByText('修复团队上下文深链')).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('1 个 Issue').length).toBeGreaterThan(0);
+    expect(screen.getByRole('tab', { name: '总览' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('我能帮你做什么')).toBeInTheDocument();
+    expect(screen.getByText('当前执行流')).toBeInTheDocument();
+    expect(screen.getByText('能力来源')).toBeInTheDocument();
+    expect((await screen.findAllByText('当前焦点：修复团队上下文深链')).length).toBeGreaterThan(0);
   });
 
-  it('renders agent squad content with live team data when switching to the Agents tab', async () => {
+  it('renders live agent execution cards when switching to the Agents tab', async () => {
     render(<SuperAssistantPage />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
 
     expect(await screen.findByText('Alpha Team')).toBeInTheDocument();
-    expect(screen.getByText('2 个协作 Agent')).toBeInTheDocument();
+    expect(screen.getByText('超级助手 Leader')).toBeInTheDocument();
+    expect(screen.getByText('执行中')).toBeInTheDocument();
+    expect(screen.getByText('当前处理：修复团队上下文深链')).toBeInTheDocument();
+    expect(screen.getByText('待领取：补齐超级助手数据接入')).toBeInTheDocument();
+    expect(screen.getByText('PR Review')).toBeInTheDocument();
+    expect(screen.getAllByText('GitHub Actions').length).toBeGreaterThan(0);
+  });
+
+  it('updates agent execution status when team runtime reports a failure', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
+    expect(await screen.findByText('开发 Agent')).toBeInTheDocument();
+
+    teamRuntimeState.agentStatusListener?.({
+      teamId: 'team-1',
+      slotId: 'dev',
+      status: 'failed',
+      lastMessage: '等待 GitHub Actions 结果超时',
+    });
+
+    expect(await screen.findByText('已阻塞')).toBeInTheDocument();
+    expect(screen.getByText('阻塞原因：等待 GitHub Actions 结果超时')).toBeInTheDocument();
   });
 
   it('shows a live admin overview summary when switching to the overview tab', async () => {
     render(<SuperAssistantPage />);
-
-    fireEvent.click(screen.getByRole('tab', { name: '总览' }));
 
     expect(await screen.findByText('当前共有 2 个未完成 Issue')).toBeInTheDocument();
   });
@@ -260,16 +305,25 @@ describe('SuperAssistantPage', () => {
 
     render(<SuperAssistantPage />);
 
-    fireEvent.click(screen.getByRole('tab', { name: '总览' }));
-
     expect(screen.getByText('我参与的协作')).toBeInTheDocument();
     expect(await screen.findByText('我当前参与 2 个 Issue')).toBeInTheDocument();
+  });
+
+  it('lets the user jump from the home overview into the current issue breakdown flow', async () => {
+    render(<SuperAssistantPage />);
+
+    expect((await screen.findAllByText('当前焦点：修复团队上下文深链')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: '拆解共享 Issue' }));
+    expect(navigateMock).toHaveBeenLastCalledWith(
+      '/enterprise/cteam?teamId=team-1&teamName=Alpha+Team&issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE'
+    );
   });
 
   it('deep-links to current team scoped collaboration modules from the command panel', async () => {
     render(<SuperAssistantPage />);
 
-    expect((await screen.findAllByText('修复团队上下文深链')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByText('拆解当前 Issue'));
     expect(navigateMock).toHaveBeenLastCalledWith(
       '/enterprise/cteam?teamId=team-1&teamName=Alpha+Team&issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE'
@@ -286,9 +340,56 @@ describe('SuperAssistantPage', () => {
     );
   });
 
+  it('assigns the current issue to a selected agent and reflects it in the agents view', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+    expect(navigateMock).toHaveBeenLastCalledWith(
+      '/team/team-1?issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE&agentSlotId=dev'
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+    expect(screen.getByText('当前处理：补齐超级助手数据接入')).toBeInTheDocument();
+  });
+
+  it('shows assignment feedback in the current issue activity flow after assigning an agent', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+
+    expect(screen.getByText('已分配给：开发 Agent')).toBeInTheDocument();
+    expect(screen.getByText('最近状态：待领取')).toBeInTheDocument();
+  });
+
+  it('shows blocker feedback in the current issue activity flow when the assigned agent fails', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+    teamRuntimeState.agentStatusListener?.({
+      teamId: 'team-1',
+      slotId: 'dev',
+      status: 'failed',
+      lastMessage: '等待 GitHub Actions 结果超时',
+    });
+
+    expect(await screen.findByText('最近状态：已阻塞')).toBeInTheDocument();
+    expect(screen.getByText('阻塞原因：等待 GitHub Actions 结果超时')).toBeInTheDocument();
+  });
+
   it('switches the current issue activity flow when selecting another live issue', async () => {
     render(<SuperAssistantPage />);
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
     expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: '补齐超级助手数据接入' }));
 
@@ -338,7 +439,7 @@ describe('SuperAssistantPage', () => {
     render(<SuperAssistantPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('暂无共享 Issue')).toBeInTheDocument();
+      expect(screen.getAllByText('暂无共享 Issue').length).toBeGreaterThan(0);
     });
 
     fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));

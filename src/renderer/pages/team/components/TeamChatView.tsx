@@ -19,7 +19,8 @@ type GeminiConversation = Extract<TChatConversation, { type: 'gemini' }>;
 const GeminiTeamChat: React.FC<{
   conversation: GeminiConversation;
   hideSendBox?: boolean;
-}> = ({ conversation, hideSendBox }) => {
+  stretchLayout?: boolean;
+}> = ({ conversation, hideSendBox, stretchLayout }) => {
   const onSelectModel = useCallback(
     async (_provider: IProvider, modelName: string) => {
       const selected = { ..._provider, useModel: modelName } as TProviderWithModel;
@@ -37,6 +38,7 @@ const GeminiTeamChat: React.FC<{
       workspace={conversation.extra.workspace}
       modelSelection={modelSelection}
       hideSendBox={hideSendBox}
+      stretchLayout={stretchLayout}
     />
   );
 };
@@ -47,7 +49,8 @@ type AionrsConversation = Extract<TChatConversation, { type: 'aionrs' }>;
 /** Aionrs sub-component manages model selection state without adding a ChatLayout wrapper */
 const AionrsTeamChat: React.FC<{
   conversation: AionrsConversation;
-}> = ({ conversation }) => {
+  stretchLayout?: boolean;
+}> = ({ conversation, stretchLayout }) => {
   const onSelectModel = useCallback(
     async (_provider: IProvider, modelName: string) => {
       const selected = { ..._provider, useModel: modelName } as TProviderWithModel;
@@ -64,6 +67,7 @@ const AionrsTeamChat: React.FC<{
       conversation_id={conversation.id}
       workspace={conversation.extra.workspace}
       modelSelection={modelSelection}
+      stretchLayout={stretchLayout}
     />
   );
 };
@@ -96,6 +100,7 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({ conversation, hideSendBox, 
             hideSendBox={hideSendBox}
             teamId={teamId}
             agentSlotId={agentSlotId}
+            stretchLayout
           />
         );
       case 'codex': // Legacy: codex now uses ACP protocol
@@ -108,12 +113,13 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({ conversation, hideSendBox, 
             hideSendBox={hideSendBox}
             teamId={teamId}
             agentSlotId={agentSlotId}
+            stretchLayout
           />
         );
       case 'aionrs':
-        return <AionrsTeamChat key={conversation.id} conversation={conversation as AionrsConversation} />;
+        return <AionrsTeamChat key={conversation.id} conversation={conversation as AionrsConversation} stretchLayout />;
       case 'gemini':
-        return <GeminiTeamChat key={conversation.id} conversation={conversation} hideSendBox={hideSendBox} />;
+        return <GeminiTeamChat key={conversation.id} conversation={conversation} hideSendBox={hideSendBox} stretchLayout />;
       case 'openclaw-gateway':
         return (
           <OpenClawChat
@@ -121,6 +127,7 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({ conversation, hideSendBox, 
             conversation_id={conversation.id}
             workspace={conversation.extra?.workspace}
             hideSendBox={hideSendBox}
+            stretchLayout
           />
         );
       case 'nanobot':
@@ -130,6 +137,7 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({ conversation, hideSendBox, 
             conversation_id={conversation.id}
             workspace={conversation.extra?.workspace}
             hideSendBox={hideSendBox}
+            stretchLayout
           />
         );
       case 'remote':
@@ -139,6 +147,7 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({ conversation, hideSendBox, 
             conversation_id={conversation.id}
             workspace={conversation.extra?.workspace}
             hideSendBox={hideSendBox}
+            stretchLayout
           />
         );
       default:

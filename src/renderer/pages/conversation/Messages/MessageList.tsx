@@ -37,6 +37,7 @@ import MessageThinking from './components/MessageThinking';
 import type { WriteFileResult } from './types';
 import { useAutoScroll } from './useAutoScroll';
 import { useAutoPreviewOfficeFiles } from '@/renderer/hooks/file/useAutoPreviewOfficeFiles';
+import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 import SelectionReplyButton from './components/SelectionReplyButton';
 
 type TurnDiffContent = Extract<CodexToolCallUpdate, { subtype: 'turn_diff' }>;
@@ -104,19 +105,25 @@ VirtuosoScroller.displayName = 'VirtuosoScroller';
 const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean }> = React.memo(
   HOC((props) => {
     const { message, highlighted } = props as { message: TMessage; highlighted?: boolean };
+    const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
     return (
       <div
         id={`message-${message.id}`}
         className={classNames(
-          'min-w-0 flex items-start message-item [&>div]:max-w-full px-8px m-t-10px max-w-full md:max-w-780px mx-auto',
+          'min-w-0 flex items-start message-item [&>div]:max-w-full px-8px m-t-10px max-w-full',
           message.type,
           {
             'justify-center': message.position === 'center',
             'justify-end': message.position === 'right',
             'justify-start': message.position === 'left',
+            'mx-auto': !stretchLayout,
+            'w-full': stretchLayout,
           }
         )}
-        style={highlighted ? highlightStyle : undefined}
+        style={{
+          ...getChatRailSurfaceStyle('message', stretchLayout),
+          ...(highlighted ? highlightStyle : {}),
+        }}
       >
         {props.children}
       </div>
@@ -168,6 +175,7 @@ const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean }> = Reac
 const MessageList: React.FC<{ className?: string }> = () => {
   const list = useMessageList();
   const conversationContext = useConversationContextSafe();
+  const stretchLayout = Boolean(conversationContext?.stretchLayout);
   useAutoPreviewOfficeFiles(conversationContext?.workspace);
   const { t } = useTranslation();
   const location = useLocation();
@@ -354,8 +362,14 @@ const MessageList: React.FC<{ className?: string }> = () => {
         <div
           key={item.id}
           id={`message-${getProcessedItemAnchorId(item)}`}
-          className={'min-w-0 message-item px-8px m-t-10px max-w-full md:max-w-780px mx-auto ' + item.type}
-          style={highlighted ? highlightStyle : undefined}
+          className={classNames('min-w-0 message-item px-8px m-t-10px max-w-full', item.type, {
+            'mx-auto': !stretchLayout,
+            'w-full': stretchLayout,
+          })}
+          style={{
+            ...getChatRailSurfaceStyle('message', stretchLayout),
+            ...(highlighted ? highlightStyle : {}),
+          }}
         >
           {item.type === 'file_summary' && <MessageFileChanges diffsChanges={item.diffs} />}
           {item.type === 'tool_summary' && <MessageToolGroupSummary messages={item.messages}></MessageToolGroupSummary>}

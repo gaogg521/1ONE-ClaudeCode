@@ -276,6 +276,10 @@ export const fs = {
   ),
   // 导入 skill 目录 / Import skill directory
   importSkill: bridge.buildProvider<IBridgeResponse<{ skillName: string }>, { skillPath: string }>('import-skill'),
+  previewSkillsFromUrl: bridge.buildProvider<IBridgeResponse<IUrlSkillPreview>, { url: string }>('preview-skills-from-url'),
+  importSkillFromUrl: bridge.buildProvider<IBridgeResponse<{ skillName: string }>, { skillPath: string }>(
+    'import-skill-from-url'
+  ),
   // 扫描目录下的 skills / Scan directory for skills
   scanForSkills: bridge.buildProvider<
     IBridgeResponse<Array<{ name: string; description: string; path: string }>>,
@@ -1066,6 +1070,13 @@ export interface IFileMetadata {
   lastModified: number;
   isDirectory?: boolean;
 }
+
+export type IUrlSkillPreview = {
+  sourceUrl: string;
+  resolvedUrl: string;
+  cacheDir: string;
+  skills: SkillMetadata[];
+};
 
 export interface IResponseMessage {
   type: string;

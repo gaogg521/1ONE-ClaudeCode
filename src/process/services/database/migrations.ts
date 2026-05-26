@@ -1631,6 +1631,26 @@ const migration_v39: IMigration = {
 };
 
 /**
+ * Migration v39 -> v40: Add last_error column to rag_documents
+ */
+const migration_v40: IMigration = {
+  version: 40,
+  name: 'Add last_error to rag_documents',
+  up: (db) => {
+    const cols = new Set((db.pragma('table_info(rag_documents)') as Array<{ name: string }>).map((col) => col.name));
+    if (!cols.has('last_error')) {
+      db.exec('ALTER TABLE rag_documents ADD COLUMN last_error TEXT');
+      console.log('[Migration v40] Added last_error to rag_documents');
+      return;
+    }
+    console.log('[Migration v40] last_error already exists on rag_documents, skipping');
+  },
+  down: (_db) => {
+    console.log('[Migration v40] Rolled back: column retained (SQLite cannot drop columns)');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -1654,6 +1674,7 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v37,
   migration_v38,
   migration_v39,
+  migration_v40,
 ];
 
 /**

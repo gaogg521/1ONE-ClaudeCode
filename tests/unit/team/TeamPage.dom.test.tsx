@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigateMock = vi.hoisted(() => vi.fn());
 const locationMock = vi.hoisted(() => ({ pathname: '/team/team-1', search: '' }));
+const chatSiderMock = vi.hoisted(() => vi.fn(() => <div />));
+const swrMock = vi.hoisted(() => vi.fn());
+const teamTabsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
@@ -30,7 +33,7 @@ vi.mock('@arco-design/web-react', () => ({
 
 vi.mock('swr', () => ({
   __esModule: true,
-  default: () => ({ data: undefined }),
+  default: (...args: unknown[]) => swrMock(...args),
   useSWRConfig: () => ({ mutate: vi.fn() }),
 }));
 
@@ -63,12 +66,17 @@ vi.mock('@/common', () => ({
 
 vi.mock('@/renderer/pages/conversation/components/ChatLayout', () => ({
   __esModule: true,
-  default: ({ headerExtra }: { headerExtra?: React.ReactNode }) => <div>{headerExtra}</div>,
+  default: ({ headerExtra, sider }: { headerExtra?: React.ReactNode; sider?: React.ReactNode }) => (
+    <div>
+      {headerExtra}
+      {sider}
+    </div>
+  ),
 }));
 
 vi.mock('@/renderer/pages/conversation/components/ChatSider', () => ({
   __esModule: true,
-  default: () => <div />,
+  default: (props: unknown) => chatSiderMock(props),
 }));
 
 vi.mock('@/renderer/pages/team/components/TeamConfirmOverlay', () => ({
@@ -121,12 +129,7 @@ vi.mock('@/renderer/pages/team/components/agentSelectUtils', () => ({
 
 vi.mock('@/renderer/pages/team/hooks/TeamTabsContext', () => ({
   TeamTabsProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
-  useTeamTabs: () => ({
-    agents: [],
-    activeSlotId: '',
-    statusMap: new Map(),
-    switchTab: vi.fn(),
-  }),
+  useTeamTabs: () => teamTabsMock(),
 }));
 
 vi.mock('@/renderer/pages/team/hooks/TeamPermissionContext', () => ({
@@ -155,8 +158,16 @@ import TeamPage from '@/renderer/pages/team/TeamPage';
 describe('TeamPage', () => {
   beforeEach(() => {
     navigateMock.mockReset();
+    chatSiderMock.mockReset();
     locationMock.pathname = '/team/team-1';
     locationMock.search = '';
+    swrMock.mockReturnValue({ data: undefined });
+    teamTabsMock.mockReturnValue({
+      agents: [],
+      activeSlotId: '',
+      statusMap: new Map(),
+      switchTab: vi.fn(),
+    });
   });
 
   it('opens shared workspace pages directly in the current team scope', () => {
@@ -243,5 +254,94 @@ describe('TeamPage', () => {
     expect(navigateMock).toHaveBeenCalledWith(
       '/enterprise/cteam?teamId=team-1&teamName=Alpha+Team&issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE'
     );
+  });
+
+  it('passes the requested workspace tab through to the team workspace sider', () => {
+    locationMock.search =
+      '?issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE&workspaceTab=kanban';
+    teamTabsMock.mockReturnValue({
+      agents: [
+        {
+          slotId: 'lead-slot',
+          conversationId: 'conversation-1',
+          role: 'lead',
+        },
+      ],
+      activeSlotId: 'lead-slot',
+      statusMap: new Map(),
+      switchTab: vi.fn(),
+    });
+    swrMock.mockReturnValue({
+      data: {
+        id: 'conversation-1',
+        type: 'gemini',
+        extra: { workspace: '/repo/team-alpha' },
+      },
+    });
+
+    render(
+      <TeamPage
+        team={{
+          id: 'team-1',
+          userId: 'user-1',
+          name: 'Alpha Team',
+          workspace: '/repo/team-alpha',
+          workspaceMode: 'shared',
+          leadAgentId: '',
+          agents: [],
+          createdAt: 0,
+          updatedAt: 0,
+        }}
+      />
+    );
+
+    expect(chatSiderMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialTab: 'kanban',
+      })
+    );
+  });
+
+  it('switches to the assigned agent slot from super assistant deep links', () => {
+    const switchTabMock = vi.fn();
+    locationMock.search =
+      '?issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE&agentSlotId=dev-slot';
+    teamTabsMock.mockReturnValue({
+      agents: [
+        {
+          slotId: 'lead-slot',
+          conversationId: 'conversation-1',
+          role: 'lead',
+          agentName: '超级助手 Leader',
+        },
+        {
+          slotId: 'dev-slot',
+          conversationId: 'conversation-2',
+          role: 'teammate',
+          agentName: '开发 Agent',
+        },
+      ],
+      activeSlotId: 'lead-slot',
+      statusMap: new Map(),
+      switchTab: switchTabMock,
+    });
+
+    render(
+      <TeamPage
+        team={{
+          id: 'team-1',
+          userId: 'user-1',
+          name: 'Alpha Team',
+          workspace: '',
+          workspaceMode: 'shared',
+          leadAgentId: 'lead-slot',
+          agents: [],
+          createdAt: 0,
+          updatedAt: 0,
+        }}
+      />
+    );
+
+    expect(switchTabMock).toHaveBeenCalledWith('dev-slot');
   });
 });

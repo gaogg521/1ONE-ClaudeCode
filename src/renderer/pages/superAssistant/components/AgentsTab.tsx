@@ -1,104 +1,132 @@
 import React from 'react';
 import { Card, Empty, Tag } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
-import type { SuperAssistantTeamSummary } from '../hooks/useSuperAssistantData';
+import type { SuperAssistantAgentExecutionGroup } from '../hooks/useSuperAssistantData';
 
 type AgentsTabProps = {
-  teamSummaries: SuperAssistantTeamSummary[];
-  teamConversationCount: number;
+  executionGroups: SuperAssistantAgentExecutionGroup[];
 };
 
-const AgentsTab: React.FC<AgentsTabProps> = ({ teamSummaries, teamConversationCount }) => {
+function getStatusMeta(
+  status: 'pending' | 'idle' | 'active' | 'completed' | 'failed',
+  t: ReturnType<typeof useTranslation>['t']
+): { color: 'green' | 'blue' | 'orangered' | 'gold' | 'arcoblue'; label: string } {
+  switch (status) {
+    case 'active':
+      return { color: 'green', label: t('common.superAssistant.agentStatus.active', { defaultValue: '执行中' }) };
+    case 'failed':
+      return { color: 'orangered', label: t('common.superAssistant.agentStatus.failed', { defaultValue: '已阻塞' }) };
+    case 'completed':
+      return {
+        color: 'arcoblue',
+        label: t('common.superAssistant.agentStatus.completed', { defaultValue: '已完成' }),
+      };
+    case 'pending':
+      return { color: 'gold', label: t('common.superAssistant.agentStatus.pending', { defaultValue: '准备中' }) };
+    case 'idle':
+    default:
+      return { color: 'blue', label: t('common.superAssistant.agentStatus.idle', { defaultValue: '待领取' }) };
+  }
+}
+
+const AgentsTab: React.FC<AgentsTabProps> = ({ executionGroups }) => {
   const { t } = useTranslation();
-  const agentRows = [
-    {
-      key: 'leader',
-      title: t('common.superAssistant.agents.rows.leaderTitle', { defaultValue: '超级助手 Leader' }),
-      status: t('common.superAssistant.agents.rows.leaderStatus', { defaultValue: '在线' }),
-      summary: t('common.superAssistant.agents.rows.leaderSummary', {
-        defaultValue: '负责接单、拆解与编排模块动作。',
-      }),
-    },
-    {
-      key: 'dev',
-      title: t('common.superAssistant.agents.rows.devTitle', { defaultValue: '开发 Agent' }),
-      status: t('common.superAssistant.agents.rows.devStatus', { defaultValue: '进行中' }),
-      summary: t('common.superAssistant.agents.rows.devSummary', {
-        defaultValue: '推进编码与实现任务。',
-      }),
-    },
-    {
-      key: 'qa',
-      title: t('common.superAssistant.agents.rows.qaTitle', { defaultValue: '测试 Agent' }),
-      status: t('common.superAssistant.agents.rows.qaStatus', { defaultValue: '待命' }),
-      summary: t('common.superAssistant.agents.rows.qaSummary', {
-        defaultValue: '负责验证、回归与阻塞反馈。',
-      }),
-    },
-    {
-      key: 'product',
-      title: t('common.superAssistant.agents.rows.productTitle', { defaultValue: '产品 Agent' }),
-      status: t('common.superAssistant.agents.rows.productStatus', { defaultValue: '在线' }),
-      summary: t('common.superAssistant.agents.rows.productSummary', {
-        defaultValue: '辅助梳理需求、活动流与验收信息。',
-      }),
-    },
-  ];
 
   return (
     <div className='space-y-12px'>
-      <Card title={t('common.superAssistant.agentsHierarchyTitle', { defaultValue: '超级助手小队指挥链' })}>
+      <Card title={t('common.superAssistant.agentsExecutionTitle', { defaultValue: '当前执行编组' })}>
         <div className='text-12px text-t-tertiary'>
-          {t('common.superAssistant.agentsHierarchyDesc', {
-            defaultValue: '管理员查看全队 Agent 指挥关系；成员查看自己参与的小队协作视图。',
+          {t('common.superAssistant.agentsExecutionDesc', {
+            defaultValue: '按团队查看每个 Agent 当前在处理什么、是否阻塞，以及它依赖的工作区 / 技能 / MCP 能力。',
           })}
         </div>
       </Card>
-      {teamSummaries.length === 0 ? (
+      {executionGroups.length === 0 ? (
         <Empty
           description={t('common.superAssistant.noTeams', {
             defaultValue: '还没有团队',
           })}
         />
       ) : (
-        <div className='grid gap-12px md:grid-cols-2'>
-          {teamSummaries.map((team) => (
+        <div className='space-y-12px'>
+          {executionGroups.map((group) => (
             <Card
-              key={team.id}
-              title={team.name}
+              key={group.teamId}
+              title={group.teamName}
               extra={
-                <Tag color={team.activeAgentCount > 0 ? 'green' : 'blue'}>
+                <Tag color={group.activeAgentCount > 0 ? 'green' : 'blue'}>
                   {t('common.superAssistant.agentCount', {
                     defaultValue: '{{count}} 个协作 Agent',
-                    count: team.agentCount,
+                    count: group.agentCount,
                   })}
                 </Tag>
               }
             >
-              <div className='text-12px text-t-tertiary'>
-                {[team.workspace, ...team.sampleAgentNames].filter(Boolean).join(' · ')}
-              </div>
-              <div className='mt-6px text-12px text-t-secondary'>
+              <div className='mb-10px text-12px text-t-secondary'>
                 {t('common.superAssistant.teamConversationCount', {
                   defaultValue: '{{count}} 个团队会话',
-                  count: teamConversationCount,
+                  count: group.conversationCount,
+                })}
+              </div>
+              <div className='grid gap-12px md:grid-cols-2'>
+                {group.agents.map((agent) => {
+                  const statusMeta = getStatusMeta(agent.status, t);
+                  const focusText =
+                    agent.status === 'failed'
+                      ? agent.blockerMessage
+                        ? t('common.superAssistant.agentBlocker', {
+                            defaultValue: '阻塞原因：{{message}}',
+                            message: agent.blockerMessage,
+                          })
+                        : t('common.superAssistant.agentBlockedFallback', {
+                            defaultValue: '当前执行已阻塞，等待人工处理',
+                          })
+                      : agent.currentIssueSubject
+                        ? t('common.superAssistant.agentCurrentIssue', {
+                            defaultValue: '当前处理：{{subject}}',
+                            subject: agent.currentIssueSubject,
+                          })
+                        : agent.status === 'completed'
+                          ? t('common.superAssistant.agentCompletedIssue', {
+                              defaultValue: '刚完成：{{subject}}',
+                              subject: agent.currentIssueSubject ?? t('common.superAssistant.noIssues', { defaultValue: '暂无共享 Issue' }),
+                            })
+                          : agent.queuedIssueSubject
+                            ? t('common.superAssistant.agentQueuedIssue', {
+                                defaultValue: '待领取：{{subject}}',
+                                subject: agent.queuedIssueSubject,
+                              })
+                            : t('common.superAssistant.agentIdleFallback', {
+                                defaultValue: '等待下一轮任务',
+                              });
+
+                  return (
+                    <Card
+                      key={agent.slotId}
+                      title={agent.agentName}
+                      extra={<Tag color={statusMeta.color}>{statusMeta.label}</Tag>}
+                    >
+                      <div className='text-12px text-t-tertiary'>{focusText}</div>
+                      <div className='mt-6px text-12px text-t-secondary'>
+                        {t('common.superAssistant.agentCapabilitySources', {
+                          defaultValue: '依赖能力',
+                        })}
+                      </div>
+                      <div className='mt-6px flex flex-wrap gap-8px'>
+                        {agent.dependencyNames.map((dependency) => (
+                          <Tag key={`${agent.slotId}-${dependency}`} color='blue'>
+                            {dependency}
+                          </Tag>
+                        ))}
+                      </div>
+                    </Card>
+                  );
                 })}
               </div>
             </Card>
           ))}
         </div>
       )}
-      <div className='grid gap-12px md:grid-cols-2'>
-        {agentRows.map((agent) => (
-          <Card
-            key={agent.key}
-            title={agent.title}
-            extra={<Tag color={agent.key === 'leader' ? 'arcoblue' : 'blue'}>{agent.status}</Tag>}
-          >
-            <div className='text-12px text-t-tertiary'>{agent.summary}</div>
-          </Card>
-        ))}
-      </div>
     </div>
   );
 };

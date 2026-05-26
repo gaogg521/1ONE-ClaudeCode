@@ -198,6 +198,7 @@ const GeminiConversationPanel: React.FC<{
         modelSelection={modelSelection}
         cronJobId={conversation.extra?.cronJobId as string | undefined}
         hideSendBox={hideSendBox}
+        stretchLayout
       />
     </ChatLayout>
   );
@@ -249,6 +250,7 @@ const AionrsConversationPanel: React.FC<{ conversation: AionrsConversation; slid
         conversation_id={conversation.id}
         workspace={conversation.extra.workspace}
         modelSelection={modelSelection}
+        stretchLayout
       />
     </ChatLayout>
   );
@@ -280,6 +282,7 @@ const ChatConversation: React.FC<{
             agentName={(conversation.extra as { agentName?: string })?.agentName}
             cronJobId={(conversation.extra as { cronJobId?: string })?.cronJobId}
             hideSendBox={hideSendBox}
+            stretchLayout
           ></AcpChat>
         );
       case 'codex': // Legacy: codex now uses ACP protocol
@@ -297,6 +300,7 @@ const ChatConversation: React.FC<{
               )?.cachedConfigOptions
             }
             hideSendBox={hideSendBox}
+            stretchLayout
           />
         );
       case 'openclaw-gateway':
@@ -306,6 +310,7 @@ const ChatConversation: React.FC<{
             conversation_id={conversation.id}
             workspace={conversation.extra?.workspace}
             cronJobId={(conversation.extra as { cronJobId?: string })?.cronJobId}
+            stretchLayout
           />
         );
       case 'nanobot':
@@ -315,6 +320,7 @@ const ChatConversation: React.FC<{
             conversation_id={conversation.id}
             workspace={conversation.extra?.workspace}
             cronJobId={(conversation.extra as { cronJobId?: string })?.cronJobId}
+            stretchLayout
           />
         );
       case 'remote':
@@ -324,6 +330,7 @@ const ChatConversation: React.FC<{
             conversation_id={conversation.id}
             workspace={conversation.extra?.workspace}
             cronJobId={(conversation.extra as { cronJobId?: string })?.cronJobId}
+            stretchLayout
           />
         );
       default:

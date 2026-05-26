@@ -8,10 +8,12 @@ import type { TChatConversation } from '@/common/config/storage';
 import { Message } from '@arco-design/web-react';
 import React from 'react';
 import ChatWorkspace from '../Workspace';
+import type { WorkspaceTab } from '../Workspace/types';
 
 const ChatSider: React.FC<{
   conversation?: TChatConversation;
-}> = ({ conversation }) => {
+  initialTab?: WorkspaceTab;
+}> = ({ conversation, initialTab }) => {
   const [messageApi, messageContext] = Message.useMessage({ maxCount: 1 });
 
   let workspaceNode: React.ReactNode = null;
@@ -21,6 +23,7 @@ const ChatSider: React.FC<{
         conversation_id={conversation.id}
         workspace={conversation.extra.workspace}
         messageApi={messageApi}
+        initialTab={initialTab}
       ></ChatWorkspace>
     );
   } else if (conversation?.type === 'acp' && conversation.extra?.workspace) {
@@ -30,6 +33,7 @@ const ChatSider: React.FC<{
         workspace={conversation.extra.workspace}
         eventPrefix='acp'
         messageApi={messageApi}
+        initialTab={initialTab}
       ></ChatWorkspace>
     );
   } else if (conversation?.type === 'codex' && conversation.extra?.workspace) {
@@ -39,6 +43,7 @@ const ChatSider: React.FC<{
         workspace={conversation.extra.workspace}
         eventPrefix='codex'
         messageApi={messageApi}
+        initialTab={initialTab}
       ></ChatWorkspace>
     );
   } else if (conversation?.type === 'aionrs' && conversation.extra?.workspace) {
@@ -48,6 +53,7 @@ const ChatSider: React.FC<{
         workspace={conversation.extra.workspace}
         eventPrefix='aionrs'
         messageApi={messageApi}
+        initialTab={initialTab}
       ></ChatWorkspace>
     );
   }

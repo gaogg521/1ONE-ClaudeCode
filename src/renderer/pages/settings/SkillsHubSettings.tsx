@@ -1,4 +1,5 @@
 import { ipcBridge } from '@/common';
+import type { IUrlSkillPreview } from '@/common/adapter/ipcBridge';
 import { ConfigStorage } from '@/common/config/storage';
 import { resolveLocaleKey } from '@/common/utils';
 import type { AcpBackendConfig } from '@/common/types/acpTypes';
@@ -106,6 +107,10 @@ const SkillsHubSettings: React.FC = () => {
   const [removeAssistantIds, setRemoveAssistantIds] = useState<string[]>([]);
   const [removeSaving, setRemoveSaving] = useState(false);
   const [externalPreviewSkill, setExternalPreviewSkill] = useState<SkillMetadata | null>(null);
+  const [githubImportModalVisible, setGithubImportModalVisible] = useState(false);
+  const [githubUrlInput, setGithubUrlInput] = useState('');
+  const [githubPreview, setGithubPreview] = useState<IUrlSkillPreview | null>(null);
+  const [githubPreviewLoading, setGithubPreviewLoading] = useState(false);
   const [mySkillPreview, setMySkillPreview] = useState<SkillMetadata | null>(null);
 
   const getAssistantDisplayName = useCallback(
@@ -323,13 +328,21 @@ const SkillsHubSettings: React.FC = () => {
   const handleImport = useCallback(
     async (
       skillPath: string,
-      opts?: { skillName?: string; skipRefetch?: boolean; closePreview?: boolean }
+      opts?: {
+        skillName?: string;
+        skipRefetch?: boolean;
+        closePreview?: boolean;
+        importMode?: 'symlink' | 'copy';
+      }
     ): Promise<boolean> => {
       const skillNameHint = opts?.skillName;
       const shouldRefetch = !opts?.skipRefetch;
       const closePreview = opts?.closePreview !== false;
       try {
-        const result = await ipcBridge.fs.importSkillWithSymlink.invoke({ skillPath });
+        const result =
+          opts?.importMode === 'copy'
+            ? await ipcBridge.fs.importSkillFromUrl.invoke({ skillPath })
+            : await ipcBridge.fs.importSkillWithSymlink.invoke({ skillPath });
         if (result.success) {
           Message.success(
             result.msg || t('settings.skillsHub.importSuccess', { defaultValue: 'Skill imported successfully' })
@@ -373,6 +386,33 @@ const SkillsHubSettings: React.FC = () => {
     },
     [fetchData, t]
   );
+
+  const openGitHubImportModal = useCallback(() => {
+    setGithubImportModalVisible(true);
+    setGithubUrlInput('');
+    setGithubPreview(null);
+  }, []);
+
+  const handlePreviewSkillsFromUrl = useCallback(async () => {
+    const input = githubUrlInput.trim();
+    if (!input) return;
+    setGithubPreviewLoading(true);
+    try {
+      const result = await ipcBridge.fs.previewSkillsFromUrl.invoke({ url: input });
+      if (result.success && result.data) {
+        setGithubPreview(result.data);
+      } else {
+        setGithubPreview(null);
+        Message.error(result.msg || t('settings.skillsHub.githubPreviewFailed', { defaultValue: 'Failed to preview GitHub skills' }));
+      }
+    } catch (error) {
+      console.error('Failed to preview GitHub skills:', error);
+      setGithubPreview(null);
+      Message.error(t('settings.skillsHub.githubPreviewError', { defaultValue: 'Error previewing GitHub skills' }));
+    } finally {
+      setGithubPreviewLoading(false);
+    }
+  }, [githubUrlInput, t]);
 
   const externalSkillImportStatusMap = useMemo(() => {
     const map = new Map<string, 'user' | 'builtin'>();
@@ -1430,6 +1470,14 @@ const SkillsHubSettings: React.FC = () => {
                     </span>
                   </button>
                   <button
+                    className='flex items-center justify-center gap-6px px-16px py-6px bg-base border border-border-1 hover:border-border-2 hover:bg-fill-1 text-t-primary rd-8px shadow-sm transition-all focus:outline-none cursor-pointer whitespace-nowrap'
+                    onClick={openGitHubImportModal}
+                  >
+                    <span className='text-13px font-medium'>
+                      {t('settings.skillsHub.githubImport', { defaultValue: '从 GitHub URL 导入' })}
+                    </span>
+                  </button>
+                  <button
                     className='outline-none border-none bg-transparent cursor-pointer p-6px text-t-tertiary hover:text-primary-6 transition-colors rd-full hover:bg-fill-2'
                     onClick={async () => {
                       await fetchData();
@@ -1819,6 +1867,101 @@ const SkillsHubSettings: React.FC = () => {
             ) : null}
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        title={t('settings.skillsHub.githubImportModalTitle', { defaultValue: '从 GitHub URL 预览技能' })}
+        visible={githubImportModalVisible}
+        onCancel={() => {
+          setGithubImportModalVisible(false);
+          setGithubPreview(null);
+          setGithubUrlInput('');
+        }}
+        footer={
+          <div className='flex justify-end gap-8px'>
+            <Button
+              onClick={() => {
+                setGithubImportModalVisible(false);
+                setGithubPreview(null);
+                setGithubUrlInput('');
+              }}
+            >
+              {t('common.close', { defaultValue: 'Close' })}
+            </Button>
+          </div>
+        }
+        autoFocus={false}
+        focusLock
+      >
+        <div className='flex flex-col gap-16px'>
+          <Typography.Text type='secondary' className='text-13px leading-relaxed'>
+            {t('settings.skillsHub.githubImportHint', {
+              defaultValue:
+                '支持 GitHub 仓库根目录、tree 目录链接，以及指向 SKILL.md 的 blob/raw 链接。先预览 metadata，再确认导入到我的技能。',
+            })}
+          </Typography.Text>
+          <div className='flex gap-8px items-start'>
+            <Input
+              placeholder='https://github.com/owner/repo'
+              value={githubUrlInput}
+              onChange={(value) => setGithubUrlInput(value)}
+            />
+            <Button type='primary' loading={githubPreviewLoading} disabled={!githubUrlInput.trim()} onClick={() => void handlePreviewSkillsFromUrl()}>
+              {t('settings.skillsHub.githubPreviewAction', { defaultValue: '预览' })}
+            </Button>
+          </div>
+
+          {githubPreview ? (
+            <div className='flex flex-col gap-12px'>
+              <div>
+                <div className='text-12px font-medium text-t-secondary mb-6px'>
+                  {t('settings.skillsHub.githubPreviewResolvedUrl', { defaultValue: 'Resolved GitHub URL' })}
+                </div>
+                <Typography.Paragraph className='text-13px font-mono text-t-primary mb-0 break-all bg-fill-1 px-12px py-8px rd-8px border border-border-1'>
+                  {githubPreview.resolvedUrl}
+                </Typography.Paragraph>
+              </div>
+              <div className='max-h-[360px] overflow-y-auto custom-scrollbar flex flex-col gap-8px pr-4px'>
+                {githubPreview.skills.map((skill) => {
+                  const status = externalSkillImportStatusMap.get(skill.name);
+                  return (
+                    <div
+                      key={skill.directory || skill.name}
+                      className='flex flex-col gap-10px p-12px rd-12px border border-border-1 bg-base'
+                    >
+                      <div className='flex items-start justify-between gap-12px'>
+                        <div className='min-w-0 flex-1'>
+                          <div className='text-14px font-semibold text-t-primary truncate'>{skill.name}</div>
+                          {skill.description ? (
+                            <div className='text-12px text-t-secondary mt-4px whitespace-pre-wrap'>{skill.description}</div>
+                          ) : null}
+                        </div>
+                        <Button
+                          size='small'
+                          type='primary'
+                          disabled={status === 'builtin'}
+                          onClick={() =>
+                            void handleImport(skill.directory, {
+                              skillName: skill.name,
+                              importMode: 'copy',
+                              closePreview: false,
+                            })
+                          }
+                        >
+                          {t('common.import', { defaultValue: 'Import' })}
+                        </Button>
+                      </div>
+                      <div className='flex flex-wrap gap-6px'>{renderExternalSkillStatusTag(skill)}</div>
+                      <Typography.Paragraph className='text-12px font-mono text-t-tertiary mb-0 break-all'>
+                        {skill.directory}
+                      </Typography.Paragraph>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </Modal>
 
       <Modal

@@ -10,6 +10,7 @@ import FlexFullContainer from '@renderer/components/layout/FlexFullContainer';
 import MessageList from '@renderer/pages/conversation/Messages/MessageList';
 import { MessageListProvider, useMessageLstCache } from '@renderer/pages/conversation/Messages/hooks';
 import HOC from '@renderer/utils/ui/HOC';
+import { CHAT_RAIL_INLINE_PADDING_CLASS } from '@renderer/utils/ui/contentRail';
 import React, { useEffect, useMemo } from 'react';
 import LocalImageView from '@renderer/components/media/LocalImageView';
 import ConversationChatConfirm from '../../components/ConversationChatConfirm';
@@ -20,19 +21,20 @@ const AionrsChat: React.FC<{
   conversation_id: string;
   workspace: string;
   modelSelection: AionrsModelSelection;
-}> = ({ conversation_id, workspace, modelSelection }) => {
+  stretchLayout?: boolean;
+}> = ({ conversation_id, workspace, modelSelection, stretchLayout }) => {
   useMessageLstCache(conversation_id);
   const updateLocalImage = LocalImageView.useUpdateLocalImage();
   useEffect(() => {
     updateLocalImage({ root: workspace });
   }, [workspace]);
   const conversationValue = useMemo<ConversationContextValue>(() => {
-    return { conversationId: conversation_id, workspace, type: 'aionrs' };
-  }, [conversation_id, workspace]);
+    return { conversationId: conversation_id, workspace, type: 'aionrs', stretchLayout };
+  }, [conversation_id, workspace, stretchLayout]);
 
   return (
     <ConversationProvider value={conversationValue}>
-      <div className='flex-1 flex flex-col px-20px min-h-0'>
+      <div className={`flex-1 flex flex-col min-h-0 ${CHAT_RAIL_INLINE_PADDING_CLASS}`}>
         <FlexFullContainer>
           <MessageList className='flex-1' />
         </FlexFullContainer>

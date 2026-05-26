@@ -5,7 +5,7 @@
  */
 
 import { PipelineService } from '@process/services/pipeline/PipelineService';
-import type { IPipelineDefinition } from '@process/services/pipeline/PipelineService';
+import { normalizePipelineDefinition, type IPipelineDefinition } from '@process/services/pipeline/PipelineService';
 
 export class CciService {
   static async listPipelines(tenantId: string): Promise<unknown[]> {
@@ -22,11 +22,34 @@ export class CciService {
     if (!name) {
       throw new Error('Pipeline name is required');
     }
-    if (!input.definition || !Array.isArray(input.definition.stages)) {
-      throw new Error('Invalid pipeline definition');
-    }
+
+    normalizePipelineDefinition(input.definition);
+
     return PipelineService.getInstance().createPipeline({
       tenantId: input.tenantId,
+      name,
+      associatedTeamId: input.associatedTeamId || null,
+      definition: input.definition as IPipelineDefinition,
+    });
+  }
+
+  static async updatePipeline(input: {
+    tenantId: string;
+    pipelineId: string;
+    name: string;
+    definition: { stages: unknown[] };
+    associatedTeamId?: string | null;
+  }): Promise<unknown> {
+    const name = input.name.trim();
+    if (!name) {
+      throw new Error('Pipeline name is required');
+    }
+
+    normalizePipelineDefinition(input.definition);
+
+    return PipelineService.getInstance().updatePipeline({
+      tenantId: input.tenantId,
+      pipelineId: input.pipelineId,
       name,
       associatedTeamId: input.associatedTeamId || null,
       definition: input.definition as IPipelineDefinition,

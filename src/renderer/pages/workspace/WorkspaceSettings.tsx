@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@arco-design/web-react';
 import { Left, SettingTwo } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
+import PageContentShell from '@/renderer/components/layout/PageContentShell';
 
 const WorkspaceSettings: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = useTranslation();
@@ -19,7 +20,7 @@ const WorkspaceSettings: React.FC<{ children: React.ReactNode }> = ({ children }
   }, [location.pathname, t]);
 
   return (
-    <div className='h-full w-full overflow-auto px-20px py-16px'>
+    <PageContentShell className='workspace-settings-shell' contentClassName='md:max-w-1200px'>
       <div className='flex items-center justify-between gap-12px mb-12px'>
         <div className='flex items-center gap-10px min-w-0'>
           <Button
@@ -79,7 +80,7 @@ const WorkspaceSettings: React.FC<{ children: React.ReactNode }> = ({ children }
       <div className='rounded-12px bg-[var(--color-bg-1)] border border-solid border-[var(--color-border-2)] p-12px'>
         {children}
       </div>
-    </div>
+    </PageContentShell>
   );
 };
 

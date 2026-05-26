@@ -31,13 +31,18 @@ const LAST_ACTIVE_TEAM_SCOPE_STORAGE_KEY = 'workspace:last-active-team-scope';
 type TeamIssueContext = {
   issueId: string | null;
   issueSubject: string | null;
+  workspaceTab: 'files' | 'kanban' | null;
+  agentSlotId: string | null;
 };
 
 function parseTeamIssueContext(search: string): TeamIssueContext {
   const params = new URLSearchParams(search);
+  const workspaceTab = params.get('workspaceTab');
   return {
     issueId: params.get('issueId'),
     issueSubject: params.get('issueSubject'),
+    workspaceTab: workspaceTab === 'files' || workspaceTab === 'kanban' ? workspaceTab : null,
+    agentSlotId: params.get('agentSlotId'),
   };
 }
 
@@ -252,6 +257,18 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
   const leadAgent = agents.find((a) => a.role === 'lead');
   const issueContext = parseTeamIssueContext(location.search);
 
+  useEffect(() => {
+    if (!issueContext.agentSlotId) {
+      return;
+    }
+    if (issueContext.agentSlotId === activeSlotId) {
+      return;
+    }
+    if (agents.some((agent) => agent.slotId === issueContext.agentSlotId)) {
+      switchTab(issueContext.agentSlotId);
+    }
+  }, [activeSlotId, agents, issueContext.agentSlotId, switchTab]);
+
   const handleRemoveAgent = useCallback(
     async (slotId: string) => {
       await ipcBridge.team.removeAgent.invoke({ teamId: team.id, slotId });
@@ -308,8 +325,8 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
 
   const sider = useMemo(() => {
     if (!workspaceEnabled || !dispatchConversation) return <div />;
-    return <ChatSider conversation={dispatchConversation} />;
-  }, [workspaceEnabled, dispatchConversation]);
+    return <ChatSider conversation={dispatchConversation} initialTab={issueContext.workspaceTab ?? undefined} />;
+  }, [workspaceEnabled, dispatchConversation, issueContext.workspaceTab]);
 
   const updateScrollArrows = useCallback(() => {
     const container = scrollContainerRef.current;

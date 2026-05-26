@@ -1,11 +1,17 @@
 .guidLayout {
   --assistant-surface-bg: color-mix(in srgb, var(--bg-2) 65%, transparent);
   --assistant-surface-bg-hover: color-mix(in srgb, var(--bg-2) 85%, transparent);
-  width: clamp(var(--app-min-width, 360px), calc(100% - 32px), 800px);
+  width: min(100%, var(--content-rail-max-width, 960px));
   max-width: 100%;
-  padding: 0 16px;
+  padding: 0 var(--content-rail-inline-padding-mobile, 16px);
   box-sizing: border-box;
   margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .guidLayout {
+    padding: 0 var(--content-rail-inline-padding-desktop, 24px);
+  }
 }
 
 .heroHeader {
@@ -17,7 +23,7 @@
 
 .heroHeaderControls {
   width: 100%;
-  max-width: 760px;
+  max-width: var(--content-rail-inner-max-width, 880px);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -139,7 +145,7 @@
 
 .heroSubtitle {
   margin: 0 auto 14px;
-  max-width: 760px;
+  max-width: var(--content-rail-inner-max-width, 880px);
   min-height: 40px;
   padding: 0 14px;
   border-radius: 20px;

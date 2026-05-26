@@ -25,6 +25,7 @@ import { useEnterpriseRuntime } from '@/renderer/hooks/enterprise/useEnterpriseR
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import type { EnterpriseNavKey } from '@/renderer/pages/enterprise/enterpriseNav';
 import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
+import PageContentShell from '@/renderer/components/layout/PageContentShell';
 import {
   listCodeRepos,
   listMcpRegistry,
@@ -144,7 +145,7 @@ const EnterpriseHome: React.FC = () => {
   );
 
   return (
-    <div className='max-w-1200px mx-auto w-full px-4px pb-40px'>
+    <PageContentShell contentClassName='max-w-1200px pb-40px' disableOverflow>
       {/* 1. 现代头部 PageHeader (深邃靛蓝渐变) */}
       <div
         className='rd-12px p-24px mb-24px text-white relative overflow-hidden'
@@ -347,7 +348,7 @@ const EnterpriseHome: React.FC = () => {
           </Col>
         ))}
       </Row>
-    </div>
+    </PageContentShell>
   );
 };
 

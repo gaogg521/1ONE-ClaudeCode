@@ -49,6 +49,14 @@ vi.mock('@process/services/database', () => ({
   }),
 }));
 
+const getAuthProviderMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@process/webserver/auth/repository/AuthProviderRepository', () => ({
+  AuthProviderRepository: {
+    getProvider: (...args: unknown[]) => getAuthProviderMock(...args),
+  },
+}));
+
 // 辅助方法：快速创建 Mock Response
 function createResponseMock() {
   const res = {
@@ -71,6 +79,7 @@ describe('devopsRoutes', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn());
     app = express();
     app.use(express.json());
 
@@ -125,6 +134,130 @@ describe('devopsRoutes', () => {
   });
 
   describe('RAG 知识库 API', () => {
+    it('GET /api/admin/rag/documents - returns failure reason for failed documents', async () => {
+      mockAll.mockReturnValueOnce([
+        {
+          id: 'doc-1',
+          title: '导入失败文档',
+          status: 'failed',
+          last_error: 'embedding warmup failed',
+        },
+      ]);
+
+      const handler = getRouteHandler(app, 'get', '/api/admin/rag/documents');
+      const req = {
+        user: { id: 'test-user-id', tenant_id: 'tenant-123', role: 'org_admin' },
+      } as any;
+      const res = createResponseMock();
+
+      await handler(req, res, () => {});
+
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: [
+          expect.objectContaining({
+            id: 'doc-1',
+            last_error: 'embedding warmup failed',
+          }),
+        ],
+      });
+    });
+
+    it('POST /api/admin/rag/import-url - imports a public URL and queues indexing', async () => {
+      vi.mocked(global.fetch).mockResolvedValueOnce({
+        ok: true,
+        text: async () => '<html><body>研发流程 文档内容</body></html>',
+      } as Response);
+
+      const handler = getRouteHandler(app, 'post', '/api/admin/rag/import-url');
+      const req = {
+        user: { id: 'test-user-id', tenant_id: 'tenant-123', role: 'org_admin' },
+        body: { url: 'https://example.com/doc', title: '研发流程' },
+      } as any;
+      const res = createResponseMock();
+
+      await handler(req, res, () => {});
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://example.com/doc',
+        expect.objectContaining({
+          headers: { 'User-Agent': '1ONE-RAG/1.0' },
+        })
+      );
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: expect.objectContaining({
+          status: 'indexing',
+          title: '研发流程',
+        }),
+      });
+    });
+
+    it('POST /api/admin/rag/import-feishu - rejects requests when Feishu provider is not configured', async () => {
+      getAuthProviderMock.mockResolvedValueOnce(null);
+
+      const handler = getRouteHandler(app, 'post', '/api/admin/rag/import-feishu');
+      const req = {
+        user: { id: 'test-user-id', tenant_id: 'tenant-123', role: 'org_admin' },
+        body: { url: 'https://sample.feishu.cn/docx/AbCdEf123456' },
+      } as any;
+      const res = createResponseMock();
+
+      await handler(req, res, () => {});
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: expect.stringContaining('Feishu'),
+      });
+    });
+
+    it('POST /api/admin/rag/import-feishu - imports Feishu docx content through tenant credentials', async () => {
+      getAuthProviderMock.mockResolvedValueOnce({
+        enabled: 1,
+        config: {
+          appId: 'cli_xxx',
+          appSecret: 'secret_xxx',
+        },
+      });
+
+      vi.mocked(global.fetch)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ code: 0, tenant_access_token: 'tenant-token' }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ code: 0, data: { document: { title: '飞书规范' } } }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ code: 0, data: { content: '# 飞书规范\n\n正文' } }),
+        } as Response);
+
+      const handler = getRouteHandler(app, 'post', '/api/admin/rag/import-feishu');
+      const req = {
+        user: { id: 'test-user-id', tenant_id: 'tenant-123', role: 'org_admin' },
+        body: { url: 'https://sample.feishu.cn/docx/AbCdEf123456' },
+      } as any;
+      const res = createResponseMock();
+
+      await handler(req, res, () => {});
+
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        1,
+        'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: expect.objectContaining({
+          status: 'indexing',
+          title: '飞书规范',
+        }),
+      });
+    });
+
     it('POST /api/admin/rag/query - 语义检索计算余弦相似度并排序过滤', async () => {
       // 模拟数据库已有的知识切片
       mockAll.mockReturnValueOnce([

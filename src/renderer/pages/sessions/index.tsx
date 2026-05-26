@@ -7,8 +7,11 @@ import { Add, Search, Play, Delete, Left, FolderOpen, Right, Pushpin, Star } fro
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
+import type { TTeam } from '@/common/types/teamTypes';
 import { useTranslation } from 'react-i18next';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
+import { useTeamList } from '@/renderer/pages/team/hooks/useTeamList';
+import TeamCreateModal from '@/renderer/pages/team/components/TeamCreateModal';
 
 type WorkspaceScope = 'all' | 'personal' | 'team';
 
@@ -111,6 +114,17 @@ function buildIssueKanbanPath(
   params.set('issueId', issueId);
   params.set('issueSubject', issueSubject);
   return `/enterprise/cteam?${params.toString()}`;
+}
+
+function buildTeamSessionPath(teamId: string, issueId?: string | null, issueSubject?: string | null): string {
+  if (!issueId || !issueSubject) {
+    return `/team/${teamId}`;
+  }
+  const params = new URLSearchParams({
+    issueId,
+    issueSubject,
+  });
+  return `/team/${teamId}?${params.toString()}`;
 }
 
 const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) => void }> = ({ conv, onDelete }) => {
@@ -246,10 +260,12 @@ const SessionsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeDateKey, setActiveDateKey] = useState<string | null>(null);
+  const [createTeamVisible, setCreateTeamVisible] = useState(false);
   const location = useLocation();
   const [scope, setScope] = useState<WorkspaceScope>(() => resolveWorkspaceScope(location.search));
   const navigate = useNavigate();
   const { hasJoinedEnterprise, isEnterpriseEdition, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
+  const { mutate: refreshTeams } = useTeamList();
   const {
     teamId: scopedTeamId,
     teamName: scopedTeamName,
@@ -257,6 +273,7 @@ const SessionsPage: React.FC = () => {
     issueSubject: scopedIssueSubject,
   } = parseWorkspaceScopeSearch(location.search);
   const isCurrentTeamScope = scope === 'team' && Boolean(scopedTeamId);
+  const isTeamScopeWithoutTeam = scope === 'team' && !scopedTeamId;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -380,6 +397,32 @@ const SessionsPage: React.FC = () => {
     navigate(buildWorkspaceScopePath(location.pathname, location.search, nextScope), { replace: true });
   };
 
+  const handleOpenCurrentTeam = useCallback(() => {
+    if (!scopedTeamId) return;
+    navigate(buildTeamSessionPath(scopedTeamId, scopedIssueId, scopedIssueSubject));
+  }, [navigate, scopedIssueId, scopedIssueSubject, scopedTeamId]);
+
+  const handleNewAction = useCallback(() => {
+    if (isCurrentTeamScope) {
+      handleOpenCurrentTeam();
+      return;
+    }
+    if (scope === 'team') {
+      setCreateTeamVisible(true);
+      return;
+    }
+    navigate('/guid');
+  }, [handleOpenCurrentTeam, isCurrentTeamScope, navigate, scope]);
+
+  const handleTeamCreated = useCallback(
+    async (team: TTeam) => {
+      setCreateTeamVisible(false);
+      navigate(buildTeamSessionPath(team.id, scopedIssueId, scopedIssueSubject));
+      await refreshTeams();
+    },
+    [navigate, refreshTeams, scopedIssueId, scopedIssueSubject]
+  );
+
   return (
     <div style={{ padding: '20px 24px', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -401,11 +444,13 @@ const SessionsPage: React.FC = () => {
           type='primary'
           icon={<Add theme='outline' />}
           size='small'
-          onClick={() => navigate(isCurrentTeamScope && scopedTeamId ? `/team/${scopedTeamId}` : '/guid')}
+          onClick={handleNewAction}
         >
           {isCurrentTeamScope
             ? t('team.continueTeamCollaboration', { defaultValue: '继续团队协同' })
-            : t('sessions.new')}
+            : scope === 'team'
+              ? t('team.createTeamSession', { defaultValue: '新建团队会话' })
+              : t('sessions.new')}
         </Button>
       </div>
 
@@ -584,11 +629,13 @@ const SessionsPage: React.FC = () => {
                 <Button
                   type='primary'
                   icon={<Add theme='outline' />}
-                  onClick={() => navigate(isCurrentTeamScope && scopedTeamId ? `/team/${scopedTeamId}` : '/guid')}
+                  onClick={handleNewAction}
                 >
                   {isCurrentTeamScope
                     ? t('team.continueTeamCollaboration', { defaultValue: '继续团队协同' })
-                    : t('sessions.startFirst')}
+                    : scope === 'team'
+                      ? t('team.createTeamSession', { defaultValue: '新建团队会话' })
+                      : t('sessions.startFirst')}
                 </Button>
               </div>
             )}
@@ -683,6 +730,13 @@ const SessionsPage: React.FC = () => {
           </>
         )}
       </div>
+      <TeamCreateModal
+        visible={createTeamVisible}
+        onClose={() => setCreateTeamVisible(false)}
+        onCreated={(team) => {
+          void handleTeamCreated(team);
+        }}
+      />
     </div>
   );
 };

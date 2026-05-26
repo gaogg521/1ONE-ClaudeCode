@@ -5,7 +5,9 @@
  */
 
 import type { IMessageCronTrigger } from '@/common/chat/chatLib';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { iconColors } from '@/renderer/styles/colors';
+import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 import { AlarmClock, Right } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,9 +17,14 @@ const MessageCronTrigger: React.FC<{ message: IMessageCronTrigger }> = ({ messag
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { cronJobId, cronJobName } = message.content;
+  const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
 
   return (
-    <div className='max-w-780px w-full mx-auto cursor-pointer' onClick={() => navigate(`/scheduled/${cronJobId}`)}>
+    <div
+      className={`${stretchLayout ? 'w-full' : 'w-full mx-auto'} cursor-pointer`}
+      style={getChatRailSurfaceStyle('message', stretchLayout)}
+      onClick={() => navigate(`/scheduled/${cronJobId}`)}
+    >
       <div
         className='flex items-center gap-8px px-16px py-12px rd-12px b-1 b-solid bg-fill-0 hover:bg-fill-1 transition-colors'
         style={{ borderColor: 'color-mix(in srgb, var(--color-border-2) 70%, transparent)' }}

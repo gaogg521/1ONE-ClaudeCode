@@ -19,6 +19,8 @@ import HorizontalFileList from '@renderer/components/media/HorizontalFileList';
 import MarkdownView from '@renderer/components/Markdown';
 import { stripThinkTags, hasThinkTags } from '@renderer/utils/chat/thinkTagFilter';
 import { stripSkillSuggest, hasSkillSuggest } from '@renderer/utils/chat/skillSuggestParser';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { CONTENT_RAIL } from '@/renderer/utils/ui/contentRail';
 
 /**
  * Format a timestamp for message display.
@@ -100,6 +102,7 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
   const [showCopyAlert, setShowCopyAlert] = useState(false);
   const isUserMessage = message.position === 'right';
   const isTeammateMessage = message.position === 'left' && message.content.teammateMessage === true;
+  const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
 
   // 过滤空内容，避免渲染空DOM
   if (!message.content.content || (typeof message.content.content === 'string' && !message.content.content.trim())) {
@@ -150,7 +153,7 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
                 {senderName.charAt(0).toUpperCase()}
               </div>
             )}
-            <span className='text-12px text-t-secondary'>{senderName}</span>
+            <span className='text-11px text-t-secondary'>{senderName}</span>
           </div>
         )}
         {files.length > 0 && (
@@ -169,17 +172,24 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
           </div>
         )}
         <div
-          className={classNames('min-w-0 [&>p:first-child]:mt-0px [&>p:last-child]:mb-0px md:max-w-780px', {
+          className={classNames('min-w-0 text-13px lh-20px [&>p:first-child]:mt-0px [&>p:last-child]:mb-0px', {
             'bg-aou-2 p-8px': isUserMessage || cronMeta,
             'bg-3 p-8px': isTeammateMessage,
             'w-full': !(isUserMessage || cronMeta || isTeammateMessage),
           })}
           style={
-            isUserMessage || cronMeta
-              ? { borderRadius: '8px 0 8px 8px' }
-              : isTeammateMessage
-                ? { borderRadius: '0 8px 8px 8px' }
-                : undefined
+            {
+              ...(stretchLayout
+                ? !isUserMessage
+                  ? { width: '100%', maxWidth: 'none' }
+                  : {}
+                : { maxWidth: CONTENT_RAIL.chatMessageMaxWidth }),
+              ...(isUserMessage || cronMeta
+                ? { borderRadius: '8px 0 8px 8px' }
+                : isTeammateMessage
+                  ? { borderRadius: '0 8px 8px 8px' }
+                  : {}),
+            }
           }
         >
           {/* JSON 内容使用折叠组件 Use CollapsibleContent for JSON content */}
@@ -200,7 +210,7 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
         >
           {copyButton}
           {message.createdAt && (
-            <span className='text-12px c-text-4 opacity-0 group-hover:opacity-100 transition-opacity select-none'>
+            <span className='text-11px c-text-4 opacity-0 group-hover:opacity-100 transition-opacity select-none'>
               {formatMessageTime(message.createdAt)}
             </span>
           )}

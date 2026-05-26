@@ -3,13 +3,28 @@ import { Button, Card, Empty } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import type { SuperAssistantBoardColumn, SuperAssistantIssueItem } from '../hooks/useSuperAssistantData';
 
+type AssignableIssueAgent = {
+  slotId: string;
+  agentName: string;
+};
+
+type CurrentIssueActivityFeedback = {
+  assignedAgentName: string | null;
+  assignedStatus: 'pending' | 'idle' | 'active' | 'completed' | 'failed' | null;
+  blockerMessage: string | null;
+};
+
 type IssuesWorkbenchProps = {
   isAdmin: boolean;
   loading: boolean;
   boardColumns: SuperAssistantBoardColumn[];
   currentIssue: SuperAssistantIssueItem | null;
+  assignableAgents: AssignableIssueAgent[];
+  currentAssignmentAgentName: string | null;
+  currentIssueActivityFeedback: CurrentIssueActivityFeedback;
   onSelectIssue: (issueId: string) => void;
   onBreakdownIssue: () => void;
+  onAssignIssue: (slotId: string, agentName: string) => void;
   onOpenKanban: () => void;
   onOpenTeamFlow: () => void;
   onOpenSharedTasks: () => void;
@@ -24,8 +39,12 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
   loading,
   boardColumns,
   currentIssue,
+  assignableAgents,
+  currentAssignmentAgentName,
+  currentIssueActivityFeedback,
   onSelectIssue,
   onBreakdownIssue,
+  onAssignIssue,
   onOpenKanban,
   onOpenTeamFlow,
   onOpenSharedTasks,
@@ -35,6 +54,18 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
   onOpenMcp,
 }) => {
   const { t } = useTranslation();
+  const activityStatusLabel =
+    currentIssueActivityFeedback.assignedStatus === 'failed'
+      ? t('common.superAssistant.agentStatus.failed', { defaultValue: '已阻塞' })
+      : currentIssueActivityFeedback.assignedStatus === 'active'
+        ? t('common.superAssistant.agentStatus.active', { defaultValue: '执行中' })
+        : currentIssueActivityFeedback.assignedStatus === 'completed'
+          ? t('common.superAssistant.agentStatus.completed', { defaultValue: '已完成' })
+          : currentIssueActivityFeedback.assignedStatus === 'pending'
+            ? t('common.superAssistant.agentStatus.pending', { defaultValue: '准备中' })
+            : currentIssueActivityFeedback.assignedStatus === 'idle'
+              ? t('common.superAssistant.agentStatus.idle', { defaultValue: '待领取' })
+              : null;
   const boardColumnMeta = [
     {
       key: 'unassigned',
@@ -131,6 +162,36 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
                   defaultValue: '最新评论和阻塞会优先汇总在这里。',
                 })}
             </div>
+            {currentIssueActivityFeedback.assignedAgentName ? (
+              <div>
+                {t('common.superAssistant.activity.assignedAgent', {
+                  defaultValue: '已分配给：{{agentName}}',
+                  agentName: currentIssueActivityFeedback.assignedAgentName,
+                })}
+              </div>
+            ) : (
+              <div>
+                {t('common.superAssistant.activity.unassigned', {
+                  defaultValue: '尚未分配到具体 Agent',
+                })}
+              </div>
+            )}
+            {activityStatusLabel ? (
+              <div>
+                {t('common.superAssistant.activity.latestStatus', {
+                  defaultValue: '最近状态：{{status}}',
+                  status: activityStatusLabel,
+                })}
+              </div>
+            ) : null}
+            {currentIssueActivityFeedback.blockerMessage ? (
+              <div>
+                {t('common.superAssistant.activity.blocker', {
+                  defaultValue: '阻塞原因：{{message}}',
+                  message: currentIssueActivityFeedback.blockerMessage,
+                })}
+              </div>
+            ) : null}
             <div>{t('common.superAssistant.activity.breakdown', { defaultValue: '超级助手拆解了 3 个子任务并建议分派。' })}</div>
             <div>{t('common.superAssistant.activity.execution', { defaultValue: '开发 Agent 正在推进编码，测试 Agent 等待联调。' })}</div>
           </div>
@@ -168,6 +229,28 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
           <Button size='small' onClick={onOpenSharedSessions}>
             {t('common.superAssistant.createSharedSession', { defaultValue: '创建共享会话' })}
           </Button>
+        </div>
+
+        <div className='mb-8px mt-12px text-12px font-600 text-t-secondary'>
+          {t('common.superAssistant.assignmentActionsTitle', { defaultValue: '分配动作' })}
+        </div>
+        {currentAssignmentAgentName ? (
+          <div className='mb-8px text-12px text-t-tertiary'>
+            {t('common.superAssistant.currentAssignedAgent', {
+              defaultValue: '当前已分配：{{agentName}}',
+              agentName: currentAssignmentAgentName,
+            })}
+          </div>
+        ) : null}
+        <div className='grid gap-8px'>
+          {assignableAgents.map((agent) => (
+            <Button key={agent.slotId} size='small' onClick={() => onAssignIssue(agent.slotId, agent.agentName)}>
+              {t('common.superAssistant.assignIssueToAgent', {
+                defaultValue: '分配给 {{agentName}}',
+                agentName: agent.agentName,
+              })}
+            </Button>
+          ))}
         </div>
 
         <div className='mb-8px mt-12px text-12px font-600 text-t-secondary'>

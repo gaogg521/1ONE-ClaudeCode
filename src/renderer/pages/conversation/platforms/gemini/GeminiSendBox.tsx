@@ -34,6 +34,8 @@ import AgentModeSelector from '@/renderer/components/agent/AgentModeSelector';
 import { useTeamPermission } from '@/renderer/pages/team/hooks/TeamPermissionContext';
 import ThoughtDisplay from '@/renderer/components/chat/ThoughtDisplay';
 import { useCommandQueueEnabled } from '@/renderer/hooks/system/useCommandQueueEnabled';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GeminiModelSelection } from './useGeminiModelSelection';
@@ -91,6 +93,7 @@ const GeminiSendBox: React.FC<{
   const [workspacePath, setWorkspacePath] = useState('');
   const { t } = useTranslation();
   const teamPermission = useTeamPermission();
+  const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
   const isCommandQueueEnabled = useCommandQueueEnabled();
   const showModeSelector = !teamPermission || teamPermission.isLeadAgent;
   const { checkAndUpdateTitle } = useAutoTitle();
@@ -356,7 +359,10 @@ const GeminiSendBox: React.FC<{
   };
 
   return (
-    <div className='max-w-800px w-full mx-auto flex flex-col mt-auto mb-16px'>
+    <div
+      className={`w-full flex flex-col mt-auto mb-16px ${stretchLayout ? '' : 'mx-auto'}`}
+      style={getChatRailSurfaceStyle('surface', stretchLayout)}
+    >
       {/* Agent Setup Card - only show for new conversation + no auth, auto-switch to available agent */}
       {showSetupCard && isNewConversation && hasNoAuth && (
         <AgentSetupCard

@@ -82,12 +82,22 @@ type RequirementFocusMatch = {
   card: IRequirement | null;
 };
 
+type AiDraftCard = {
+  type: Extract<RequirementType, 'feature' | 'story' | 'task'>;
+  subject: string;
+  description: string;
+  status: RequirementStatus;
+  priority: RequirementPriority;
+};
+
 type IssueContext = {
   teamId: string | null;
   teamName: string | null;
   issueId: string | null;
   issueSubject: string | null;
 };
+
+type TeamWorkspaceTab = 'files' | 'kanban';
 
 function parseIssueContext(search: string): IssueContext {
   const params = new URLSearchParams(search);
@@ -126,15 +136,22 @@ function buildSuperAssistantIssuePath(issueId: string): string {
   return `/super-assistant?${params.toString()}`;
 }
 
-function buildCurrentTeamPath(teamId: string, issueId?: string | null, issueSubject?: string | null): string {
-  if (!issueId || !issueSubject) {
-    return `/team/${teamId}`;
+function buildCurrentTeamPath(
+  teamId: string,
+  issueId?: string | null,
+  issueSubject?: string | null,
+  workspaceTab?: TeamWorkspaceTab
+): string {
+  const params = new URLSearchParams();
+  if (issueId && issueSubject) {
+    params.set('issueId', issueId);
+    params.set('issueSubject', issueSubject);
   }
-  const params = new URLSearchParams({
-    issueId,
-    issueSubject,
-  });
-  return `/team/${teamId}?${params.toString()}`;
+  if (workspaceTab) {
+    params.set('workspaceTab', workspaceTab);
+  }
+  const query = params.toString();
+  return query ? `/team/${teamId}?${query}` : `/team/${teamId}`;
 }
 
 function findRequirementFocus(requirements: IRequirement[], issueId: string): RequirementFocusMatch | null {
@@ -165,6 +182,90 @@ function findRequirementFocus(requirements: IRequirement[], issueId: string): Re
   }
 
   return null;
+}
+
+function trimBulletPrefix(line: string): string {
+  return line.replace(/^\s*(?:[-*•]|\d+[\.\、\)])\s*/, '').trim();
+}
+
+function splitAiInputLines(input: string): string[] {
+  return input
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function buildAiDraftCards(input: string): { feature: AiDraftCard; children: AiDraftCard[] } {
+  const lines = splitAiInputLines(input);
+  const fallbackTitle = lines[0]?.slice(0, 24) || 'AI 拆解需求';
+  const firstLine = lines[0] || '';
+  const [firstTitlePart, firstSectionPart] = firstLine.split(/[:：]/, 2);
+  const featureSubject = (firstSectionPart ? firstTitlePart : firstLine).trim() || fallbackTitle;
+
+  const sections: Array<{ title: string; items: string[] }> = [];
+  let currentTitle = firstSectionPart?.trim() || '';
+  let currentItems: string[] = [];
+
+  const pushCurrentSection = () => {
+    if (!currentTitle) {
+      return;
+    }
+    sections.push({
+      title: currentTitle,
+      items: currentItems,
+    });
+    currentTitle = '';
+    currentItems = [];
+  };
+
+  for (const [index, rawLine] of lines.entries()) {
+    if (index === 0) {
+      continue;
+    }
+
+    const trimmedLine = rawLine.trim();
+    const bulletText = trimBulletPrefix(trimmedLine);
+    const isBullet = bulletText !== trimmedLine;
+
+    if (isBullet) {
+      if (currentTitle) {
+        currentItems.push(bulletText);
+      } else {
+        sections.push({
+          title: bulletText.slice(0, 40),
+          items: [],
+        });
+      }
+      continue;
+    }
+
+    pushCurrentSection();
+    currentTitle = trimmedLine;
+  }
+
+  pushCurrentSection();
+
+  const sourceSections = sections.length
+    ? sections
+    : [{ title: fallbackTitle, items: lines.slice(1).map(trimBulletPrefix) }];
+  const children: AiDraftCard[] = sourceSections.map((section, index) => ({
+    type: section.items.length > 1 ? 'story' : 'task',
+    subject: section.title.slice(0, 60),
+    description: section.items.join('\n'),
+    status: index === 0 ? 'planning' : 'backlog',
+    priority: index === 0 ? 'high' : 'medium',
+  }));
+
+  return {
+    feature: {
+      type: 'feature',
+      subject: featureSubject.slice(0, 60),
+      description: input.trim(),
+      status: 'planning',
+      priority: 'high',
+    },
+    children,
+  };
 }
 
 const AdminKanban: React.FC = () => {
@@ -390,54 +491,39 @@ const AdminKanban: React.FC = () => {
     }
     setSaving(true);
     try {
+      const draft = buildAiDraftCards(aiInput);
+
       // 1. 创建关联的 Feature 主卡片 / Create parent Feature card
       const epicId = selectedEpicId || '';
       const featureRes = await createRequirement({
         parent_id: epicId || null,
-        type: 'feature',
-        subject: t('admin.kanban.ai.featureTitle', { defaultValue: 'AI 自动生成特性库', name: aiInput.slice(0, 8) }),
-        description: aiInput.trim(),
-        status: 'planning',
-        priority: 'high',
+        type: draft.feature.type,
+        subject: draft.feature.subject,
+        description: draft.feature.description,
+        status: draft.feature.status,
+        priority: draft.feature.priority,
       });
       const featureId = featureRes.id;
 
-      // 2. 模拟智能切片出 3 张级联 Story/Task 开发卡片，并智能滑入各个泳道中！
-      // Simulation of intelligent swarm split into Story / Task cards
-      const story1 = {
-        parent_id: featureId,
-        type: 'story' as const,
-        subject: t('admin.kanban.ai.story1', { defaultValue: 'DevOps 底层数据结构与升级方案校验' }),
-        description: t('admin.kanban.ai.story1Desc', { defaultValue: '使用 SQLiteBetter3 升级 v30 / v31，建立需求树与 RAG 表，完成 migration 自动备份逻辑。' }),
-        status: 'planning' as const,
-        priority: 'high' as const,
-      };
+      await Promise.all(
+        draft.children.map((item) =>
+          createRequirement({
+            parent_id: featureId,
+            type: item.type,
+            subject: item.subject,
+            description: item.description,
+            status: item.status,
+            priority: item.priority,
+          })
+        )
+      );
 
-      const story2 = {
-        parent_id: featureId,
-        type: 'task' as const,
-        subject: t('admin.kanban.ai.story2', { defaultValue: '全离线 RAG 本地向量化推理提取与相似度检索' }),
-        description: t('admin.kanban.ai.story2Desc', { defaultValue: '使用 transformers.js (WASM) 本地提取特征，Float32 序列化 BLOB，进行余弦比对检索。' }),
-        status: 'developing' as const,
-        priority: 'urgent' as const,
-      };
-
-      const story3 = {
-        parent_id: featureId,
-        type: 'task' as const,
-        subject: t('admin.kanban.ai.story3', { defaultValue: '开发企业端看板 UI 并集成管理员验证保护' }),
-        description: t('admin.kanban.ai.story3Desc', { defaultValue: '使用 Arco Design 新建多层泳道需求树，并补齐管理员角色边界、表单交互与回归测试。' }),
-        status: 'backlog' as const,
-        priority: 'medium' as const,
-      };
-
-      await Promise.all([
-        createRequirement(story1),
-        createRequirement(story2),
-        createRequirement(story3),
-      ]);
-
-      Message.success(t('admin.kanban.ai.success', { defaultValue: '🎉 AI Agent 成功为您拆解出 1 张特性和 3 张级联开发任务卡片并飘入泳道！' }));
+      Message.success(
+        t('admin.kanban.ai.success', {
+          defaultValue: 'AI Agent 已根据输入创建 1 张特性卡和 {{count}} 张拆解卡片。',
+          count: draft.children.length,
+        })
+      );
       setAiVisible(false);
       setAiInput('');
       await loadRequirements();
@@ -488,7 +574,7 @@ const AdminKanban: React.FC = () => {
           <Typography.Title heading={5} className='mt-0 mb-4px'>
             {t('admin.kanban.pageTitle', { defaultValue: 'CTeam 敏捷协同看板' })}
           </Typography.Title>
-          <Typography.Paragraph type='secondary' className='mb-0 text-13px'>
+          <Typography.Paragraph type='secondary' className='mb-0 text-12px'>
             {t('admin.kanban.pageDesc', { defaultValue: '企业级需求管理：树形拆解、敏捷任务状态流转，融合 AI 智能自动拆单技术。' })}
           </Typography.Paragraph>
         </div>
@@ -526,7 +612,7 @@ const AdminKanban: React.FC = () => {
       {issueContext.issueId && issueContext.issueSubject ? (
         <Card bordered={false} className='mb-16px rd-8px'>
           <div className='flex items-center justify-between gap-12px flex-wrap'>
-            <div className='text-12px text-t-tertiary'>
+            <div className='text-11px text-t-tertiary'>
               {t('common.workspace.issueContextHint', {
                 defaultValue: '当前来自超级助手 Issue：{{subject}}',
                 subject: issueContext.issueSubject,
@@ -577,6 +663,42 @@ const AdminKanban: React.FC = () => {
                   defaultValue: '返回超级助手',
                 })}
               </Button>
+              {issueContext.teamId ? (
+                <Button
+                  size='small'
+                  type='outline'
+                  onClick={() =>
+                    navigate(
+                      buildCurrentTeamPath(
+                        issueContext.teamId as string,
+                        issueContext.issueId,
+                        issueContext.issueSubject,
+                        'kanban'
+                      )
+                    )
+                  }
+                >
+                  {t('team.openWorkspace', { defaultValue: '打开团队工作区' })}
+                </Button>
+              ) : null}
+              {issueContext.teamId ? (
+                <Button
+                  size='small'
+                  type='outline'
+                  onClick={() =>
+                    navigate(
+                      buildCurrentTeamPath(
+                        issueContext.teamId as string,
+                        issueContext.issueId,
+                        issueContext.issueSubject,
+                        'files'
+                      )
+                    )
+                  }
+                >
+                  {t('team.openCurrentCode', { defaultValue: '打开当前团队代码' })}
+                </Button>
+              ) : null}
               {issueContext.teamId ? (
                 <Button
                   size='small'
@@ -646,7 +768,7 @@ const AdminKanban: React.FC = () => {
                       }`}
                       onClick={() => setSelectedEpicId(epic.id)}
                     >
-                      <div className='text-13px truncate'>{epic.subject}</div>
+                      <div className='text-12px truncate'>{epic.subject}</div>
                       <div className='text-11px text-t-tertiary mt-4px'>
                         {t('admin.kanban.card.subCount', {
                           count: epic.children?.length ?? 0,
@@ -679,7 +801,7 @@ const AdminKanban: React.FC = () => {
                       {/* Column Header */}
                       <div className='flex items-center justify-between mb-12px px-4px'>
                         <div className='flex items-center gap-6px'>
-                          <span className='text-14px font-700 text-t-primary'>
+                          <span className='text-13px font-700 text-t-primary'>
                             {t(status.labelKey, { defaultValue: status.defaultLabel })}
                           </span>
                           <Tag size='small' color={status.color} className='rd-10px font-600'>
@@ -722,11 +844,11 @@ const AdminKanban: React.FC = () => {
                                     {t(priority.labelKey, { defaultValue: priority.defaultLabel })}
                                   </Tag>
                                 </div>
-                                <div className='text-13px font-600 text-t-primary mb-6px line-clamp-2'>
+                                <div className='text-12px font-600 text-t-primary mb-6px line-clamp-2'>
                                   {card.subject}
                                 </div>
                                 {card.description ? (
-                                  <Typography.Paragraph type='secondary' className='mb-8px text-12px line-clamp-2'>
+                                  <Typography.Paragraph type='secondary' className='mb-8px text-11px line-clamp-2'>
                                     {card.description}
                                   </Typography.Paragraph>
                                 ) : null}

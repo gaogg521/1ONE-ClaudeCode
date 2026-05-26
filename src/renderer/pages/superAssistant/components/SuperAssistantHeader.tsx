@@ -33,7 +33,7 @@ const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
         <div className='mt-4px text-12px text-t-tertiary'>
           {t('common.superAssistant.subtitle', {
             defaultValue:
-              '把团队 Issue、Agent、技能、运行时与现有企业模块连接到同一个协作中枢。',
+              '把需求拆解、团队协作、技能编排和运行时连接到同一个可持续执行的协作中枢。',
           })}
         </div>
         {tenantLabel ? (
@@ -48,10 +48,10 @@ const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
 
       <div className='flex items-center gap-8px'>
         <Button size='small' type='outline' onClick={onOpenOverview}>
-          {t('common.superAssistant.headerOverview', { defaultValue: '查看总览' })}
+          {t('common.superAssistant.headerOverview', { defaultValue: '首页总览' })}
         </Button>
         <Button size='small' type='primary' onClick={onOpenIssues}>
-          {t('common.superAssistant.headerWork', { defaultValue: '进入作战台' })}
+          {t('common.superAssistant.headerWork', { defaultValue: '进入 Issue 作战台' })}
         </Button>
       </div>
     </div>

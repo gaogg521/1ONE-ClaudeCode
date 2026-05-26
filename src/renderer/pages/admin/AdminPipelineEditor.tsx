@@ -20,6 +20,7 @@ import {
   listPipelines,
   savePipeline,
   triggerPipelineRun,
+  updatePipeline,
   type PipelineListItem,
 } from '@/renderer/utils/enterpriseApi/modules';
 
@@ -50,6 +51,85 @@ const ATOMIC_TEMPLATES: StageDef[] = [
   { name: 'Maven 编译打包', command: 'mvn clean package -DskipTests', enabled: true },
 ];
 
+function splitStageCommands(commandText: string): string[] {
+  return commandText
+    .split(/\r?\n/)
+    .map((command) => command.trim())
+    .filter((command) => command.length > 0);
+}
+
+function buildPipelineDefinition(stages: StageDef[]): {
+  stages: Array<{ name: string; enabled: boolean; jobs: Array<{ name: string; commands: string[] }> }>;
+} {
+  return {
+    stages: stages
+      .map((stage) => {
+        const name = stage.name.trim();
+        if (!name) {
+          return null;
+        }
+
+        return {
+          name,
+          enabled: stage.enabled,
+          jobs: stage.enabled
+            ? [
+                {
+                  name,
+                  commands: splitStageCommands(stage.command),
+                },
+              ]
+            : [],
+        };
+      })
+      .filter(
+        (
+          stage
+        ): stage is { name: string; enabled: boolean; jobs: Array<{ name: string; commands: string[] }> } =>
+          Boolean(stage)
+      ),
+  };
+}
+
+function parsePipelineStages(definitionJson: string | undefined): StageDef[] {
+  const parsed = JSON.parse(definitionJson || '{}') as {
+    stages?: Array<{
+      name?: string;
+      command?: string;
+      enabled?: boolean;
+      jobs?: Array<{ commands?: string[] }>;
+    }>;
+  };
+
+  return (parsed.stages || [])
+    .map((stage) => {
+      const name = typeof stage.name === 'string' ? stage.name.trim() : '';
+      if (!name) {
+        return null;
+      }
+
+      const nestedCommands = Array.isArray(stage.jobs)
+        ? stage.jobs
+            .flatMap((job) => (Array.isArray(job.commands) ? job.commands : []))
+            .filter((command): command is string => typeof command === 'string' && command.trim().length > 0)
+        : [];
+
+      const command =
+        nestedCommands.length > 0
+          ? nestedCommands.join('\n')
+          : typeof stage.command === 'string'
+            ? stage.command
+            : '';
+
+      return {
+        name,
+        command,
+        enabled: stage.enabled !== false,
+      };
+    })
+    .filter((stage): stage is StageDef => Boolean(stage));
+}
+
 const PipelineEditor: React.FC = () => {
   const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState<string>('');
@@ -69,6 +149,7 @@ const PipelineEditor: React.FC = () => {
   const [runStatus, setRunStatus] = useState<string>('');
   const [runLog, setRunLog] = useState<string>('');
   const [runLoading, setRunLoading] = useState(false);
+  const hasDraft = Boolean(selectedId || pipelineName.trim() || stages.length > 0);
 
   // Select pipeline → load definition
   useEffect(() => {
@@ -77,7 +158,7 @@ const PipelineEditor: React.FC = () => {
     if (!p) return;
     setPipelineName(p.name || '');
     try {
-      setStages(JSON.parse(p.definition_json || '{}')?.stages || []);
+      setStages(parsePipelineStages(p.definition_json));
       setEditorError(null);
     } catch (error) {
       setStages([]);
@@ -105,14 +186,19 @@ const PipelineEditor: React.FC = () => {
     if (!pipelineName.trim()) { Message.warning('请输入流水线名称'); return; }
     setSaving(true);
     try {
-      await savePipeline({
-        id: selectedId || undefined,
+      const payload: Record<string, unknown> = {
         name: pipelineName.trim(),
-        definition: { stages },
+        definition: buildPipelineDefinition(stages),
         associatedTeamId: null,
-      });
+      };
+      const saved = selectedId
+        ? await updatePipeline(selectedId, payload)
+        : await savePipeline(payload);
       Message.success(t('common.saved', { defaultValue: '已保存' }));
       await pipelinesState.reload();
+      if (saved.id) {
+        setSelectedId(saved.id);
+      }
     } catch (error) {
       Message.error(getEnterpriseActionError(error, t('common.saveFailed', { defaultValue: '保存失败' })));
     } finally {
@@ -169,12 +255,12 @@ const PipelineEditor: React.FC = () => {
             <Button icon={<Refresh />} onClick={() => void pipelinesState.reload()}>
               {t('common.refresh', { defaultValue: '刷新' })}
             </Button>
-            {selectedId ? (
+            {hasDraft ? (
               <>
                 <Button type='primary' icon={<Save />} loading={saving} onClick={handleSave}>
                   {t('common.save', { defaultValue: '保存' })}
                 </Button>
-                <Button type='primary' status='success' loading={runLoading} onClick={handleRun}>
+                <Button type='primary' status='success' disabled={!selectedId} loading={runLoading} onClick={handleRun}>
                   {t('admin.pipeline.button.run', { defaultValue: '▶ 运行流水线' })}
                 </Button>
               </>
@@ -187,6 +273,24 @@ const PipelineEditor: React.FC = () => {
           <Typography.Text type='error'>{editorError}</Typography.Text>
         </Card>
       ) : null}
+
+      <Card bordered={false} className='rd-12px mb-16px'>
+        <div className='flex flex-col gap-8px'>
+          <Typography.Text className='text-13px font-600 text-t-primary'>
+            {t('admin.pipeline.introTitle', { defaultValue: 'CCI 的意义：流水线编排、运行与质量闸口' })}
+          </Typography.Text>
+          <Typography.Text className='text-12px text-t-secondary'>
+            {t('admin.pipeline.introDesc', {
+              defaultValue: '先编排最小 Stage，再保存、运行和查看日志。当前编辑器使用简化视图，但会自动转换为执行器可运行的 jobs/commands 结构。',
+            })}
+          </Typography.Text>
+          <Typography.Text className='text-12px text-t-secondary'>
+            {t('admin.pipeline.introSteps', {
+              defaultValue: '最小使用路径：1. 新建或选择流水线 2. 添加 Stage 命令 3. 保存 4. 运行并查看结果日志',
+            })}
+          </Typography.Text>
+        </div>
+      </Card>
 
       <div className='flex gap-16px' style={{ minHeight: 'calc(100vh - 220px)' }}>
         {/* 左侧流水线列表 */}

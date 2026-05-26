@@ -79,6 +79,8 @@ const mockListAvailableSkills = vi.fn();
 const mockDetectAndCountExternalSkills = vi.fn();
 const mockGetSkillPaths = vi.fn();
 const mockImportSkillWithSymlink = vi.fn();
+const mockPreviewSkillsFromUrl = vi.fn();
+const mockImportSkillFromUrl = vi.fn();
 const mockDeleteSkill = vi.fn();
 const mockExportSkillWithSymlink = vi.fn();
 const mockAddCustomExternalPath = vi.fn();
@@ -94,6 +96,8 @@ vi.mock('@/common', () => {
         detectAndCountExternalSkills: { invoke: (...args: any[]) => mockDetectAndCountExternalSkills(...args) },
         getSkillPaths: { invoke: (...args: any[]) => mockGetSkillPaths(...args) },
         importSkillWithSymlink: { invoke: (...args: any[]) => mockImportSkillWithSymlink(...args) },
+        previewSkillsFromUrl: { invoke: (...args: any[]) => mockPreviewSkillsFromUrl(...args) },
+        importSkillFromUrl: { invoke: (...args: any[]) => mockImportSkillFromUrl(...args) },
         deleteSkill: { invoke: (...args: any[]) => mockDeleteSkill(...args) },
         exportSkillWithSymlink: { invoke: (...args: any[]) => mockExportSkillWithSymlink(...args) },
         addCustomExternalPath: { invoke: (...args: any[]) => mockAddCustomExternalPath(...args) },
@@ -212,6 +216,33 @@ describe('SkillsHubSettings Component', () => {
       userSkillsDir: '/user/skills',
       builtinSkillsDir: '/builtin/skills',
     });
+
+    mockPreviewSkillsFromUrl.mockResolvedValue({
+      success: true,
+      data: {
+        sourceUrl: 'https://github.com/acme/skill-pack',
+        resolvedUrl: 'https://github.com/acme/skill-pack/tree/main',
+        cacheDir: '/cache/github/skill-pack',
+        skills: [
+          {
+            name: 'GitHubSkill',
+            description: 'from github',
+            directory: '/cache/github/skill-pack/GitHubSkill',
+            location: '/cache/github/skill-pack/GitHubSkill/SKILL.md',
+            runtimeFiles: ['/cache/github/skill-pack/GitHubSkill/SKILL.md'],
+            isCustom: false,
+            sourceKind: 'external',
+            metadataFormat: 'legacy-skill-md',
+            platforms: ['generic'],
+            adapterPlatforms: [],
+            hasCommonLayer: false,
+            effective: true,
+            warnings: [],
+          },
+        ],
+      },
+    });
+    mockImportSkillFromUrl.mockResolvedValue({ success: true });
   });
 
   it('should render main sections and load skills', async () => {
@@ -440,6 +471,42 @@ describe('SkillsHubSettings Component', () => {
 
     await waitFor(() => {
       expect(mockAddCustomExternalPath).toHaveBeenCalledWith({ name: 'NewPath', path: '/foo/bar' });
+    });
+  });
+
+  it('should preview and import skills from a GitHub URL', async () => {
+    render(<SkillsHubSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText('从 GitHub URL 导入')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('从 GitHub URL 导入'));
+
+    await waitFor(() => {
+      expect(screen.getByText('从 GitHub URL 预览技能')).toBeInTheDocument();
+    });
+
+    const urlInput = screen.getByPlaceholderText('https://github.com/owner/repo');
+    fireEvent.change(urlInput, { target: { value: 'https://github.com/acme/skill-pack' } });
+    fireEvent.click(screen.getByText('预览'));
+
+    await waitFor(() => {
+      expect(mockPreviewSkillsFromUrl).toHaveBeenCalledWith({ url: 'https://github.com/acme/skill-pack' });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('GitHubSkill')).toBeInTheDocument();
+      expect(screen.getByText('from github')).toBeInTheDocument();
+    });
+
+    const previewModal = await screen.findByTestId('mock-modal');
+    fireEvent.click(within(previewModal).getAllByText('Import')[0]);
+
+    await waitFor(() => {
+      expect(mockImportSkillFromUrl).toHaveBeenCalledWith({
+        skillPath: '/cache/github/skill-pack/GitHubSkill',
+      });
     });
   });
 

@@ -56,6 +56,7 @@ export type RagDocumentRecord = {
   file_size?: number;
   mime_type?: string;
   status?: string;
+  last_error?: string;
   created_at?: number;
   chunk_count?: number;
   scope?: string;
@@ -273,6 +274,12 @@ export async function importRagUrl(
   return enterpriseMutate<{ id: string }>('/api/admin/rag/import-url', 'POST', payload);
 }
 
+export async function importRagFeishuDocument(
+  payload: Record<string, unknown>
+): Promise<{ id: string }> {
+  return enterpriseMutate<{ id: string }>('/api/admin/rag/import-feishu', 'POST', payload);
+}
+
 export async function uploadRagDocument(
   file: File
 ): Promise<{ id: string; status: string }> {
@@ -444,8 +451,15 @@ export async function listPipelines(): Promise<PipelineListItem[]> {
   return enterpriseGet<PipelineListItem[]>('/api/admin/pipelines');
 }
 
-export async function savePipeline(payload: Record<string, unknown>): Promise<void> {
-  await enterpriseMutate('/api/admin/pipelines', 'POST', payload);
+export async function savePipeline(payload: Record<string, unknown>): Promise<PipelineListItem> {
+  return enterpriseMutate<PipelineListItem>('/api/admin/pipelines', 'POST', payload);
+}
+
+export async function updatePipeline(
+  pipelineId: string,
+  payload: Record<string, unknown>
+): Promise<PipelineListItem> {
+  return enterpriseMutate<PipelineListItem>(`/api/admin/pipelines/${pipelineId}`, 'PATCH', payload);
 }
 
 export async function triggerPipelineRun(

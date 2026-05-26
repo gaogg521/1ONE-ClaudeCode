@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useConversationHistoryContext } from '@/renderer/hooks/context/ConversationHistoryContext';
 import { getActivityTime } from '@/renderer/utils/chat/timeline';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
+import PageContentShell from '@/renderer/components/layout/PageContentShell';
 
 const LAST_ACTIVE_TEAM_SCOPE_STORAGE_KEY = 'workspace:last-active-team-scope';
 
@@ -153,16 +154,6 @@ const WorkspacePage: React.FC = () => {
           path: buildSharedWorkspaceScopePath('/tasks', lastActiveTeamScope),
         },
         {
-          key: 'pipeline',
-          title: t('common.workspace.hub.enterprisePipelineTitle', {
-            defaultValue: 'CCI 流水线',
-          }),
-          description: t('common.workspace.hub.enterprisePipelineDesc', {
-            defaultValue: '进入流水线编排、执行与质量闸口。',
-          }),
-          path: '/enterprise/pipeline-editor',
-        },
-        {
           key: 'cagent',
           title: t('common.workspace.hub.enterpriseAgentTitle', {
             defaultValue: 'CAgent 智能助手',
@@ -184,12 +175,24 @@ const WorkspacePage: React.FC = () => {
               path: '/enterprise/auth',
             }
           : null,
+        showEnterpriseAdminNav
+          ? {
+              key: 'pipeline',
+              title: t('common.workspace.hub.enterprisePipelineTitle', {
+                defaultValue: 'CCI 流水线',
+              }),
+              description: t('common.workspace.hub.enterprisePipelineDesc', {
+                defaultValue: '进入流水线编排、执行与质量闸口。',
+              }),
+              path: '/enterprise/pipeline-editor',
+            }
+          : null,
       ].filter((item): item is { key: string; title: string; description: string; path: string } => Boolean(item)),
     [lastActiveTeamScope, showEnterpriseAdminNav, t]
   );
 
   return (
-    <div className='h-full w-full overflow-auto px-20px py-16px'>
+    <PageContentShell className='workspace-page-shell' contentClassName='md:max-w-1200px'>
       <div className='flex items-start justify-between gap-12px'>
         <div className='min-w-0'>
           <div className='text-18px font-bold text-t-primary'>{t('nav.workspace', { defaultValue: '工作区（文件）' })}</div>
@@ -229,9 +232,12 @@ const WorkspacePage: React.FC = () => {
             {enterpriseCards.map((card) => (
               <Card
                 key={card.key}
-                className='border border-solid border-[var(--color-border-2)] rd-12px'
+                className='border border-solid border-[var(--color-border-2)] rd-12px cursor-pointer'
                 bodyStyle={{ padding: 16 }}
                 hoverable
+                onClick={() => {
+                  void navigate(card.path);
+                }}
               >
                 <div className='flex h-full flex-col gap-10px'>
                   <div className='text-14px font-semibold text-t-primary'>{card.title}</div>
@@ -242,7 +248,8 @@ const WorkspacePage: React.FC = () => {
                     <Button
                       type='outline'
                       size='small'
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation();
                         void navigate(card.path);
                       }}
                     >
@@ -326,7 +333,7 @@ const WorkspacePage: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
+    </PageContentShell>
   );
 };
 

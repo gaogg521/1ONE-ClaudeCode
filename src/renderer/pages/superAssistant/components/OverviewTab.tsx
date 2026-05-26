@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card } from '@arco-design/web-react';
+import { Button, Card } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 
 type OverviewTabProps = {
@@ -10,6 +10,16 @@ type OverviewTabProps = {
   activeAgentCount: number;
   teamConversationCount: number;
   featuredIssueSubject?: string | null;
+  skillCount: number;
+  enabledMcpCount: number;
+  teamCount: number;
+  onBreakdownIssue: () => void;
+  onOpenTeamFlow: () => void;
+  onOpenSharedTasks: () => void;
+  onOpenSharedSessions: () => void;
+  onOpenSkills: () => void;
+  onOpenMcp: () => void;
+  onOpenRuntimes: () => void;
 };
 
 const OverviewTab: React.FC<OverviewTabProps> = ({
@@ -20,6 +30,16 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
   activeAgentCount,
   teamConversationCount,
   featuredIssueSubject,
+  skillCount,
+  enabledMcpCount,
+  teamCount,
+  onBreakdownIssue,
+  onOpenTeamFlow,
+  onOpenSharedTasks,
+  onOpenSharedSessions,
+  onOpenSkills,
+  onOpenMcp,
+  onOpenRuntimes,
 }) => {
   const { t } = useTranslation();
   const cards = isAdmin
@@ -105,12 +125,133 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
       ];
 
   return (
-    <div className='grid gap-12px md:grid-cols-2 xl:grid-cols-4'>
-      {cards.map((card) => (
-        <Card key={card.title} title={card.title}>
-          <div className='text-12px text-t-tertiary'>{card.summary}</div>
-        </Card>
-      ))}
+    <div className='space-y-12px'>
+      <Card title={t('common.superAssistant.homeCapabilitiesTitle', { defaultValue: '我能帮你做什么' })}>
+        <div className='grid gap-12px md:grid-cols-2 xl:grid-cols-4'>
+          <Card title={t('common.superAssistant.homeCapabilityBreakdown', { defaultValue: '拆解共享 Issue' })}>
+            <div className='text-12px text-t-tertiary'>
+              {t('common.superAssistant.homeCapabilityBreakdownDesc', {
+                defaultValue: '把当前焦点需求拆成可执行工作项，并回到 Issue 看板继续推进。',
+              })}
+            </div>
+            <div className='mt-10px'>
+              <Button size='small' type='primary' onClick={onBreakdownIssue}>
+                {t('common.superAssistant.homeCapabilityBreakdownAction', { defaultValue: '拆解共享 Issue' })}
+              </Button>
+            </div>
+          </Card>
+          <Card title={t('common.superAssistant.homeCapabilityTeam', { defaultValue: '拉起 Team 协作' })}>
+            <div className='text-12px text-t-tertiary'>
+              {t('common.superAssistant.homeCapabilityTeamDesc', {
+                defaultValue: '把团队工作区、代码和共享上下文串起来，让智能体进入同一个协作面。',
+              })}
+            </div>
+            <div className='mt-10px'>
+              <Button size='small' type='primary' onClick={onOpenTeamFlow}>
+                {t('common.superAssistant.launchTeamFlow', { defaultValue: '拉起 Team 协作' })}
+              </Button>
+            </div>
+          </Card>
+          <Card title={t('common.superAssistant.homeCapabilityTasks', { defaultValue: '创建共享任务与会话' })}>
+            <div className='text-12px text-t-tertiary'>
+              {t('common.superAssistant.homeCapabilityTasksDesc', {
+                defaultValue: '直接把当前焦点转成共享任务或共享会话，让团队和智能体接着干。',
+              })}
+            </div>
+            <div className='mt-10px flex flex-wrap gap-8px'>
+              <Button size='small' onClick={onOpenSharedTasks}>
+                {t('common.superAssistant.createSharedTask', { defaultValue: '创建共享任务' })}
+              </Button>
+              <Button size='small' onClick={onOpenSharedSessions}>
+                {t('common.superAssistant.createSharedSession', { defaultValue: '创建共享会话' })}
+              </Button>
+            </div>
+          </Card>
+          <Card title={t('common.superAssistant.homeCapabilitySkills', { defaultValue: '编排 Skills / MCP / 运行时' })}>
+            <div className='text-12px text-t-tertiary'>
+              {t('common.superAssistant.homeCapabilitySkillsDesc', {
+                defaultValue: '把技能包、MCP 自动化和运行时连接起来，让超级助手持续执行而不是只负责跳转。',
+              })}
+            </div>
+            <div className='mt-10px flex flex-wrap gap-8px'>
+              <Button size='small' onClick={onOpenSkills}>
+                {t('common.superAssistant.openSkills', { defaultValue: '打开 Skills 能力包' })}
+              </Button>
+              <Button size='small' onClick={onOpenMcp}>
+                {t('common.superAssistant.openMcp', { defaultValue: '触发 MCP / 自动化' })}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </Card>
+
+      <Card title={t('common.superAssistant.homeExecutionTitle', { defaultValue: '当前执行流' })}>
+        <div className='mb-12px text-12px text-t-secondary'>
+          {featuredIssueSubject
+            ? t('common.superAssistant.overview.featuredIssueSummary', {
+                defaultValue: '当前焦点：{{subject}}',
+                subject: featuredIssueSubject,
+              })
+            : t('common.superAssistant.noIssues', { defaultValue: '暂无共享 Issue' })}
+        </div>
+        <div className='grid gap-12px md:grid-cols-2 xl:grid-cols-4'>
+          {cards.map((card) => (
+            <Card key={card.title} title={card.title}>
+              <div className='text-12px text-t-tertiary'>{card.summary}</div>
+            </Card>
+          ))}
+        </div>
+      </Card>
+
+      <Card title={t('common.superAssistant.homeCapabilitySourcesTitle', { defaultValue: '能力来源' })}>
+        <div className='grid gap-12px md:grid-cols-3'>
+          <Card title={t('common.superAssistant.homeSourceSkills', { defaultValue: '技能与自动化' })}>
+            <div className='text-12px text-t-tertiary'>
+              {t('common.superAssistant.homeSourceSkillsSummary', {
+                defaultValue: '已接入 {{count}} 个技能、{{mcpCount}} 个启用中的 MCP 连接器。',
+                count: skillCount,
+                mcpCount: enabledMcpCount,
+              })}
+            </div>
+            <div className='mt-10px flex flex-wrap gap-8px'>
+              <Button size='small' onClick={onOpenSkills}>
+                {t('common.superAssistant.openSkills', { defaultValue: '打开 Skills 能力包' })}
+              </Button>
+              <Button size='small' onClick={onOpenMcp}>
+                {t('common.superAssistant.openMcp', { defaultValue: '触发 MCP / 自动化' })}
+              </Button>
+            </div>
+          </Card>
+          <Card title={t('common.superAssistant.homeSourceRuntimes', { defaultValue: '运行时与智能体' })}>
+            <div className='text-12px text-t-tertiary'>
+              {t('common.superAssistant.homeSourceRuntimesSummary', {
+                defaultValue: '当前有 {{agentCount}} 个 Agent、{{activeCount}} 个活跃 Agent。',
+                agentCount: totalAgentCount,
+                activeCount: activeAgentCount,
+              })}
+            </div>
+            <div className='mt-10px'>
+              <Button size='small' onClick={onOpenRuntimes}>
+                {t('common.superAssistant.tabs.runtimes', { defaultValue: '运行时' })}
+              </Button>
+            </div>
+          </Card>
+          <Card title={t('common.superAssistant.homeSourceTeamContext', { defaultValue: '团队上下文' })}>
+            <div className='text-12px text-t-tertiary'>
+              {t('common.superAssistant.homeSourceTeamContextSummary', {
+                defaultValue: '当前覆盖 {{teamCount}} 个团队、{{conversationCount}} 个团队会话。',
+                teamCount,
+                conversationCount: teamConversationCount,
+              })}
+            </div>
+            <div className='mt-10px'>
+              <Button size='small' onClick={onOpenTeamFlow}>
+                {t('common.superAssistant.launchTeamFlow', { defaultValue: '拉起 Team 协作' })}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </Card>
     </div>
   );
 };

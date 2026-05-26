@@ -132,7 +132,22 @@ describe('PipelineService', () => {
       expect(result.id).toBeDefined();
       expect(result.name).toBe('New Pipeline');
       expect(result.associated_team_id).toBe('team-1');
-      expect(result.definition_json).toBe(JSON.stringify(definition));
+      expect(result.definition_json).toBe(
+        JSON.stringify({
+          stages: [
+            {
+              name: 'Lint',
+              enabled: true,
+              jobs: [
+                {
+                  name: 'oxlint',
+                  commands: ['npm run lint'],
+                },
+              ],
+            },
+          ],
+        })
+      );
 
       expect(mockDriver.prepare).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO devops_pipelines')
@@ -146,6 +161,96 @@ describe('PipelineService', () => {
         1,
         expect.any(Number),
         expect.any(Number)
+      );
+    });
+
+    it('createPipeline should normalize flat editor stages into stage jobs and commands', async () => {
+      mockPrepareInstance.run.mockReturnValue({ changes: 1 });
+
+      const service = PipelineService.getInstance();
+      const result = await service.createPipeline({
+        tenantId: 'default',
+        name: 'Editor Pipeline',
+        definition: {
+          stages: [
+            {
+              name: 'Lint',
+              command: 'npm run lint\nnpm run test',
+              enabled: true,
+            },
+          ],
+        } as any,
+      });
+
+      expect(result.definition_json).toBe(
+        JSON.stringify({
+          stages: [
+            {
+              name: 'Lint',
+              enabled: true,
+              jobs: [
+                {
+                  name: 'Lint',
+                  commands: ['npm run lint', 'npm run test'],
+                },
+              ],
+            },
+          ],
+        })
+      );
+    });
+
+    it('updatePipeline should update an existing pipeline instead of inserting a new one', async () => {
+      const existingPipeline = {
+        id: 'pl-1',
+        tenant_id: 'default',
+        name: 'Old Pipeline',
+        associated_team_id: null,
+        definition_json: '{}',
+        enabled: 1,
+        created_at: 1000,
+        updated_at: 1000,
+      };
+
+      mockPrepareInstance.get.mockReturnValue(existingPipeline);
+      mockPrepareInstance.run.mockReturnValue({ changes: 1 });
+
+      const service = PipelineService.getInstance();
+      const result = await (service as any).updatePipeline({
+        tenantId: 'default',
+        pipelineId: 'pl-1',
+        name: 'Updated Pipeline',
+        definition: {
+          stages: [
+            {
+              name: 'Build',
+              command: 'npm run build',
+              enabled: true,
+            },
+          ],
+        },
+      });
+
+      expect(mockDriver.prepare).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE devops_pipelines')
+      );
+      expect(result.id).toBe('pl-1');
+      expect(result.name).toBe('Updated Pipeline');
+      expect(result.definition_json).toBe(
+        JSON.stringify({
+          stages: [
+            {
+              name: 'Build',
+              enabled: true,
+              jobs: [
+                {
+                  name: 'Build',
+                  commands: ['npm run build'],
+                },
+              ],
+            },
+          ],
+        })
       );
     });
   });

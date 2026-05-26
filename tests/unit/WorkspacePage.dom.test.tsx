@@ -21,7 +21,10 @@ vi.mock('@arco-design/web-react', () => ({
   Button: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => (
     <button onClick={onClick}>{children}</button>
   ),
-  Card: ({ children }: React.PropsWithChildren) => <section>{children}</section>,
+  Card: ({
+    children,
+    onClick,
+  }: React.PropsWithChildren<{ onClick?: () => void }>) => <section onClick={onClick}>{children}</section>,
   Empty: ({ description }: { description?: React.ReactNode }) => <div>{description}</div>,
   Typography: {
     Ellipsis: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
@@ -63,6 +66,7 @@ describe('WorkspacePage', () => {
 
     render(<WorkspacePage />);
 
+    expect(screen.getByTestId('page-content-shell-content')).toBeInTheDocument();
     expect(screen.getByText('企业协同与平台能力')).toBeInTheDocument();
     expect(screen.getByText('企业能力总览')).toBeInTheDocument();
     expect(screen.getByText('CTeam 敏捷协同')).toBeInTheDocument();
@@ -159,5 +163,36 @@ describe('WorkspacePage', () => {
     render(<WorkspacePage />);
 
     expect(screen.queryByText('企业协同与平台能力')).not.toBeInTheDocument();
+  });
+
+  it('hides the admin-only CCI entry for enterprise members without admin navigation', () => {
+    editionFeaturesMock.mockReturnValue({
+      hasJoinedEnterprise: true,
+      showEnterpriseAdminNav: false,
+      tenantLabel: '欢乐互娱有限公司',
+    });
+
+    render(<WorkspacePage />);
+
+    expect(screen.queryByText('CCI 流水线')).not.toBeInTheDocument();
+  });
+
+  it('makes the CCI enterprise card clickable as a whole for admins', () => {
+    editionFeaturesMock.mockReturnValue({
+      hasJoinedEnterprise: true,
+      showEnterpriseAdminNav: true,
+      tenantLabel: '欢乐互娱有限公司',
+    });
+
+    render(<WorkspacePage />);
+
+    const cciCard = screen.getByText('CCI 流水线').closest('section');
+    if (!cciCard) {
+      throw new Error('Expected CCI card to render');
+    }
+
+    fireEvent.click(cciCard);
+
+    expect(navigateMock).toHaveBeenCalledWith('/enterprise/pipeline-editor');
   });
 });

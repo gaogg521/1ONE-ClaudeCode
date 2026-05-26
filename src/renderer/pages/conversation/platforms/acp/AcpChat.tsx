@@ -11,6 +11,7 @@ import FlexFullContainer from '@renderer/components/layout/FlexFullContainer';
 import MessageList from '@renderer/pages/conversation/Messages/MessageList';
 import { MessageListProvider, useMessageLstCache } from '@renderer/pages/conversation/Messages/hooks';
 import HOC from '@renderer/utils/ui/HOC';
+import { CHAT_RAIL_INLINE_PADDING_CLASS } from '@renderer/utils/ui/contentRail';
 import React, { useEffect } from 'react';
 import ConversationChatConfirm from '../../components/ConversationChatConfirm';
 import AcpSendBox from './AcpSendBox';
@@ -26,6 +27,7 @@ const AcpChat: React.FC<{
   hideSendBox?: boolean;
   teamId?: string;
   agentSlotId?: string;
+  stretchLayout?: boolean;
 }> = ({
   conversation_id,
   workspace,
@@ -37,6 +39,7 @@ const AcpChat: React.FC<{
   hideSendBox,
   teamId,
   agentSlotId,
+  stretchLayout,
 }) => {
   useMessageLstCache(conversation_id);
   const updateLocalImage = LocalImageView.useUpdateLocalImage();
@@ -45,8 +48,10 @@ const AcpChat: React.FC<{
   }, [workspace]);
 
   return (
-    <ConversationProvider value={{ conversationId: conversation_id, workspace, type: 'acp', cronJobId, hideSendBox }}>
-      <div className='flex-1 flex flex-col px-20px min-h-0'>
+    <ConversationProvider
+      value={{ conversationId: conversation_id, workspace, type: 'acp', cronJobId, hideSendBox, stretchLayout }}
+    >
+      <div className={`flex-1 flex flex-col min-h-0 ${CHAT_RAIL_INLINE_PADDING_CLASS}`}>
         <FlexFullContainer>
           <MessageList className='flex-1'></MessageList>
         </FlexFullContainer>

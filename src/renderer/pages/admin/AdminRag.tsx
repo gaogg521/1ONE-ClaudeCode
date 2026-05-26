@@ -30,6 +30,7 @@ import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client'
 import {
   createRagDocument,
   deleteRagDocument,
+  importRagFeishuDocument,
   importRagUrl,
   listRagDocuments,
   queryRagDocuments,
@@ -51,6 +52,9 @@ const AdminRag: React.FC = () => {
   const [urlVisible, setUrlVisible] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [urlTitle, setUrlTitle] = useState('');
+  const [feishuVisible, setFeishuVisible] = useState(false);
+  const [feishuUrlInput, setFeishuUrlInput] = useState('');
+  const [feishuTitle, setFeishuTitle] = useState('');
   const [form] = Form.useForm<{ title: string; content: string }>();
 
   // Semantic Search Playground
@@ -119,6 +123,60 @@ const AdminRag: React.FC = () => {
     }
   }, [searchQuery, searchLimit, t]);
 
+  const handleUrlImport = useCallback(async () => {
+    if (!urlInput.trim()) {
+      Message.warning(t('admin.rag.urlRequired', { defaultValue: '请输入URL' }));
+      return;
+    }
+
+    setAdding(true);
+    try {
+      await importRagUrl({ url: urlInput.trim(), title: urlTitle.trim() || undefined });
+      Message.success(t('admin.rag.urlSuccess', { defaultValue: 'URL 文档导入成功' }));
+      setUrlVisible(false);
+      setUrlInput('');
+      setUrlTitle('');
+      await documentsState.reload();
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(error, t('admin.rag.urlFailed', { defaultValue: '导入失败' }))
+      );
+    } finally {
+      setAdding(false);
+    }
+  }, [documentsState, t, urlInput, urlTitle]);
+
+  const handleFeishuImport = useCallback(async () => {
+    if (!feishuUrlInput.trim()) {
+      Message.warning(t('admin.rag.feishuUrlRequired', { defaultValue: '请输入飞书文档链接' }));
+      return;
+    }
+
+    setAdding(true);
+    try {
+      await importRagFeishuDocument({
+        url: feishuUrlInput.trim(),
+        title: feishuTitle.trim() || undefined,
+      });
+      Message.success(
+        t('admin.rag.feishuSuccess', { defaultValue: '飞书文档已提交导入，后台索引中' })
+      );
+      setFeishuVisible(false);
+      setFeishuUrlInput('');
+      setFeishuTitle('');
+      await documentsState.reload();
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('admin.rag.feishuFailed', { defaultValue: '飞书文档导入失败' })
+        )
+      );
+    } finally {
+      setAdding(false);
+    }
+  }, [documentsState, feishuTitle, feishuUrlInput, t]);
+
   const columns = [
     {
       title: t('admin.rag.table.title', { defaultValue: '标题' }),
@@ -146,6 +204,14 @@ const AdminRag: React.FC = () => {
               {record.scope || 'personal'}
             </Tag>
           </div>
+          {record.status === 'failed' && record.last_error ? (
+            <Typography.Text type='error' className='text-12px break-all'>
+              {t('admin.rag.table.lastError', {
+                defaultValue: '失败原因：{{message}}',
+                message: record.last_error,
+              })}
+            </Typography.Text>
+          ) : null}
         </div>
       ),
     },
@@ -193,6 +259,17 @@ const AdminRag: React.FC = () => {
             }} />
               <Button type='outline' icon={<Plus />} onClick={() => { setUrlInput(''); setUrlTitle(''); setUrlVisible(true); }}>
                 {t('admin.rag.importUrl', { defaultValue: 'URL 导入' })}
+              </Button>
+              <Button
+                type='outline'
+                icon={<Plus />}
+                onClick={() => {
+                  setFeishuUrlInput('');
+                  setFeishuTitle('');
+                  setFeishuVisible(true);
+                }}
+              >
+                {t('admin.rag.importFeishu', { defaultValue: '企业飞书导入' })}
               </Button>
               <Button
                 type='primary'
@@ -335,18 +412,7 @@ const AdminRag: React.FC = () => {
         <Modal
           title={t('admin.rag.urlImportTitle', { defaultValue: 'URL 导入文档' })}
           visible={urlVisible}
-          onOk={async () => {
-            if (!urlInput.trim()) { Message.warning(t('admin.rag.urlRequired', { defaultValue: '请输入URL' })); return; }
-            setAdding(true);
-            try {
-              await importRagUrl({ url: urlInput.trim(), title: urlTitle.trim() || undefined });
-              Message.success(t('admin.rag.urlSuccess', { defaultValue: 'URL 文档导入成功' }));
-              setUrlVisible(false);
-              setUrlInput('');
-              setUrlTitle('');
-              await documentsState.reload();
-            } catch { Message.error(t('admin.rag.urlFailed', { defaultValue: '导入失败' })); } finally { setAdding(false); }
-          }}
+          onOk={() => void handleUrlImport()}
           okButtonProps={{ loading: adding }}
           okText={t('common.import', { defaultValue: '导入' })}
           onCancel={() => setUrlVisible(false)}
@@ -354,11 +420,43 @@ const AdminRag: React.FC = () => {
         >
           <Form layout='vertical'>
             <Form.Item label={t('admin.rag.urlLabel', { defaultValue: '文档 URL' })} required>
-              <Input value={urlInput} onChange={setUrlInput} placeholder='https://feishu.cn/docx/xxx 或 https://dingtalk.com/...' />
+              <Input value={urlInput} onChange={setUrlInput} placeholder='https://docs.example.com/guide 或 https://company.wiki/page' />
             </Form.Item>
             <Form.Item label={t('admin.rag.urlTitleLabel', { defaultValue: '标题（可选）' })}>
               <Input value={urlTitle} onChange={setUrlTitle} placeholder={t('admin.rag.urlTitlePlaceholder', { defaultValue: '留空则自动从URL提取' })} />
             </Form.Item>
+          </Form>
+        </Modal>
+
+        <Modal
+          title={t('admin.rag.feishuImportTitle', { defaultValue: '企业飞书文档导入' })}
+          visible={feishuVisible}
+          onOk={() => void handleFeishuImport()}
+          okButtonProps={{ loading: adding }}
+          okText={t('common.import', { defaultValue: '导入' })}
+          onCancel={() => setFeishuVisible(false)}
+          cancelText={t('common.cancel', { defaultValue: '取消' })}
+        >
+          <Form layout='vertical'>
+            <Form.Item label={t('admin.rag.feishuUrlLabel', { defaultValue: '飞书文档链接' })} required>
+              <Input
+                value={feishuUrlInput}
+                onChange={setFeishuUrlInput}
+                placeholder='https://sample.feishu.cn/docx/xxx 或 https://sample.feishu.cn/wiki/xxx'
+              />
+            </Form.Item>
+            <Form.Item label={t('admin.rag.feishuTitleLabel', { defaultValue: '标题（可选）' })}>
+              <Input
+                value={feishuTitle}
+                onChange={setFeishuTitle}
+                placeholder={t('admin.rag.feishuTitlePlaceholder', { defaultValue: '留空则自动读取飞书文档标题' })}
+              />
+            </Form.Item>
+            <Typography.Text type='secondary' className='text-12px'>
+              {t('admin.rag.feishuHint', {
+                defaultValue: '该入口会复用企业控制台中已配置的飞书应用凭证，不再走匿名网页抓取。',
+              })}
+            </Typography.Text>
           </Form>
         </Modal>
       </div>

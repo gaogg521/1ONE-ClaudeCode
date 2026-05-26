@@ -54,6 +54,7 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
   workspace,
   eventPrefix = 'gemini',
   messageApi: externalMessageApi,
+  initialTab,
 }) => {
   const { t } = useTranslation();
   const layout = useLayoutContext();
@@ -66,7 +67,7 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
   const shouldRenderLocalMessageContext = !externalMessageApi;
 
   // Tab state and file changes
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('files');
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialTab ?? 'files');
   const fileChangesHook = useFileChanges({ workspace, conversationId: conversation_id });
 
   // Initialize all hooks
@@ -202,6 +203,12 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
       fileChangesHook.refreshChanges();
     }
   }, [activeTab, fileChangesHook.refreshChanges]);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Get target folder path for paste confirm modal
   const targetFolderPathForModal = getTargetFolderPath(

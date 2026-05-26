@@ -15,10 +15,107 @@ export interface IPipelineStageJob {
 export interface IPipelineStage {
   name: string;
   jobs: IPipelineStageJob[];
+  enabled?: boolean;
 }
 
 export interface IPipelineDefinition {
   stages: IPipelineStage[];
+}
+
+type FlatPipelineEditorStage = {
+  name?: string;
+  command?: string;
+  enabled?: boolean;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function normalizeCommands(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter((item) => item.length > 0);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+  }
+
+  return [];
+}
+
+function normalizeStageJobs(stageName: string, jobsInput: unknown): IPipelineStageJob[] {
+  if (!Array.isArray(jobsInput)) {
+    return [];
+  }
+
+  return jobsInput
+    .map((jobInput) => {
+      const job = asRecord(jobInput);
+      if (!job) {
+        return null;
+      }
+
+      const commands = normalizeCommands(job.commands);
+      if (commands.length === 0) {
+        return null;
+      }
+
+      const jobName = typeof job.name === 'string' && job.name.trim() ? job.name.trim() : stageName;
+      return {
+        name: jobName,
+        commands,
+      };
+    })
+    .filter((job): job is IPipelineStageJob => Boolean(job));
+}
+
+function normalizeStage(stageInput: unknown): IPipelineStage | null {
+  const stage = asRecord(stageInput);
+  if (!stage) {
+    return null;
+  }
+
+  const name = typeof stage.name === 'string' ? stage.name.trim() : '';
+  if (!name) {
+    return null;
+  }
+
+  const enabled = stage.enabled !== false;
+  const jobs = normalizeStageJobs(name, stage.jobs);
+  if (jobs.length > 0) {
+    return {
+      name,
+      enabled,
+      jobs,
+    };
+  }
+
+  const flatStage = stage as FlatPipelineEditorStage;
+  const commands = normalizeCommands(flatStage.command);
+  return {
+    name,
+    enabled,
+    jobs: enabled && commands.length > 0 ? [{ name, commands }] : [],
+  };
+}
+
+export function normalizePipelineDefinition(definition: unknown): IPipelineDefinition {
+  const record = asRecord(definition);
+  if (!record || !Array.isArray(record.stages)) {
+    throw new Error('Invalid pipeline definition');
+  }
+
+  return {
+    stages: record.stages
+      .map((stage) => normalizeStage(stage))
+      .filter((stage): stage is IPipelineStage => Boolean(stage)),
+  };
 }
 
 export interface IPipeline {
@@ -132,14 +229,14 @@ export class PipelineService {
     tenantId?: string;
     name: string;
     associatedTeamId?: string | null;
-    definition: IPipelineDefinition;
+    definition: unknown;
   }): Promise<IPipeline> {
     const db = await getDatabase();
     const driver = db.getDriver();
     const id = `pl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const tenantId = params.tenantId ?? 'default';
     const associatedTeamId = params.associatedTeamId ?? null;
-    const definitionJson = JSON.stringify(params.definition);
+    const definitionJson = JSON.stringify(normalizePipelineDefinition(params.definition));
     const now = Date.now();
 
     driver
@@ -158,6 +255,54 @@ export class PipelineService {
       enabled: true,
       created_at: now,
       updated_at: now,
+    };
+  }
+
+  /**
+   * Update an existing pipeline
+   */
+  public async updatePipeline(params: {
+    tenantId?: string;
+    pipelineId: string;
+    name: string;
+    associatedTeamId?: string | null;
+    definition: unknown;
+  }): Promise<IPipeline> {
+    const tenantId = params.tenantId ?? 'default';
+    const existing = await this.getPipeline(params.pipelineId, tenantId);
+    if (!existing) {
+      throw new Error('Pipeline not found');
+    }
+
+    const db = await getDatabase();
+    const driver = db.getDriver();
+    const definitionJson = JSON.stringify(normalizePipelineDefinition(params.definition));
+    const updatedAt = Date.now();
+    const associatedTeamId = params.associatedTeamId ?? null;
+    const enabled = existing.enabled ? 1 : 0;
+
+    driver
+      .prepare(
+        `UPDATE devops_pipelines
+         SET name = ?, associated_team_id = ?, definition_json = ?, enabled = ?, updated_at = ?
+         WHERE id = ? AND tenant_id = ?`
+      )
+      .run(
+        params.name,
+        associatedTeamId,
+        definitionJson,
+        enabled,
+        updatedAt,
+        params.pipelineId,
+        tenantId
+      );
+
+    return {
+      ...existing,
+      name: params.name,
+      associated_team_id: associatedTeamId,
+      definition_json: definitionJson,
+      updated_at: updatedAt,
     };
   }
 
@@ -219,7 +364,7 @@ export class PipelineService {
 
     let definition: IPipelineDefinition;
     try {
-      definition = JSON.parse(pipeline.definition_json);
+      definition = normalizePipelineDefinition(JSON.parse(pipeline.definition_json));
     } catch (err) {
       throw new Error(`Invalid pipeline definition JSON: ${err}`);
     }
@@ -277,6 +422,18 @@ export class PipelineService {
 
       if (pipelineFailed) {
         stageStatusObj.status = 'skipped';
+        continue;
+      }
+
+      if (stage.enabled === false || (stage.jobs || []).length === 0) {
+        stageStatusObj.status = 'skipped';
+        stageStatusObj.started_at = null;
+        stageStatusObj.finished_at = Date.now();
+        stageStatusObj.duration_ms = 0;
+        logger.append(`>>> Stage [${stage.name}] skipped\n\n`);
+        driver
+          .prepare('UPDATE devops_pipeline_runs SET stages_status_json = ? WHERE id = ?')
+          .run(JSON.stringify(stagesStatus), runId);
         continue;
       }
 

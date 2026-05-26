@@ -13,6 +13,7 @@ import { Tooltip } from '@arco-design/web-react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { getMobileRailBleedStyle } from '@/renderer/utils/ui/contentRail';
 import styles from '../index.module.css';
 
 type AgentPillBarProps = {
@@ -43,10 +44,10 @@ const AgentPillBar: React.FC<AgentPillBarProps> = ({
           borderRadius: '30px',
           backgroundColor: 'var(--color-guid-agent-bar, var(--aou-2))',
           transition: 'background-color 0.35s ease',
-          width: isMobile ? 'calc(100% + 28px)' : 'fit-content',
+          width: isMobile ? getMobileRailBleedStyle(true)?.width : 'fit-content',
           maxWidth: isMobile ? 'none' : '100%',
-          marginLeft: isMobile ? -14 : 0,
-          marginRight: isMobile ? -14 : 0,
+          marginLeft: isMobile ? getMobileRailBleedStyle(true)?.marginLeft : 0,
+          marginRight: isMobile ? getMobileRailBleedStyle(true)?.marginRight : 0,
           overflow: isMobile ? 'visible' : 'hidden',
           gap: isMobile ? 6 : 4,
           flexWrap: isMobile ? 'wrap' : 'nowrap',

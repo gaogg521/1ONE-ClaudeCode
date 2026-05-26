@@ -239,6 +239,7 @@ export function initSchema(db: ISqliteDriver): void {
     mime_type TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'indexing', 'completed', 'failed'
     chunk_count INTEGER DEFAULT 0,
+    last_error TEXT,
     scope TEXT NOT NULL DEFAULT 'personal', -- 'personal', 'team', 'organization'
     team_id TEXT,
     created_by TEXT NOT NULL DEFAULT '',
@@ -442,4 +443,4 @@ export function setDatabaseVersion(db: ISqliteDriver, version: number): void {
  * Current database schema version
  * Update this when adding new migrations in migrations.ts
  */
-export const CURRENT_DB_VERSION = 39;
+export const CURRENT_DB_VERSION = 40;

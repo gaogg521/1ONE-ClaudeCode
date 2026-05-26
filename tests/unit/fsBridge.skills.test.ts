@@ -1,9 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import path from 'path';
+import { EventEmitter } from 'node:events';
 
 // Store all mock states at module scope to ensure they remain accessible in vi.doMock
 let mockFsStore: Record<string, any> = {};
 let mockCustomExternalPaths: Array<{ name: string; path: string }> = [];
+let mockRemoteResponses: Record<
+  string,
+  {
+    statusCode: number;
+    headers?: Record<string, string>;
+    body?: string | Buffer;
+  }
+> = {};
+let mockZipEntries: Record<string, string | Buffer> = {};
 
 describe('fsBridge skills functionality', () => {
   const originalEnv = { ...process.env };
@@ -13,6 +23,8 @@ describe('fsBridge skills functionality', () => {
     vi.clearAllMocks();
     mockFsStore = {};
     mockCustomExternalPaths = [];
+    mockRemoteResponses = {};
+    mockZipEntries = {};
 
     // Mock electron
     vi.doMock('electron', () => ({
@@ -34,6 +46,28 @@ describe('fsBridge skills functionality', () => {
     }));
 
     // Mock fs/promises
+    vi.doMock('fs', () => {
+      const resolvePath = (p: string) => path.resolve(p);
+      return {
+        existsSync: vi.fn((filePath: string) => resolvePath(filePath) in mockFsStore),
+        readFileSync: vi.fn((filePath: string, encoding?: BufferEncoding) => {
+          const fp = resolvePath(filePath);
+          if (fp in mockFsStore) {
+            const fileContent = mockFsStore[fp];
+            if (typeof fileContent === 'string') return fileContent;
+            if (fileContent && typeof fileContent === 'object' && fileContent.content !== undefined) {
+              if (Buffer.isBuffer(fileContent.content) && encoding === 'utf-8') {
+                return fileContent.content.toString('utf-8');
+              }
+              return fileContent.content;
+            }
+          }
+          throw new Error(`ENOENT: no such file or directory, open '${fp}'`);
+        }),
+      };
+    });
+
+    // Mock fs/promises
     vi.doMock('fs/promises', () => {
       const resolvePath = (p: string) => path.resolve(p);
       return {
@@ -43,7 +77,7 @@ describe('fsBridge skills functionality', () => {
             if (fp in mockFsStore) return;
             throw new Error(`ENOENT: no such file or directory, access '${fp}'`);
           }),
-          readFile: vi.fn(async (filePath: string) => {
+          readFile: vi.fn(async (filePath: string, encoding?: BufferEncoding | { encoding?: BufferEncoding }) => {
             const fp = resolvePath(filePath);
             if (fp.endsWith('custom_external_skill_paths.json')) {
               return JSON.stringify(mockCustomExternalPaths);
@@ -52,6 +86,10 @@ describe('fsBridge skills functionality', () => {
               const fileContent = mockFsStore[fp];
               if (typeof fileContent === 'string') return fileContent;
               if (fileContent && typeof fileContent === 'object' && fileContent.content !== undefined) {
+                const requestedEncoding = typeof encoding === 'string' ? encoding : encoding?.encoding;
+                if (Buffer.isBuffer(fileContent.content) && requestedEncoding === 'utf-8') {
+                  return fileContent.content.toString('utf-8');
+                }
                 return fileContent.content;
               }
               throw new Error(`EISDIR: illegal operation on a directory, read '${fp}'`);
@@ -89,13 +127,31 @@ describe('fsBridge skills functionality', () => {
             return entries;
           }),
           mkdir: vi.fn(async (dirPath: string) => {
-            mockFsStore[resolvePath(dirPath)] = { isDirectory: true };
+            const resolvedDir = resolvePath(dirPath);
+            const parts = resolvedDir.split(path.sep);
+            const base = resolvedDir.startsWith(path.sep) ? path.sep : '';
+            let current = base;
+            for (const part of parts.filter(Boolean)) {
+              current = current ? path.join(current, part) : part;
+              mockFsStore[current] = { isDirectory: true };
+            }
           }),
           copyFile: vi.fn(async (src: string, dest: string) => {
             const s = resolvePath(src);
             const d = resolvePath(dest);
             if (!(s in mockFsStore)) throw new Error(`ENOENT: src not found '${s}'`);
             mockFsStore[d] = { ...mockFsStore[s] };
+          }),
+          cp: vi.fn(async (src: string, dest: string) => {
+            const s = resolvePath(src);
+            const d = resolvePath(dest);
+            for (const key of Object.keys(mockFsStore)) {
+              if (key === s || key.startsWith(s + path.sep)) {
+                const relativePath = path.relative(s, key);
+                const targetPath = relativePath ? path.join(d, relativePath) : d;
+                mockFsStore[targetPath] = { ...mockFsStore[key] };
+              }
+            }
           }),
           lstat: vi.fn(async (filePath: string) => {
             const fp = resolvePath(filePath);
@@ -146,9 +202,67 @@ describe('fsBridge skills functionality', () => {
       class MockJSZip {
         file = vi.fn();
         generateAsync = vi.fn(async () => Buffer.from('fake-zip-content'));
+
+        static async loadAsync() {
+          return {
+            files: Object.fromEntries(
+              Object.entries(mockZipEntries).map(([name, content]) => [
+                name,
+                {
+                  name,
+                  dir: false,
+                  async: async () => (Buffer.isBuffer(content) ? content : Buffer.from(content)),
+                },
+              ])
+            ),
+          };
+        }
       }
       return { default: MockJSZip };
     });
+
+    const createHttpModuleMock = () => ({
+      default: {
+        get: vi.fn((targetUrl: string, _options: unknown, callback: (response: EventEmitter & any) => void) => {
+          const request = new EventEmitter() as EventEmitter & {
+            setTimeout: (ms: number, handler: () => void) => void;
+            destroy: (error?: Error) => void;
+          };
+          request.setTimeout = (_ms, _handler) => {};
+          request.destroy = (error?: Error) => {
+            if (error) {
+              request.emit('error', error);
+            }
+          };
+
+          const responseConfig = mockRemoteResponses[targetUrl];
+          queueMicrotask(() => {
+            if (!responseConfig) {
+              request.emit('error', new Error(`No mocked response for ${targetUrl}`));
+              return;
+            }
+            const response = new EventEmitter() as EventEmitter & {
+              statusCode?: number;
+              headers: Record<string, string>;
+              resume: () => void;
+            };
+            response.statusCode = responseConfig.statusCode;
+            response.headers = responseConfig.headers || {};
+            response.resume = () => {};
+            callback(response);
+            if (responseConfig.body) {
+              response.emit('data', Buffer.isBuffer(responseConfig.body) ? responseConfig.body : Buffer.from(responseConfig.body));
+            }
+            response.emit('end');
+          });
+
+          return request;
+        }),
+      },
+    });
+
+    vi.doMock('node:https', createHttpModuleMock);
+    vi.doMock('node:http', createHttpModuleMock);
 
     // Mock initStorage
     vi.doMock('@process/utils/initStorage', () => ({
@@ -161,6 +275,7 @@ describe('fsBridge skills functionality', () => {
       getAssistantsDir: vi.fn(() => '/mock/userData/assistants'),
       getSkillsDir: vi.fn(() => '/mock/userData/config/skills'),
       getBuiltinSkillsCopyDir: vi.fn(() => path.resolve('/mock/userData/builtin-skills')),
+      getAutoSkillsDir: vi.fn(() => path.resolve('/mock/userData/auto-skills')),
       ProcessEnv: { set: vi.fn() },
     }));
 
@@ -207,12 +322,15 @@ describe('fsBridge skills functionality', () => {
             deleteAssistantSkill: createCommandMock('delete-assistant-skill'),
             // The specific ones we care about
             listAvailableSkills: createCommandMock('list-available-skills'),
+            listAutoSkills: createCommandMock('list-auto-skills'),
             readSkillInfo: createCommandMock('read-skill-info'),
             importSkill: createCommandMock('import-skill'),
             scanForSkills: createCommandMock('scan-for-skills'),
             detectCommonSkillPaths: createCommandMock('detect-common-skill-paths'),
             detectAndCountExternalSkills: createCommandMock('detect-and-count-external-skills'),
             importSkillWithSymlink: createCommandMock('import-skill-with-symlink'),
+            previewSkillsFromUrl: createCommandMock('preview-skills-from-url'),
+            importSkillFromUrl: createCommandMock('import-skill-from-url'),
             deleteSkill: createCommandMock('delete-skill'),
             getSkillPaths: createCommandMock('get-skill-paths'),
             exportSkillWithSymlink: createCommandMock('export-skill-with-symlink'),
@@ -333,7 +451,7 @@ describe('fsBridge skills functionality', () => {
       const result = await handler();
 
       expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBe(2);
+      expect(result.length).toBe(3);
 
       const builtin = result.find((s: any) => s.name === 'BuiltinTest');
       expect(builtin).toBeDefined();
@@ -343,6 +461,11 @@ describe('fsBridge skills functionality', () => {
       const custom = result.find((s: any) => s.name === 'CustomTest');
       expect(custom).toBeDefined();
       expect(custom.isCustom).toBe(true);
+
+      const shadowed = result.find((s: any) => s.directory.endsWith('duplicate-skill'));
+      expect(shadowed).toBeDefined();
+      expect(shadowed.effective).toBe(false);
+      expect(shadowed.shadowedBy.bySourceKind).toBe('builtin');
     });
   });
 
@@ -478,7 +601,7 @@ describe('fsBridge skills functionality', () => {
   });
 
   describe('exportSkillWithSymlink', () => {
-    it('should successfully create a symlink to external path', async () => {
+    it('should successfully copy a skill to the external path', async () => {
       const srcPath = path.resolve('/mock/userData/config/skills/MySkill');
       const targetDir = path.resolve('/mock/home/.claude/skills');
       const targetPath = path.join(targetDir, 'MySkill');
@@ -491,8 +614,8 @@ describe('fsBridge skills functionality', () => {
 
       expect(result.success).toBe(true);
       expect(mockFsStore[targetPath]).toBeDefined();
-      expect(mockFsStore[targetPath].isSymlink).toBe(true);
-      expect(mockFsStore[targetPath].target).toBe(srcPath);
+      expect(mockFsStore[targetPath].isDirectory).toBe(true);
+      expect(mockFsStore[path.join(targetPath, 'SKILL.md')]).toBeDefined();
     });
 
     it('should fail if target already exists', async () => {
@@ -619,6 +742,107 @@ describe('fsBridge skills functionality', () => {
       expect(result2.success).toBe(true);
       expect(result2.data).toHaveLength(1);
       expect(result2.data[0].name).toBe('RootSkill');
+    });
+  });
+
+  describe('previewSkillsFromUrl', () => {
+    it('should preview skills from a GitHub repo root URL', async () => {
+      mockRemoteResponses['https://api.github.com/repos/acme/skill-pack'] = {
+        statusCode: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ default_branch: 'main' }),
+      };
+      mockRemoteResponses['https://codeload.github.com/acme/skill-pack/zip/refs/heads/main'] = {
+        statusCode: 200,
+        headers: { 'content-type': 'application/zip' },
+        body: Buffer.from('zip-root'),
+      };
+      mockZipEntries = {
+        'skill-pack-main/skills/alpha/SKILL.md': '---\nname: Alpha\n---',
+        'skill-pack-main/skills/beta/SKILL.md': '---\nname: Beta\n---',
+      };
+
+      const handler = await getProvider('previewSkillsFromUrl');
+      const result = await handler({ url: 'https://github.com/acme/skill-pack' });
+
+      expect(result.success, result.msg || JSON.stringify(result)).toBe(true);
+      expect(result.data.sourceUrl).toBe('https://github.com/acme/skill-pack');
+      expect(result.data.resolvedUrl).toBe('https://github.com/acme/skill-pack/tree/main');
+      expect(result.data.skills.map((skill: any) => skill.name)).toEqual(['Alpha', 'Beta']);
+    });
+
+    it('should preview a skill from a GitHub tree directory URL', async () => {
+      mockRemoteResponses['https://codeload.github.com/acme/toolbox/zip/refs/heads/release'] = {
+        statusCode: 200,
+        headers: { 'content-type': 'application/zip' },
+        body: Buffer.from('zip-tree'),
+      };
+      mockZipEntries = {
+        'toolbox-release/skills/lark/SKILL.md': '---\nname: LarkFlow\n---',
+      };
+
+      const handler = await getProvider('previewSkillsFromUrl');
+      const result = await handler({ url: 'https://github.com/acme/toolbox/tree/release/skills/lark' });
+
+      expect(result.success, result.msg || JSON.stringify(result)).toBe(true);
+      expect(result.data.resolvedUrl).toBe('https://github.com/acme/toolbox/tree/release/skills/lark');
+      expect(result.data.skills).toHaveLength(1);
+      expect(result.data.skills[0].name).toBe('LarkFlow');
+    });
+
+    it('should support raw SKILL.md links by previewing the containing skill directory', async () => {
+      mockRemoteResponses['https://codeload.github.com/acme/toolbox/zip/refs/heads/release'] = {
+        statusCode: 200,
+        headers: { 'content-type': 'application/zip' },
+        body: Buffer.from('zip-raw'),
+      };
+      mockZipEntries = {
+        'toolbox-release/skills/docs/SKILL.md': '---\nname: DocsSkill\n---',
+      };
+
+      const handler = await getProvider('previewSkillsFromUrl');
+      const result = await handler({
+        url: 'https://raw.githubusercontent.com/acme/toolbox/release/skills/docs/SKILL.md',
+      });
+
+      expect(result.success, result.msg || JSON.stringify(result)).toBe(true);
+      expect(result.data.resolvedUrl).toBe('https://github.com/acme/toolbox/tree/release/skills/docs');
+      expect(result.data.skills).toHaveLength(1);
+      expect(result.data.skills[0].name).toBe('DocsSkill');
+    });
+
+    it('should reject unsupported non-GitHub URLs', async () => {
+      const handler = await getProvider('previewSkillsFromUrl');
+      const result = await handler({ url: 'https://example.com/not-supported' });
+
+      expect(result.success).toBe(false);
+      expect(result.msg).toContain('GitHub');
+    });
+  });
+
+  describe('importSkillFromUrl', () => {
+    it('should import a previewed GitHub skill by copying it into the user skills directory', async () => {
+      const previewedSkillDir = path.resolve('/mock/cache/github-skill-imports/preview-1/skill-alpha');
+      const userSkillsDir = path.resolve('/mock/userData/config/skills');
+
+      mockFsStore[previewedSkillDir] = { isDirectory: true };
+      mockFsStore[path.join(previewedSkillDir, 'SKILL.md')] = {
+        content: '---\nname: ImportedFromGithub\n---\nData',
+        isDirectory: false,
+      };
+      mockFsStore[path.join(previewedSkillDir, 'README.md')] = {
+        content: '# hello',
+        isDirectory: false,
+      };
+      mockFsStore[userSkillsDir] = { isDirectory: true };
+
+      const handler = await getProvider('importSkillFromUrl');
+      const result = await handler({ skillPath: previewedSkillDir });
+
+      expect(result.success, result.msg || JSON.stringify(result)).toBe(true);
+      expect(result.data.skillName).toBe('ImportedFromGithub');
+      expect(mockFsStore[path.join(userSkillsDir, 'ImportedFromGithub')]).toBeDefined();
+      expect(mockFsStore[path.join(userSkillsDir, 'ImportedFromGithub', 'SKILL.md')]).toBeDefined();
     });
   });
 });

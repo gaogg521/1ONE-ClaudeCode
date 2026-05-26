@@ -115,5 +115,25 @@ describe('RAGService', () => {
       expect(embedding[1]).toBeCloseTo(-0.5, 5);
       expect(embedding[2]).toBeCloseTo(0.9, 5);
     });
+
+    it('在首次模型初始化失败后允许下一次重新初始化', async () => {
+      vi.resetModules();
+
+      const transformers = await import('@xenova/transformers');
+      vi.mocked(transformers.pipeline)
+        .mockRejectedValueOnce(new Error('download failed'))
+        .mockResolvedValueOnce(
+          vi.fn().mockResolvedValue({
+            data: new Float32Array([0.4, 0.6]),
+          })
+        );
+
+      const { RAGService: ReloadedRAGService } = await import('@process/services/rag/RAGService');
+
+      await expect(ReloadedRAGService.getEmbedding('第一次')).rejects.toThrow('download failed');
+      const recovered = await ReloadedRAGService.getEmbedding('第二次');
+      expect(recovered[0]).toBeCloseTo(0.4, 5);
+      expect(recovered[1]).toBeCloseTo(0.6, 5);
+    });
   });
 });

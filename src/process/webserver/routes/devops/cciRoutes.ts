@@ -49,6 +49,36 @@ export function registerCciRoutes(app: Express, auth: DevopsRouteAuth): void {
     }
   });
 
+  app.patch('/api/admin/pipelines/:pipelineId', apiRateLimiter, auth, requireDevopsAdmin, async (req, res) => {
+    try {
+      const pipeline = await CciService.updatePipeline({
+        tenantId: resolveDevopsTenantId(req),
+        pipelineId: String(req.params.pipelineId),
+        name: String(req.body?.name ?? ''),
+        definition: req.body?.definition as { stages: unknown[] },
+        associatedTeamId: req.body?.associatedTeamId
+          ? String(req.body.associatedTeamId)
+          : null,
+      });
+      res.json({ success: true, data: pipeline });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        (error.message === 'Pipeline name is required' ||
+          error.message === 'Invalid pipeline definition')
+      ) {
+        res.status(400).json({ success: false, message: error.message });
+        return;
+      }
+      if (error instanceof Error && error.message === 'Pipeline not found') {
+        res.status(404).json({ success: false, message: error.message });
+        return;
+      }
+      console.error('[DevOpsRoute] update pipeline error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
   app.post('/api/admin/pipelines/run/:pipelineId', apiRateLimiter, auth, async (req, res) => {
     try {
       const data = await CciService.triggerPipelineRun(

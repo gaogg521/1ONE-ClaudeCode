@@ -37,6 +37,8 @@ import { useTeamPermission } from '@/renderer/pages/team/hooks/TeamPermissionCon
 import { useSlashCommands } from '@/renderer/hooks/chat/useSlashCommands';
 import { useAcpMessage } from './useAcpMessage';
 import { useAcpInitialMessage } from './useAcpInitialMessage';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 
 const useAcpSendBoxDraft = getSendBoxDraftHook('acp', {
   _type: 'acp',
@@ -102,6 +104,7 @@ const AcpSendBox: React.FC<{
   } = useAcpMessage(conversation_id);
   const { t } = useTranslation();
   const teamPermission = useTeamPermission();
+  const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
   const isCommandQueueEnabled = useCommandQueueEnabled();
   // In team mode, only the lead agent shows the permission mode selector
   const showModeSelector = !teamPermission || conversation_id === teamPermission.leadConversationId;
@@ -306,7 +309,10 @@ Please check your local CLI tool authentication status`,
   };
 
   return (
-    <div className='max-w-800px w-full mx-auto flex flex-col mt-auto mb-16px'>
+    <div
+      className={`w-full flex flex-col mt-auto mb-16px ${stretchLayout ? '' : 'mx-auto'}`}
+      style={getChatRailSurfaceStyle('surface', stretchLayout)}
+    >
       <ThoughtDisplay running={aiProcessing && !hasThinkingMessage} onStop={handleStop} />
       <CommandQueuePanel
         items={queuedCommands}

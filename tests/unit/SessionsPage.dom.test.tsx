@@ -6,6 +6,20 @@ const navigateMock = vi.hoisted(() => vi.fn());
 const editionFeaturesMock = vi.hoisted(() => vi.fn());
 const getUserConversationsMock = vi.hoisted(() => vi.fn());
 const locationMock = vi.hoisted(() => ({ pathname: '/sessions', search: '' }));
+const teamListMock = vi.hoisted(() => vi.fn());
+const teamCreateState = vi.hoisted(() => ({
+  createdTeam: {
+    id: 'team-new',
+    name: '新团队',
+    workspace: '',
+    agents: [],
+    userId: 'user-1',
+    workspaceMode: 'shared',
+    leadAgentId: 'lead',
+    createdAt: 1,
+    updatedAt: 1,
+  },
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -70,6 +84,29 @@ vi.mock('@/renderer/hooks/webui/useEditionFeatures', () => ({
   useEditionFeatures: () => editionFeaturesMock(),
 }));
 
+vi.mock('@/renderer/pages/team/hooks/useTeamList', () => ({
+  useTeamList: () => teamListMock(),
+}));
+
+vi.mock('@/renderer/pages/team/components/TeamCreateModal', () => ({
+  default: ({
+    visible,
+    onClose,
+    onCreated,
+  }: {
+    visible: boolean;
+    onClose: () => void;
+    onCreated: (team: typeof teamCreateState.createdTeam) => void;
+  }) =>
+    visible ? (
+      <div>
+        <div>create-team-modal</div>
+        <button onClick={() => onCreated(teamCreateState.createdTeam)}>confirm-create-team</button>
+        <button onClick={onClose}>close-create-team</button>
+      </div>
+    ) : null,
+}));
+
 import SessionsPage from '@/renderer/pages/sessions';
 
 describe('SessionsPage', () => {
@@ -78,6 +115,11 @@ describe('SessionsPage', () => {
     locationMock.pathname = '/sessions';
     locationMock.search = '';
     getUserConversationsMock.mockResolvedValue([]);
+    teamListMock.mockReturnValue({
+      teams: [],
+      mutate: vi.fn(),
+      removeTeam: vi.fn(),
+    });
     editionFeaturesMock.mockReturnValue({
       hasJoinedEnterprise: true,
       isEnterpriseEdition: false,
@@ -221,6 +263,31 @@ describe('SessionsPage', () => {
     fireEvent.click(screen.getByText('打开当前 Issue 看板'));
     expect(navigateMock).toHaveBeenCalledWith(
       '/enterprise/cteam?teamId=team-1&teamName=Alpha+Team&issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE'
+    );
+  });
+
+  it('opens the team creation flow when the shared sessions view has no current team', async () => {
+    locationMock.search = '?scope=team';
+
+    render(<SessionsPage />);
+
+    expect(await screen.findByText('sessions.empty')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByText('新建团队会话')[0]!);
+    expect(screen.getByText('create-team-modal')).toBeInTheDocument();
+  });
+
+  it('navigates into the newly created team while preserving current issue context', async () => {
+    locationMock.search =
+      '?scope=team&issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE';
+
+    render(<SessionsPage />);
+
+    expect(await screen.findByText('当前来自超级助手 Issue：修复团队上下文深链')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByText('新建团队会话')[0]!);
+    fireEvent.click(screen.getByText('confirm-create-team'));
+
+    expect(navigateMock).toHaveBeenCalledWith(
+      '/team/team-new?issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE'
     );
   });
 });

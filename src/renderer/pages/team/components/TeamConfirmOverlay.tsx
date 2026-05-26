@@ -1,5 +1,6 @@
 import { ipcBridge } from '@/common';
 import type { IConfirmation } from '@/common/chat/chatLib';
+import { CONTENT_RAIL } from '@/renderer/utils/ui/contentRail';
 import { Divider, Typography } from '@arco-design/web-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -124,18 +125,19 @@ const TeamConfirmOverlay: React.FC<{
       style={{ zIndex: 1000, pointerEvents: 'none' }}
     >
       <div
-        className='relative p-16px bg-white flex flex-col overflow-hidden rd-20px max-w-800px max-h-[calc(100vh-200px)] w-full box-border mx-20px'
+        className='relative p-16px bg-white flex flex-col overflow-hidden rd-20px max-h-[calc(100vh-200px)] w-full box-border mx-20px'
         style={{
+          maxWidth: CONTENT_RAIL.chatSurfaceMaxWidth,
           boxShadow: '0px 2px 20px 0px rgba(74, 88, 250, 0.1)',
           pointerEvents: 'auto',
         }}
       >
         <div className='flex-1 overflow-y-auto min-h-0'>
-          <Typography.Ellipsis className='text-16px font-bold color-[rgba(29,33,41,1)]' rows={2} expandable>
+          <Typography.Ellipsis className='text-15px font-bold color-[rgba(29,33,41,1)]' rows={2} expandable>
             {$t(confirmation.title) || 'Choose an action'}
           </Typography.Ellipsis>
           <Divider className={'!my-10px'} />
-          <Typography.Ellipsis className='text-14px color-[rgba(29,33,41,1)]' rows={5} expandable>
+          <Typography.Ellipsis className='text-13px color-[rgba(29,33,41,1)]' rows={5} expandable>
             {$t(confirmation.description)}
           </Typography.Ellipsis>
         </div>
