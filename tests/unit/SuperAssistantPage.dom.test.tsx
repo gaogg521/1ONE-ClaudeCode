@@ -386,6 +386,47 @@ describe('SuperAssistantPage', () => {
     expect(screen.getByText('阻塞原因：等待 GitHub Actions 结果超时')).toBeInTheDocument();
   });
 
+  it('opens the assigned agent conversation directly from the issues workbench', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+    fireEvent.click(screen.getByRole('button', { name: '打开已分配 Agent 会话' }));
+
+    expect(navigateMock).toHaveBeenLastCalledWith(
+      '/team/team-1?issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE&agentSlotId=dev'
+    );
+  });
+
+  it('supports reassigning the current issue to another agent from the issues workbench', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+    fireEvent.click(screen.getByRole('button', { name: '分配给 超级助手 Leader' }));
+
+    expect(screen.getByText('已分配给：超级助手 Leader')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+  });
+
+  it('allows manually marking the current issue as blocked from the issues workbench', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+    fireEvent.click(screen.getByRole('button', { name: '标记为阻塞' }));
+
+    expect(screen.getByText('最近状态：已阻塞')).toBeInTheDocument();
+    expect(screen.getByText('阻塞原因：等待人工处理')).toBeInTheDocument();
+  });
+
   it('switches the current issue activity flow when selecting another live issue', async () => {
     render(<SuperAssistantPage />);
 

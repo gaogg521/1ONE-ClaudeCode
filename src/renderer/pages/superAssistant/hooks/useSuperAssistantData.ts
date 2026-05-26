@@ -74,6 +74,8 @@ export type SuperAssistantIssueAssignmentRecord = {
   slotId: string;
   agentName: string;
   assignedAt: number;
+  manualStatus?: TeammateStatus;
+  manualBlockerMessage?: string | null;
 };
 
 export type SuperAssistantIssueAssignmentMap = Record<string, SuperAssistantIssueAssignmentRecord>;
@@ -431,7 +433,12 @@ export function useSuperAssistantData(
               skills[index]?.name ?? skills[0]?.name ?? '',
               enabledMcpNames[0] ?? '',
             ].filter(Boolean);
+            const assignment = Object.values(issueAssignments).find(
+              (item) => item.teamId === team.id && item.slotId === agent.slotId
+            );
             const assignedIssue = assignedIssuesBySlot.get(agent.slotId) ?? null;
+            const resolvedStatus = assignment?.manualStatus ?? agent.runtimeStatus;
+            const resolvedBlockerMessage = assignment?.manualBlockerMessage ?? agent.blockerMessage;
 
             if (assignedIssue) {
               return {
@@ -444,10 +451,10 @@ export function useSuperAssistantData(
                 role: agent.role,
                 agentType: agent.agentType,
                 conversationType: agent.conversationType,
-                status: agent.runtimeStatus,
+                status: resolvedStatus,
                 currentIssueSubject: assignedIssue.subject,
                 queuedIssueSubject: null,
-                blockerMessage: agent.blockerMessage,
+                blockerMessage: resolvedBlockerMessage,
                 dependencyNames,
               };
             }
@@ -465,10 +472,10 @@ export function useSuperAssistantData(
                 role: agent.role,
                 agentType: agent.agentType,
                 conversationType: agent.conversationType,
-                status: agent.runtimeStatus,
+                status: resolvedStatus,
                 currentIssueSubject: currentIssue?.subject ?? null,
                 queuedIssueSubject: null,
-                blockerMessage: agent.blockerMessage,
+                blockerMessage: resolvedBlockerMessage,
                 dependencyNames,
               };
             }
@@ -485,10 +492,10 @@ export function useSuperAssistantData(
               role: agent.role,
               agentType: agent.agentType,
               conversationType: agent.conversationType,
-              status: agent.runtimeStatus,
+              status: resolvedStatus,
               currentIssueSubject: null,
               queuedIssueSubject: queuedIssue?.subject ?? null,
-              blockerMessage: agent.blockerMessage,
+              blockerMessage: resolvedBlockerMessage,
               dependencyNames,
             };
           }),

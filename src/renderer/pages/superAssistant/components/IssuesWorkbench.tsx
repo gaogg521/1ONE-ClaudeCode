@@ -25,6 +25,8 @@ type IssuesWorkbenchProps = {
   onSelectIssue: (issueId: string) => void;
   onBreakdownIssue: () => void;
   onAssignIssue: (slotId: string, agentName: string) => void;
+  onMarkIssueBlocked: () => void;
+  onOpenAssignedAgent: () => void;
   onOpenKanban: () => void;
   onOpenTeamFlow: () => void;
   onOpenSharedTasks: () => void;
@@ -45,6 +47,8 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
   onSelectIssue,
   onBreakdownIssue,
   onAssignIssue,
+  onMarkIssueBlocked,
+  onOpenAssignedAgent,
   onOpenKanban,
   onOpenTeamFlow,
   onOpenSharedTasks,
@@ -251,6 +255,20 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
               })}
             </Button>
           ))}
+          {currentAssignmentAgentName ? (
+            <Button size='small' onClick={onOpenAssignedAgent}>
+              {t('common.superAssistant.openAssignedAgent', {
+                defaultValue: '打开已分配 Agent 会话',
+              })}
+            </Button>
+          ) : null}
+          {currentAssignmentAgentName ? (
+            <Button size='small' onClick={onMarkIssueBlocked}>
+              {t('common.superAssistant.markIssueBlocked', {
+                defaultValue: '标记为阻塞',
+              })}
+            </Button>
+          ) : null}
         </div>
 
         <div className='mb-8px mt-12px text-12px font-600 text-t-secondary'>

@@ -158,8 +158,8 @@ const SuperAssistantPage: React.FC = () => {
         ?.agents.find((agent) => agent.slotId === currentIssueAssignment.slotId) ?? null;
     return {
       assignedAgentName: currentIssueAssignment.agentName,
-      assignedStatus: matchedAgent?.status ?? null,
-      blockerMessage: matchedAgent?.blockerMessage ?? null,
+      assignedStatus: currentIssueAssignment.manualStatus ?? matchedAgent?.status ?? null,
+      blockerMessage: currentIssueAssignment.manualBlockerMessage ?? matchedAgent?.blockerMessage ?? null,
     } as const;
   }, [currentIssueAssignment, superAssistantData.agentExecutionGroups]);
   const assignableAgents = useMemo(
@@ -230,11 +230,34 @@ const SuperAssistantPage: React.FC = () => {
         slotId,
         agentName,
         assignedAt: Date.now(),
+        manualStatus: undefined,
+        manualBlockerMessage: null,
       },
     };
     setIssueAssignments(nextAssignments);
     saveIssueAssignments(nextAssignments);
     navigate(buildTeamPath(superAssistantData.primaryTeam.id, currentIssue, slotId));
+  };
+  const handleMarkIssueBlocked = () => {
+    if (!currentIssue || !currentIssueAssignment) {
+      return;
+    }
+    const nextAssignments: SuperAssistantIssueAssignmentMap = {
+      ...issueAssignments,
+      [currentIssue.id]: {
+        ...currentIssueAssignment,
+        manualStatus: 'failed',
+        manualBlockerMessage: '等待人工处理',
+      },
+    };
+    setIssueAssignments(nextAssignments);
+    saveIssueAssignments(nextAssignments);
+  };
+  const handleOpenAssignedAgent = () => {
+    if (!currentIssue || !currentIssueAssignment) {
+      return;
+    }
+    navigate(buildTeamPath(currentIssueAssignment.teamId, currentIssue, currentIssueAssignment.slotId));
   };
 
   const tabLabels = useMemo<Record<SuperAssistantTab, string>>(
@@ -303,6 +326,8 @@ const SuperAssistantPage: React.FC = () => {
             onSelectIssue={setSelectedIssueId}
             onBreakdownIssue={handleBreakdownIssue}
             onAssignIssue={handleAssignIssue}
+            onMarkIssueBlocked={handleMarkIssueBlocked}
+            onOpenAssignedAgent={handleOpenAssignedAgent}
             onOpenKanban={handleBreakdownIssue}
             onOpenTeamFlow={handleOpenTeamFlow}
             onOpenSharedTasks={handleOpenSharedTasks}
