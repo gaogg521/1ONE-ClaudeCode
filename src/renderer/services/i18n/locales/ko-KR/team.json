@@ -26,6 +26,10 @@
     "confirm": "Add"
   },
   "newAgent": "New Agent",
+  "sharedSessions": "공유 세션",
+  "sharedTasks": "공유 작업",
+  "backToCurrentTeam": "현재 팀으로 돌아가기",
+  "continueTeamCollaboration": "팀 협업 계속하기",
   "noMessages": "No messages yet.",
   "agentNotConfigured": "에이전트가 아직 구성되지 않았습니다.",
   "sendBox": {

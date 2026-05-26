@@ -4,10 +4,41 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Button, Input, Tag, Tooltip, Spin, Empty, Typography } from '@arco-design/web-react';
 import { Add, Search, Play, Delete, Left, FolderOpen, Right, Pushpin, Star } from '@icon-park/react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
 import { useTranslation } from 'react-i18next';
+import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
+
+type WorkspaceScope = 'all' | 'personal' | 'team';
+
+function parseWorkspaceScopeSearch(search: string): {
+  scope: WorkspaceScope;
+  teamId: string | null;
+  teamName: string | null;
+  issueId: string | null;
+  issueSubject: string | null;
+} {
+  const params = new URLSearchParams(search);
+  const value = params.get('scope');
+  const scope: WorkspaceScope =
+    value === 'personal' || value === 'team' || value === 'all' ? value : 'all';
+  return {
+    scope,
+    teamId: params.get('teamId'),
+    teamName: params.get('teamName'),
+    issueId: params.get('issueId'),
+    issueSubject: params.get('issueSubject'),
+  };
+}
+
+function resolveWorkspaceScope(search: string): WorkspaceScope {
+  const value = new URLSearchParams(search).get('scope');
+  if (value === 'personal' || value === 'team' || value === 'all') {
+    return value;
+  }
+  return 'all';
+}
 
 const BACKEND_LABEL: Record<string, { label: string; color: string }> = {
   claude:     { label: 'Claude Code', color: 'blue' },
@@ -45,6 +76,43 @@ function formatDateKey(ts: number): string {
   return `${y}-${m}-${day}`;
 }
 
+function isTeamConversation(conv: TChatConversation): boolean {
+  const extra = conv.extra as { teamId?: string } | undefined;
+  return Boolean(extra?.teamId);
+}
+
+function getSessionOpenPath(conv: TChatConversation): string {
+  const extra = conv.extra as { teamId?: string } | undefined;
+  if (extra?.teamId) {
+    return `/team/${extra.teamId}`;
+  }
+  return `/conversation/${conv.id}`;
+}
+
+function buildWorkspaceScopePath(pathname: string, search: string, scope: WorkspaceScope): string {
+  const params = new URLSearchParams(search);
+  params.set('scope', scope);
+  return `${pathname}?${params.toString()}`;
+}
+
+function buildIssueKanbanPath(
+  issueId: string,
+  issueSubject: string,
+  teamId?: string | null,
+  teamName?: string | null
+): string {
+  const params = new URLSearchParams();
+  if (teamId) {
+    params.set('teamId', teamId);
+  }
+  if (teamId && teamName) {
+    params.set('teamName', teamName);
+  }
+  params.set('issueId', issueId);
+  params.set('issueSubject', issueSubject);
+  return `/enterprise/cteam?${params.toString()}`;
+}
+
 const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) => void }> = ({ conv, onDelete }) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -53,6 +121,7 @@ const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) =>
   const extra = conv.extra as { pinned?: boolean; favorited?: boolean } | undefined;
   const pinned = Boolean(extra?.pinned);
   const favorited = Boolean(extra?.favorited);
+  const openPath = getSessionOpenPath(conv);
 
   const handleTogglePin = (e: Event) => {
     (e as unknown as React.MouseEvent<HTMLElement>).stopPropagation();
@@ -95,7 +164,7 @@ const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) =>
       }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--color-primary-6)')}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--color-border)')}
-      onClick={() => navigate(`/conversation/${conv.id}`)}
+      onClick={() => navigate(openPath)}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -151,7 +220,7 @@ const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) =>
             <Button
               type='text' size='mini'
               icon={<Play theme='outline' size={14} />}
-              onClick={(e) => { e.stopPropagation(); navigate(`/conversation/${conv.id}`); }}
+              onClick={(e) => { e.stopPropagation(); navigate(openPath); }}
             />
           </Tooltip>
           <Tooltip content='删除'>
@@ -177,7 +246,17 @@ const SessionsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeDateKey, setActiveDateKey] = useState<string | null>(null);
+  const location = useLocation();
+  const [scope, setScope] = useState<WorkspaceScope>(() => resolveWorkspaceScope(location.search));
   const navigate = useNavigate();
+  const { hasJoinedEnterprise, isEnterpriseEdition, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
+  const {
+    teamId: scopedTeamId,
+    teamName: scopedTeamName,
+    issueId: scopedIssueId,
+    issueSubject: scopedIssueSubject,
+  } = parseWorkspaceScopeSearch(location.search);
+  const isCurrentTeamScope = scope === 'team' && Boolean(scopedTeamId);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -216,6 +295,11 @@ const SessionsPage: React.FC = () => {
     return () => unsub();
   }, [load]);
 
+  useEffect(() => {
+    setScope(resolveWorkspaceScope(location.search));
+    setActiveDateKey(null);
+  }, [location.search]);
+
   const handleDelete = useCallback(async (id: string) => {
     try {
       await ipcBridge.conversation.remove.invoke({ id });
@@ -225,11 +309,35 @@ const SessionsPage: React.FC = () => {
     }
   }, []);
 
+  const scopeCounts = useMemo(
+    () => ({
+      all: convs.length,
+      personal: convs.filter((conv) => !isTeamConversation(conv)).length,
+      team: convs.filter((conv) => {
+        if (!isTeamConversation(conv)) return false;
+        if (!scopedTeamId) return true;
+        const extra = conv.extra as { teamId?: string } | undefined;
+        return extra?.teamId === scopedTeamId;
+      }).length,
+    }),
+    [convs, scopedTeamId]
+  );
+
   const filtered = useMemo(() => {
+    const scopeFiltered = convs.filter((conv) => {
+      if (scope === 'personal') return !isTeamConversation(conv);
+      if (scope === 'team') {
+        if (!isTeamConversation(conv)) return false;
+        if (!scopedTeamId) return true;
+        const extra = conv.extra as { teamId?: string } | undefined;
+        return extra?.teamId === scopedTeamId;
+      }
+      return true;
+    });
     const q = search.trim().toLowerCase();
-    if (!q) return convs;
-    return convs.filter((c) => (c.name || '').toLowerCase().includes(q));
-  }, [convs, search]);
+    if (!q) return scopeFiltered;
+    return scopeFiltered.filter((c) => (c.name || '').toLowerCase().includes(q));
+  }, [convs, scope, scopedTeamId, search]);
 
   // Default view: show latest 10 (by modifyTime). Remaining are grouped into "folders" by create date.
   const { recent, folders } = useMemo(() => {
@@ -266,6 +374,12 @@ const SessionsPage: React.FC = () => {
     );
   }, [activeDateKey, folders]);
 
+  const applyScope = (nextScope: WorkspaceScope) => {
+    setScope(nextScope);
+    setActiveDateKey(null);
+    navigate(buildWorkspaceScopePath(location.pathname, location.search, nextScope), { replace: true });
+  };
+
   return (
     <div style={{ padding: '20px 24px', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -283,10 +397,160 @@ const SessionsPage: React.FC = () => {
             {activeDateKey ? `${t('sessions.folderTitle')} · ${activeDateKey}` : t('sessions.title')}
           </h2>
         </div>
-        <Button type='primary' icon={<Add theme='outline' />} size='small' onClick={() => navigate('/guid')}>
-          {t('sessions.new')}
+        <Button
+          type='primary'
+          icon={<Add theme='outline' />}
+          size='small'
+          onClick={() => navigate(isCurrentTeamScope && scopedTeamId ? `/team/${scopedTeamId}` : '/guid')}
+        >
+          {isCurrentTeamScope
+            ? t('team.continueTeamCollaboration', { defaultValue: '继续团队协同' })
+            : t('sessions.new')}
         </Button>
       </div>
+
+      {hasJoinedEnterprise ? (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: '12px 16px',
+            borderRadius: 10,
+            border: '1px solid var(--color-border-2)',
+            background: 'var(--color-fill-1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-1)', marginBottom: 4 }}>
+              {t('common.workspace.hub.enterpriseTitle', {
+                defaultValue: '企业协同与平台能力',
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-3)', lineHeight: 1.6 }}>
+              {t('common.workspace.hub.enterpriseDesc', {
+                defaultValue:
+                  '已加入 {{tenant}}。现在可以从主工作台直接进入企业协同与平台能力，不必先切到独立管理页。',
+                tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业版' }),
+              })}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Tag size='small' color={isEnterpriseEdition ? 'arcoblue' : 'gray'}>
+              {isEnterpriseEdition
+                ? t('settings.edition.enterprise', { defaultValue: '企业版' })
+                : t('settings.edition.personal', { defaultValue: '个人版' })}
+            </Tag>
+            {tenantLabel ? (
+              <Tag size='small' color='green'>
+                {tenantLabel}
+              </Tag>
+            ) : null}
+            <Button size='small' onClick={() => navigate('/workspace')}>
+              {t('common.workspace.hub.enterpriseOverviewTitle', {
+                defaultValue: '企业能力总览',
+              })}
+            </Button>
+            {showEnterpriseAdminNav ? (
+              <Button size='small' type='outline' onClick={() => navigate('/enterprise/auth')}>
+                {t('settings.edition.openAdminConsole', { defaultValue: '管理后台' })}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {hasJoinedEnterprise ? (
+        <div
+          style={{
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ fontSize: 12, color: 'var(--color-text-3)' }}>
+            {t('common.workspace.scopeHint', {
+              defaultValue: '切换查看个人工作内容与团队协同范围。',
+            })}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Button
+              size='small'
+              type={scope === 'all' ? 'primary' : 'outline'}
+              onClick={() => applyScope('all')}
+            >
+              {t('common.workspace.scopeAll', { defaultValue: '全部' })}
+            </Button>
+            <Tag size='small' color='gray'>
+              {scopeCounts.all}
+            </Tag>
+            <Button
+              size='small'
+              type={scope === 'personal' ? 'primary' : 'outline'}
+              onClick={() => applyScope('personal')}
+            >
+              {t('common.workspace.scopePersonal', { defaultValue: '个人' })}
+            </Button>
+            <Tag size='small' color='gray'>
+              {scopeCounts.personal}
+            </Tag>
+            <Button
+              size='small'
+              type={scope === 'team' ? 'primary' : 'outline'}
+              onClick={() => applyScope('team')}
+            >
+              {t('common.workspace.scopeTeam', { defaultValue: '团队协同' })}
+            </Button>
+            <Tag size='small' color='gray'>
+              {scopeCounts.team}
+            </Tag>
+            {scope === 'team' && scopedTeamName ? (
+              <Tag size='small' color='purple'>
+                {scopedTeamName}
+              </Tag>
+            ) : null}
+            {scope === 'team' && scopedTeamId ? (
+              <Button size='small' type='outline' onClick={() => navigate(`/team/${scopedTeamId}`)}>
+                {t('team.backToCurrentTeam', { defaultValue: '返回当前团队' })}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {isCurrentTeamScope ? (
+        <div style={{ marginBottom: 16, fontSize: 12, color: 'var(--color-text-3)' }}>
+          {t('common.workspace.scopeTeamSessionOpenHint', {
+            defaultValue: '当前团队视图中的团队会话会直接回到对应的团队协同页。',
+          })}
+        </div>
+      ) : null}
+
+      {scopedIssueId && scopedIssueSubject ? (
+        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12, color: 'var(--color-text-3)' }}>
+            {t('common.workspace.issueContextHint', {
+              defaultValue: '当前来自超级助手 Issue：{{subject}}',
+              subject: scopedIssueSubject,
+            })}
+          </div>
+          <Button
+            size='small'
+            type='outline'
+            onClick={() => navigate(buildIssueKanbanPath(scopedIssueId, scopedIssueSubject, scopedTeamId, scopedTeamName))}
+          >
+            {t('common.workspace.issueOpenKanban', {
+              defaultValue: '打开当前 Issue 看板',
+            })}
+          </Button>
+        </div>
+      ) : null}
 
       <Input
         prefix={<Search theme='outline' size={14} />}
@@ -317,8 +581,14 @@ const SessionsPage: React.FC = () => {
             />
             {!search && (
               <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
-                <Button type='primary' icon={<Add theme='outline' />} onClick={() => navigate('/guid')}>
-                  {t('sessions.startFirst')}
+                <Button
+                  type='primary'
+                  icon={<Add theme='outline' />}
+                  onClick={() => navigate(isCurrentTeamScope && scopedTeamId ? `/team/${scopedTeamId}` : '/guid')}
+                >
+                  {isCurrentTeamScope
+                    ? t('team.continueTeamCollaboration', { defaultValue: '继续团队协同' })
+                    : t('sessions.startFirst')}
                 </Button>
               </div>
             )}

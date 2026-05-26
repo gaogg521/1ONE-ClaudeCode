@@ -26,6 +26,10 @@
     "confirm": "Add"
   },
   "newAgent": "New Agent",
+  "sharedSessions": "Paylaşılan oturumlar",
+  "sharedTasks": "Paylaşılan görevler",
+  "backToCurrentTeam": "Geçerli takıma dön",
+  "continueTeamCollaboration": "Ekip iş birliğine devam et",
   "noMessages": "No messages yet.",
   "agentNotConfigured": "Ajan henüz yapılandırılmadı.",
   "sendBox": {

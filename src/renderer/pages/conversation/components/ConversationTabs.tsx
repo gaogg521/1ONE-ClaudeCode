@@ -22,12 +22,31 @@ import { buildCliAgentParams, buildPresetAssistantParams } from '../utils/create
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { iconColors } from '@/renderer/styles/colors';
 import type { TChatConversation } from '@/common/config/storage';
+import type { ConversationTab } from '../hooks/ConversationTabsContext';
 
 const TAB_OVERFLOW_THRESHOLD = 10;
 
 interface TabFadeState {
   left: boolean;
   right: boolean;
+}
+
+function readConversationTeamId(extra: unknown): string | undefined {
+  if (!extra || typeof extra !== 'object') {
+    return undefined;
+  }
+  const teamId = (extra as { teamId?: unknown }).teamId;
+  return typeof teamId === 'string' && teamId.length > 0 ? teamId : undefined;
+}
+
+function getConversationOpenPath(
+  conversation: Pick<ConversationTab, 'id' | 'teamId'> | Pick<TChatConversation, 'id' | 'extra'>
+): string {
+  const teamId = 'extra' in conversation ? readConversationTeamId(conversation.extra) : conversation.teamId;
+  if (teamId) {
+    return `/team/${teamId}`;
+  }
+  return `/conversation/${conversation.id}`;
 }
 
 interface ConversationTabViewProps {
@@ -176,9 +195,10 @@ const ConversationTabs: React.FC = () => {
     (tabId: string) => {
       cleanupSiderTooltips();
       switchTab(tabId);
-      void navigate(`/conversation/${tabId}`);
+      const targetTab = openTabs.find((tab) => tab.id === tabId);
+      void navigate(targetTab ? getConversationOpenPath(targetTab) : `/conversation/${tabId}`);
     },
-    [switchTab, navigate]
+    [openTabs, switchTab, navigate]
   );
 
   // 关闭 tab
@@ -392,7 +412,10 @@ const ConversationTabs: React.FC = () => {
                 break;
               case 'close-others':
                 closeOtherTabs(tabId);
-                void navigate(`/conversation/${tabId}`);
+                {
+                  const targetTab = openTabs.find((tab) => tab.id === tabId);
+                  void navigate(targetTab ? getConversationOpenPath(targetTab) : `/conversation/${tabId}`);
+                }
                 break;
             }
           }}

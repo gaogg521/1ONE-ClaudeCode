@@ -1,7 +1,8 @@
-import { Message, Spin } from '@arco-design/web-react';
+import { Button, Message, Spin } from '@arco-design/web-react';
 import { CloseOne, FullScreen, Left, OffScreen, Right } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation, useNavigate } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { ipcBridge } from '@/common';
@@ -24,6 +25,47 @@ import { TeamPermissionProvider } from './hooks/TeamPermissionContext';
 import { useTeamSession } from './hooks/useTeamSession';
 import { getAgentLogo } from '@/renderer/utils/model/agentLogo';
 import { dispatchWorkspaceHasFilesEvent } from '@/renderer/utils/workspace/workspaceEvents';
+
+const LAST_ACTIVE_TEAM_SCOPE_STORAGE_KEY = 'workspace:last-active-team-scope';
+
+type TeamIssueContext = {
+  issueId: string | null;
+  issueSubject: string | null;
+};
+
+function parseTeamIssueContext(search: string): TeamIssueContext {
+  const params = new URLSearchParams(search);
+  return {
+    issueId: params.get('issueId'),
+    issueSubject: params.get('issueSubject'),
+  };
+}
+
+function buildSharedWorkspaceScopePath(path: '/sessions' | '/tasks', team: TTeam, issueContext?: TeamIssueContext): string {
+  const params = new URLSearchParams({
+    scope: 'team',
+    teamId: team.id,
+    teamName: team.name,
+  });
+  if (issueContext?.issueId && issueContext.issueSubject) {
+    params.set('issueId', issueContext.issueId);
+    params.set('issueSubject', issueContext.issueSubject);
+  }
+  return `${path}?${params.toString()}`;
+}
+
+function buildIssueKanbanPath(team: TTeam, issueContext: TeamIssueContext): string {
+  if (!issueContext.issueId || !issueContext.issueSubject) {
+    return '/enterprise/cteam';
+  }
+  const params = new URLSearchParams({
+    teamId: team.id,
+    teamName: team.name,
+    issueId: issueContext.issueId,
+    issueSubject: issueContext.issueSubject,
+  });
+  return `/enterprise/cteam?${params.toString()}`;
+}
 
 type Props = {
   team: TTeam;
@@ -195,6 +237,8 @@ const AgentChatSlot: React.FC<{
 /** Inner component that reads active tab from context and renders the chat layout */
 const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onRenameTeam }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { agents, activeSlotId, statusMap, switchTab } = useTeamTabs();
   const [, messageContext] = Message.useMessage({ maxCount: 1 });
 
@@ -206,6 +250,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
 
   const activeAgent = agents.find((a) => a.slotId === activeSlotId);
   const leadAgent = agents.find((a) => a.role === 'lead');
+  const issueContext = parseTeamIssueContext(location.search);
 
   const handleRemoveAgent = useCallback(
     async (slotId: string) => {
@@ -230,6 +275,20 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
   // Use team workspace if specified, otherwise fall back to lead agent's conversation workspace (temp workspace)
   const effectiveWorkspace = team.workspace || (dispatchConversation?.extra as { workspace?: string })?.workspace || '';
   const workspaceEnabled = Boolean(effectiveWorkspace);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(
+        LAST_ACTIVE_TEAM_SCOPE_STORAGE_KEY,
+        JSON.stringify({
+          teamId: team.id,
+          teamName: team.name,
+        })
+      );
+    } catch {
+      // Ignore storage failures; deep links still work directly from the team header buttons.
+    }
+  }, [team.id, team.name]);
 
   // Auto-expand workspace panel on mount when workspace is available
   useEffect(() => {
@@ -341,6 +400,47 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
     [onAddAgent, handleTabClick]
   );
 
+  const headerExtra = useMemo(
+    () => (
+      <div className='flex items-center gap-8px'>
+        {issueContext.issueId && issueContext.issueSubject ? (
+          <div className='text-12px text-t-tertiary'>
+            {t('common.workspace.issueContextHint', {
+              defaultValue: '当前来自超级助手 Issue：{{subject}}',
+              subject: issueContext.issueSubject,
+            })}
+          </div>
+        ) : null}
+        {issueContext.issueId && issueContext.issueSubject ? (
+          <Button
+            size='small'
+            type='primary'
+            onClick={() => void navigate(buildIssueKanbanPath(team, issueContext))}
+          >
+            {t('common.workspace.issueOpenKanban', {
+              defaultValue: '打开当前 Issue 看板',
+            })}
+          </Button>
+        ) : null}
+        <Button
+          size='small'
+          type='outline'
+          onClick={() => void navigate(buildSharedWorkspaceScopePath('/sessions', team, issueContext))}
+        >
+          {t('team.sharedSessions', { defaultValue: '共享会话' })}
+        </Button>
+        <Button
+          size='small'
+          type='outline'
+          onClick={() => void navigate(buildSharedWorkspaceScopePath('/tasks', team, issueContext))}
+        >
+          {t('team.sharedTasks', { defaultValue: '共享任务' })}
+        </Button>
+      </div>
+    ),
+    [issueContext, navigate, t, team]
+  );
+
   return (
     <TeamPermissionProvider
       isLeadAgent={isLeadAgent}
@@ -356,6 +456,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
         sider={sider}
         workspaceEnabled={workspaceEnabled}
         tabsSlot={tabsSlot}
+        headerExtra={headerExtra}
         conversationId={activeAgent?.conversationId}
         agentName={undefined}
         workspacePath={effectiveWorkspace}

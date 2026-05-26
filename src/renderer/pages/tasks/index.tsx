@@ -11,8 +11,59 @@ import AionSelect from '@/renderer/components/base/AionSelect';
 import { ipcBridge } from '@/common';
 import { kanbanApi, type IKanbanTask, type KanbanMe, type IKanbanUser } from '@/renderer/utils/kanbanApi';
 import type { TChatConversation } from '@/common/config/storage';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 
 type TaskStatus = 'pending' | 'in_progress' | 'completed';
+type WorkspaceScope = 'all' | 'personal' | 'team';
+
+function resolveWorkspaceScope(search: string): WorkspaceScope {
+  const value = new URLSearchParams(search).get('scope');
+  if (value === 'personal' || value === 'team' || value === 'all') {
+    return value;
+  }
+  return 'all';
+}
+
+function parseWorkspaceScopeSearch(search: string): {
+  teamId: string | null;
+  teamName: string | null;
+  issueId: string | null;
+  issueSubject: string | null;
+} {
+  const params = new URLSearchParams(search);
+  return {
+    teamId: params.get('teamId'),
+    teamName: params.get('teamName'),
+    issueId: params.get('issueId'),
+    issueSubject: params.get('issueSubject'),
+  };
+}
+
+function buildWorkspaceScopePath(pathname: string, search: string, scope: WorkspaceScope): string {
+  const params = new URLSearchParams(search);
+  params.set('scope', scope);
+  return `${pathname}?${params.toString()}`;
+}
+
+function buildIssueKanbanPath(
+  issueId: string,
+  issueSubject: string,
+  teamId?: string | null,
+  teamName?: string | null
+): string {
+  const params = new URLSearchParams();
+  if (teamId) {
+    params.set('teamId', teamId);
+  }
+  if (teamId && teamName) {
+    params.set('teamName', teamName);
+  }
+  params.set('issueId', issueId);
+  params.set('issueSubject', issueSubject);
+  return `/enterprise/cteam?${params.toString()}`;
+}
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; dot: string }> = {
   pending: { label: '待处理', dot: 'var(--color-text-4)' },
@@ -28,6 +79,42 @@ const EMPTY_FORM = {
   assigned_to: '',
 };
 
+function isTeamConversationId(
+  conversationId: string | undefined,
+  conversations: Map<string, TChatConversation>
+): boolean {
+  if (!conversationId) return false;
+  const conversation = conversations.get(conversationId);
+  const extra = conversation?.extra as { teamId?: string } | undefined;
+  return Boolean(extra?.teamId);
+}
+
+function matchesConversationScope(
+  conversation: TChatConversation,
+  scope: WorkspaceScope,
+  scopedTeamId: string | null
+): boolean {
+  const extra = conversation.extra as { teamId?: string } | undefined;
+  const teamId = extra?.teamId ?? null;
+  if (scope === 'personal') {
+    return !teamId;
+  }
+  if (scope === 'team') {
+    if (!teamId) return false;
+    if (!scopedTeamId) return true;
+    return teamId === scopedTeamId;
+  }
+  return true;
+}
+
+function getConversationOpenPath(conversation: TChatConversation): string {
+  const extra = conversation.extra as { teamId?: string } | undefined;
+  if (extra?.teamId) {
+    return `/team/${extra.teamId}`;
+  }
+  return `/conversation/${conversation.id}`;
+}
+
 interface TaskCardProps {
   task: IKanbanTask;
   conversations: Map<string, TChatConversation>;
@@ -39,6 +126,7 @@ interface TaskCardProps {
 }
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, conversations, users, me, onEdit, onDelete, onStatusChange }) => {
+  const navigate = useNavigate();
   const cfg = STATUS_CONFIG[task.status];
   const conv = task.session_name ? conversations.get(task.session_name) : null;
   const assignedUser = task.assigned_to ? users.get(task.assigned_to) : null;
@@ -75,7 +163,18 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, conversations, users, me, onE
       {task.active_form && (
         <div className='text-11px mt-4px pl-13px text-[var(--warning)]'>▶ {task.active_form}</div>
       )}
-      {conv && <div className='text-11px text-t-tertiary mt-4px pl-13px'>📋 {conv.name}</div>}
+      {conv && (
+        <div className='mt-4px pl-13px'>
+          <Button
+            type='text'
+            size='mini'
+            className='!p-0 !h-auto text-11px text-t-tertiary'
+            onClick={() => navigate(getConversationOpenPath(conv))}
+          >
+            {`📋 ${conv.name}`}
+          </Button>
+        </div>
+      )}
       <div className='flex items-center gap-8px mt-4px pl-13px flex-wrap'>
         {owner && me.role === 'admin' && owner.id !== me.id && (
           <span className='text-11px text-t-tertiary'>🧑 {owner.username}</span>
@@ -89,6 +188,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, conversations, users, me, onE
 };
 
 const TasksPage: React.FC = () => {
+  const { t } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<IKanbanTask[]>([]);
   const [me, setMe] = useState<KanbanMe>({ id: '', username: '', role: 'user' });
   const [conversations, setConversations] = useState<Map<string, TChatConversation>>(new Map());
@@ -99,6 +201,14 @@ const TasksPage: React.FC = () => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [scope, setScope] = useState<WorkspaceScope>(() => resolveWorkspaceScope(location.search));
+  const { hasJoinedEnterprise, isEnterpriseEdition, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
+  const {
+    teamId: scopedTeamId,
+    teamName: scopedTeamName,
+    issueId: scopedIssueId,
+    issueSubject: scopedIssueSubject,
+  } = parseWorkspaceScopeSearch(location.search);
 
   const loadMe = useCallback(async () => {
     const info = await kanbanApi.me();
@@ -159,7 +269,19 @@ const TasksPage: React.FC = () => {
     run().finally(() => setLoading(false));
   }, [migrateLocalStorage, loadMe, loadTasks, loadConversations, loadUsers]);
 
-  const openAdd = () => { setEditing(null); setForm(EMPTY_FORM); setModalVisible(true); };
+  useEffect(() => {
+    setScope(resolveWorkspaceScope(location.search));
+  }, [location.search]);
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm({
+      ...EMPTY_FORM,
+      subject: scopedIssueSubject ?? EMPTY_FORM.subject,
+      session_name: defaultScopedConversationId,
+    });
+    setModalVisible(true);
+  };
 
   const openEdit = (t: IKanbanTask) => {
     setEditing(t);
@@ -204,11 +326,51 @@ const TasksPage: React.FC = () => {
     await kanbanApi.update({ id, status });
   }, []);
 
+  const scopeCounts = {
+    all: tasks.length,
+    personal: tasks.filter((task) => !isTeamConversationId(task.session_name, conversations)).length,
+    team: tasks.filter((task) => {
+      if (!isTeamConversationId(task.session_name, conversations)) return false;
+      if (!scopedTeamId) return true;
+      const conversation = task.session_name ? conversations.get(task.session_name) : null;
+      const extra = conversation?.extra as { teamId?: string } | undefined;
+      return extra?.teamId === scopedTeamId;
+    }).length,
+  };
+
   // 过滤逻辑：admin 可按成员过滤
-  const visibleTasks = filterUserId ? tasks.filter((t) => t.user_id === filterUserId) : tasks;
+  const visibleTasks = tasks.filter((task) => {
+    if (filterUserId && task.user_id !== filterUserId) {
+      return false;
+    }
+    if (scope === 'personal') {
+      return !isTeamConversationId(task.session_name, conversations);
+    }
+    if (scope === 'team') {
+      if (!isTeamConversationId(task.session_name, conversations)) {
+        return false;
+      }
+      if (!scopedTeamId) {
+        return true;
+      }
+      const conversation = task.session_name ? conversations.get(task.session_name) : null;
+      const extra = conversation?.extra as { teamId?: string } | undefined;
+      return extra?.teamId === scopedTeamId;
+    }
+    return true;
+  });
   const byStatus = (s: TaskStatus) => visibleTasks.filter((t) => t.status === s);
-  const convList = Array.from(conversations.values());
+  const convList = Array.from(conversations.values()).filter((conversation) =>
+    matchesConversationScope(conversation, scope, scopedTeamId)
+  );
+  const defaultScopedConversationId =
+    scope === 'team' && scopedTeamId ? (convList[0]?.id ?? '') : '';
   const userList = Array.from(users.values());
+
+  const applyScope = (nextScope: WorkspaceScope) => {
+    setScope(nextScope);
+    navigate(buildWorkspaceScopePath(location.pathname, location.search, nextScope), { replace: true });
+  };
 
   if (loading) {
     return (
@@ -250,6 +412,130 @@ const TasksPage: React.FC = () => {
           </Button>
         </Space>
       </div>
+
+      {hasJoinedEnterprise ? (
+        <div
+          className='mb-16px p-12px rd-10px border border-border-2 bg-fill-1 flex items-center justify-between gap-12px flex-wrap'
+        >
+          <div className='min-w-0 flex-1'>
+            <div className='text-14px font-600 text-t-primary mb-4px'>
+              {t('common.workspace.hub.enterpriseTitle', {
+                defaultValue: '企业协同与平台能力',
+              })}
+            </div>
+            <div className='text-12px text-t-tertiary leading-relaxed'>
+              {t('common.workspace.hub.enterpriseDesc', {
+                defaultValue:
+                  '已加入 {{tenant}}。现在可以从主工作台直接进入企业协同与平台能力，不必先切到独立管理页。',
+                tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业版' }),
+              })}
+            </div>
+          </div>
+          <div className='flex items-center gap-8px flex-wrap'>
+            <Tag size='small' color={isEnterpriseEdition ? 'arcoblue' : 'gray'}>
+              {isEnterpriseEdition
+                ? t('settings.edition.enterprise', { defaultValue: '企业版' })
+                : t('settings.edition.personal', { defaultValue: '个人版' })}
+            </Tag>
+            {tenantLabel ? (
+              <Tag size='small' color='green'>
+                {tenantLabel}
+              </Tag>
+            ) : null}
+            <Button size='small' onClick={() => navigate('/workspace')}>
+              {t('common.workspace.hub.enterpriseOverviewTitle', {
+                defaultValue: '企业能力总览',
+              })}
+            </Button>
+            {showEnterpriseAdminNav ? (
+              <Button size='small' type='outline' onClick={() => navigate('/enterprise/auth')}>
+                {t('settings.edition.openAdminConsole', { defaultValue: '管理后台' })}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {hasJoinedEnterprise ? (
+        <div className='mb-16px flex items-center justify-between gap-12px flex-wrap'>
+          <div className='text-12px text-t-tertiary'>
+            {t('common.workspace.scopeHint', {
+              defaultValue: '切换查看个人工作内容与团队协同范围。',
+            })}
+          </div>
+          <div className='flex items-center gap-8px flex-wrap'>
+            <Button size='small' type={scope === 'all' ? 'primary' : 'outline'} onClick={() => applyScope('all')}>
+              {t('common.workspace.scopeAll', { defaultValue: '全部' })}
+            </Button>
+            <Tag size='small' color='gray'>
+              {scopeCounts.all}
+            </Tag>
+            <Button
+              size='small'
+              type={scope === 'personal' ? 'primary' : 'outline'}
+              onClick={() => applyScope('personal')}
+            >
+              {t('common.workspace.scopePersonal', { defaultValue: '个人' })}
+            </Button>
+            <Tag size='small' color='gray'>
+              {scopeCounts.personal}
+            </Tag>
+            <Button size='small' type={scope === 'team' ? 'primary' : 'outline'} onClick={() => applyScope('team')}>
+              {t('common.workspace.scopeTeam', { defaultValue: '团队协同' })}
+            </Button>
+            <Tag size='small' color='gray'>
+              {scopeCounts.team}
+            </Tag>
+            {scope === 'team' && scopedTeamName ? (
+              <Tag size='small' color='purple'>
+                {scopedTeamName}
+              </Tag>
+            ) : null}
+            {scope === 'team' && scopedTeamId ? (
+              <Button size='small' type='outline' onClick={() => navigate(`/team/${scopedTeamId}`)}>
+                {t('team.backToCurrentTeam', { defaultValue: '返回当前团队' })}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {scope === 'team' && scopedTeamId ? (
+        <div className='mb-16px text-12px text-t-tertiary'>
+          {t('common.workspace.scopeTeamTaskCreateHint', {
+            defaultValue: '当前团队视图中新建任务会默认关联到这个团队范围里的会话。',
+          })}
+        </div>
+      ) : null}
+
+      {scopedIssueId && scopedIssueSubject ? (
+        <div className='mb-16px rounded-10px border border-border-2 bg-fill-1 p-12px'>
+          <div className='text-12px text-t-tertiary'>
+            {t('common.workspace.issueContextHint', {
+              defaultValue: '当前来自超级助手 Issue：{{subject}}',
+              subject: scopedIssueSubject,
+            })}
+          </div>
+          <div className='mt-8px flex items-center gap-8px flex-wrap'>
+            <Button size='small' type='primary' onClick={openAdd}>
+              {t('common.workspace.issueCreateTaskDraft', {
+                defaultValue: '基于当前 Issue 新建任务',
+              })}
+            </Button>
+            <Button
+              size='small'
+              type='outline'
+              onClick={() =>
+                navigate(buildIssueKanbanPath(scopedIssueId, scopedIssueSubject, scopedTeamId, scopedTeamName))
+              }
+            >
+              {t('common.workspace.issueOpenKanban', {
+                defaultValue: '打开当前 Issue 看板',
+              })}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <div className='flex gap-20px flex-1 overflow-hidden'>
         {(['pending', 'in_progress', 'completed'] as TaskStatus[]).map((s) => {

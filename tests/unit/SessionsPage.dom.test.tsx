@@ -1,0 +1,226 @@
+import React from 'react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const navigateMock = vi.hoisted(() => vi.fn());
+const editionFeaturesMock = vi.hoisted(() => vi.fn());
+const getUserConversationsMock = vi.hoisted(() => vi.fn());
+const locationMock = vi.hoisted(() => ({ pathname: '/sessions', search: '' }));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (_key: string, options?: { defaultValue?: string; tenant?: string; subject?: string }) =>
+      options?.defaultValue
+        ?.replace('{{tenant}}', options?.tenant ?? '')
+        .replace('{{subject}}', options?.subject ?? '') || _key,
+  }),
+}));
+
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigateMock,
+  useLocation: () => locationMock,
+}));
+
+vi.mock('@icon-park/react', () => ({
+  Add: () => <span>add</span>,
+  Search: () => <span>search</span>,
+  Play: () => <span>play</span>,
+  Delete: () => <span>delete</span>,
+  Left: () => <span>left</span>,
+  FolderOpen: () => <span>folder</span>,
+  Right: () => <span>right</span>,
+  Pushpin: () => <span>pin</span>,
+  Star: () => <span>star</span>,
+}));
+
+vi.mock('@arco-design/web-react', () => ({
+  Button: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => (
+    <button onClick={onClick}>{children}</button>
+  ),
+  Input: ({ placeholder }: { placeholder?: string }) => <input placeholder={placeholder} />,
+  Tag: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
+  Spin: () => <div>loading</div>,
+  Empty: ({ description }: { description?: React.ReactNode }) => <div>{description}</div>,
+  Typography: {},
+}));
+
+vi.mock('@/common', () => ({
+  ipcBridge: {
+    database: {
+      getUserConversations: {
+        invoke: getUserConversationsMock,
+      },
+    },
+    conversation: {
+      listChanged: {
+        on: vi.fn(() => () => {}),
+      },
+      remove: {
+        invoke: vi.fn(),
+      },
+      update: {
+        invoke: vi.fn(),
+      },
+    },
+  },
+}));
+
+vi.mock('@/renderer/hooks/webui/useEditionFeatures', () => ({
+  useEditionFeatures: () => editionFeaturesMock(),
+}));
+
+import SessionsPage from '@/renderer/pages/sessions';
+
+describe('SessionsPage', () => {
+  beforeEach(() => {
+    navigateMock.mockReset();
+    locationMock.pathname = '/sessions';
+    locationMock.search = '';
+    getUserConversationsMock.mockResolvedValue([]);
+    editionFeaturesMock.mockReturnValue({
+      hasJoinedEnterprise: true,
+      isEnterpriseEdition: false,
+      tenantLabel: '欢乐互娱有限公司',
+      showEnterpriseAdminNav: true,
+    });
+  });
+
+  it('shows enterprise context and entry buttons in the shared sessions workspace', () => {
+    render(<SessionsPage />);
+
+    expect(screen.getByText('企业协同与平台能力')).toBeInTheDocument();
+    expect(screen.getByText('欢乐互娱有限公司')).toBeInTheDocument();
+    expect(screen.getByText('企业能力总览')).toBeInTheDocument();
+    expect(screen.getByText('管理后台')).toBeInTheDocument();
+  });
+
+  it('filters sessions by personal and team collaboration scope after joining an enterprise', async () => {
+    getUserConversationsMock.mockResolvedValue([
+      {
+        id: 'conversation-personal',
+        name: '个人会话',
+        type: 'acp',
+        status: 'finished',
+        createTime: 1710000000000,
+        modifyTime: 1710000000000,
+        extra: { backend: 'claude' },
+      },
+      {
+        id: 'conversation-team',
+        name: '团队会话',
+        type: 'acp',
+        status: 'finished',
+        createTime: 1710000001000,
+        modifyTime: 1710000001000,
+        extra: { backend: 'claude', teamId: 'team-1' },
+      },
+    ]);
+
+    render(<SessionsPage />);
+
+    expect(await screen.findByText('个人会话')).toBeInTheDocument();
+    expect(screen.getByText('团队会话')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('团队协同'));
+    expect(screen.getByText('团队会话')).toBeInTheDocument();
+    expect(screen.queryByText('个人会话')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('个人'));
+    expect(screen.getByText('个人会话')).toBeInTheDocument();
+    expect(screen.queryByText('团队会话')).not.toBeInTheDocument();
+  });
+
+  it('opens the current team scope directly from the URL query', async () => {
+    locationMock.search = '?scope=team&teamId=team-1&teamName=Alpha+Team';
+    getUserConversationsMock.mockResolvedValue([
+      {
+        id: 'conversation-personal',
+        name: '个人会话',
+        type: 'acp',
+        status: 'finished',
+        createTime: 1710000000000,
+        modifyTime: 1710000000000,
+        extra: { backend: 'claude' },
+      },
+      {
+        id: 'conversation-team',
+        name: '团队会话',
+        type: 'acp',
+        status: 'finished',
+        createTime: 1710000001000,
+        modifyTime: 1710000001000,
+        extra: { backend: 'claude', teamId: 'team-1' },
+      },
+      {
+        id: 'conversation-other-team',
+        name: '其他团队会话',
+        type: 'acp',
+        status: 'finished',
+        createTime: 1710000002000,
+        modifyTime: 1710000002000,
+        extra: { backend: 'claude', teamId: 'team-2' },
+      },
+    ]);
+
+    render(<SessionsPage />);
+
+    expect(await screen.findByText('团队会话')).toBeInTheDocument();
+    expect(screen.queryByText('个人会话')).not.toBeInTheDocument();
+    expect(screen.queryByText('其他团队会话')).not.toBeInTheDocument();
+    expect(screen.getByText('Alpha Team')).toBeInTheDocument();
+    expect(screen.getByText('当前团队视图中的团队会话会直接回到对应的团队协同页。')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('继续团队协同'));
+    expect(navigateMock).toHaveBeenCalledWith('/team/team-1');
+
+    navigateMock.mockClear();
+    fireEvent.click(screen.getByText('团队会话'));
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+    expect(navigateMock).toHaveBeenLastCalledWith('/team/team-1');
+
+    fireEvent.click(screen.getByText('返回当前团队'));
+    expect(navigateMock).toHaveBeenCalledWith('/team/team-1');
+
+    navigateMock.mockClear();
+    fireEvent.click(screen.getByText('个人'));
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+    expect(navigateMock).toHaveBeenCalledWith('/sessions?scope=personal&teamId=team-1&teamName=Alpha+Team', {
+      replace: true,
+    });
+  });
+
+  it('keeps the empty state action inside the current team scope', async () => {
+    locationMock.search = '?scope=team&teamId=team-1&teamName=Alpha+Team';
+    getUserConversationsMock.mockResolvedValue([
+      {
+        id: 'conversation-personal',
+        name: '个人会话',
+        type: 'acp',
+        status: 'finished',
+        createTime: 1710000000000,
+        modifyTime: 1710000000000,
+        extra: { backend: 'claude' },
+      },
+    ]);
+
+    render(<SessionsPage />);
+
+    expect(await screen.findByText('sessions.empty')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByText('继续团队协同')[0]!);
+    expect(navigateMock).toHaveBeenCalledWith('/team/team-1');
+  });
+
+  it('shows the current issue context when opened from super assistant', async () => {
+    locationMock.search =
+      '?scope=team&teamId=team-1&teamName=Alpha+Team&issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE';
+
+    render(<SessionsPage />);
+
+    expect(await screen.findByText('当前来自超级助手 Issue：修复团队上下文深链')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('打开当前 Issue 看板'));
+    expect(navigateMock).toHaveBeenCalledWith(
+      '/enterprise/cteam?teamId=team-1&teamName=Alpha+Team&issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE'
+    );
+  });
+});

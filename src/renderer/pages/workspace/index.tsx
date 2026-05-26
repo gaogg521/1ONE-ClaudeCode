@@ -7,19 +7,71 @@ import { useConversationHistoryContext } from '@/renderer/hooks/context/Conversa
 import { getActivityTime } from '@/renderer/utils/chat/timeline';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 
+const LAST_ACTIVE_TEAM_SCOPE_STORAGE_KEY = 'workspace:last-active-team-scope';
+
 type WorkspaceEntry = {
   workspace: string;
   displayName: string;
-  latestConversationId?: string;
+  latestOpenPath?: string;
   latestConversationName?: string;
   time: number;
 };
+
+type LastActiveTeamScope = {
+  teamId: string;
+  teamName?: string;
+};
+
+function readLastActiveTeamScope(): LastActiveTeamScope | null {
+  try {
+    const raw = window.sessionStorage.getItem(LAST_ACTIVE_TEAM_SCOPE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { teamId?: unknown; teamName?: unknown };
+    if (typeof parsed.teamId !== 'string' || parsed.teamId.length === 0) {
+      return null;
+    }
+    return {
+      teamId: parsed.teamId,
+      teamName: typeof parsed.teamName === 'string' && parsed.teamName.length > 0 ? parsed.teamName : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildSharedWorkspaceScopePath(path: '/sessions' | '/tasks', scope: LastActiveTeamScope | null): string {
+  const params = new URLSearchParams({ scope: 'team' });
+  if (scope?.teamId) {
+    params.set('teamId', scope.teamId);
+  }
+  if (scope?.teamName) {
+    params.set('teamName', scope.teamName);
+  }
+  return `${path}?${params.toString()}`;
+}
+
+function readConversationTeamId(extra: unknown): string | undefined {
+  if (!extra || typeof extra !== 'object') {
+    return undefined;
+  }
+  const teamId = (extra as { teamId?: unknown }).teamId;
+  return typeof teamId === 'string' && teamId.length > 0 ? teamId : undefined;
+}
+
+function getConversationOpenPath(conversation: { id: string; extra?: unknown }): string {
+  const teamId = readConversationTeamId(conversation.extra);
+  if (teamId) {
+    return `/team/${teamId}`;
+  }
+  return `/conversation/${conversation.id}`;
+}
 
 const WorkspacePage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { groupedHistory, conversations } = useConversationHistoryContext();
   const { hasJoinedEnterprise, showEnterpriseAdminNav, tenantLabel } = useEditionFeatures();
+  const lastActiveTeamScope = useMemo(() => readLastActiveTeamScope(), []);
 
   const workspaceEntries = useMemo<WorkspaceEntry[]>(() => {
     const map = new Map<string, WorkspaceEntry>();
@@ -31,7 +83,7 @@ const WorkspacePage: React.FC = () => {
         map.set(group.workspace, {
           workspace: group.workspace,
           displayName: group.displayName,
-          latestConversationId: latest?.id,
+          latestOpenPath: latest ? getConversationOpenPath(latest) : undefined,
           latestConversationName: latest?.name,
           time: item.time,
         });
@@ -48,7 +100,7 @@ const WorkspacePage: React.FC = () => {
       map.set(ws, {
         workspace: ws,
         displayName: ws.split(/[\\/]/).filter(Boolean).pop() || ws,
-        latestConversationId: c.id,
+        latestOpenPath: getConversationOpenPath(c),
         latestConversationName: c.name,
         time: getActivityTime(c),
       });
@@ -79,6 +131,26 @@ const WorkspacePage: React.FC = () => {
             defaultValue: '进入需求协同、任务拆解与跨角色推进看板。',
           }),
           path: '/enterprise/cteam',
+        },
+        {
+          key: 'shared-sessions',
+          title: t('common.workspace.hub.enterpriseSharedSessionsTitle', {
+            defaultValue: '共享会话',
+          }),
+          description: t('common.workspace.hub.enterpriseSharedSessionsDesc', {
+            defaultValue: '直接进入主工作台里的团队协同会话范围。',
+          }),
+          path: buildSharedWorkspaceScopePath('/sessions', lastActiveTeamScope),
+        },
+        {
+          key: 'shared-tasks',
+          title: t('common.workspace.hub.enterpriseSharedTasksTitle', {
+            defaultValue: '共享任务',
+          }),
+          description: t('common.workspace.hub.enterpriseSharedTasksDesc', {
+            defaultValue: '直接进入主工作台里的团队协同任务范围。',
+          }),
+          path: buildSharedWorkspaceScopePath('/tasks', lastActiveTeamScope),
         },
         {
           key: 'pipeline',
@@ -113,7 +185,7 @@ const WorkspacePage: React.FC = () => {
             }
           : null,
       ].filter((item): item is { key: string; title: string; description: string; path: string } => Boolean(item)),
-    [showEnterpriseAdminNav, t]
+    [lastActiveTeamScope, showEnterpriseAdminNav, t]
   );
 
   return (
@@ -228,8 +300,8 @@ const WorkspacePage: React.FC = () => {
                 key={w.workspace}
                 className='px-14px py-12px rd-12px border border-solid border-[var(--color-border-2)] bg-[var(--color-bg-1)] hover:bg-fill-2 transition-colors cursor-pointer'
                 onClick={() => {
-                  if (w.latestConversationId) {
-                    void navigate(`/conversation/${w.latestConversationId}`);
+                  if (w.latestOpenPath) {
+                    void navigate(w.latestOpenPath);
                   }
                 }}
               >

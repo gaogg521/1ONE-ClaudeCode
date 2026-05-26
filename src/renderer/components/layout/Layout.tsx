@@ -9,7 +9,7 @@ import PwaPullToRefresh from '@/renderer/components/layout/PwaPullToRefresh';
 import Titlebar from '@/renderer/components/layout/Titlebar';
 import { Layout as ArcoLayout } from '@arco-design/web-react';
 import { Tooltip } from '@arco-design/web-react';
-import { MenuFold, MenuUnfold, CommentOne, FolderOpen, Checklist, Lightning, Server, Brain, AlarmClock, Setting, People } from '@icon-park/react';
+import { MenuFold, MenuUnfold, CommentOne, FolderOpen, Checklist, Lightning, Server, Brain, AlarmClock, Setting, People, Robot } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -57,7 +57,7 @@ const useDebug = () => {
   return { onClick };
 };
 
-type NavItem = {
+export type NavItem = {
   icon: React.ReactNode;
   labelKey: string;
   labelDefault: string;
@@ -73,9 +73,15 @@ const NAV_ITEMS: NavItem[] = [
   { icon: <Checklist theme='outline' size={18} />, labelKey: 'nav.tasks', labelDefault: 'Tasks', path: '/tasks' },
   {
     icon: <People theme='outline' size={18} />,
-    labelKey: 'nav.enterpriseAdmin',
-    labelDefault: 'Admin console',
+    labelKey: 'nav.enterpriseConsole',
+    labelDefault: 'Enterprise',
     path: '/enterprise',
+  },
+  {
+    icon: <Robot theme='outline' size={18} />,
+    labelKey: 'nav.superAssistant',
+    labelDefault: '超级助手',
+    path: '/super-assistant',
   },
   { icon: <Lightning theme='outline' size={18} />, labelKey: 'nav.hooks', labelDefault: 'Hooks', path: '/hooks' },
   { icon: <Server theme='outline' size={18} />, labelKey: 'nav.mcp', labelDefault: 'MCP', path: '/mcp' },
@@ -84,18 +90,23 @@ const NAV_ITEMS: NavItem[] = [
   { icon: <Setting theme='outline' size={18} />, labelKey: 'nav.globalSettings', labelDefault: 'Settings', path: '/settings' },
 ];
 
-const SidebarNavIcons: React.FC = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { t } = useTranslation();
-  const { isEnterpriseEdition, showEnterpriseAdminNav } = useEditionFeatures();
+export function getSidebarNavItems(hasJoinedEnterprise: boolean, isEnterpriseEdition: boolean): NavItem[] {
   let items = NAV_ITEMS;
-  if (!showEnterpriseAdminNav) {
-    items = items.filter((x) => x.path !== '/enterprise');
+  if (!hasJoinedEnterprise) {
+    items = items.filter((x) => x.path !== '/enterprise' && x.path !== '/super-assistant');
   }
   if (!isEnterpriseEdition) {
     items = items.filter((x) => !x.enterpriseOnly);
   }
+  return items;
+}
+
+const SidebarNavIcons: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { hasJoinedEnterprise, isEnterpriseEdition } = useEditionFeatures();
+  const items = getSidebarNavItems(hasJoinedEnterprise, isEnterpriseEdition);
   return (
     <div style={{
       display: 'flex',

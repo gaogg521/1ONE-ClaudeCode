@@ -26,6 +26,10 @@
     "confirm": "Add"
   },
   "newAgent": "New Agent",
+  "sharedSessions": "共有セッション",
+  "sharedTasks": "共有タスク",
+  "backToCurrentTeam": "現在のチームに戻る",
+  "continueTeamCollaboration": "チーム協業を続ける",
   "noMessages": "No messages yet.",
   "agentNotConfigured": "エージェントはまだ設定されていません。",
   "sendBox": {

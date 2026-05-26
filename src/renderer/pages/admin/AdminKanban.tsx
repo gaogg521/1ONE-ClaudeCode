@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Card,
@@ -38,6 +38,7 @@ import {
   updateRequirement,
 } from '@/renderer/utils/enterpriseApi/modules';
 import AdminPageWrapper from './components/AdminPageWrapper';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const { Row, Col } = Grid;
 
@@ -76,8 +77,100 @@ const PRIORITY_TAGS: Record<RequirementPriority, { color: string; labelKey: stri
   urgent: { color: 'red', labelKey: 'admin.kanban.priority.urgent', defaultLabel: '紧急' },
 };
 
+type RequirementFocusMatch = {
+  epic: IRequirement;
+  card: IRequirement | null;
+};
+
+type IssueContext = {
+  teamId: string | null;
+  teamName: string | null;
+  issueId: string | null;
+  issueSubject: string | null;
+};
+
+function parseIssueContext(search: string): IssueContext {
+  const params = new URLSearchParams(search);
+  return {
+    teamId: params.get('teamId'),
+    teamName: params.get('teamName'),
+    issueId: params.get('issueId'),
+    issueSubject: params.get('issueSubject'),
+  };
+}
+
+function buildIssueScopedWorkspacePath(
+  path: '/tasks' | '/sessions',
+  issueId: string,
+  issueSubject: string,
+  teamId?: string | null,
+  teamName?: string | null
+): string {
+  const params = new URLSearchParams({ scope: 'team' });
+  if (teamId) {
+    params.set('teamId', teamId);
+  }
+  if (teamId && teamName) {
+    params.set('teamName', teamName);
+  }
+  params.set('issueId', issueId);
+  params.set('issueSubject', issueSubject);
+  return `${path}?${params.toString()}`;
+}
+
+function buildSuperAssistantIssuePath(issueId: string): string {
+  const params = new URLSearchParams({
+    tab: 'issues',
+    issueId,
+  });
+  return `/super-assistant?${params.toString()}`;
+}
+
+function buildCurrentTeamPath(teamId: string, issueId?: string | null, issueSubject?: string | null): string {
+  if (!issueId || !issueSubject) {
+    return `/team/${teamId}`;
+  }
+  const params = new URLSearchParams({
+    issueId,
+    issueSubject,
+  });
+  return `/team/${teamId}?${params.toString()}`;
+}
+
+function findRequirementFocus(requirements: IRequirement[], issueId: string): RequirementFocusMatch | null {
+  const walk = (epic: IRequirement, items: IRequirement[]): RequirementFocusMatch | null => {
+    for (const item of items) {
+      if (item.id === issueId) {
+        return {
+          epic,
+          card: item.type === 'epic' ? null : item,
+        };
+      }
+      const nested = item.children?.length ? walk(epic, item.children) : null;
+      if (nested) {
+        return nested;
+      }
+    }
+    return null;
+  };
+
+  for (const epic of requirements) {
+    if (epic.id === issueId) {
+      return { epic, card: null };
+    }
+    const nested = epic.children?.length ? walk(epic, epic.children) : null;
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
+}
+
 const AdminKanban: React.FC = () => {
   const { t } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [requirements, setRequirements] = useState<IRequirement[]>([]);
   const [selectedEpicId, setSelectedEpicId] = useState<string | null>(null);
@@ -94,6 +187,8 @@ const AdminKanban: React.FC = () => {
   const [batchImportJson, setBatchImportJson] = useState('');
   const [batchImportError, setBatchImportError] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<IRequirement | null>(null);
+
+  const issueContext = useMemo(() => parseIssueContext(location.search), [location.search]);
 
   const [createForm, setCreateForm] = useState({
     parent_id: '' as string | null,
@@ -129,6 +224,34 @@ const AdminKanban: React.FC = () => {
   useEffect(() => {
     void loadRequirements();
   }, []);
+
+  useEffect(() => {
+    if (!requirements.length) {
+      return;
+    }
+
+    if (!issueContext.issueId) {
+      return;
+    }
+
+    const match = findRequirementFocus(requirements, issueContext.issueId);
+    if (!match) {
+      return;
+    }
+
+    setSelectedEpicId(match.epic.id);
+    if (match.card) {
+      setSelectedCard(match.card);
+      setCardDetailVisible(true);
+    }
+  }, [issueContext.issueId, requirements]);
+
+  const openAiDecomposeModal = useCallback(() => {
+    if (issueContext.issueSubject) {
+      setAiInput(issueContext.issueSubject);
+    }
+    setAiVisible(true);
+  }, [issueContext.issueSubject]);
 
   const handleCreate = async () => {
     if (!createForm.subject.trim()) {
@@ -378,7 +501,7 @@ const AdminKanban: React.FC = () => {
             status='warning'
             icon={<Lightning />}
             style={{ backgroundColor: '#f59e0b', borderColor: '#f59e0b' }}
-            onClick={() => setAiVisible(true)}
+            onClick={openAiDecomposeModal}
           >
             {t('admin.kanban.button.aiDecompose', { defaultValue: 'AI 需求一键拆单' })}
           </Button>
@@ -399,6 +522,82 @@ const AdminKanban: React.FC = () => {
           </Button>
         </Space>
       </div>
+
+      {issueContext.issueId && issueContext.issueSubject ? (
+        <Card bordered={false} className='mb-16px rd-8px'>
+          <div className='flex items-center justify-between gap-12px flex-wrap'>
+            <div className='text-12px text-t-tertiary'>
+              {t('common.workspace.issueContextHint', {
+                defaultValue: '当前来自超级助手 Issue：{{subject}}',
+                subject: issueContext.issueSubject,
+              })}
+            </div>
+            <Space wrap>
+              <Button size='small' type='primary' onClick={openAiDecomposeModal}>
+                {t('common.superAssistant.breakdownIssue', { defaultValue: '拆解当前 Issue' })}
+              </Button>
+              <Button
+                size='small'
+                onClick={() =>
+                  navigate(
+                    buildIssueScopedWorkspacePath(
+                      '/tasks',
+                      issueContext.issueId as string,
+                      issueContext.issueSubject as string,
+                      issueContext.teamId,
+                      issueContext.teamName
+                    )
+                  )
+                }
+              >
+                {t('common.superAssistant.createSharedTask', { defaultValue: '创建共享任务' })}
+              </Button>
+              <Button
+                size='small'
+                onClick={() =>
+                  navigate(
+                    buildIssueScopedWorkspacePath(
+                      '/sessions',
+                      issueContext.issueId as string,
+                      issueContext.issueSubject as string,
+                      issueContext.teamId,
+                      issueContext.teamName
+                    )
+                  )
+                }
+              >
+                {t('common.superAssistant.createSharedSession', { defaultValue: '创建共享会话' })}
+              </Button>
+              <Button
+                size='small'
+                type='outline'
+                onClick={() => navigate(buildSuperAssistantIssuePath(issueContext.issueId as string))}
+              >
+                {t('common.superAssistant.returnToSuperAssistant', {
+                  defaultValue: '返回超级助手',
+                })}
+              </Button>
+              {issueContext.teamId ? (
+                <Button
+                  size='small'
+                  type='outline'
+                  onClick={() =>
+                    navigate(
+                      buildCurrentTeamPath(
+                        issueContext.teamId as string,
+                        issueContext.issueId,
+                        issueContext.issueSubject
+                      )
+                    )
+                  }
+                >
+                  {t('team.backToCurrentTeam', { defaultValue: '返回当前团队' })}
+                </Button>
+              ) : null}
+            </Space>
+          </div>
+        </Card>
+      ) : null}
 
       {loading ? (
         <div className='flex justify-center py-80px'>
@@ -682,18 +881,63 @@ const AdminKanban: React.FC = () => {
           visible={cardDetailVisible}
           onCancel={() => setCardDetailVisible(false)}
           footer={
-            <div className='flex justify-between items-center w-full'>
-              <Popconfirm
-                title={t('admin.kanban.confirm.deleteCard', { defaultValue: '确定物理删除该张看板卡片吗？' })}
-                onOk={() => void handleDeleteCard(selectedCard.id)}
-              >
-                <Button status='danger' icon={<Delete />}>
-                  {t('common.delete', { defaultValue: '删除' })}
+            <div className='flex justify-between items-center w-full gap-12px flex-wrap'>
+              <Space wrap>
+                <Button
+                  size='small'
+                  onClick={() =>
+                    navigate(
+                      buildIssueScopedWorkspacePath(
+                        '/tasks',
+                        selectedCard.id,
+                        selectedCard.subject,
+                        issueContext.teamId,
+                        issueContext.teamName
+                      )
+                    )
+                  }
+                >
+                  {t('common.superAssistant.createSharedTask', { defaultValue: '创建共享任务' })}
                 </Button>
-              </Popconfirm>
-              <Button type='primary' onClick={() => setCardDetailVisible(false)}>
-                {t('common.confirm', { defaultValue: '确定' })}
-              </Button>
+                <Button
+                  size='small'
+                  onClick={() =>
+                    navigate(
+                      buildIssueScopedWorkspacePath(
+                        '/sessions',
+                        selectedCard.id,
+                        selectedCard.subject,
+                        issueContext.teamId,
+                        issueContext.teamName
+                      )
+                    )
+                  }
+                >
+                  {t('common.superAssistant.createSharedSession', { defaultValue: '创建共享会话' })}
+                </Button>
+                <Button
+                  size='small'
+                  type='outline'
+                  onClick={() => navigate(buildSuperAssistantIssuePath(selectedCard.id))}
+                >
+                  {t('common.superAssistant.returnToSuperAssistant', {
+                    defaultValue: '返回超级助手',
+                  })}
+                </Button>
+              </Space>
+              <Space>
+                <Popconfirm
+                  title={t('admin.kanban.confirm.deleteCard', { defaultValue: '确定物理删除该张看板卡片吗？' })}
+                  onOk={() => void handleDeleteCard(selectedCard.id)}
+                >
+                  <Button status='danger' icon={<Delete />}>
+                    {t('common.delete', { defaultValue: '删除' })}
+                  </Button>
+                </Popconfirm>
+                <Button type='primary' onClick={() => setCardDetailVisible(false)}>
+                  {t('common.confirm', { defaultValue: '确定' })}
+                </Button>
+              </Space>
             </div>
           }
         >

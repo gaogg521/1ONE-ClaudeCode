@@ -27,6 +27,10 @@
     "confirm": "Add"
   },
   "newAgent": "New Agent",
+  "sharedSessions": "Shared sessions",
+  "sharedTasks": "Shared tasks",
+  "backToCurrentTeam": "Back to current team",
+  "continueTeamCollaboration": "Continue team collaboration",
   "noMessages": "No messages yet.",
   "agentNotConfigured": "Agent not configured yet.",
   "sendBox": {

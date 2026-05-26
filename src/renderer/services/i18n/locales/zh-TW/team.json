@@ -26,6 +26,10 @@
     "confirm": "新增"
   },
   "newAgent": "New Agent",
+  "sharedSessions": "共享對話",
+  "sharedTasks": "共享任務",
+  "backToCurrentTeam": "返回目前團隊",
+  "continueTeamCollaboration": "繼續團隊協同",
   "noMessages": "No messages yet.",
   "agentNotConfigured": "Agent 尚未設定。",
   "sendBox": {

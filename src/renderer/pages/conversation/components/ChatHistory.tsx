@@ -61,6 +61,22 @@ const useScrollIntoView = (id: string) => {
   }, [id]);
 };
 
+function readConversationTeamId(extra: unknown): string | undefined {
+  if (!extra || typeof extra !== 'object') {
+    return undefined;
+  }
+  const teamId = (extra as { teamId?: unknown }).teamId;
+  return typeof teamId === 'string' && teamId.length > 0 ? teamId : undefined;
+}
+
+const getConversationOpenPath = (conversation: TChatConversation): string => {
+  const teamId = readConversationTeamId(conversation.extra);
+  if (teamId) {
+    return `/team/${teamId}`;
+  }
+  return `/conversation/${conversation.id}`;
+};
+
 const ChatHistory: React.FC<{ onSessionClick?: () => void; collapsed?: boolean }> = ({
   onSessionClick,
   collapsed = false,
@@ -90,7 +106,7 @@ const ChatHistory: React.FC<{ onSessionClick?: () => void; collapsed?: boolean }
     blockMobileInputFocus();
     blurActiveElement();
     // ipcBridge.conversation.createWithConversation.invoke({ conversation }).then(() => {
-    Promise.resolve(navigate(`/conversation/${conversation.id}`)).catch((error) => {
+    Promise.resolve(navigate(getConversationOpenPath(conversation))).catch((error) => {
       console.error('Navigation failed:', error);
     });
     // 点击session后自动隐藏sidebar

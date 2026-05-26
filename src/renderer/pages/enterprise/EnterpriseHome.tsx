@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback } from 'react';
-import { Card, Grid, Statistic, Tag, Typography } from '@arco-design/web-react';
+import { Button, Card, Grid, Statistic, Tag, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -164,6 +164,22 @@ const EnterpriseHome: React.FC = () => {
             <Typography.Title heading={4} style={{ color: '#fff', margin: 0, fontWeight: 700 }}>
               {tenantLabel}
             </Typography.Title>
+            <Typography.Paragraph style={{ color: 'rgba(255,255,255,0.78)', margin: '8px 0 0' }}>
+              {t('settings.enterpriseConsole.sharedWorkspaceHint', {
+                defaultValue: '日常会话、任务和共享工作区仍在主工作台中，下面可直接返回。',
+              })}
+            </Typography.Paragraph>
+            <div className='mt-12px flex items-center gap-8px flex-wrap'>
+              <Button size='small' onClick={() => handleOpenModule('/sessions')}>
+                {t('nav.sessions', { defaultValue: 'Sessions' })}
+              </Button>
+              <Button size='small' onClick={() => handleOpenModule('/workspace')}>
+                {t('nav.workspace', { defaultValue: 'Workspace' })}
+              </Button>
+              <Button size='small' onClick={() => handleOpenModule('/tasks')}>
+                {t('nav.tasks', { defaultValue: 'Tasks' })}
+              </Button>
+            </div>
           </div>
         </div>
         {/* 背景轻量装饰圈 */}

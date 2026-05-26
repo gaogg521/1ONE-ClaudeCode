@@ -79,6 +79,22 @@ const renderHighlightedText = (text: string, keyword: string) => {
   });
 };
 
+function readConversationTeamId(extra: unknown): string | undefined {
+  if (!extra || typeof extra !== 'object') {
+    return undefined;
+  }
+  const teamId = (extra as { teamId?: unknown }).teamId;
+  return typeof teamId === 'string' && teamId.length > 0 ? teamId : undefined;
+}
+
+const getConversationOpenPath = (conversation: IMessageSearchItem['conversation']): string => {
+  const teamId = readConversationTeamId(conversation.extra);
+  if (teamId) {
+    return `/team/${teamId}`;
+  }
+  return `/conversation/${conversation.id}`;
+};
+
 const formatTime = (timestamp: number): string => {
   if (!timestamp) return '';
   return new Intl.DateTimeFormat(undefined, {
@@ -295,7 +311,7 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
       }
 
       await Promise.resolve(
-        navigate(`/conversation/${item.conversation.id}`, {
+        navigate(getConversationOpenPath(item.conversation), {
           state: {
             targetMessageId: item.messageId,
             fromConversationSearch: true,

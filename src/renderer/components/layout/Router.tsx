@@ -59,6 +59,7 @@ const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase
 const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage'));
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
 const TeamIndex = React.lazy(() => import('@renderer/pages/team'));
+const SuperAssistantPage = React.lazy(() => import('@renderer/pages/superAssistant'));
 const WorkspacePage = React.lazy(() => import('@renderer/pages/workspace'));
 const WorkspaceSettingsShell = React.lazy(() => import('@renderer/pages/workspace/WorkspaceSettings'));
 
@@ -174,6 +175,7 @@ const PanelRoute: React.FC = () => {
               }
             />
             <Route path='/tasks' element={withRouteFallback(TasksPage)} />
+            <Route path='/super-assistant' element={withRouteFallback(SuperAssistantPage)} />
             <Route path='/hooks' element={withRouteFallback(HooksPage)} />
             <Route path='/mcp' element={withRouteFallback(MCPPage)} />
             <Route path='/memory' element={withRouteFallback(MemoryPage)} />

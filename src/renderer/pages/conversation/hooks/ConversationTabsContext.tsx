@@ -17,6 +17,8 @@ export interface ConversationTab {
   name: string;
   /** 工作空间路径 / Workspace path */
   workspace: string;
+  /** 团队上下文（若存在） */
+  teamId?: string;
   /** 会话类型 / Conversation type */
   type: 'gemini' | 'acp' | 'codex' | 'openclaw-gateway' | 'nanobot' | 'remote' | 'aionrs';
   /** 是否有未保存的修改 / Whether there are unsaved changes */
@@ -51,6 +53,14 @@ export interface ConversationTabsContextValue {
 }
 
 const ConversationTabsContext = createContext<ConversationTabsContextValue | null>(null);
+
+function readConversationTeamId(extra: unknown): string | undefined {
+  if (!extra || typeof extra !== 'object') {
+    return undefined;
+  }
+  const teamId = (extra as { teamId?: unknown }).teamId;
+  return typeof teamId === 'string' && teamId.length > 0 ? teamId : undefined;
+}
 
 // 从 localStorage 恢复状态 / Restore state from localStorage
 const loadPersistedState = (): { openTabs: ConversationTab[]; activeTabId: string | null } => {
@@ -124,6 +134,7 @@ export const ConversationTabsProvider: React.FC<{ children: React.ReactNode }> =
           id: conversation.id,
           name: conversation.name,
           workspace: conversation.extra?.workspace || '',
+          teamId: readConversationTeamId(conversation.extra),
           type: conversation.type,
         },
       ];

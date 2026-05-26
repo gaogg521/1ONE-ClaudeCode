@@ -182,6 +182,68 @@ describe('ConversationSearchPopover', () => {
     expect(screen.getByPlaceholderText('conversation.historySearch.placeholder')).toHaveValue('');
   });
 
+  it('opens TeamPage when the selected search result belongs to a team conversation', async () => {
+    searchConversationMessagesInvoke.mockResolvedValue({
+      items: [
+        {
+          conversation: {
+            id: 'conv-team-1',
+            name: 'Alpha Team Chat',
+            type: 'gemini',
+            createTime: 1,
+            modifyTime: 1,
+            extra: {
+              workspace: '/workspace/topic-a',
+              customWorkspace: true,
+              teamId: 'team-1',
+            },
+            model: {
+              id: 'provider-1',
+              platform: 'openai',
+              name: 'Provider',
+              baseUrl: 'https://example.com',
+              apiKey: 'test-key',
+              useModel: 'gpt-4o-mini',
+            },
+          },
+          messageId: 'msg-team-1',
+          messageType: 'text',
+          messageCreatedAt: Date.now(),
+          previewText: 'team keyword appears here',
+        },
+      ],
+      total: 1,
+      page: 0,
+      pageSize: 20,
+      hasMore: false,
+    });
+
+    render(<ConversationSearchPopover />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'conversation.historySearch.tooltip' }));
+    fireEvent.change(screen.getByPlaceholderText('conversation.historySearch.placeholder'), {
+      target: { value: 'team keyword' },
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Alpha Team Chat/ }));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/team/team-1', {
+        state: {
+          targetMessageId: 'msg-team-1',
+          fromConversationSearch: true,
+        },
+      });
+    });
+  });
+
   it('opens the modal on Cmd/Ctrl+Shift+F in desktop runtime', () => {
     setElectronAPI({});
 

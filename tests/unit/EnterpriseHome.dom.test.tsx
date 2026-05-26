@@ -144,4 +144,16 @@ describe('EnterpriseHome', () => {
     expect(openVerifyModal).not.toHaveBeenCalled();
     expect(navigateMock).toHaveBeenCalledWith('/enterprise/mcp');
   });
+
+  it('provides quick links back to the shared workspace shell', () => {
+    render(<EnterpriseHome />);
+
+    fireEvent.click(screen.getByText('Sessions'));
+    fireEvent.click(screen.getByText('Workspace'));
+    fireEvent.click(screen.getByText('Tasks'));
+
+    expect(navigateMock).toHaveBeenNthCalledWith(1, '/sessions');
+    expect(navigateMock).toHaveBeenNthCalledWith(2, '/workspace');
+    expect(navigateMock).toHaveBeenNthCalledWith(3, '/tasks');
+  });
 });
