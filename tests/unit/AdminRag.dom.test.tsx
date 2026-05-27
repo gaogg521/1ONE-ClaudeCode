@@ -49,6 +49,9 @@ vi.mock('@arco-design/web-react', () => {
   };
 
   return {
+    Alert: ({ title, content }: { title?: React.ReactNode; content?: React.ReactNode }) => (
+      <div role='alert'>{title}{content}</div>
+    ),
     Button: ({ children }: React.PropsWithChildren) => <button>{children}</button>,
     Card: ({ children, title, extra }: React.PropsWithChildren<{ title?: React.ReactNode; extra?: React.ReactNode }>) => (
       <section>
@@ -103,6 +106,7 @@ vi.mock('@/renderer/utils/enterpriseApi/client', () => ({
 vi.mock('@/renderer/utils/enterpriseApi/modules', () => ({
   createRagDocument: vi.fn(),
   deleteRagDocument: vi.fn(),
+  getRagStatus: vi.fn().mockResolvedValue({ ready: true, message: '' }),
   importRagFeishuDocument: vi.fn(),
   importRagUrl: vi.fn(),
   listRagDocuments: vi.fn(),

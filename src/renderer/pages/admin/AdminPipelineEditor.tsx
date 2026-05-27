@@ -8,8 +8,9 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Card, Divider, Empty, Form, Input, Message, Modal, Space, Steps, Switch, Tag, Typography } from '@arco-design/web-react';
-import { Delete, Down, Edit, Move, Plus, Refresh, Save, Undo } from '@icon-park/react';
+import { Delete, Down, Edit, Move, Plus, Refresh, Save, Star, Undo } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
+import { ConfigStorage } from '@/common/config/storage';
 import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
 import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
 import ModulePageHeader from '@/renderer/pages/admin/components/ModulePageHeader';
@@ -25,6 +26,8 @@ import {
 } from '@/renderer/utils/enterpriseApi/modules';
 
 const Step = Steps.Step;
+
+const CUSTOM_TEMPLATES_KEY = 'cci.custom_stage_templates';
 
 type StageDef = { name: string; command: string; enabled: boolean };
 type PipelineDef = { id?: string; name: string; stages: StageDef[] };
@@ -150,7 +153,34 @@ const PipelineEditor: React.FC = () => {
   const [runStatus, setRunStatus] = useState<string>('');
   const [runLog, setRunLog] = useState<string>('');
   const [runLoading, setRunLoading] = useState(false);
+  const [customTemplates, setCustomTemplates] = useState<StageDef[]>([]);
+  const [saveTemplateVisible, setSaveTemplateVisible] = useState(false);
+  const [saveTemplateName, setSaveTemplateName] = useState('');
   const hasDraft = Boolean(selectedId || pipelineName.trim() || stages.length > 0 || isCreating);
+
+  // Load custom templates from ConfigStorage
+  useEffect(() => {
+    void ConfigStorage.get('cci.custom_stage_templates').then((raw) => {
+      if (Array.isArray(raw)) setCustomTemplates(raw as StageDef[]);
+    });
+  }, []);
+
+  const handleSaveCustomTemplate = useCallback(async () => {
+    if (!saveTemplateName.trim()) { Message.warning('请输入模板名称'); return; }
+    const newTemplate: StageDef = { name: saveTemplateName.trim(), command: editForm.command, enabled: true };
+    const updated = [...customTemplates, newTemplate];
+    await ConfigStorage.set('cci.custom_stage_templates', updated);
+    setCustomTemplates(updated);
+    setSaveTemplateVisible(false);
+    setSaveTemplateName('');
+    Message.success('已保存为自定义模板');
+  }, [saveTemplateName, editForm.command, customTemplates]);
+
+  const handleDeleteCustomTemplate = useCallback(async (idx: number) => {
+    const updated = customTemplates.filter((_, i) => i !== idx);
+    await ConfigStorage.set('cci.custom_stage_templates', updated);
+    setCustomTemplates(updated);
+  }, [customTemplates]);
 
   // Select pipeline → load definition
   useEffect(() => {
@@ -367,8 +397,33 @@ const PipelineEditor: React.FC = () => {
       </div>
 
       {/* 原子模板库 Modal */}
-      <Modal title={t('admin.pipeline.templateLibrary', { defaultValue: '原子模板库 (50+ 内置)' })} visible={templateVisible} onCancel={() => setTemplateVisible(false)} footer={null} style={{ width: 700 }}>
-        <div className='grid grid-cols-2 gap-8px max-h-500px overflow-y-auto'>
+      <Modal title={t('admin.pipeline.templateLibrary', { defaultValue: '模板库' })} visible={templateVisible} onCancel={() => setTemplateVisible(false)} footer={null} style={{ width: 720 }}>
+        {customTemplates.length > 0 && (
+          <>
+            <div className='text-12px font-600 text-t-secondary mb-8px'>
+              {t('admin.pipeline.customTemplates', { defaultValue: '我的自定义模板' })}
+            </div>
+            <div className='grid grid-cols-2 gap-8px mb-16px'>
+              {customTemplates.map((tpl, i) => (
+                <div key={`custom-${i}`} className='flex items-center justify-between px-12px py-8px bg-fill-2 rd-6px hover:bg-fill-3 transition-colors'>
+                  <div className='flex-1 cursor-pointer' onClick={() => addStage({ ...tpl })}>
+                    <div className='text-13px font-600 text-t-primary'>{tpl.name}</div>
+                    <div className='text-11px text-t-tertiary font-mono truncate' style={{ maxWidth: 240 }}>{tpl.command}</div>
+                  </div>
+                  <div className='flex items-center gap-4px ml-8px'>
+                    <Plus size={14} className='text-primary cursor-pointer' onClick={() => addStage({ ...tpl })} />
+                    <Delete size={14} className='text-danger cursor-pointer' onClick={() => void handleDeleteCustomTemplate(i)} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Divider className='my-12px' />
+          </>
+        )}
+        <div className='text-12px font-600 text-t-secondary mb-8px'>
+          {t('admin.pipeline.builtinTemplates', { defaultValue: '内置原子模板（50+）' })}
+        </div>
+        <div className='grid grid-cols-2 gap-8px max-h-400px overflow-y-auto'>
           {ATOMIC_TEMPLATES.map((tpl, i) => (
             <div key={i} className='flex items-center justify-between px-12px py-8px bg-fill-2 rd-6px cursor-pointer hover:bg-fill-3 transition-colors' onClick={() => addStage({ ...tpl })}>
               <div>
@@ -381,12 +436,54 @@ const PipelineEditor: React.FC = () => {
         </div>
       </Modal>
 
-      {/* 编辑 Stage Modal */}
-      <Modal title={t('admin.pipeline.editStage', { defaultValue: '编辑 Stage' })} visible={editStageIdx !== null} onCancel={() => setEditStageIdx(null)} onOk={saveStageEdit} okText={t('common.confirm', { defaultValue: '确定' })} cancelText={t('common.cancel', { defaultValue: '取消' })}>
+      {/* 编辑 Stage Modal — 加"保存为模板"按钮 */}
+      <Modal
+        title={t('admin.pipeline.editStage', { defaultValue: '编辑 Stage' })}
+        visible={editStageIdx !== null}
+        onCancel={() => setEditStageIdx(null)}
+        onOk={saveStageEdit}
+        okText={t('common.confirm', { defaultValue: '确定' })}
+        cancelText={t('common.cancel', { defaultValue: '取消' })}
+        footer={
+          <div className='flex justify-between items-center'>
+            <Button
+              size='small'
+              type='text'
+              icon={<Star />}
+              onClick={() => { setSaveTemplateName(editForm.name); setSaveTemplateVisible(true); }}
+            >
+              {t('admin.pipeline.saveAsTemplate', { defaultValue: '保存为自定义模板' })}
+            </Button>
+            <Space>
+              <Button onClick={() => setEditStageIdx(null)}>{t('common.cancel', { defaultValue: '取消' })}</Button>
+              <Button type='primary' onClick={saveStageEdit}>{t('common.confirm', { defaultValue: '确定' })}</Button>
+            </Space>
+          </div>
+        }
+      >
         <Form layout='vertical'>
           <Form.Item label={t('admin.pipeline.stageName', { defaultValue: 'Stage 名称' })} required><Input value={editForm.name} onChange={(v) => setEditForm((s) => ({ ...s, name: v }))} /></Form.Item>
           <Form.Item label={t('admin.pipeline.stageCommand', { defaultValue: '执行命令' })} required><Input.TextArea value={editForm.command} onChange={(v) => setEditForm((s) => ({ ...s, command: v }))} autoSize /></Form.Item>
           <Form.Item label={t('admin.pipeline.stageEnabled', { defaultValue: '启用' })}><Switch checked={editForm.enabled} onChange={(v) => setEditForm((s) => ({ ...s, enabled: v }))} /></Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 保存自定义模板 Modal */}
+      <Modal
+        title={t('admin.pipeline.saveTemplateTitle', { defaultValue: '保存为自定义模板' })}
+        visible={saveTemplateVisible}
+        onCancel={() => setSaveTemplateVisible(false)}
+        onOk={() => void handleSaveCustomTemplate()}
+        okText={t('common.save', { defaultValue: '保存' })}
+        cancelText={t('common.cancel', { defaultValue: '取消' })}
+      >
+        <Form layout='vertical'>
+          <Form.Item label={t('admin.pipeline.templateName', { defaultValue: '模板名称' })} required>
+            <Input value={saveTemplateName} onChange={setSaveTemplateName} placeholder={t('admin.pipeline.templateNamePlaceholder', { defaultValue: '例如：我的 Node.js 构建流程' })} />
+          </Form.Item>
+          <Form.Item label={t('admin.pipeline.templateCommand', { defaultValue: '命令预览' })}>
+            <Input.TextArea value={editForm.command} readOnly autoSize />
+          </Form.Item>
         </Form>
       </Modal>
     </AdminPageWrapper>

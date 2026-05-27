@@ -388,6 +388,8 @@ const SuperAssistantPage: React.FC = () => {
           metadata,
         });
       }
+
+      // 分配成功后导航到团队 Agent 会话页，让用户手动触发或 Agent 自动接收
       navigate(buildTeamPath(superAssistantData.primaryTeam.id, currentIssue, slotId));
       await loadIssueAssignmentsFromTeam();
     } catch (error) {

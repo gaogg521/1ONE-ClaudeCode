@@ -20,7 +20,9 @@ vi.mock('@icon-park/react', () => ({
   Plus: () => <span>plus</span>,
   Refresh: () => <span>refresh</span>,
   Save: () => <span>save</span>,
+  Star: () => <span>star</span>,
   Undo: () => <span>undo</span>,
+  Timer: () => <span>timer</span>,
 }));
 
 vi.mock('@arco-design/web-react', () => {

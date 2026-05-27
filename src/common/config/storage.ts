@@ -86,6 +86,10 @@ export interface IConfigStorageRefer {
   /** 桌面模式下 WebUI 端口 / WebUI port in desktop mode */
   'webui.desktop.port'?: number;
   customCss: string; // 自定义 CSS 样式
+  /**
+   * CCI 流水线编辑器：用户自定义 Stage 模板
+   */
+  'cci.custom_stage_templates'?: Array<{ name: string; command: string; enabled: boolean }>;
   'css.themes': ICssTheme[]; // 自定义 CSS 主题列表 / Custom CSS themes list
   'css.activeThemeId': string; // 当前激活的主题 ID / Currently active theme ID
   'gemini.defaultModel': string | { id: string; useModel: string };
@@ -611,8 +615,8 @@ export interface IMcpTool {
   _meta?: Record<string, unknown>;
 }
 
-/**
- * CSS 主题配置接口 / CSS Theme configuration interface
+  /**
+   * CSS 主题配置接口 / CSS Theme configuration interface
  * 用于存储用户自定义的 CSS 皮肤 / Used to store user-defined CSS skins
  */
 export interface ICssTheme {
