@@ -211,7 +211,22 @@ const EnterpriseHome: React.FC = () => {
                 prefix={<Thunderbolt theme='outline' size={18} className='text-blue-500 mr-8px' />}
                 suffix={t('settings.enterpriseConsole.metricPipelineSuffix', { defaultValue: '条' })}
                 style={{ color: 'rgb(var(--primary-6))', fontWeight: 'bold' } as React.CSSProperties}
-                extra={<span className='text-11px text-t-tertiary'>{metricExtraText.pipeline}</span>}
+                extra={
+                  <div className='flex items-center justify-between'>
+                    <span className='text-11px text-t-tertiary'>{metricExtraText.pipeline}</span>
+                    <Button
+                      size='mini'
+                      type='text'
+                      className='text-11px'
+                      onClick={() => handleOpenModule('/enterprise/pipeline-editor')}
+                    >
+                      <Tag size='small' color='orange' className='mr-4px'>
+                        {t('settings.enterpriseConsole.experimental', { defaultValue: '实验性' })}
+                      </Tag>
+                      {t('settings.enterpriseConsole.openPipelineEditor', { defaultValue: '进入编排器' })}
+                    </Button>
+                  </div>
+                }
               />
             </Card>
           </Col>

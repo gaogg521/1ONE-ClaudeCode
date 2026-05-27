@@ -121,6 +121,7 @@ export const ENTERPRISE_ROUTE_META: EnterpriseRouteMeta[] = [
     path: ENTERPRISE_PIPELINE_EDITOR_PATH,
     requiresRole: 'admin',
     platformPolicy: 'all',
+    visibleInNav: false,
   },
   {
     key: 'milestones',
