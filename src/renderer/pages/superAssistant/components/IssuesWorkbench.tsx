@@ -65,7 +65,7 @@ function getStatusTag(
 }
 
 const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
-  isAdmin,
+  isAdmin: _isAdmin,
   loading,
   boardColumns,
   issueBoardFeedbackById,

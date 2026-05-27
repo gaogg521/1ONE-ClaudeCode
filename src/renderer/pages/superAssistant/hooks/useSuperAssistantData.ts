@@ -251,7 +251,7 @@ export function useSuperAssistantData(
     () =>
       [...visibleRequirements]
         .filter((item) => item.status !== 'completed')
-        .sort((a, b) => {
+        .toSorted((a, b) => {
           const priorityDelta = priorityRank(b.priority) - priorityRank(a.priority);
           if (priorityDelta !== 0) {
             return priorityDelta;
@@ -263,7 +263,7 @@ export function useSuperAssistantData(
 
   const boardColumns = useMemo<SuperAssistantBoardColumn[]>(() => {
     const sortItems = (items: RequirementRecord[]): RequirementRecord[] =>
-      [...items].sort((a, b) => {
+      items.toSorted((a, b) => {
         const priorityDelta = priorityRank(b.priority) - priorityRank(a.priority);
         if (priorityDelta !== 0) {
           return priorityDelta;
@@ -314,7 +314,7 @@ export function useSuperAssistantData(
   }, [visibleRequirements]);
 
   const featuredIssue = useMemo<SuperAssistantFeaturedIssue | null>(() => {
-    const sorted = [...visibleRequirements].sort((a, b) => {
+    const sorted = [...visibleRequirements].toSorted((a, b) => {
       const aCompleted = a.status === 'completed' ? 1 : 0;
       const bCompleted = b.status === 'completed' ? 1 : 0;
       if (aCompleted !== bCompleted) {

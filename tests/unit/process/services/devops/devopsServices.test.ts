@@ -55,11 +55,15 @@ vi.mock(
   })
 );
 
-vi.mock('@process/services/pipeline/PipelineService', () => ({
-  PipelineService: {
-    getInstance: (...args: unknown[]) => pipelineGetInstanceMock(...args),
-  },
-}));
+vi.mock('@process/services/pipeline/PipelineService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@process/services/pipeline/PipelineService')>();
+  return {
+    ...actual,
+    PipelineService: {
+      getInstance: (...args: unknown[]) => pipelineGetInstanceMock(...args),
+    },
+  };
+});
 
 import { CpackService } from '@process/services/devops/cpack/cpackService';
 import { CcodeService } from '@process/services/devops/ccode/ccodeService';
