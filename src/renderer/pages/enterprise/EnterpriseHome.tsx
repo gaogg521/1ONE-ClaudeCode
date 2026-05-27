@@ -291,7 +291,7 @@ const EnterpriseHome: React.FC = () => {
       </ModuleDataState>
 
       <Typography.Title heading={6} className='mt-0 mb-16px text-14px font-700 text-t-secondary uppercase tracking-wider'>
-        {t('settings.enterpriseConsole.capabilityTitle', { defaultValue: '8 大 DevOps 能力' })}
+        {t('settings.enterpriseConsole.capabilityTitle', { defaultValue: '研发智能工作台' })}
       </Typography.Title>
 
       <Row gutter={[16, 16]} className='mb-24px'>

@@ -90,4 +90,18 @@ export class TestRepository {
         input.createdAt
       );
   }
+
+  static async updateCaseStatus(id: string, tenantId: string, status: string): Promise<void> {
+    const db = await getDatabase();
+    const result = db
+      .getDriver()
+      .prepare(
+        `UPDATE test_cases SET status = ?
+         WHERE id = ? AND plan_id IN (SELECT id FROM test_plans WHERE tenant_id = ?)`
+      )
+      .run(status, id, tenantId);
+    if ((result as { changes: number }).changes === 0) {
+      throw new Error('not found');
+    }
+  }
 }

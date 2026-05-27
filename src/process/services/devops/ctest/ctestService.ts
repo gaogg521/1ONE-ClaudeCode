@@ -70,4 +70,8 @@ export class CtestService {
     });
     return { id };
   }
+
+  static async updateCaseStatus(input: { id: string; tenantId: string; status: string }): Promise<void> {
+    await TestRepository.updateCaseStatus(input.id, input.tenantId, input.status);
+  }
 }

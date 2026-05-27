@@ -95,7 +95,7 @@ export type FlowStageRecord = {
   exit_time: number | null;
   wait_duration_ms: number;
   process_duration_ms: number;
-  req_subject: string;
+  req_subject: string | null;
 };
 
 export type PipelineListItem = {
@@ -455,6 +455,10 @@ export async function listTestPlans(): Promise<TestPlan[]> {
 
 export async function createTestPlan(payload: Record<string, unknown>): Promise<void> {
   await enterpriseMutate('/api/admin/test-plans', 'POST', payload);
+}
+
+export async function updateTestCase(id: string, payload: { status: string }): Promise<void> {
+  await enterpriseMutate<void>(`/api/admin/test-cases/${id}`, 'PATCH', payload);
 }
 
 export async function listTestCases(planId: string): Promise<TestCaseRecord[]> {

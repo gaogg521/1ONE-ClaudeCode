@@ -427,7 +427,17 @@ export function registerDevOpsRoutes(app: Express): void {
         if (stageName) {
           const nowFl = Date.now();
           try {
-            driver.prepare(`INSERT INTO value_stream_stages (id, tenant_id, requirement_id, stage_name, entry_time, exit_time, wait_duration_ms, process_duration_ms) VALUES (?,?,?,?,?,?,?,?)`).run(randomUUID(), tenantId, id, stageName, nowFl, nowFl, 0, 0);
+            // 查询该需求上一个阶段的 entry_time，计算等待时间
+            const prevStage = driver
+              .prepare(`SELECT entry_time FROM value_stream_stages WHERE requirement_id = ? ORDER BY entry_time DESC LIMIT 1`)
+              .get(id) as { entry_time: number } | undefined;
+            const waitMs = prevStage ? Math.max(0, nowFl - prevStage.entry_time) : 0;
+            driver.prepare(`INSERT INTO value_stream_stages (id, tenant_id, requirement_id, stage_name, entry_time, exit_time, wait_duration_ms, process_duration_ms) VALUES (?,?,?,?,?,?,?,?)`).run(randomUUID(), tenantId, id, stageName, nowFl, null, waitMs, 0);
+            // 同时关闭上一个阶段（设置 exit_time 和 process_duration_ms）
+            if (prevStage) {
+              driver.prepare(`UPDATE value_stream_stages SET exit_time = ?, process_duration_ms = ? WHERE requirement_id = ? AND exit_time IS NULL AND entry_time = ?`)
+                .run(nowFl, waitMs, id, prevStage.entry_time);
+            }
           } catch { /* ignore flow logging errors */ }
         }
       }

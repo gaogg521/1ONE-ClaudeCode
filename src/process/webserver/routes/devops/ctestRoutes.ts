@@ -78,4 +78,25 @@ export function registerCtestRoutes(app: Express, auth: DevopsRouteAuth): void {
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
+
+  // PATCH /api/admin/test-cases/:id — 更新用例状态（passed / failed / pending）
+  app.patch('/api/admin/test-cases/:id', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveDevopsTenantId(req);
+      const id = String(req.params.id);
+      const status = String(req.body?.status ?? '');
+      if (!['pending', 'passed', 'failed', 'blocked'].includes(status)) {
+        res.status(400).json({ success: false, message: 'Invalid status' });
+        return;
+      }
+      await CtestService.updateCaseStatus({ id, tenantId, status });
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'not found') {
+        res.status(404).json({ success: false, message: 'Test case not found' });
+        return;
+      }
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
 }
