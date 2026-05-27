@@ -8,10 +8,21 @@ const navigateMock = vi.hoisted(() => vi.fn());
 const listRequirementsTreeMock = vi.hoisted(() => vi.fn());
 const listSkillsMock = vi.hoisted(() => vi.fn());
 const listMcpRegistryMock = vi.hoisted(() => vi.fn());
+const updateRequirementMock = vi.hoisted(() => vi.fn());
+const listTeamTasksMock = vi.hoisted(() => vi.fn());
+const createTeamTaskMock = vi.hoisted(() => vi.fn());
+const updateTeamTaskMock = vi.hoisted(() => vi.fn());
+const deleteTeamTaskMock = vi.hoisted(() => vi.fn());
 const useTeamListMock = vi.hoisted(() => vi.fn());
 const conversationHistoryMock = vi.hoisted(() => vi.fn());
 const locationMock = vi.hoisted(() => ({ pathname: '/super-assistant', search: '' }));
 const ensureSessionMock = vi.hoisted(() => vi.fn());
+const requirementTreeState = vi.hoisted(() => ({
+  items: [] as Array<Record<string, unknown>>,
+}));
+const teamTaskState = vi.hoisted(() => ({
+  items: [] as Array<Record<string, unknown>>,
+}));
 const teamRuntimeState = vi.hoisted(() => ({
   agentStatusListener: null as null | ((event: { teamId: string; slotId: string; status: string; lastMessage?: string }) => void),
 }));
@@ -72,6 +83,11 @@ vi.mock('@/renderer/utils/enterpriseApi/modules', () => ({
   listRequirementsTree: () => listRequirementsTreeMock(),
   listSkills: () => listSkillsMock(),
   listMcpRegistry: () => listMcpRegistryMock(),
+  updateRequirement: (...args: unknown[]) => updateRequirementMock(...args),
+  listTeamTasks: (...args: unknown[]) => listTeamTasksMock(...args),
+  createTeamTask: (...args: unknown[]) => createTeamTaskMock(...args),
+  updateTeamTask: (...args: unknown[]) => updateTeamTaskMock(...args),
+  deleteTeamTask: (...args: unknown[]) => deleteTeamTaskMock(...args),
 }));
 
 vi.mock('@/renderer/pages/team/hooks/useTeamList', () => ({
@@ -111,6 +127,10 @@ vi.mock('@arco-design/web-react', () => ({
       <div>{subTitle}</div>
     </div>
   ),
+  Message: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
 }));
 
 import SuperAssistantPage from '@/renderer/pages/superAssistant';
@@ -119,11 +139,16 @@ describe('SuperAssistantPage', () => {
   beforeEach(() => {
     navigateMock.mockReset();
     ensureSessionMock.mockReset();
+    updateRequirementMock.mockReset();
+    listTeamTasksMock.mockReset();
+    createTeamTaskMock.mockReset();
+    updateTeamTaskMock.mockReset();
+    deleteTeamTaskMock.mockReset();
     teamRuntimeState.agentStatusListener = null;
     window.localStorage.clear();
     locationMock.pathname = '/super-assistant';
     locationMock.search = '';
-    listRequirementsTreeMock.mockResolvedValue([
+    requirementTreeState.items = [
       {
         id: 'epic-1',
         type: 'epic',
@@ -168,7 +193,90 @@ describe('SuperAssistantPage', () => {
           },
         ],
       },
-    ]);
+    ];
+    listRequirementsTreeMock.mockImplementation(async () => structuredClone(requirementTreeState.items));
+    updateRequirementMock.mockImplementation(async (requirementId: string, payload: { status?: string }) => {
+      const nextStatus = payload.status;
+      if (!nextStatus) {
+        return;
+      }
+      const updateNode = (items: Array<Record<string, unknown>>): boolean => {
+        for (const item of items) {
+          if (item.id === requirementId) {
+            item.status = nextStatus;
+            item.updated_at = Number(item.updated_at ?? 0) + 100;
+            return true;
+          }
+          const children = Array.isArray(item.children) ? (item.children as Array<Record<string, unknown>>) : [];
+          if (children.length && updateNode(children)) {
+            return true;
+          }
+        }
+        return false;
+      };
+      updateNode(requirementTreeState.items);
+    });
+    teamTaskState.items = [];
+    listTeamTasksMock.mockImplementation(async (teamId: string) =>
+      structuredClone(teamTaskState.items.filter((item) => item.team_id === teamId))
+    );
+    createTeamTaskMock.mockImplementation(
+      async (payload: {
+        teamId: string;
+        subject: string;
+        description?: string | null;
+        owner?: string | null;
+        metadata?: Record<string, unknown>;
+      }) => {
+        teamTaskState.items.push({
+          id: `teamtask-${teamTaskState.items.length + 1}`,
+          team_id: payload.teamId,
+          subject: payload.subject,
+          description: payload.description ?? null,
+          status: 'in_progress',
+          owner: payload.owner ?? null,
+          metadata: payload.metadata ?? {},
+          created_at: Date.now(),
+          updated_at: Date.now(),
+        });
+      }
+    );
+    updateTeamTaskMock.mockImplementation(
+      async (
+        taskId: string,
+        payload: {
+          subject?: string;
+          description?: string | null;
+          status?: string;
+          owner?: string | null;
+          metadata?: Record<string, unknown>;
+        }
+      ) => {
+        const task = teamTaskState.items.find((item) => item.id === taskId);
+        if (!task) {
+          return;
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'subject')) {
+          task.subject = payload.subject ?? task.subject;
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'description')) {
+          task.description = payload.description ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'status')) {
+          task.status = payload.status ?? task.status;
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'owner')) {
+          task.owner = payload.owner ?? null;
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'metadata')) {
+          task.metadata = payload.metadata ?? {};
+        }
+        task.updated_at = Date.now();
+      }
+    );
+    deleteTeamTaskMock.mockImplementation(async (taskId: string) => {
+      teamTaskState.items = teamTaskState.items.filter((item) => item.id !== taskId);
+    });
     listSkillsMock.mockResolvedValue([
       {
         id: 'skill-1',
@@ -347,6 +455,15 @@ describe('SuperAssistantPage', () => {
     expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+    await waitFor(() => {
+      expect(createTeamTaskMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          teamId: 'team-1',
+          subject: '修复团队上下文深链',
+          owner: 'dev',
+        })
+      );
+    });
     expect(navigateMock).toHaveBeenLastCalledWith(
       '/team/team-1?issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE&agentSlotId=dev'
     );
@@ -364,8 +481,20 @@ describe('SuperAssistantPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
 
-    expect(screen.getByText('已分配给：开发 Agent')).toBeInTheDocument();
+    expect(await screen.findByText('已分配给：开发 Agent')).toBeInTheDocument();
     expect(screen.getByText('最近状态：待领取')).toBeInTheDocument();
+  });
+
+  it('shows assignment summary directly on the shared issue board', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+
+    expect(await screen.findByText('分配：开发 Agent')).toBeInTheDocument();
+    expect(screen.getByText('状态：待领取')).toBeInTheDocument();
   });
 
   it('shows blocker feedback in the current issue activity flow when the assigned agent fails', async () => {
@@ -386,6 +515,19 @@ describe('SuperAssistantPage', () => {
     expect(screen.getByText('阻塞原因：等待 GitHub Actions 结果超时')).toBeInTheDocument();
   });
 
+  it('shows blocked status directly on the shared issue board when the assigned agent is blocked', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+    expect(await screen.findByText('当前已分配：开发 Agent')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '标记为阻塞' }));
+
+    expect(await screen.findByText('状态：已阻塞')).toBeInTheDocument();
+  });
+
   it('opens the assigned agent conversation directly from the issues workbench', async () => {
     render(<SuperAssistantPage />);
 
@@ -393,6 +535,7 @@ describe('SuperAssistantPage', () => {
     expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+    expect(await screen.findByText('当前已分配：开发 Agent')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '打开已分配 Agent 会话' }));
 
     expect(navigateMock).toHaveBeenLastCalledWith(
@@ -407,9 +550,18 @@ describe('SuperAssistantPage', () => {
     expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+    expect(await screen.findByText('当前已分配：开发 Agent')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '分配给 超级助手 Leader' }));
 
-    expect(screen.getByText('已分配给：超级助手 Leader')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(updateTeamTaskMock).toHaveBeenCalledWith(
+        'teamtask-1',
+        expect.objectContaining({
+          owner: 'leader',
+        })
+      );
+    });
+    expect(await screen.findByText('已分配给：超级助手 Leader')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Agents' }));
     expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
   });
@@ -421,10 +573,98 @@ describe('SuperAssistantPage', () => {
     expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+    expect(await screen.findByText('当前已分配：开发 Agent')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '标记为阻塞' }));
 
-    expect(screen.getByText('最近状态：已阻塞')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(updateTeamTaskMock).toHaveBeenCalledWith(
+        'teamtask-1',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            manualStatus: 'failed',
+            manualBlockerMessage: '等待人工处理',
+          }),
+        })
+      );
+    });
+    expect(await screen.findByText('最近状态：已阻塞')).toBeInTheDocument();
     expect(screen.getByText('阻塞原因：等待人工处理')).toBeInTheDocument();
+  });
+
+  it('allows clearing a manually blocked issue from the issues workbench', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+    expect(await screen.findByText('当前已分配：开发 Agent')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '标记为阻塞' }));
+    expect(await screen.findByText('最近状态：已阻塞')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '解除阻塞' }));
+
+    await waitFor(() => {
+      expect(updateTeamTaskMock).toHaveBeenCalledWith(
+        'teamtask-1',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            manualStatus: 'idle',
+            manualBlockerMessage: null,
+          }),
+        })
+      );
+    });
+    expect(await screen.findByText('最近状态：待领取')).toBeInTheDocument();
+    expect(screen.queryByText('阻塞原因：等待人工处理')).not.toBeInTheDocument();
+    expect(screen.getByText('状态：待领取')).toBeInTheDocument();
+  });
+
+  it('allows unassigning the current issue from the issues workbench', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '分配给 开发 Agent' }));
+    expect(await screen.findByText('当前已分配：开发 Agent')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '撤销分配' }));
+
+    await waitFor(() => {
+      expect(deleteTeamTaskMock).toHaveBeenCalledWith('teamtask-1');
+    });
+    expect(await screen.findByText('尚未分配到具体 Agent')).toBeInTheDocument();
+    expect(screen.queryByText('分配：开发 Agent')).not.toBeInTheDocument();
+    expect(screen.queryByText('当前已分配：开发 Agent')).not.toBeInTheDocument();
+  });
+
+  it('allows moving the current issue to review from the issues workbench', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '切到待评审' }));
+
+    await waitFor(() => {
+      expect(updateRequirementMock).toHaveBeenCalledWith('story-1', { status: 'testing' });
+    });
+    expect(await screen.findByText('当前阶段：待评审')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '切到待评审' })).not.toBeInTheDocument();
+  });
+
+  it('allows marking the current issue as completed from the issues workbench', async () => {
+    render(<SuperAssistantPage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Issues' }));
+    expect((await screen.findAllByText('当前处理：修复团队上下文深链')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '标记已完成' }));
+
+    await waitFor(() => {
+      expect(updateRequirementMock).toHaveBeenCalledWith('story-1', { status: 'completed' });
+    });
+    expect(await screen.findByText('当前阶段：已完成')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '标记已完成' })).not.toBeInTheDocument();
   });
 
   it('switches the current issue activity flow when selecting another live issue', async () => {

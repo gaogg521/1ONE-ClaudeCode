@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ipcBridge } from '@/common';
 import type {
   McpRegistryRecord,
@@ -82,6 +82,7 @@ export type SuperAssistantIssueAssignmentMap = Record<string, SuperAssistantIssu
 
 type UseSuperAssistantDataResult = {
   loading: boolean;
+  refresh: () => Promise<void>;
   boardColumns: SuperAssistantBoardColumn[];
   featuredIssue: SuperAssistantFeaturedIssue | null;
   teams: TTeam[];
@@ -160,36 +161,39 @@ export function useSuperAssistantData(
   const [runtimeStatusMap, setRuntimeStatusMap] = useState<Map<string, RuntimeStatusInfo>>(new Map());
   const [loading, setLoading] = useState(enabled);
 
-  useEffect(() => {
+  const refresh = useCallback(async () => {
     if (!enabled) {
       setRequirements([]);
+      setSkills([]);
+      setMcpRegistry([]);
       setLoading(false);
       return;
     }
 
-    let disposed = false;
     setLoading(true);
+    const [requirementsResult, skillsResult, mcpResult] = await Promise.allSettled([
+      listRequirementsTree(),
+      listSkills(),
+      listMcpRegistry(),
+    ]);
+    setRequirements(requirementsResult.status === 'fulfilled' ? (requirementsResult.value ?? []) : []);
+    setSkills(skillsResult.status === 'fulfilled' ? (skillsResult.value ?? []) : []);
+    setMcpRegistry(mcpResult.status === 'fulfilled' ? (mcpResult.value ?? []) : []);
+    setLoading(false);
+  }, [enabled]);
 
-    void Promise.allSettled([listRequirementsTree(), listSkills(), listMcpRegistry()])
-      .then((results) => {
-        if (disposed) {
-          return;
-        }
-        const [requirementsResult, skillsResult, mcpResult] = results;
-        setRequirements(requirementsResult.status === 'fulfilled' ? (requirementsResult.value ?? []) : []);
-        setSkills(skillsResult.status === 'fulfilled' ? (skillsResult.value ?? []) : []);
-        setMcpRegistry(mcpResult.status === 'fulfilled' ? (mcpResult.value ?? []) : []);
-      })
-      .finally(() => {
-        if (!disposed) {
-          setLoading(false);
-        }
-      });
+  useEffect(() => {
+    let disposed = false;
+    void refresh().catch(() => {
+      if (!disposed) {
+        setLoading(false);
+      }
+    });
 
     return () => {
       disposed = true;
     };
-  }, [enabled]);
+  }, [refresh]);
 
   useEffect(() => {
     if (!enabled) {
@@ -506,6 +510,7 @@ export function useSuperAssistantData(
 
   return {
     loading,
+    refresh,
     boardColumns,
     featuredIssue,
     teams,

@@ -1,10 +1,19 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Result } from '@arco-design/web-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Button, Card, Message, Result } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
+import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
+import {
+  createTeamTask,
+  deleteTeamTask,
+  listTeamTasks,
+  type TeamTaskRecord,
+  updateRequirement,
+  updateTeamTask,
+} from '@/renderer/utils/enterpriseApi/modules';
 import type { SuperAssistantTab } from './constants';
 import { SUPER_ASSISTANT_TABS } from './constants';
 import SuperAssistantHeader from './components/SuperAssistantHeader';
@@ -27,7 +36,15 @@ type NavigationTeamContext = {
   name: string;
 } | null;
 
-const SUPER_ASSISTANT_ISSUE_ASSIGNMENTS_KEY = 'super-assistant-issue-assignments';
+type SuperAssistantIssueTaskMetadata = {
+  source: 'super-assistant-issue';
+  issueId: string;
+  issueSubject: string;
+  slotId: string;
+  agentName: string;
+  manualStatus?: SuperAssistantIssueAssignmentMap[string]['manualStatus'];
+  manualBlockerMessage?: string | null;
+};
 
 function appendIssueContext(params: URLSearchParams, issue: NavigationIssueContext): void {
   if (!issue) {
@@ -84,16 +101,52 @@ function buildTeamPath(teamId: string, issue?: NavigationIssueContext, agentSlot
   return `/team/${teamId}?${params.toString()}`;
 }
 
-function loadIssueAssignments(): SuperAssistantIssueAssignmentMap {
-  try {
-    return JSON.parse(window.localStorage.getItem(SUPER_ASSISTANT_ISSUE_ASSIGNMENTS_KEY) ?? '{}') as SuperAssistantIssueAssignmentMap;
-  } catch {
-    return {};
+function parseIssueTaskMetadata(task: TeamTaskRecord): SuperAssistantIssueTaskMetadata | null {
+  const rawMetadata = task.metadata;
+  const parsedMetadata =
+    typeof rawMetadata === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(rawMetadata) as Record<string, unknown>;
+          } catch {
+            return null;
+          }
+        })()
+      : rawMetadata && typeof rawMetadata === 'object'
+        ? (rawMetadata as Record<string, unknown>)
+        : null;
+  if (!parsedMetadata || parsedMetadata.source !== 'super-assistant-issue') {
+    return null;
   }
-}
-
-function saveIssueAssignments(assignments: SuperAssistantIssueAssignmentMap): void {
-  window.localStorage.setItem(SUPER_ASSISTANT_ISSUE_ASSIGNMENTS_KEY, JSON.stringify(assignments));
+  if (
+    typeof parsedMetadata.issueId !== 'string' ||
+    typeof parsedMetadata.issueSubject !== 'string' ||
+    typeof parsedMetadata.slotId !== 'string' ||
+    typeof parsedMetadata.agentName !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    source: 'super-assistant-issue',
+    issueId: parsedMetadata.issueId,
+    issueSubject: parsedMetadata.issueSubject,
+    slotId: parsedMetadata.slotId,
+    agentName: parsedMetadata.agentName,
+    manualStatus:
+      parsedMetadata.manualStatus === 'pending' ||
+      parsedMetadata.manualStatus === 'idle' ||
+      parsedMetadata.manualStatus === 'active' ||
+      parsedMetadata.manualStatus === 'completed' ||
+      parsedMetadata.manualStatus === 'failed'
+        ? parsedMetadata.manualStatus
+        : undefined,
+    manualBlockerMessage:
+      typeof parsedMetadata.manualBlockerMessage === 'string'
+        ? parsedMetadata.manualBlockerMessage
+        : parsedMetadata.manualBlockerMessage === null
+          ? null
+          : null,
+  };
 }
 
 function parseSuperAssistantSearch(search: string): {
@@ -119,7 +172,8 @@ const SuperAssistantPage: React.FC = () => {
   const { user } = useAuth();
   const { hasJoinedEnterprise, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
   const [activeTab, setActiveTab] = useState<SuperAssistantTab>('overview');
-  const [issueAssignments, setIssueAssignments] = useState<SuperAssistantIssueAssignmentMap>(() => loadIssueAssignments());
+  const [issueAssignments, setIssueAssignments] = useState<SuperAssistantIssueAssignmentMap>({});
+  const [issueAssignmentTaskIds, setIssueAssignmentTaskIds] = useState<Record<string, string>>({});
   const isAdmin = isEnterpriseAdminRole(user?.role);
   const superAssistantData = useSuperAssistantData(hasJoinedEnterprise, isAdmin, issueAssignments);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
@@ -144,6 +198,75 @@ const SuperAssistantPage: React.FC = () => {
     (selectedIssueId ? superAssistantData.issueLookup[selectedIssueId] : null) ??
     superAssistantData.featuredIssue;
   const currentIssueAssignment = currentIssue ? issueAssignments[currentIssue.id] ?? null : null;
+  const currentIssueAssignmentTaskId = currentIssue ? issueAssignmentTaskIds[currentIssue.id] ?? null : null;
+  const loadIssueAssignmentsFromTeam = useCallback(async () => {
+    if (!superAssistantData.primaryTeam) {
+      setIssueAssignments({});
+      setIssueAssignmentTaskIds({});
+      return;
+    }
+    const team = superAssistantData.primaryTeam;
+    const tasks = await listTeamTasks(team.id);
+    const nextAssignments: SuperAssistantIssueAssignmentMap = {};
+    const nextTaskIds: Record<string, string> = {};
+    tasks.forEach((task) => {
+      const metadata = parseIssueTaskMetadata(task);
+      if (!metadata) {
+        return;
+      }
+      const slotId = task.owner || metadata.slotId;
+      const agentName =
+        metadata.agentName ||
+        team.agents.find((agent) => agent.slotId === slotId)?.agentName ||
+        slotId;
+      nextAssignments[metadata.issueId] = {
+        issueId: metadata.issueId,
+        issueSubject: metadata.issueSubject,
+        teamId: team.id,
+        teamName: team.name,
+        slotId,
+        agentName,
+        assignedAt: task.updated_at ?? task.created_at,
+        manualStatus: metadata.manualStatus,
+        manualBlockerMessage: metadata.manualBlockerMessage ?? null,
+      };
+      nextTaskIds[metadata.issueId] = task.id;
+    });
+    setIssueAssignments(nextAssignments);
+    setIssueAssignmentTaskIds(nextTaskIds);
+  }, [superAssistantData.primaryTeam]);
+
+  useEffect(() => {
+    void loadIssueAssignmentsFromTeam().catch(() => {
+      setIssueAssignments({});
+      setIssueAssignmentTaskIds({});
+    });
+  }, [loadIssueAssignmentsFromTeam]);
+
+  const buildIssueTaskMetadata = useCallback(
+    (
+      slotId: string,
+      agentName: string,
+      options?: {
+        manualStatus?: SuperAssistantIssueAssignmentMap[string]['manualStatus'];
+        manualBlockerMessage?: string | null;
+      }
+    ): SuperAssistantIssueTaskMetadata | null => {
+      if (!currentIssue) {
+        return null;
+      }
+      return {
+        source: 'super-assistant-issue',
+        issueId: currentIssue.id,
+        issueSubject: currentIssue.subject,
+        slotId,
+        agentName,
+        manualStatus: options?.manualStatus,
+        manualBlockerMessage: options?.manualBlockerMessage ?? null,
+      };
+    },
+    [currentIssue]
+  );
   const currentIssueActivityFeedback = useMemo(() => {
     if (!currentIssueAssignment) {
       return {
@@ -162,6 +285,31 @@ const SuperAssistantPage: React.FC = () => {
       blockerMessage: currentIssueAssignment.manualBlockerMessage ?? matchedAgent?.blockerMessage ?? null,
     } as const;
   }, [currentIssueAssignment, superAssistantData.agentExecutionGroups]);
+  const issueBoardFeedbackById = useMemo(() => {
+    return Object.fromEntries(
+      Object.entries(issueAssignments).map(([issueId, assignment]) => {
+        const matchedAgent =
+          superAssistantData.agentExecutionGroups
+            .find((group) => group.teamId === assignment.teamId)
+            ?.agents.find((agent) => agent.slotId === assignment.slotId) ?? null;
+        return [
+          issueId,
+          {
+            assignedAgentName: assignment.agentName,
+            assignedStatus: assignment.manualStatus ?? matchedAgent?.status ?? null,
+            blockerMessage: assignment.manualBlockerMessage ?? matchedAgent?.blockerMessage ?? null,
+          },
+        ];
+      })
+    ) as Record<
+      string,
+      {
+        assignedAgentName: string | null;
+        assignedStatus: 'pending' | 'idle' | 'active' | 'completed' | 'failed' | null;
+        blockerMessage: string | null;
+      }
+    >;
+  }, [issueAssignments, superAssistantData.agentExecutionGroups]);
   const assignableAgents = useMemo(
     () =>
       (superAssistantData.primaryTeam?.agents ?? []).map((agent) => ({
@@ -216,42 +364,163 @@ const SuperAssistantPage: React.FC = () => {
   const handleOpenSkillsHub = () => navigate('/settings/skills-hub');
   const handleOpenMcp = () => navigate('/mcp');
   const handleOpenAgentSettings = () => navigate('/settings/agent');
-  const handleAssignIssue = (slotId: string, agentName: string) => {
+  const handleAssignIssue = async (slotId: string, agentName: string) => {
     if (!currentIssue || !superAssistantData.primaryTeam) {
       return;
     }
-    const nextAssignments: SuperAssistantIssueAssignmentMap = {
-      ...issueAssignments,
-      [currentIssue.id]: {
-        issueId: currentIssue.id,
-        issueSubject: currentIssue.subject,
-        teamId: superAssistantData.primaryTeam.id,
-        teamName: superAssistantData.primaryTeam.name,
-        slotId,
-        agentName,
-        assignedAt: Date.now(),
-        manualStatus: undefined,
-        manualBlockerMessage: null,
-      },
-    };
-    setIssueAssignments(nextAssignments);
-    saveIssueAssignments(nextAssignments);
-    navigate(buildTeamPath(superAssistantData.primaryTeam.id, currentIssue, slotId));
-  };
-  const handleMarkIssueBlocked = () => {
-    if (!currentIssue || !currentIssueAssignment) {
+    const metadata = buildIssueTaskMetadata(slotId, agentName);
+    if (!metadata) {
       return;
     }
-    const nextAssignments: SuperAssistantIssueAssignmentMap = {
-      ...issueAssignments,
-      [currentIssue.id]: {
-        ...currentIssueAssignment,
-        manualStatus: 'failed',
-        manualBlockerMessage: '等待人工处理',
-      },
-    };
-    setIssueAssignments(nextAssignments);
-    saveIssueAssignments(nextAssignments);
+    try {
+      if (currentIssueAssignmentTaskId) {
+        await updateTeamTask(currentIssueAssignmentTaskId, {
+          owner: slotId,
+          status: 'in_progress',
+          metadata,
+        });
+      } else {
+        await createTeamTask({
+          teamId: superAssistantData.primaryTeam.id,
+          subject: currentIssue.subject,
+          description: currentIssue.description ?? null,
+          owner: slotId,
+          metadata,
+        });
+      }
+      navigate(buildTeamPath(superAssistantData.primaryTeam.id, currentIssue, slotId));
+      await loadIssueAssignmentsFromTeam();
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('common.superAssistant.assignIssueFailed', { defaultValue: '同步 Issue 分配失败' })
+        )
+      );
+    }
+  };
+  const handleMarkIssueBlocked = async () => {
+    if (!currentIssue || !currentIssueAssignment || !currentIssueAssignmentTaskId) {
+      return;
+    }
+    const metadata = buildIssueTaskMetadata(currentIssueAssignment.slotId, currentIssueAssignment.agentName, {
+      manualStatus: 'failed',
+      manualBlockerMessage: '等待人工处理',
+    });
+    if (!metadata) {
+      return;
+    }
+    try {
+      await updateTeamTask(currentIssueAssignmentTaskId, {
+        metadata,
+      });
+      await loadIssueAssignmentsFromTeam();
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('common.superAssistant.updateIssueStatusFailed', { defaultValue: '同步 Issue 状态失败' })
+        )
+      );
+    }
+  };
+  const handleClearIssueBlocked = async () => {
+    if (!currentIssue || !currentIssueAssignment || !currentIssueAssignmentTaskId) {
+      return;
+    }
+    const metadata = buildIssueTaskMetadata(currentIssueAssignment.slotId, currentIssueAssignment.agentName, {
+      manualStatus: 'idle',
+      manualBlockerMessage: null,
+    });
+    if (!metadata) {
+      return;
+    }
+    try {
+      await updateTeamTask(currentIssueAssignmentTaskId, {
+        metadata,
+      });
+      await loadIssueAssignmentsFromTeam();
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('common.superAssistant.updateIssueStatusFailed', { defaultValue: '同步 Issue 状态失败' })
+        )
+      );
+    }
+  };
+  const handleUnassignIssue = async () => {
+    if (!currentIssue || !currentIssueAssignment || !currentIssueAssignmentTaskId) {
+      return;
+    }
+    try {
+      await deleteTeamTask(currentIssueAssignmentTaskId);
+      await loadIssueAssignmentsFromTeam();
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('common.superAssistant.assignIssueFailed', { defaultValue: '同步 Issue 分配失败' })
+        )
+      );
+    }
+  };
+  const handleMoveIssueToReview = async () => {
+    if (!currentIssue) {
+      return;
+    }
+    try {
+      await updateRequirement(currentIssue.id, { status: 'testing' });
+      if (currentIssueAssignment && currentIssueAssignmentTaskId) {
+        const metadata = buildIssueTaskMetadata(currentIssueAssignment.slotId, currentIssueAssignment.agentName, {
+          manualStatus: undefined,
+          manualBlockerMessage: null,
+        });
+        if (metadata) {
+          await updateTeamTask(currentIssueAssignmentTaskId, {
+            metadata,
+          });
+        }
+      }
+      await superAssistantData.refresh();
+      await loadIssueAssignmentsFromTeam();
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('common.superAssistant.updateIssueStatusFailed', { defaultValue: '同步 Issue 状态失败' })
+        )
+      );
+    }
+  };
+  const handleMarkIssueDone = async () => {
+    if (!currentIssue) {
+      return;
+    }
+    try {
+      await updateRequirement(currentIssue.id, { status: 'completed' });
+      if (currentIssueAssignment && currentIssueAssignmentTaskId) {
+        const metadata = buildIssueTaskMetadata(currentIssueAssignment.slotId, currentIssueAssignment.agentName, {
+          manualStatus: undefined,
+          manualBlockerMessage: null,
+        });
+        if (metadata) {
+          await updateTeamTask(currentIssueAssignmentTaskId, {
+            status: 'completed',
+            metadata,
+          });
+        }
+      }
+      await superAssistantData.refresh();
+      await loadIssueAssignmentsFromTeam();
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('common.superAssistant.updateIssueStatusFailed', { defaultValue: '同步 Issue 状态失败' })
+        )
+      );
+    }
   };
   const handleOpenAssignedAgent = () => {
     if (!currentIssue || !currentIssueAssignment) {
@@ -319,6 +588,7 @@ const SuperAssistantPage: React.FC = () => {
             isAdmin={isAdmin}
             loading={superAssistantData.loading}
             boardColumns={superAssistantData.boardColumns}
+            issueBoardFeedbackById={issueBoardFeedbackById}
             currentIssue={currentIssue}
             assignableAgents={assignableAgents}
             currentAssignmentAgentName={currentIssueAssignment?.agentName ?? null}
@@ -327,6 +597,10 @@ const SuperAssistantPage: React.FC = () => {
             onBreakdownIssue={handleBreakdownIssue}
             onAssignIssue={handleAssignIssue}
             onMarkIssueBlocked={handleMarkIssueBlocked}
+            onClearIssueBlocked={handleClearIssueBlocked}
+            onUnassignIssue={handleUnassignIssue}
+            onMoveIssueToReview={handleMoveIssueToReview}
+            onMarkIssueDone={handleMarkIssueDone}
             onOpenAssignedAgent={handleOpenAssignedAgent}
             onOpenKanban={handleBreakdownIssue}
             onOpenTeamFlow={handleOpenTeamFlow}

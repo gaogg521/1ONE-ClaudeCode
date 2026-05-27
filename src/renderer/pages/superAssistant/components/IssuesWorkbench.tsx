@@ -14,10 +14,17 @@ type CurrentIssueActivityFeedback = {
   blockerMessage: string | null;
 };
 
+type IssueBoardFeedback = {
+  assignedAgentName: string | null;
+  assignedStatus: 'pending' | 'idle' | 'active' | 'completed' | 'failed' | null;
+  blockerMessage: string | null;
+};
+
 type IssuesWorkbenchProps = {
   isAdmin: boolean;
   loading: boolean;
   boardColumns: SuperAssistantBoardColumn[];
+  issueBoardFeedbackById: Record<string, IssueBoardFeedback>;
   currentIssue: SuperAssistantIssueItem | null;
   assignableAgents: AssignableIssueAgent[];
   currentAssignmentAgentName: string | null;
@@ -26,6 +33,10 @@ type IssuesWorkbenchProps = {
   onBreakdownIssue: () => void;
   onAssignIssue: (slotId: string, agentName: string) => void;
   onMarkIssueBlocked: () => void;
+  onClearIssueBlocked: () => void;
+  onUnassignIssue: () => void;
+  onMoveIssueToReview: () => void;
+  onMarkIssueDone: () => void;
   onOpenAssignedAgent: () => void;
   onOpenKanban: () => void;
   onOpenTeamFlow: () => void;
@@ -40,6 +51,7 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
   isAdmin,
   loading,
   boardColumns,
+  issueBoardFeedbackById,
   currentIssue,
   assignableAgents,
   currentAssignmentAgentName,
@@ -48,6 +60,10 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
   onBreakdownIssue,
   onAssignIssue,
   onMarkIssueBlocked,
+  onClearIssueBlocked,
+  onUnassignIssue,
+  onMoveIssueToReview,
+  onMarkIssueDone,
   onOpenAssignedAgent,
   onOpenKanban,
   onOpenTeamFlow,
@@ -70,6 +86,15 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
             : currentIssueActivityFeedback.assignedStatus === 'idle'
               ? t('common.superAssistant.agentStatus.idle', { defaultValue: '待领取' })
               : null;
+  const currentIssueStageLabel = currentIssue
+    ? currentIssue.status === 'completed'
+      ? t('common.superAssistant.issueStage.done', { defaultValue: '已完成' })
+      : currentIssue.status === 'testing'
+        ? t('common.superAssistant.issueStage.review', { defaultValue: '待评审' })
+        : currentIssue.status === 'developing'
+          ? t('common.superAssistant.issueStage.active', { defaultValue: '进行中' })
+          : t('common.superAssistant.issueStage.unassigned', { defaultValue: '待分配' })
+    : null;
   const boardColumnMeta = [
     {
       key: 'unassigned',
@@ -121,14 +146,48 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
               <div className='mt-4px grid gap-6px'>
                 {liveColumn?.items.length ? (
                   liveColumn.items.slice(0, 3).map((issue) => (
-                    <Button
-                      key={issue.id}
-                      size='mini'
-                      type={currentIssue?.id === issue.id ? 'primary' : 'secondary'}
-                      onClick={() => onSelectIssue(issue.id)}
-                    >
-                      {issue.subject}
-                    </Button>
+                    <React.Fragment key={issue.id}>
+                      <Button
+                        size='mini'
+                        type={currentIssue?.id === issue.id ? 'primary' : 'secondary'}
+                        onClick={() => onSelectIssue(issue.id)}
+                      >
+                        {issue.subject}
+                      </Button>
+                      {issueBoardFeedbackById[issue.id]?.assignedAgentName ? (
+                        <div className='text-t-tertiary'>
+                          {t('common.superAssistant.issueBoard.assignedAgent', {
+                            defaultValue: '分配：{{agentName}}',
+                            agentName: issueBoardFeedbackById[issue.id].assignedAgentName,
+                          })}
+                        </div>
+                      ) : null}
+                      {issueBoardFeedbackById[issue.id]?.assignedStatus ? (
+                        <div className='text-t-tertiary'>
+                          {t('common.superAssistant.issueBoard.statusLabel', {
+                            defaultValue: '状态：{{status}}',
+                            status:
+                              issueBoardFeedbackById[issue.id].assignedStatus === 'failed'
+                                ? t('common.superAssistant.agentStatus.failed', { defaultValue: '已阻塞' })
+                                : issueBoardFeedbackById[issue.id].assignedStatus === 'active'
+                                  ? t('common.superAssistant.agentStatus.active', { defaultValue: '执行中' })
+                                  : issueBoardFeedbackById[issue.id].assignedStatus === 'completed'
+                                    ? t('common.superAssistant.agentStatus.completed', { defaultValue: '已完成' })
+                                    : issueBoardFeedbackById[issue.id].assignedStatus === 'pending'
+                                      ? t('common.superAssistant.agentStatus.pending', { defaultValue: '准备中' })
+                                      : t('common.superAssistant.agentStatus.idle', { defaultValue: '待领取' }),
+                          })}
+                        </div>
+                      ) : null}
+                      {issueBoardFeedbackById[issue.id]?.blockerMessage ? (
+                        <div className='text-t-tertiary'>
+                          {t('common.superAssistant.issueBoard.blockerLabel', {
+                            defaultValue: '阻塞：{{message}}',
+                            message: issueBoardFeedbackById[issue.id].blockerMessage,
+                          })}
+                        </div>
+                      ) : null}
+                    </React.Fragment>
                   ))
                 ) : (
                   <div className='text-t-tertiary'>{columnMeta.summary}</div>
@@ -166,6 +225,14 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
                   defaultValue: '最新评论和阻塞会优先汇总在这里。',
                 })}
             </div>
+            {currentIssueStageLabel ? (
+              <div>
+                {t('common.superAssistant.activity.currentStage', {
+                  defaultValue: '当前阶段：{{stage}}',
+                  stage: currentIssueStageLabel,
+                })}
+              </div>
+            ) : null}
             {currentIssueActivityFeedback.assignedAgentName ? (
               <div>
                 {t('common.superAssistant.activity.assignedAgent', {
@@ -262,10 +329,45 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
               })}
             </Button>
           ) : null}
+          {currentIssueActivityFeedback.assignedStatus === 'failed' ||
+          currentIssueActivityFeedback.blockerMessage ? (
+            <Button size='small' onClick={onClearIssueBlocked}>
+              {t('common.superAssistant.clearIssueBlocked', {
+                defaultValue: '解除阻塞',
+              })}
+            </Button>
+          ) : null}
           {currentAssignmentAgentName ? (
             <Button size='small' onClick={onMarkIssueBlocked}>
               {t('common.superAssistant.markIssueBlocked', {
                 defaultValue: '标记为阻塞',
+              })}
+            </Button>
+          ) : null}
+          {currentAssignmentAgentName ? (
+            <Button size='small' onClick={onUnassignIssue}>
+              {t('common.superAssistant.unassignIssue', {
+                defaultValue: '撤销分配',
+              })}
+            </Button>
+          ) : null}
+        </div>
+
+        <div className='mb-8px mt-12px text-12px font-600 text-t-secondary'>
+          {t('common.superAssistant.stageActionsTitle', { defaultValue: '状态动作' })}
+        </div>
+        <div className='grid gap-8px'>
+          {currentIssue?.status !== 'testing' ? (
+            <Button size='small' onClick={onMoveIssueToReview}>
+              {t('common.superAssistant.moveIssueToReview', {
+                defaultValue: '切到待评审',
+              })}
+            </Button>
+          ) : null}
+          {currentIssue?.status !== 'completed' ? (
+            <Button size='small' onClick={onMarkIssueDone}>
+              {t('common.superAssistant.markIssueDone', {
+                defaultValue: '标记已完成',
               })}
             </Button>
           ) : null}

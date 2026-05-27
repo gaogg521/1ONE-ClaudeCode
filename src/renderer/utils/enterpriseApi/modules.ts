@@ -137,6 +137,9 @@ export type TeamTaskRecord = {
   description: string | null;
   status: string;
   owner: string | null;
+  blocked_by?: string;
+  blocks?: string;
+  metadata?: Record<string, unknown> | string | null;
   created_at: number;
   updated_at: number;
 };
