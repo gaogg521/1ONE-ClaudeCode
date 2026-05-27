@@ -152,12 +152,14 @@ export const ENTERPRISE_ROUTE_META: EnterpriseRouteMeta[] = [
     path: ENTERPRISE_CTEST_PATH,
     requiresRole: 'admin',
     platformPolicy: 'all',
+    visibleInNav: false,
   },
   {
     key: 'cflow',
     path: ENTERPRISE_CFLOW_PATH,
     requiresRole: 'admin',
     platformPolicy: 'all',
+    visibleInNav: false,
   },
   {
     key: 'cagent',
