@@ -84,6 +84,37 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
     return null;
   }
 
+  // 已加入企业：不显示切换器，直接展示企业身份标识 + 管理后台入口
+  if (hasJoinedEnterprise) {
+    const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId;
+    if (variant === 'compact') {
+      return (
+        <div className={styles.compact}>
+          <Tag size='small' color='arcoblue'>{tenantLabel || t('settings.edition.joined', { defaultValue: '已加入企业' })}</Tag>
+          {showEnterpriseAdminNav ? (
+            <Button size='mini' type='text' onClick={() => void openAdminConsole()}>
+              {t('settings.edition.openAdminConsole', { defaultValue: '管理后台' })}
+            </Button>
+          ) : null}
+        </div>
+      );
+    }
+    return (
+      <div className={styles.bar}>
+        <div className={styles.barTop}>
+          <div className={styles.barLeft}>
+            <Tag color='arcoblue'>{tenantLabel || t('settings.edition.joined', { defaultValue: '已加入企业' })}</Tag>
+          </div>
+          {showEnterpriseAdminNav ? (
+            <Button size='small' type='outline' onClick={() => void openAdminConsole()}>
+              {t('settings.edition.openAdminConsole', { defaultValue: '管理后台' })}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId;
   const personalLabel = t('settings.edition.personal', { defaultValue: '个人版' });
   const enterpriseLabel = t('settings.edition.enterprise', { defaultValue: '企业版' });

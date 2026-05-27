@@ -20,6 +20,7 @@ import {
   Tag,
   Typography,
 } from '@arco-design/web-react';
+import { Alert } from '@arco-design/web-react';
 import { Delete, Plus, Search } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import AdminPageWrapper from './components/AdminPageWrapper';
@@ -30,6 +31,7 @@ import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client'
 import {
   createRagDocument,
   deleteRagDocument,
+  getRagStatus,
   importRagFeishuDocument,
   importRagUrl,
   listRagDocuments,
@@ -67,6 +69,12 @@ const AdminRag: React.FC = () => {
     listRagDocuments,
     [],
     t('admin.rag.messages.loadFailed', { defaultValue: '加载文档失败' })
+  );
+
+  const ragStatusState = useEnterpriseAsyncData(
+    getRagStatus,
+    { ready: true, message: '' },
+    ''
   );
 
   const handleAddDocument = useCallback(async () => {
@@ -281,6 +289,20 @@ const AdminRag: React.FC = () => {
             </>
           }
         />
+
+        {/* Embedding 模型状态提示 */}
+        {!ragStatusState.loading && !ragStatusState.data.ready && (
+          <Alert
+            type='warning'
+            title={t('admin.rag.modelNotReady', { defaultValue: 'Embedding 模型未就绪' })}
+            content={t('admin.rag.modelNotReadyDesc', {
+              defaultValue: '向量化模型正在初始化或下载中（约 80MB），导入的文档将在模型就绪后自动完成索引。若长时间未就绪，请检查网络连接或查看服务日志。错误信息：{{msg}}',
+              msg: ragStatusState.data.message,
+            })}
+            closable
+            className='mb-16px'
+          />
+        )}
 
         {/* Grid: Left - Documents Table, Right - Search Playground */}
         <div className='grid grid-cols-1 lg:grid-cols-3 gap-24px items-start'>

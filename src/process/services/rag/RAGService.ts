@@ -81,6 +81,13 @@ export class RAGService {
   }
 
   /**
+   * 健康检查：尝试初始化 pipeline，成功则 resolve，失败则 reject
+   */
+  public static async checkHealth(): Promise<void> {
+    await this.initPipeline();
+  }
+
+  /**
    * 文本重叠滑动窗口切片算法 (Sliding Window Chunking)
    *
    * @param text 原始文本

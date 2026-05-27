@@ -257,6 +257,10 @@ export async function listRagDocuments(): Promise<RagDocumentRecord[]> {
   return enterpriseGet<RagDocumentRecord[]>('/api/admin/rag/documents');
 }
 
+export async function getRagStatus(): Promise<{ ready: boolean; message: string }> {
+  return enterpriseGet<{ ready: boolean; message: string }>('/api/admin/rag/status');
+}
+
 export async function createRagDocument(payload: Record<string, unknown>): Promise<void> {
   await enterpriseMutate('/api/admin/rag/documents', 'POST', payload);
 }
@@ -313,8 +317,23 @@ export async function listTeams(): Promise<TeamRecord[]> {
   return enterpriseGet<TeamRecord[]>('/api/admin/teams');
 }
 
+export type MemberDashboardRecord = {
+  id: string;
+  username: string;
+  role: string;
+  last_login: number;
+  is_online: boolean;
+  tasks_total: number;
+  tasks_completed: number;
+  tasks_in_progress: number;
+};
+
 export async function listAdminUsers(): Promise<AdminUserRecord[]> {
   return enterpriseGet<AdminUserRecord[]>('/api/admin/users');
+}
+
+export async function listMemberDashboard(): Promise<MemberDashboardRecord[]> {
+  return enterpriseGet<MemberDashboardRecord[]>('/api/admin/member-dashboard');
 }
 
 export async function listSkills(): Promise<SkillRecord[]> {

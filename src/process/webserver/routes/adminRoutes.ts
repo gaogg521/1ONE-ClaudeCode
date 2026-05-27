@@ -291,6 +291,66 @@ export function registerAdminRoutes(app: Express): void {
     }
   });
 
+  // GET /api/admin/member-dashboard — 成员在线状态与任务完成情况
+  app.get('/api/admin/member-dashboard', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+    try {
+      const adminTenantId = resolveAdminTenantId(req);
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const allUsers = await UserRepository.listUsers();
+      const users = isEnterpriseTenantId(adminTenantId)
+        ? allUsers.filter((u) => u.tenant_id === adminTenantId)
+        : allUsers;
+
+      const now = Date.now();
+      const ONLINE_THRESHOLD_MS = 15 * 60 * 1000; // 15分钟内登录视为在线
+      const TODAY_START = new Date();
+      TODAY_START.setHours(0, 0, 0, 0);
+      const todayStartMs = TODAY_START.getTime();
+
+      // 查询今日任务完成情况
+      const userIds = users.map((u) => u.id);
+      const taskRows = userIds.length > 0
+        ? (driver.prepare(
+            `SELECT owner, status, COUNT(*) as cnt FROM team_tasks
+             WHERE tenant_id = ? AND owner IN (${userIds.map(() => '?').join(',')})
+             GROUP BY owner, status`
+          ).all(adminTenantId, ...userIds) as Array<{ owner: string; status: string; cnt: number }>)
+        : [];
+
+      const tasksByUser = new Map<string, { total: number; completed: number; inProgress: number }>();
+      for (const row of taskRows) {
+        const entry = tasksByUser.get(row.owner) ?? { total: 0, completed: 0, inProgress: 0 };
+        entry.total += row.cnt;
+        if (row.status === 'completed') entry.completed += row.cnt;
+        if (row.status === 'in_progress') entry.inProgress += row.cnt;
+        tasksByUser.set(row.owner, entry);
+      }
+
+      res.json({
+        success: true,
+        data: users.map((u) => {
+          const lastLogin = u.last_login ?? 0;
+          const isOnline = lastLogin > 0 && (now - lastLogin) < ONLINE_THRESHOLD_MS;
+          const tasks = tasksByUser.get(u.id) ?? { total: 0, completed: 0, inProgress: 0 };
+          return {
+            id: u.id,
+            username: u.username,
+            role: u.role,
+            last_login: lastLogin,
+            is_online: isOnline,
+            tasks_total: tasks.total,
+            tasks_completed: tasks.completed,
+            tasks_in_progress: tasks.inProgress,
+          };
+        }),
+      });
+    } catch (err) {
+      console.error('[AdminRoute] member-dashboard error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
   /**
    * =========================
    * Team & RBAC Admin APIs

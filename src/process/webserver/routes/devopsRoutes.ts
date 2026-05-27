@@ -106,6 +106,22 @@ export function registerDevOpsRoutes(app: Express): void {
   // 0. RAG 文件上传 & URL 导入
   // ==========================================
 
+  // GET /api/admin/rag/status — 检查 embedding 模型是否就绪
+  app.get('/api/admin/rag/status', apiRateLimiter, auth, async (_req, res) => {
+    try {
+      await RAGService.checkHealth();
+      res.json({ success: true, data: { ready: true, message: 'Embedding model loaded' } });
+    } catch (error) {
+      res.json({
+        success: true,
+        data: {
+          ready: false,
+          message: error instanceof Error ? error.message : 'Embedding model not ready',
+        },
+      });
+    }
+  });
+
   // POST /api/admin/rag/upload — 上传本地文件 (无需 CSRF，multipart)
   app.post('/api/admin/rag/upload', ragUpload.single('file'), auth, async (req, res) => {
     try {

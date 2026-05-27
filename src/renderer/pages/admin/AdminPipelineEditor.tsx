@@ -145,11 +145,12 @@ const PipelineEditor: React.FC = () => {
   const [editStageIdx, setEditStageIdx] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ name: '', command: '', enabled: true });
 
+  const [isCreating, setIsCreating] = useState(false);
   const [runId, setRunId] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<string>('');
   const [runLog, setRunLog] = useState<string>('');
   const [runLoading, setRunLoading] = useState(false);
-  const hasDraft = Boolean(selectedId || pipelineName.trim() || stages.length > 0);
+  const hasDraft = Boolean(selectedId || pipelineName.trim() || stages.length > 0 || isCreating);
 
   // Select pipeline → load definition
   useEffect(() => {
@@ -195,6 +196,7 @@ const PipelineEditor: React.FC = () => {
         ? await updatePipeline(selectedId, payload)
         : await savePipeline(payload);
       Message.success(t('common.saved', { defaultValue: '已保存' }));
+      setIsCreating(false);
       await pipelinesState.reload();
       if (saved.id) {
         setSelectedId(saved.id);
@@ -311,16 +313,16 @@ const PipelineEditor: React.FC = () => {
             </>
           </ModuleDataState>
           <Divider />
-          <Button type='outline' long icon={<Plus />} onClick={() => { setSelectedId(''); setPipelineName(''); setStages([]); }}>
+          <Button type='outline' long icon={<Plus />} onClick={() => { setSelectedId(''); setPipelineName(''); setStages([]); setIsCreating(true); }}>
             {t('admin.pipeline.create', { defaultValue: '新建流水线' })}
           </Button>
         </Card>
 
         {/* 右侧编排区域 */}
         <Card bordered={false} className='flex-1 rd-12px' title={selectedId ? pipelineName : t('admin.pipeline.newPipeline', { defaultValue: '新建流水线' })}>
-          {!selectedId && !pipelineName && <Empty description={t('admin.pipeline.selectOrCreate', { defaultValue: '选择或新建一条流水线开始编排' })} />}
+          {!selectedId && !pipelineName && !isCreating && <Empty description={t('admin.pipeline.selectOrCreate', { defaultValue: '选择或新建一条流水线开始编排' })} />}
 
-          {(selectedId || pipelineName) && (
+          {(selectedId || pipelineName || isCreating) && (
             <>
               <Form.Item label={t('admin.pipeline.name', { defaultValue: '流水线名称' })}><Input value={pipelineName} onChange={setPipelineName} placeholder='例如: 1ONE-Main-Prod' style={{ width: 320 }} /></Form.Item>
 
