@@ -1,7 +1,7 @@
 /**
  * CTest Test Management
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Form, Grid, Input, Message, Modal, Select, Space, Table, Tag } from '@arco-design/web-react';
 import { Plus, Refresh } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
@@ -71,6 +71,17 @@ const CTestManagement: React.FC = () => {
   // 需求列表（用于关联下拉）
   const reqsState = useEnterpriseAsyncData(listRequirementsTree, [], '');
   const flatReqs = flattenReqs(reqsState.data as unknown[]);
+  const reqLabelById = useMemo(
+    () => new Map(flatReqs.map((req) => [req.id, req.subject])),
+    [flatReqs]
+  );
+
+  // 首次加载后自动选中第一个计划，避免右侧长期空白
+  useEffect(() => {
+    if (!selectedPlan && plansState.data.length > 0 && !plansState.loading) {
+      setSelectedPlan(plansState.data[0] ?? null);
+    }
+  }, [plansState.data, plansState.loading, selectedPlan]);
 
   const handleCreatePlan = async () => {
     if (!form.name.trim()) { Message.warning('名称不能为空'); return; }
@@ -319,8 +330,9 @@ const CTestManagement: React.FC = () => {
                 allowClear
                 showSearch
                 filterOption={(input, option) => {
-                  const label = (option as { props?: { children?: unknown } })?.props?.children;
-                  return typeof label === 'string' && label.toLowerCase().includes(input.toLowerCase());
+                  const reqId = String((option as { props?: { value?: string } })?.props?.value ?? '');
+                  const label = reqLabelById.get(reqId) ?? '';
+                  return label.toLowerCase().includes(input.toLowerCase());
                 }}
               >
                 {flatReqs.map((r) => (

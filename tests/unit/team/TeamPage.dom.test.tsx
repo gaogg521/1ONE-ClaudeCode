@@ -7,6 +7,18 @@ const locationMock = vi.hoisted(() => ({ pathname: '/team/team-1', search: '' })
 const chatSiderMock = vi.hoisted(() => vi.fn(() => <div />));
 const swrMock = vi.hoisted(() => vi.fn());
 const teamTabsMock = vi.hoisted(() => vi.fn());
+const collaborationContextMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/renderer/hooks/webui/useEditionFeatures', () => ({
+  useEditionFeatures: () => ({
+    hasJoinedEnterprise: true,
+    showEnterpriseAdminNav: true,
+  }),
+}));
+
+vi.mock('@/renderer/pages/superAssistant/hooks/useEnterpriseCollaborationContext', () => ({
+  useEnterpriseCollaborationContext: () => collaborationContextMock(),
+}));
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
@@ -15,8 +27,18 @@ vi.mock('react-router-dom', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { defaultValue?: string; subject?: string }) =>
-      options?.defaultValue?.replace('{{subject}}', options?.subject ?? '') || key,
+    t: (_key: string, options?: { defaultValue?: string; [key: string]: unknown }) => {
+      const template = options?.defaultValue;
+      if (!template) {
+        return _key;
+      }
+      return Object.entries(options ?? {}).reduce((result, [key, value]) => {
+        if (key === 'defaultValue') {
+          return result;
+        }
+        return result.replaceAll(`{{${key}}}`, String(value ?? ''));
+      }, template);
+    },
   }),
 }));
 
@@ -24,6 +46,7 @@ vi.mock('@arco-design/web-react', () => ({
   Button: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => (
     <button onClick={onClick}>{children}</button>
   ),
+  Tag: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
   Message: {
     useMessage: () => [{}, <div key='message-context' />],
     success: vi.fn(),
@@ -161,6 +184,15 @@ describe('TeamPage', () => {
     chatSiderMock.mockReset();
     locationMock.pathname = '/team/team-1';
     locationMock.search = '';
+    collaborationContextMock.mockReturnValue({
+      loading: false,
+      ragDocumentCount: 2,
+      ragReady: true,
+      skillCount: 2,
+      skillNames: ['PR Review', 'Deploy Bot'],
+      enabledMcpCount: 1,
+      mcpNames: ['GitHub Actions'],
+    });
     swrMock.mockReturnValue({ data: undefined });
     teamTabsMock.mockReturnValue({
       agents: [],
@@ -214,7 +246,10 @@ describe('TeamPage', () => {
       />
     );
 
-    expect(screen.getByText('当前来自超级助手 Issue：修复团队上下文深链')).toBeInTheDocument();
+    expect(screen.getByText(/当前 Issue「修复团队上下文深链」可调用以下企业能力/)).toBeInTheDocument();
+    expect(screen.getByText('知识库 2 篇')).toBeInTheDocument();
+    expect(screen.getByText('PR Review')).toBeInTheDocument();
+    expect(screen.getByText('GitHub Actions')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('共享会话'));
     fireEvent.click(screen.getByText('共享任务'));
@@ -227,6 +262,30 @@ describe('TeamPage', () => {
       2,
       '/tasks?scope=team&teamId=team-1&teamName=Alpha+Team&issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE'
     );
+  });
+
+  it('opens enterprise knowledge from the issue collaboration context bar', () => {
+    locationMock.search =
+      '?issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE';
+
+    render(
+      <TeamPage
+        team={{
+          id: 'team-1',
+          userId: 'user-1',
+          name: 'Alpha Team',
+          workspace: '',
+          workspaceMode: 'shared',
+          leadAgentId: '',
+          agents: [],
+          createdAt: 0,
+          updatedAt: 0,
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '企业知识库 / RAG' }));
+    expect(navigateMock).toHaveBeenCalledWith('/enterprise/rag');
   });
 
   it('opens the current issue kanban directly from the team header when issue context exists', () => {

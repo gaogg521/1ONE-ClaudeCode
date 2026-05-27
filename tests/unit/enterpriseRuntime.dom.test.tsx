@@ -18,6 +18,10 @@ import {
   useEnterpriseRuntime,
 } from '@/renderer/hooks/enterprise/useEnterpriseRuntime';
 
+function enterpriseRuntimeWrapper({ children }: React.PropsWithChildren) {
+  return <EnterpriseRuntimeProvider pathname='/enterprise/skills'>{children}</EnterpriseRuntimeProvider>;
+}
+
 describe('EnterpriseRuntimeProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -49,12 +53,8 @@ describe('EnterpriseRuntimeProvider', () => {
     });
   });
 
-  function wrapper({ children }: React.PropsWithChildren) {
-    return <EnterpriseRuntimeProvider pathname='/enterprise/skills'>{children}</EnterpriseRuntimeProvider>;
-  }
-
   it('allows admin modules without requiring secondary verification', async () => {
-    const { result } = renderHook(() => useEnterpriseRuntime(), { wrapper });
+    const { result } = renderHook(() => useEnterpriseRuntime(), { wrapper: enterpriseRuntimeWrapper });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -86,19 +86,28 @@ describe('EnterpriseRuntimeProvider', () => {
       refreshEnterpriseContext: vi.fn().mockResolvedValue(undefined),
     });
 
-    const { result } = renderHook(() => useEnterpriseRuntime(), { wrapper });
+    const { result } = renderHook(() => useEnterpriseRuntime(), { wrapper: enterpriseRuntimeWrapper });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.visibleNavItems.map((item) => item.key)).toEqual([
       'home',
       'users',
-      'cagent',
+      'cteam',
+      'rag',
+      'mcp',
+      'skills',
+      'milestones',
+      'cpack',
+      'ccode',
+      'cmeas',
+      'usage',
+      'security',
     ]);
   });
 
   it('keeps admin modules ready even when enterprise elevation is unavailable', async () => {
-    const { result } = renderHook(() => useEnterpriseRuntime(), { wrapper });
+    const { result } = renderHook(() => useEnterpriseRuntime(), { wrapper: enterpriseRuntimeWrapper });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -121,7 +130,7 @@ describe('EnterpriseRuntimeProvider', () => {
       refreshEnterpriseContext: vi.fn().mockResolvedValue(undefined),
     });
 
-    const { result } = renderHook(() => useEnterpriseRuntime(), { wrapper });
+    const { result } = renderHook(() => useEnterpriseRuntime(), { wrapper: enterpriseRuntimeWrapper });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 

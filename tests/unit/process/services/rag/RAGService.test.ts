@@ -116,7 +116,7 @@ describe('RAGService', () => {
       expect(embedding[2]).toBeCloseTo(0.9, 5);
     });
 
-    it('在首次模型初始化失败后允许下一次重新初始化', async () => {
+    it('在模型初始化失败后自动降级到 fallback embedding', async () => {
       vi.resetModules();
 
       const transformers = await import('@xenova/transformers');
@@ -130,10 +130,13 @@ describe('RAGService', () => {
 
       const { RAGService: ReloadedRAGService } = await import('@process/services/rag/RAGService');
 
-      await expect(ReloadedRAGService.getEmbedding('第一次')).rejects.toThrow('download failed');
-      const recovered = await ReloadedRAGService.getEmbedding('第二次');
-      expect(recovered[0]).toBeCloseTo(0.4, 5);
-      expect(recovered[1]).toBeCloseTo(0.6, 5);
+      const first = await ReloadedRAGService.getEmbedding('第一次');
+      const second = await ReloadedRAGService.getEmbedding('第二次');
+
+      expect(first).toHaveLength(384);
+      expect(second).toHaveLength(384);
+      expect(first.some((value) => value !== 0)).toBe(true);
+      expect(second.some((value) => value !== 0)).toBe(true);
     });
   });
 });

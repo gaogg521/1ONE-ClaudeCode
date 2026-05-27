@@ -131,7 +131,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, conversations, users, me, onE
   const conv = task.session_name ? conversations.get(task.session_name) : null;
   const assignedUser = task.assigned_to ? users.get(task.assigned_to) : null;
   const owner = users.get(task.user_id);
-  const canEdit = me.role === 'admin' || task.user_id === me.id;
+  const canEdit = me.role === 'admin' || task.user_id === me.id || task.assigned_to === me.id;
 
   return (
     <div
@@ -180,7 +180,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, conversations, users, me, onE
           <span className='text-11px text-t-tertiary'>🧑 {owner.username}</span>
         )}
         {assignedUser && (
-          <span className='text-11px text-t-tertiary'>👉 {assignedUser.username}</span>
+          <span className='text-11px text-t-tertiary'>
+            {task.assigned_to === me.id ? '👉 分配给我' : `👉 ${assignedUser.username}`}
+          </span>
         )}
       </div>
     </div>
@@ -427,14 +429,14 @@ const TasksPage: React.FC = () => {
               {t('common.workspace.hub.enterpriseDesc', {
                 defaultValue:
                   '已加入 {{tenant}}。现在可以从主工作台直接进入企业协同与平台能力，不必先切到独立管理页。',
-                tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业版' }),
+                tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业团队版' }),
               })}
             </div>
           </div>
           <div className='flex items-center gap-8px flex-wrap'>
             <Tag size='small' color={isEnterpriseEdition ? 'arcoblue' : 'gray'}>
               {isEnterpriseEdition
-                ? t('settings.edition.enterprise', { defaultValue: '企业版' })
+                ? t('settings.edition.enterprise', { defaultValue: '企业团队版' })
                 : t('settings.edition.personal', { defaultValue: '个人版' })}
             </Tag>
             {tenantLabel ? (

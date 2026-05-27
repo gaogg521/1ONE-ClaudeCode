@@ -5,6 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
+import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
+import EnterpriseCollaborationContextPanel from '@/renderer/pages/superAssistant/components/EnterpriseCollaborationContextPanel';
+import { useEnterpriseCollaborationContext } from '@/renderer/pages/superAssistant/hooks/useEnterpriseCollaborationContext';
 import { ipcBridge } from '@/common';
 import type { TeamAgent, TTeam } from '@/common/types/teamTypes';
 import type { IProvider, TChatConversation, TProviderWithModel } from '@/common/config/storage';
@@ -244,6 +247,8 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const { hasJoinedEnterprise, showEnterpriseAdminNav } = useEditionFeatures();
+  const collaborationContext = useEnterpriseCollaborationContext(hasJoinedEnterprise);
   const { agents, activeSlotId, statusMap, switchTab } = useTeamTabs();
   const [, messageContext] = Message.useMessage({ maxCount: 1 });
 
@@ -419,15 +424,23 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
 
   const headerExtra = useMemo(
     () => (
-      <div className='flex items-center gap-8px'>
+      <div className='flex flex-col items-end gap-8px'>
         {issueContext.issueId && issueContext.issueSubject ? (
-          <div className='text-12px text-t-tertiary'>
-            {t('common.workspace.issueContextHint', {
-              defaultValue: '当前来自超级助手 Issue：{{subject}}',
-              subject: issueContext.issueSubject,
-            })}
+          <div className='w-full max-w-640px p-10px rd-8px border border-solid border-[var(--color-border-2)] bg-[var(--color-fill-1)]'>
+            <EnterpriseCollaborationContextPanel
+              issueSubject={issueContext.issueSubject}
+              loading={collaborationContext.loading}
+              context={collaborationContext}
+              compact
+              onOpenEnterpriseKnowledge={() =>
+                navigate(showEnterpriseAdminNav ? '/enterprise/rag' : '/settings/skills-hub')
+              }
+              onOpenSkills={() => navigate('/settings/skills-hub')}
+              onOpenMcp={() => navigate('/mcp')}
+            />
           </div>
         ) : null}
+        <div className='flex items-center gap-8px'>
         {issueContext.issueId && issueContext.issueSubject ? (
           <Button
             size='small'
@@ -453,9 +466,10 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
         >
           {t('team.sharedTasks', { defaultValue: '共享任务' })}
         </Button>
+        </div>
       </div>
     ),
-    [issueContext, navigate, t, team]
+    [collaborationContext, issueContext, navigate, showEnterpriseAdminNav, t, team]
   );
 
   return (

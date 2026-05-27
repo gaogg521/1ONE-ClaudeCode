@@ -23,7 +23,7 @@ const EnterpriseOnboarding: React.FC = () => {
       <Typography.Paragraph type='secondary' className='mb-24px'>
         {t('settings.enterpriseConsole.onboardingDesc', {
           defaultValue:
-            '此处是企业版工作区入口（未加入时）：先登录（LDAP/飞书/本地等），或用邀请码加入。组织管理后台（成员、LDAP、邀请码）在侧栏单独入口，与上方「个人版 / 企业版」切换无关。',
+            '此处是企业团队版工作区入口（未加入时）：先登录（LDAP/飞书/本地等），或用邀请码加入。组织管理后台（成员、LDAP、邀请码）在侧栏单独入口，与上方「个人版 / 企业团队版」切换无关。',
         })}
       </Typography.Paragraph>
       <EnterpriseEntryPaths />

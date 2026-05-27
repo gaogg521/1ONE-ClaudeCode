@@ -52,7 +52,7 @@
 | CAgent 入口 | 核心场景 | 1ONE Code 现状 | 差距分析 |
 |:---|:---|:---|:---|
 | **桌面客户端** | 本地研发工作空间 | ✅ 已完成 — Electron 桌面端 + WebUI，统一入口 | 已对齐 |
-| **WebUI门户** | 统一协作门户/协同空间 | ✅ 已完成 — Port 25809 企业版管理后台 + 用户工作台 | 已对齐 |
+| **WebUI门户** | 统一协作门户/协同空间 | ✅ 已完成 — Port 25809 企业团队版管理后台 + 用户工作台 | 已对齐 |
 | **IDE 插件** | 编码提效（VS Code/IntelliJ） | ❌ 未实现 — 需要开发 VS Code Extension | 待开发 |
 | **企业IM** | 飞书/钉钉/企微审批联动 | ⚠️ 部分 — 已有 Channel 飞书/钉钉配对，但缺 AI Agent 工单审批联动 | 需强化 |
 | **OpenAPI/Webhook** | 外部系统对接 | ⚠️ 部分 — 已有 Express REST API，缺标准化 OpenAPI Schema 文档 | 需补文档 |

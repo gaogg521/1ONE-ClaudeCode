@@ -223,7 +223,7 @@ const WorkspacePage: React.FC = () => {
                 {t('common.workspace.hub.enterpriseDesc', {
                   defaultValue:
                     '已加入 {{tenant}}。现在可以从主工作台直接进入企业协同与平台能力，不必先切到独立管理页。',
-                  tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业版' }),
+                  tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业团队版' }),
                 })}
               </div>
             </div>

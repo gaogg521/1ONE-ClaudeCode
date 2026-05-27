@@ -15,6 +15,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@icon-park/react', () => ({
   Delete: () => <span>delete</span>,
+  Edit: () => <span>edit</span>,
   Plus: () => <span>plus</span>,
   Search: () => <span>search</span>,
 }));
@@ -103,6 +104,44 @@ vi.mock('@/renderer/utils/enterpriseApi/client', () => ({
   getEnterpriseActionError: (_error: unknown, fallback: string) => fallback,
 }));
 
+vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
+  useWebuiEnterpriseMode: () => ({ effectiveRole: 'org_admin' }),
+}));
+
+vi.mock('@/renderer/hooks/enterprise/useTeamNameMap', () => ({
+  useTeamNameMap: () => ({
+    getTeamName: (id: string | null | undefined) => id ?? '—',
+    teams: [],
+    teamsLoading: false,
+  }),
+}));
+
+vi.mock('@/renderer/pages/admin/components/ScopeOwnershipCell', () => ({
+  __esModule: true,
+  default: ({
+    scope,
+    teamId,
+    createdBy,
+    getTeamName,
+  }: {
+    scope?: string;
+    teamId?: string | null;
+    createdBy?: string;
+    getTeamName: (id: string | null | undefined) => string;
+  }) => (
+    <div>
+      <span>{scope === 'team' ? '团队共享' : scope === 'organization' ? '组织共享' : '个人'}</span>
+      {teamId ? <span>{`团队：${getTeamName(teamId)}`}</span> : null}
+      <span>{`创建者：${createdBy || '—'}`}</span>
+    </div>
+  ),
+}));
+
+vi.mock('@/renderer/pages/admin/components/ResourceScopeFields', () => ({
+  __esModule: true,
+  default: () => <div>scope-fields</div>,
+}));
+
 vi.mock('@/renderer/utils/enterpriseApi/modules', () => ({
   createRagDocument: vi.fn(),
   deleteRagDocument: vi.fn(),
@@ -110,6 +149,7 @@ vi.mock('@/renderer/utils/enterpriseApi/modules', () => ({
   importRagFeishuDocument: vi.fn(),
   importRagUrl: vi.fn(),
   listRagDocuments: vi.fn(),
+  listTeams: vi.fn(),
   queryRagDocuments: vi.fn(),
   uploadRagDocument: vi.fn(),
 }));
@@ -134,21 +174,38 @@ import AdminRag from '@/renderer/pages/admin/AdminRag';
 describe('AdminRag', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useEnterpriseAsyncDataMock.mockReturnValue({
-      data: [
-        {
-          id: 'doc-1',
-          title: '飞书团队规范',
-          file_path: 'https://sample.feishu.cn/docx/AbCdEf123456',
-          status: 'failed',
-          chunk_count: 0,
-          scope: 'organization',
-          last_error: 'tenant_access_token invalid',
-        },
-      ],
-      loading: false,
-      error: null,
-      reload: vi.fn(),
+    let callIndex = 0;
+    useEnterpriseAsyncDataMock.mockImplementation((_fetcher, initial) => {
+      callIndex += 1;
+      if (initial && typeof initial === 'object' && 'ready' in initial) {
+        return {
+          data: { ready: true, message: '' },
+          loading: false,
+          error: null,
+          reload: vi.fn(),
+        };
+      }
+      if (callIndex === 1) {
+        return {
+          data: [
+            {
+              id: 'doc-1',
+              title: '飞书团队规范',
+              file_path: 'https://sample.feishu.cn/docx/AbCdEf123456',
+              status: 'failed',
+              chunk_count: 0,
+              scope: 'team',
+              team_id: 'team-alpha',
+              created_by: 'alice',
+              last_error: 'tenant_access_token invalid',
+            },
+          ],
+          loading: false,
+          error: null,
+          reload: vi.fn(),
+        };
+      }
+      return { data: [], loading: false, error: null, reload: vi.fn() };
     });
   });
 
@@ -157,6 +214,9 @@ describe('AdminRag', () => {
 
     expect(screen.getByText('URL 导入')).toBeInTheDocument();
     expect(screen.getByText('企业飞书导入')).toBeInTheDocument();
+    expect(screen.getByText('团队共享')).toBeInTheDocument();
+    expect(screen.getByText('团队：team-alpha')).toBeInTheDocument();
+    expect(screen.getByText('创建者：alice')).toBeInTheDocument();
     expect(screen.getByText(/失败原因/)).toBeInTheDocument();
     expect(screen.getByText(/tenant_access_token invalid/)).toBeInTheDocument();
   });

@@ -200,5 +200,17 @@
   "superAssistant.openWebuiSettings": "打開 WebUI 設定",
   "superAssistant.settingsEnterpriseTitle": "企業模組配置入口",
   "superAssistant.settingsEnterpriseDesc": "繼續前往現有企業控制台，完善成員、認證、郵件、MCP 與組織治理配置。",
-  "superAssistant.openEnterpriseConsole": "打開企業控制台"
+  "superAssistant.openEnterpriseConsole": "打開企業控制台",
+  "notifications": {
+    "title": "通知中心",
+    "empty": "暫無通知",
+    "markAllRead": "全部標為已讀",
+    "kinds": {
+      "issue_comment": "Issue 動態",
+      "issue_escalation": "Issue 升級",
+      "autopilot": "Autopilot",
+      "task_assigned": "任務分配",
+      "lead_alert": "阻塞告警"
+    }
+  }
 }

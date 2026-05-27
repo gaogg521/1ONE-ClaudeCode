@@ -479,14 +479,14 @@ const SessionsPage: React.FC = () => {
               {t('common.workspace.hub.enterpriseDesc', {
                 defaultValue:
                   '已加入 {{tenant}}。现在可以从主工作台直接进入企业协同与平台能力，不必先切到独立管理页。',
-                tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业版' }),
+                tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业团队版' }),
               })}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <Tag size='small' color={isEnterpriseEdition ? 'arcoblue' : 'gray'}>
               {isEnterpriseEdition
-                ? t('settings.edition.enterprise', { defaultValue: '企业版' })
+                ? t('settings.edition.enterprise', { defaultValue: '企业团队版' })
                 : t('settings.edition.personal', { defaultValue: '个人版' })}
             </Tag>
             {tenantLabel ? (

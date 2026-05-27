@@ -18,6 +18,7 @@ import {
 } from '@arco-design/web-react';
 import { Add, DeleteFour, Refresh, Key, Link, CloseSmall } from '@icon-park/react';
 import { adminApi, kanbanApi, type AdminUser, type AuthProviderId, type KanbanRole } from '@/renderer/utils/kanbanApi';
+import { listMemberDashboard, type MemberDashboardRecord } from '@/renderer/utils/enterpriseApi/modules';
 
 const ROLE_TAG: Record<KanbanRole, { color: string; label: string }> = {
   admin: { color: 'arcoblue', label: 'Admin' },
@@ -39,24 +40,24 @@ function toKanbanRoleForUi(role: string | undefined): KanbanRole {
   return isKanbanAdminRole(role) ? 'admin' : 'user';
 }
 
-function meRowForProfile(m: { id: string; username: string; role?: string }): AdminUser {
-  const kr: KanbanRole = isKanbanAdminRole(m.role) ? 'admin' : 'user';
+function memberDashboardToAdminUser(record: MemberDashboardRecord): AdminUser {
   return {
-    id: m.id,
-    username: m.username,
-    role: kr,
+    id: record.id,
+    username: record.username,
+    role: toKanbanRoleForUi(record.role),
     created_at: 0,
-    last_login: null,
+    last_login: record.last_login > 0 ? record.last_login : null,
   };
 }
 
 type UsersPageProps = {
-  /** full = list all users; profile = current user only */
+  /** full = list all users; profile = team peers (read-only) */
   enterpriseAccess?: 'full' | 'profile';
 };
 
 const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [peerRecords, setPeerRecords] = useState<MemberDashboardRecord[]>([]);
   const [me, setMe] = useState<{ role: KanbanRole }>({ role: 'user' });
   const [loading, setLoading] = useState(true);
   const [createVisible, setCreateVisible] = useState(false);
@@ -79,11 +80,16 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
     if (enterpriseAccess === 'profile') {
       if (!m.id) {
         setUsers([]);
+        setPeerRecords([]);
         return;
       }
-      setUsers([meRowForProfile(m)]);
+      const peers = await listMemberDashboard().catch((): MemberDashboardRecord[] => []);
+      setPeerRecords(peers);
+      setUsers(peers.map(memberDashboardToAdminUser));
       return;
     }
+
+    setPeerRecords([]);
 
     if (!isKanbanAdminRole(String(m.role))) {
       setUsers([]);
@@ -337,14 +343,63 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
     },
   ];
 
+  const profileColumns = [
+    { title: '用户名', dataIndex: 'username', key: 'username' },
+    {
+      title: '角色',
+      dataIndex: 'role',
+      key: 'role',
+      render: (_: unknown, record: AdminUser) => {
+        const kr = toKanbanRoleForUi(String(record.role));
+        const cfg = ROLE_TAG[kr];
+        return <Tag color={cfg.color}>{cfg.label}</Tag>;
+      },
+    },
+    {
+      title: '在线状态',
+      key: 'online',
+      render: (_: unknown, record: AdminUser) => {
+        const peer = peerRecords.find((item) => item.id === record.id);
+        const online = peer?.is_online ?? false;
+        return (
+          <Tag color={online ? 'green' : 'gray'} size='small'>
+            {online ? '在线' : '离线'}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: '最后登录',
+      dataIndex: 'last_login',
+      key: 'last_login',
+      render: (val: number | null | undefined) =>
+        val ? new Date(val).toLocaleString() : '未登录',
+    },
+    {
+      title: '任务进度',
+      key: 'tasks',
+      render: (_: unknown, record: AdminUser) => {
+        const peer = peerRecords.find((item) => item.id === record.id);
+        if (!peer || peer.tasks_total <= 0) {
+          return <span className='text-12px text-t-tertiary'>—</span>;
+        }
+        return (
+          <span className='text-12px text-t-secondary'>
+            {peer.tasks_completed}/{peer.tasks_total} 已完成
+          </span>
+        );
+      },
+    },
+  ];
+
   const visibleColumns =
     enterpriseAccess === 'profile'
-      ? columns.filter((c) => c.key !== 'bindings' && c.key !== 'actions')
+      ? profileColumns
       : columns;
 
   const title =
     enterpriseAccess === 'profile'
-      ? '我的账号'
+      ? '团队成员'
       : '用户管理';
 
   if (loading) {
@@ -371,7 +426,7 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
       <div className='flex items-center justify-between mb-16px'>
         <div className='flex items-center gap-10px'>
           <h2 className='m-0 text-18px font-700 text-t-primary'>{title}</h2>
-          {enterpriseAccess === 'full' ? <Tag color='arcoblue' size='small'>Admin</Tag> : <Tag size='small'>只读</Tag>}
+          {enterpriseAccess === 'full' ? <Tag color='arcoblue' size='small'>Admin</Tag> : <Tag size='small'>成员视图</Tag>}
         </div>
         <Space>
           <Button size='small' icon={<Refresh theme='outline' />} onClick={() => void loadData()}>刷新</Button>

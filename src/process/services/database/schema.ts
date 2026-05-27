@@ -314,6 +314,9 @@ export function initSchema(db: ISqliteDriver): void {
     name TEXT NOT NULL,
     repo_type TEXT NOT NULL DEFAULT 'generic', -- generic, docker, maven, ai-model
     endpoint TEXT,
+    scope TEXT NOT NULL DEFAULT 'personal',
+    team_id TEXT,
+    created_by TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )`);
@@ -325,12 +328,30 @@ export function initSchema(db: ISqliteDriver): void {
     file_size INTEGER NOT NULL DEFAULT 0,
     checksum TEXT,
     scope TEXT NOT NULL DEFAULT 'personal',
+    team_id TEXT,
     created_by TEXT NOT NULL,
     download_count INTEGER DEFAULT 0,
     created_at INTEGER NOT NULL,
     FOREIGN KEY(repo_id) REFERENCES artifact_repos(id) ON DELETE CASCADE
   )`);
   db.exec('CREATE INDEX IF NOT EXISTS idx_artifacts_repo ON artifacts(repo_id)');
+
+  // 9. CCode 代码库 / Code Repos
+  db.exec(`CREATE TABLE IF NOT EXISTS code_repos (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    provider TEXT NOT NULL DEFAULT 'gitlab',
+    credential_id TEXT,
+    default_branch TEXT DEFAULT 'main',
+    scope TEXT NOT NULL DEFAULT 'personal',
+    team_id TEXT,
+    created_by TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_code_repos_tenant ON code_repos(tenant_id)');
 
   // 10. CTest 测试管理 / Test Plans & Cases
   db.exec(`CREATE TABLE IF NOT EXISTS test_plans (
@@ -443,4 +464,4 @@ export function setDatabaseVersion(db: ISqliteDriver, version: number): void {
  * Current database schema version
  * Update this when adding new migrations in migrations.ts
  */
-export const CURRENT_DB_VERSION = 40;
+export const CURRENT_DB_VERSION = 44;

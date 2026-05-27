@@ -8,9 +8,12 @@ import { ipcBridge } from '@/common';
 import WindowControls from '../WindowControls';
 import EditionModeSwitcher from '@/renderer/components/layout/EditionModeSwitcher';
 import EnterpriseEditionBadge from '@/renderer/components/layout/EnterpriseEditionBadge';
+import EnterpriseNotificationCenter from '@/renderer/components/layout/EnterpriseNotificationCenter';
 import { WORKSPACE_STATE_EVENT, dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
 import type { WorkspaceStateDetail } from '@renderer/utils/workspace/workspaceEvents';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { isElectronDesktop, isMacOS } from '@/renderer/utils/platform';
 import './titlebar.css';
 
@@ -31,6 +34,8 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const [mobileCenterTitle, setMobileCenterTitle] = useState(appTitle);
   const [mobileCenterOffset, setMobileCenterOffset] = useState(0);
   const layout = useLayoutContext();
+  const auth = useAuth();
+  const enterpriseMode = useWebuiEnterpriseMode();
   const location = useLocation();
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -73,6 +78,11 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const showSiderToggle = Boolean(layout?.setSiderCollapsed) && !(layout?.isMobile && isSettingsRoute);
   const showBackToChatButton = Boolean(layout?.isMobile && isSettingsRoute);
   const showNewConversationButton = Boolean(layout?.isMobile && workspaceAvailable);
+  const showNotificationCenter = Boolean(
+    enterpriseMode.webuiApiBase &&
+      enterpriseMode.hasJoinedEnterprise &&
+      auth.status === 'authenticated'
+  );
   const siderTooltip = layout?.siderCollapsed
     ? t('common.expandMore', { defaultValue: 'Expand sidebar' })
     : t('common.collapse', { defaultValue: 'Collapse sidebar' });
@@ -273,6 +283,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
       </div>
       <div ref={toolbarRef} className='app-titlebar__toolbar'>
         {!layout?.isMobile ? <EditionModeSwitcher variant='compact' /> : null}
+        <EnterpriseNotificationCenter enabled={showNotificationCenter} />
         {showNewConversationButton && (
           <button
             type='button'

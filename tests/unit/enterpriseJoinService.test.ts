@@ -14,6 +14,7 @@ const mockPrepareInstance = vi.hoisted(() => ({
 
 const mockDriver = vi.hoisted(() => ({
   prepare: vi.fn(() => mockPrepareInstance),
+  transaction: vi.fn((fn: () => void) => () => fn()),
 }));
 
 const mockDb = vi.hoisted(() => ({
@@ -133,9 +134,10 @@ describe('enterpriseJoinService', () => {
 
       const result = await joinEnterpriseWithInvite('u1', 'abcd-1234');
 
-      expect(updateTenantIdMock).toHaveBeenCalledWith('u1', 'tenant_acme');
-      expect(invalidateAllTokensMock).toHaveBeenCalled();
+      expect(mockDriver.transaction).toHaveBeenCalled();
       expect(mockPrepareInstance.run).toHaveBeenCalled();
+      expect(invalidateAllTokensMock).toHaveBeenCalled();
+      expect(updateTenantIdMock).not.toHaveBeenCalled();
       expect(result).toEqual({ tenantId: 'tenant_acme', tenantName: 'Acme Corp' });
     });
   });
@@ -176,9 +178,11 @@ describe('enterpriseJoinService', () => {
 
       expect(result.tenantName).toBe('Acme Inc');
       expect(result.tenantId).toMatch(/^tenant_/);
-      expect(updateTenantIdMock).toHaveBeenCalledWith('admin', result.tenantId);
-      expect(setRoleMock).toHaveBeenCalledWith('admin', 'org_admin');
+      expect(mockDriver.transaction).toHaveBeenCalled();
+      expect(mockPrepareInstance.run).toHaveBeenCalled();
       expect(invalidateAllTokensMock).toHaveBeenCalled();
+      expect(updateTenantIdMock).not.toHaveBeenCalled();
+      expect(setRoleMock).not.toHaveBeenCalled();
     });
   });
 

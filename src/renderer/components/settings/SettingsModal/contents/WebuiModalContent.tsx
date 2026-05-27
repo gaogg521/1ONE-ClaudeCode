@@ -697,7 +697,7 @@ const WebuiModalContent: React.FC = () => {
         <p className='m-0 text-12px text-t-tertiary leading-relaxed'>
           {t('settings.webui.editionSwitcherHint', {
             defaultValue:
-              '上方切换的是「个人版 / 企业版工作区」，不是管理后台。组织治理请用侧栏「管理后台」或本页下方「打开管理后台」。',
+              '上方切换的是「个人版 / 企业团队版工作区」，不是管理后台。组织治理请用侧栏「管理后台」或本页下方「打开管理后台」。',
           })}
         </p>
         {/* 标题 / Title */}

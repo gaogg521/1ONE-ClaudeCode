@@ -4,7 +4,9 @@
 import React, { useCallback } from 'react';
 import { Badge, Card, Grid, Progress, Statistic, Table, Tag, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
+import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import AdminPageWrapper from '@/renderer/pages/admin/components/AdminPageWrapper';
 import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
 import ModulePageHeader from '@/renderer/pages/admin/components/ModulePageHeader';
@@ -29,6 +31,8 @@ const DEFAULT_USAGE_STATS = {
 
 const EnterpriseUsagePage: React.FC = () => {
   const { t } = useTranslation();
+  const { effectiveRole } = useWebuiEnterpriseMode();
+  const isAdmin = isEnterpriseAdminRole(effectiveRole);
 
   const loadStats = useCallback(async () => {
     const [members, pipelines, ragDocuments, mcpTools, skills] = await Promise.all([
@@ -50,7 +54,7 @@ const EnterpriseUsagePage: React.FC = () => {
   const statsState = useEnterpriseAsyncData(
     loadStats,
     DEFAULT_USAGE_STATS,
-    t('admin.usage.loadFailed', { defaultValue: '加载企业使用统计失败' })
+    t('admin.usage.loadFailed', { defaultValue: '加载使用统计失败' })
   );
 
   const membersState = useEnterpriseAsyncData(
@@ -60,7 +64,12 @@ const EnterpriseUsagePage: React.FC = () => {
   );
 
   const statCards = [
-    { title: t('admin.usage.statMembers', { defaultValue: '企业成员' }), value: statsState.data.users },
+    {
+      title: isAdmin
+        ? t('admin.usage.statMembers', { defaultValue: '企业成员' })
+        : t('admin.usage.statTeamMembers', { defaultValue: '团队成员' }),
+      value: statsState.data.users,
+    },
     { title: t('admin.usage.statRag', { defaultValue: 'RAG 知识切片' }), value: statsState.data.ragDocs },
     { title: t('admin.usage.statMcp', { defaultValue: 'MCP 工具' }), value: statsState.data.mcpTools },
     { title: t('admin.usage.statSkills', { defaultValue: 'Skills 技能' }), value: statsState.data.skills },
@@ -154,12 +163,17 @@ const EnterpriseUsagePage: React.FC = () => {
       <div className='max-w-1200px mx-auto flex flex-col gap-24px'>
         <ModulePageHeader
           title={t('settings.enterpriseConsole.navUsage', { defaultValue: '使用统计' })}
-          description={t('admin.usage.desc', {
-            defaultValue: '企业资源使用全景与成员实时状态，统计各模块活跃数据。',
-          })}
+          description={
+            isAdmin
+              ? t('admin.usage.descAdmin', {
+                  defaultValue: '企业团队资源使用全景与成员实时状态，统计各模块活跃数据。',
+                })
+              : t('admin.usage.descMember', {
+                  defaultValue: '查看您所在团队可见的资源用量与队友状态（基于团队 membership 过滤）。',
+                })
+          }
         />
 
-        {/* 资源统计卡片 */}
         <ModuleDataState
           loading={statsState.loading}
           error={statsState.error}
@@ -181,14 +195,15 @@ const EnterpriseUsagePage: React.FC = () => {
           </Row>
         </ModuleDataState>
 
-        {/* 成员看板 */}
         <Card
           bordered={false}
           className='rd-12px'
           title={
             <div className='flex items-center gap-12px'>
               <span className='font-600'>
-                {t('admin.usage.memberBoard', { defaultValue: '成员看板' })}
+                {isAdmin
+                  ? t('admin.usage.memberBoard', { defaultValue: '成员看板' })
+                  : t('admin.usage.teamMemberBoard', { defaultValue: '团队成员看板' })}
               </span>
               <Tag color='green' size='small'>
                 {t('admin.usage.onlineCount', { defaultValue: '{{n}} 人在线', n: onlineCount })}
@@ -203,7 +218,11 @@ const EnterpriseUsagePage: React.FC = () => {
             loading={membersState.loading}
             error={membersState.error}
             empty={membersState.data.length === 0}
-            emptyDescription={t('admin.usage.noMembers', { defaultValue: '暂无成员数据' })}
+            emptyDescription={
+              isAdmin
+                ? t('admin.usage.noMembers', { defaultValue: '暂无成员数据' })
+                : t('admin.usage.noTeamMembers', { defaultValue: '暂无同团队成员数据，请先加入团队' })
+            }
           >
             <Table
               data={membersState.data}

@@ -21,12 +21,17 @@ import {
   Typography,
 } from '@arco-design/web-react';
 import { Alert } from '@arco-design/web-react';
-import { Delete, Plus, Search } from '@icon-park/react';
+import { Delete, Edit, Plus, Search } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import AdminPageWrapper from './components/AdminPageWrapper';
 import ModuleDataState from './components/ModuleDataState';
 import ModulePageHeader from './components/ModulePageHeader';
+import ResourceScopeFields, { type ResourceScopeValue } from './components/ResourceScopeFields';
+import ScopeOwnershipCell from './components/ScopeOwnershipCell';
 import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import { useTeamNameMap } from '@/renderer/hooks/enterprise/useTeamNameMap';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
 import {
   createRagDocument,
@@ -36,6 +41,7 @@ import {
   importRagUrl,
   listRagDocuments,
   queryRagDocuments,
+  updateRagDocumentScope,
   type RagDocumentRecord,
   type RagSearchResultRecord,
   uploadRagDocument,
@@ -46,6 +52,9 @@ type SearchResult = RagSearchResultRecord;
 
 const AdminRag: React.FC = () => {
   const { t } = useTranslation();
+  const { effectiveRole } = useWebuiEnterpriseMode();
+  const isAdmin = isEnterpriseAdminRole(effectiveRole);
+  const [createScope, setCreateScope] = useState<ResourceScopeValue>({ scope: 'personal', teamId: null });
 
   // Index Document Modal
   const [addVisible, setAddVisible] = useState(false);
@@ -64,6 +73,10 @@ const AdminRag: React.FC = () => {
   const [searchLimit, setSearchLimit] = useState(5);
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [scopeEditVisible, setScopeEditVisible] = useState(false);
+  const [scopeEditDoc, setScopeEditDoc] = useState<RagDocument | null>(null);
+  const [scopeEditValue, setScopeEditValue] = useState<ResourceScopeValue>({ scope: 'personal', teamId: null });
+  const [scopeSaving, setScopeSaving] = useState(false);
 
   const documentsState = useEnterpriseAsyncData(
     listRagDocuments,
@@ -77,13 +90,28 @@ const AdminRag: React.FC = () => {
     ''
   );
 
+  const { getTeamName, teams } = useTeamNameMap();
+
+  const scopePayload = useCallback(
+    () => ({
+      scope: createScope.scope,
+      ...(createScope.scope === 'team' && createScope.teamId ? { team_id: createScope.teamId } : {}),
+    }),
+    [createScope]
+  );
+
   const handleAddDocument = useCallback(async () => {
     try {
       const values = await form.validate();
+      if (createScope.scope === 'team' && !createScope.teamId) {
+        Message.warning(t('admin.scope.teamRequired', { defaultValue: '请选择团队' }));
+        return;
+      }
       setAdding(true);
       await createRagDocument({
         title: values.title.trim(),
         content: values.content.trim(),
+        ...scopePayload(),
       });
       Message.success(t('admin.rag.messages.addSuccess', { defaultValue: '文档索引成功' }));
       setAddVisible(false);
@@ -98,7 +126,7 @@ const AdminRag: React.FC = () => {
     } finally {
       setAdding(false);
     }
-  }, [documentsState, form, t]);
+  }, [createScope.scope, createScope.teamId, documentsState, form, scopePayload, t]);
 
   const handleDeleteDocument = useCallback(
     async (id: string) => {
@@ -139,7 +167,11 @@ const AdminRag: React.FC = () => {
 
     setAdding(true);
     try {
-      await importRagUrl({ url: urlInput.trim(), title: urlTitle.trim() || undefined });
+      await importRagUrl({
+        url: urlInput.trim(),
+        title: urlTitle.trim() || undefined,
+        ...scopePayload(),
+      });
       Message.success(t('admin.rag.urlSuccess', { defaultValue: 'URL 文档导入成功' }));
       setUrlVisible(false);
       setUrlInput('');
@@ -152,7 +184,7 @@ const AdminRag: React.FC = () => {
     } finally {
       setAdding(false);
     }
-  }, [documentsState, t, urlInput, urlTitle]);
+  }, [documentsState, scopePayload, t, urlInput, urlTitle]);
 
   const handleFeishuImport = useCallback(async () => {
     if (!feishuUrlInput.trim()) {
@@ -165,6 +197,7 @@ const AdminRag: React.FC = () => {
       await importRagFeishuDocument({
         url: feishuUrlInput.trim(),
         title: feishuTitle.trim() || undefined,
+        ...scopePayload(),
       });
       Message.success(
         t('admin.rag.feishuSuccess', { defaultValue: '飞书文档已提交导入，后台索引中' })
@@ -183,7 +216,37 @@ const AdminRag: React.FC = () => {
     } finally {
       setAdding(false);
     }
-  }, [documentsState, feishuTitle, feishuUrlInput, t]);
+  }, [documentsState, feishuTitle, feishuUrlInput, scopePayload, t]);
+
+  const openScopeEdit = useCallback((record: RagDocument) => {
+    setScopeEditDoc(record);
+    setScopeEditValue({ scope: record.scope || 'personal', teamId: record.team_id ?? null });
+    setScopeEditVisible(true);
+  }, []);
+
+  const handleSaveScope = useCallback(async () => {
+    if (!scopeEditDoc) {
+      return;
+    }
+    if (scopeEditValue.scope === 'team' && !scopeEditValue.teamId) {
+      Message.warning(t('admin.scope.teamRequired', { defaultValue: '请选择团队' }));
+      return;
+    }
+    setScopeSaving(true);
+    try {
+      await updateRagDocumentScope(scopeEditDoc.id, {
+        scope: scopeEditValue.scope,
+        ...(scopeEditValue.scope === 'team' && scopeEditValue.teamId ? { team_id: scopeEditValue.teamId } : {}),
+      });
+      Message.success(t('admin.rag.messages.scopeUpdated', { defaultValue: '可见范围已更新' }));
+      setScopeEditVisible(false);
+      await documentsState.reload();
+    } catch (error) {
+      Message.error(getEnterpriseActionError(error, t('admin.rag.messages.scopeUpdateFailed', { defaultValue: '更新可见范围失败' })));
+    } finally {
+      setScopeSaving(false);
+    }
+  }, [documentsState, scopeEditDoc, scopeEditValue, t]);
 
   const columns = [
     {
@@ -208,10 +271,13 @@ const AdminRag: React.FC = () => {
             <Tag size='small' color='arcoblue'>
               chunks: {record.chunk_count ?? 0}
             </Tag>
-            <Tag size='small' color='gray'>
-              {record.scope || 'personal'}
-            </Tag>
           </div>
+          <ScopeOwnershipCell
+            scope={record.scope}
+            teamId={record.team_id}
+            createdBy={record.created_by}
+            getTeamName={getTeamName}
+          />
           {record.status === 'failed' && record.last_error ? (
             <Typography.Text type='error' className='text-12px break-all'>
               {t('admin.rag.table.lastError', {
@@ -226,19 +292,29 @@ const AdminRag: React.FC = () => {
     {
       title: t('admin.rag.table.actions', { defaultValue: '操作' }),
       key: 'actions',
-      width: 100,
+      width: 140,
       render: (_col: unknown, record: RagDocument) => (
-        <Popconfirm
-          title={t('common.confirmDelete', { defaultValue: '确认删除？' })}
-          onOk={() => void handleDeleteDocument(record.id)}
-        >
+        <Space size='small'>
           <Button
             type='text'
-            status='danger'
             size='small'
-            icon={<Delete theme='outline' size={14} />}
-          />
-        </Popconfirm>
+            icon={<Edit theme='outline' size={14} />}
+            onClick={() => openScopeEdit(record)}
+          >
+            {t('admin.rag.table.editScope', { defaultValue: '归属' })}
+          </Button>
+          <Popconfirm
+            title={t('common.confirmDelete', { defaultValue: '确认删除？' })}
+            onOk={() => void handleDeleteDocument(record.id)}
+          >
+            <Button
+              type='text'
+              status='danger'
+              size='small'
+              icon={<Delete theme='outline' size={14} />}
+            />
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
@@ -249,7 +325,7 @@ const AdminRag: React.FC = () => {
         <ModulePageHeader
           title={t('admin.rag.title', { defaultValue: 'RAG 知识库' })}
           description={t('admin.rag.desc', {
-            defaultValue: '管理企业级向量化文档。您可以在此上传文档构建私有知识库，并测试检索效果。',
+            defaultValue: '管理团队向量化文档。成员可创建个人或团队共享知识，管理员可设为组织级共享。',
           })}
           actions={
             <>
@@ -258,9 +334,13 @@ const AdminRag: React.FC = () => {
               </Button>
             <input id='rag-file-input' type='file' accept='.md,.txt,.docx,.html,.ts,.tsx,.js,.json,.css' style={{display:'none'}} onChange={async (e) => {
               const file = e.target.files?.[0]; if (!file) return;
+              if (createScope.scope === 'team' && !createScope.teamId) {
+                Message.warning(t('admin.scope.teamRequired', { defaultValue: '请选择团队' }));
+                return;
+              }
               setAdding(true);
               try {
-                await uploadRagDocument(file);
+                await uploadRagDocument(file, scopePayload());
                 Message.success(t('admin.rag.uploadSuccess',{defaultValue:'文件上传成功，后台索引导入中'}));
                 await documentsState.reload();
               } catch (error) { Message.error(getEnterpriseActionError(error, t('admin.rag.uploadFailed',{defaultValue:'上传失败'}))); } finally { setAdding(false); (e.target as HTMLInputElement).value = ''; }
@@ -289,6 +369,16 @@ const AdminRag: React.FC = () => {
             </>
           }
         />
+
+        <Card bordered={false} className='rd-12px'>
+          <ResourceScopeFields
+            scope={createScope.scope}
+            teamId={createScope.teamId}
+            teams={teams}
+            isAdmin={isAdmin}
+            onChange={setCreateScope}
+          />
+        </Card>
 
         {/* Embedding 模型状态提示 */}
         {!ragStatusState.loading && !ragStatusState.data.ready && (
@@ -413,7 +503,7 @@ const AdminRag: React.FC = () => {
               field='title'
               rules={[{ required: true, message: t('admin.rag.validation.titleRequired', { defaultValue: '请输入标题' }) }]}
             >
-              <Input placeholder={t('admin.rag.modal.titlePlaceholder', { defaultValue: '例如：1ONE企业版部署说明' })} />
+              <Input placeholder={t('admin.rag.modal.titlePlaceholder', { defaultValue: '例如：1ONE企业团队版部署说明' })} />
             </Form.Item>
             <Form.Item
               label={t('admin.rag.modal.docContent', { defaultValue: '文档内容' })}
@@ -480,6 +570,22 @@ const AdminRag: React.FC = () => {
               })}
             </Typography.Text>
           </Form>
+        </Modal>
+
+        <Modal
+          title={t('admin.rag.modal.editScopeTitle', { defaultValue: '调整文档可见范围' })}
+          visible={scopeEditVisible}
+          onOk={() => void handleSaveScope()}
+          okButtonProps={{ loading: scopeSaving }}
+          onCancel={() => setScopeEditVisible(false)}
+        >
+          <ResourceScopeFields
+            scope={scopeEditValue.scope}
+            teamId={scopeEditValue.teamId}
+            teams={teams}
+            isAdmin={isAdmin}
+            onChange={setScopeEditValue}
+          />
         </Modal>
       </div>
     </AdminPageWrapper>

@@ -19,6 +19,7 @@ import type { ICronRepository } from './ICronRepository';
 import type { ICronEventEmitter } from './ICronEventEmitter';
 import type { ICronJobExecutor } from './ICronJobExecutor';
 import { deleteCronSkillFile } from './cronSkillFile';
+import { postAutopilotResultToIssue } from './autopilotPostback';
 
 /**
  * Parameters for creating a new cron job
@@ -36,6 +37,7 @@ export type CreateCronJobParams = {
   createdBy: 'user' | 'agent';
   executionMode?: 'existing' | 'new_conversation';
   agentConfig?: import('./CronStore').CronJob['metadata']['agentConfig'];
+  autopilotContext?: import('@/common/types/autopilotContext').AutopilotContext;
 };
 
 /**
@@ -214,6 +216,21 @@ export class CronService {
 
     const now = Date.now();
     const jobId = `cron_${uuid()}`;
+    const agentConfig = params.agentConfig
+      ? {
+          ...params.agentConfig,
+          ...(params.autopilotContext
+            ? {
+                autopilotContext: {
+                  ...params.agentConfig.autopilotContext,
+                  ...params.autopilotContext,
+                },
+              }
+            : {}),
+        }
+      : params.autopilotContext
+        ? { backend: params.agentType, name: params.name, autopilotContext: params.autopilotContext }
+        : undefined;
 
     const job: CronJob = {
       id: jobId,
@@ -231,7 +248,7 @@ export class CronService {
         createdBy: params.createdBy,
         createdAt: now,
         updatedAt: now,
-        agentConfig: params.agentConfig,
+        agentConfig,
       },
       state: {
         runCount: 0,
@@ -576,8 +593,8 @@ export class CronService {
       // conversation is already busy, preventing premature onceIdle fires.
       const newConversationId = await this.executor.executeJob(
         job,
-        () => {
-          this.registerCompletionNotification(job);
+        (activeConversationId) => {
+          this.registerCompletionNotification(job, activeConversationId);
         },
         preparedConversationId
       );
@@ -635,10 +652,14 @@ export class CronService {
    * Register a callback on executor to send notification when the agent finishes.
    * Must be called BEFORE sendMessage to avoid race conditions.
    */
-  private registerCompletionNotification(job: CronJob): void {
-    const { conversationId } = job.metadata;
-
+  private registerCompletionNotification(job: CronJob, conversationId: string): void {
     this.executor.onceIdle(conversationId, async () => {
+      try {
+        await postAutopilotResultToIssue(job, conversationId, this.conversationRepo);
+      } catch (error) {
+        console.warn('[CronService] Autopilot issue postback failed:', error);
+      }
+
       // Check if cron notification is enabled
       const cronNotificationEnabled = await ProcessConfig.get('system.cronNotificationEnabled');
       if (!cronNotificationEnabled) return;

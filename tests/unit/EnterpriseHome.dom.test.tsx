@@ -139,11 +139,13 @@ describe('EnterpriseHome', () => {
     render(<EnterpriseHome />);
 
     fireEvent.click(screen.getByText('Sessions'));
+    fireEvent.click(screen.getByText('超级助手'));
     fireEvent.click(screen.getByText('Workspace'));
     fireEvent.click(screen.getByText('Tasks'));
 
     expect(navigateMock).toHaveBeenNthCalledWith(1, '/sessions');
-    expect(navigateMock).toHaveBeenNthCalledWith(2, '/workspace');
-    expect(navigateMock).toHaveBeenNthCalledWith(3, '/tasks');
+    expect(navigateMock).toHaveBeenNthCalledWith(2, '/super-assistant');
+    expect(navigateMock).toHaveBeenNthCalledWith(3, '/workspace');
+    expect(navigateMock).toHaveBeenNthCalledWith(4, '/tasks');
   });
 });

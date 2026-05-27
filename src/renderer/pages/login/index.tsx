@@ -3,7 +3,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '@/renderer/services/i18n';
 import { resolvePostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
-import { consumePostLoginRedirect, readRedirectFromSearch } from '@/renderer/utils/postLoginRedirect';
+import {
+  consumePostLoginRedirect,
+  peekPostLoginRedirect,
+  readRedirectFromSearch,
+} from '@/renderer/utils/postLoginRedirect';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -301,9 +305,25 @@ const LoginPage: React.FC = () => {
     [formMethod, login, loginWithLdap, navigateAfterLogin, password, rememberMe, showMessage, t, username]
   );
 
+  const feishuRedirectTarget = useMemo(
+    () => readRedirectFromSearch(location.search) ?? peekPostLoginRedirect(),
+    [location.search]
+  );
+
+  const buildFeishuAuthorizePath = useCallback(
+    (mode: 'oauth' | 'qr') => {
+      const params = new URLSearchParams({ mode });
+      if (feishuRedirectTarget) {
+        params.set('redirect', feishuRedirectTarget);
+      }
+      return `/api/auth/feishu/authorize?${params.toString()}`;
+    },
+    [feishuRedirectTarget]
+  );
+
   const handleFeishuOauth = useCallback(() => {
-    window.location.href = '/api/auth/feishu/authorize?mode=oauth';
-  }, []);
+    window.location.href = buildFeishuAuthorizePath('oauth');
+  }, [buildFeishuAuthorizePath]);
 
   const ensureScriptLoaded = useCallback(async (src: string): Promise<void> => {
     if (typeof window === 'undefined') return;
@@ -324,7 +344,7 @@ const LoginPage: React.FC = () => {
     setMessage(null);
     setFeishuQr(null);
     try {
-      const res = await fetch('/api/auth/feishu/authorize?mode=qr', { credentials: 'include' });
+      const res = await fetch(buildFeishuAuthorizePath('qr'), { credentials: 'include' });
       const raw = (await res.json().catch((): null => null)) as unknown;
       const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
       const data = obj?.data && typeof obj.data === 'object' ? (obj.data as Record<string, unknown>) : null;
@@ -341,7 +361,7 @@ const LoginPage: React.FC = () => {
       console.error('Failed to init Feishu QR:', error);
       showMessage({ type: 'error', text: t('login.methods.feishuQrError', { defaultValue: '飞书二维码初始化失败' }) });
     }
-  }, [ensureScriptLoaded, showMessage, t]);
+  }, [buildFeishuAuthorizePath, ensureScriptLoaded, showMessage, t]);
 
   useEffect(() => {
     if (!showFeishuQr) {
@@ -445,7 +465,7 @@ const LoginPage: React.FC = () => {
         <div className='login-page__brand' aria-hidden={false}>
         <div className='login-page__brand-tag'>{t('login.enterprise.tag', { defaultValue: '1ONE' })}</div>
         <Typography.Title heading={4} className='login-page__brand-title'>
-          {t('login.enterprise.heroTitle', { defaultValue: '企业级 AI 工作台' })}
+          {t('login.enterprise.heroTitle', { defaultValue: '企业团队 AI 工作台' })}
         </Typography.Title>
         <Typography.Paragraph className='login-page__brand-desc'>
           {t('login.enterprise.brandDesc', {
@@ -456,7 +476,7 @@ const LoginPage: React.FC = () => {
         <div className='login-page__brand-visual' aria-hidden='true' />
         <div className='login-page__brand-intro'>
           <div className='login-page__brand-intro-title'>
-            {t('login.enterprise.introTitle', { defaultValue: '专注于企业级 AI 协作' })}
+            {t('login.enterprise.introTitle', { defaultValue: '专注于企业团队 AI 协作' })}
           </div>
           <div className='login-page__brand-intro-text'>
             {t('login.enterprise.introText', {
@@ -512,7 +532,7 @@ const LoginPage: React.FC = () => {
               className='mb-12px'
               type='info'
               content={t('login.enterpriseRedirectHint', {
-                defaultValue: '登录成功后将进入企业版（成员、团队、邀请码等）。您也可在登录后使用邀请码加入组织。',
+                defaultValue: '登录成功后将进入企业团队版（成员、团队、邀请码等）。您也可在登录后使用邀请码加入组织。',
               })}
             />
           ) : null}

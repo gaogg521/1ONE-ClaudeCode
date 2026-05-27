@@ -23,7 +23,7 @@
   },
   "enterprise": {
     "tag": "1ONE",
-    "heroTitle": "企业级 AI 工作台",
+    "heroTitle": "企业团队 AI 工作台",
     "brandDesc": "面向团队的命令行与对话型 AI 体验，统一账号与权限，支持本地、域控与飞书等多种登录方式。",
     "cardTitle": "登录您的账户",
     "cardSubtitle": "管理您的会话与任务"
@@ -44,7 +44,7 @@
     "wecomOauth": "使用企业微信登录",
     "oauthPending": "{{provider}} 登录回调正在接入。请先用 LDAP/飞书/本地账户登录，或使用邀请码加入。"
   },
-  "enterpriseRedirectHint": "登录成功后将进入企业版。您也可在登录后使用邀请码加入组织。",
+  "enterpriseRedirectHint": "登录成功后将进入企业团队版。您也可在登录后使用邀请码加入组织。",
   "orDivider": "或",
   "showFeishuQr": "显示飞书扫码登录",
   "hideFeishuQr": "收起飞书扫码",

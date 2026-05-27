@@ -323,7 +323,7 @@ describe('AdminKanban', () => {
     });
 
     fireEvent.click(screen.getByText('AI 需求一键拆单'));
-    fireEvent.change(screen.getByPlaceholderText(/例如：在企业版中加一个 RAG 本地知识库/), {
+    fireEvent.change(screen.getByPlaceholderText(/例如：在企业团队版中加一个 RAG 本地知识库/), {
       target: {
         value: `安全门户需求分析：首页
 1. 首页搜索安全知识库、个人中心和通知

@@ -422,7 +422,20 @@
     "desktopUrlPlaceholder": "Link appears after WebUI starts",
     "desktopCopyLink": "Copy",
     "desktopLinkCopied": "Link copied to clipboard",
-    "desktopCopyFailed": "Copy failed. Select and copy the address manually."
+    "desktopCopyFailed": "Copy failed. Select and copy the address manually.",
+    "capabilityTitle": "R&D Intelligence Workbench",
+    "menuTitle": "Organization & platform settings",
+    "metricPipelines": "CCI pipelines",
+    "metricPipelineSuffix": "",
+    "metricMcps": "Enabled MCP connections",
+    "metricMcpsSuffix": "",
+    "metricRags": "RAG semantic knowledge chunks",
+    "metricRagsSuffix": "",
+    "metricRepos": "CCode linked repositories",
+    "metricReposSuffix": "",
+    "experimental": "Experimental",
+    "openPipelineEditor": "Open editor",
+    "sharedWorkspaceHint": "Sessions, tasks, and shared workspaces stay in the main workbench — jump back below."
   },
   "authProviders": {
     "title": "Auth & Login",

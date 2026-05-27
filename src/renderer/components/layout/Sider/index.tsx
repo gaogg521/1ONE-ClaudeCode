@@ -294,7 +294,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                   <div className='flex items-center justify-between px-12px py-8px'>
                     <span className='text-13px text-t-secondary font-bold leading-20px'>
                       {isEnterpriseEdition
-                        ? t('team.sider.titleEnterprise', { defaultValue: '团队（企业版）' })
+                        ? t('team.sider.titleEnterprise', { defaultValue: '团队（企业团队版）' })
                         : t('team.sider.title', { defaultValue: '团队' })}
                     </span>
                     <div

@@ -5,15 +5,23 @@ import { useTranslation } from 'react-i18next';
 type SuperAssistantHeaderProps = {
   tenantLabel: string | null;
   isAdmin: boolean;
-  onOpenOverview: () => void;
-  onOpenIssues: () => void;
+  openIssueCount: number;
+  activeAgentCount: number;
+  skillCount: number;
+  onOpenKanban: () => void;
+  onOpenTeamFlow: () => void;
+  onCreateSharedTask: () => void;
 };
 
 const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
   tenantLabel,
   isAdmin,
-  onOpenOverview,
-  onOpenIssues,
+  openIssueCount,
+  activeAgentCount,
+  skillCount,
+  onOpenKanban,
+  onOpenTeamFlow,
+  onCreateSharedTask,
 }) => {
   const { t } = useTranslation();
 
@@ -22,7 +30,7 @@ const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
       <div className='min-w-0'>
         <div className='flex items-center gap-8px flex-wrap'>
           <div className='text-18px font-bold text-t-primary'>
-            {t('common.superAssistant.title', { defaultValue: '超级助手' })}
+            {t('common.superAssistant.title', { defaultValue: '超级助手 / 企业 Agent 工作台' })}
           </div>
           <Tag color='blue'>
             {isAdmin
@@ -33,7 +41,7 @@ const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
         <div className='mt-4px text-12px text-t-tertiary'>
           {t('common.superAssistant.subtitle', {
             defaultValue:
-              '把需求拆解、团队协作、技能编排和运行时连接到同一个可持续执行的协作中枢。',
+              '把“分配任务 -> 执行进度 -> 结果沉淀”放在同一个页面，像管理同事一样管理智能体。',
           })}
         </div>
         {tenantLabel ? (
@@ -44,14 +52,37 @@ const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
             })}
           </div>
         ) : null}
+        <div className='mt-8px flex flex-wrap gap-8px text-12px text-t-secondary'>
+          <Tag color='arcoblue'>
+            {t('common.superAssistant.header.openIssues', {
+              defaultValue: '待处理任务 {{count}}',
+              count: openIssueCount,
+            })}
+          </Tag>
+          <Tag color='green'>
+            {t('common.superAssistant.header.activeAgents', {
+              defaultValue: '执行中智能体 {{count}}',
+              count: activeAgentCount,
+            })}
+          </Tag>
+          <Tag color='purple'>
+            {t('common.superAssistant.header.skills', {
+              defaultValue: '可复用技能 {{count}}',
+              count: skillCount,
+            })}
+          </Tag>
+        </div>
       </div>
 
-      <div className='flex items-center gap-8px'>
-        <Button size='small' type='outline' onClick={onOpenOverview}>
-          {t('common.superAssistant.headerOverview', { defaultValue: '首页总览' })}
+      <div className='flex items-center gap-8px flex-wrap'>
+        <Button size='small' type='outline' onClick={onOpenKanban}>
+          {t('common.superAssistant.headerKanban', { defaultValue: '打开协作看板' })}
         </Button>
-        <Button size='small' type='primary' onClick={onOpenIssues}>
-          {t('common.superAssistant.headerWork', { defaultValue: '进入 Issue 作战台' })}
+        <Button size='small' type='outline' onClick={onOpenTeamFlow}>
+          {t('common.superAssistant.headerTeamFlow', { defaultValue: '拉起 Team 协作' })}
+        </Button>
+        <Button size='small' type='primary' onClick={onCreateSharedTask}>
+          {t('common.superAssistant.headerCreateTask', { defaultValue: '创建共享任务' })}
         </Button>
       </div>
     </div>

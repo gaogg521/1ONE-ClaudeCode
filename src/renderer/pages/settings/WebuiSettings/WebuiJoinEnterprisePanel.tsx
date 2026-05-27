@@ -112,7 +112,7 @@ const WebuiJoinEnterprisePanel: React.FC = () => {
       Message.success(
         t('settings.webui.createEnterpriseSuccess', {
           tenant: name,
-          defaultValue: '已创建企业「{{tenant}}」。请在标题栏切换到「企业版」进入工作区；组织管理请用侧栏「管理后台」。',
+          defaultValue: '已创建企业「{{tenant}}」。请在标题栏切换到「企业团队版」进入工作区；组织管理请用侧栏「管理后台」。',
         })
       );
       setOrgName('');
@@ -136,7 +136,7 @@ const WebuiJoinEnterprisePanel: React.FC = () => {
       <Typography.Paragraph type='secondary' className='text-12px mb-12px'>
         {t('settings.webui.joinEnterpriseDesc', {
           defaultValue:
-            '默认使用单机 WebUI。若贵司已开通企业版，可通过邀请码加入；系统管理员也可在此创建新企业。',
+            '默认使用单机 WebUI。若贵司已开通企业团队版，可通过邀请码加入；系统管理员也可在此创建新企业。',
         })}
       </Typography.Paragraph>
       {isDesktop && !webuiApiBase ? (

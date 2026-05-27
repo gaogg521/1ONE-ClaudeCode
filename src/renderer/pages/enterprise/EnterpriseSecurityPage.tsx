@@ -4,7 +4,9 @@
 import React from 'react';
 import { Card, Table, Tag } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
+import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import AdminPageWrapper from '@/renderer/pages/admin/components/AdminPageWrapper';
 import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
 import ModulePageHeader from '@/renderer/pages/admin/components/ModulePageHeader';
@@ -14,6 +16,8 @@ type AuditLog = AuditLogRecord;
 
 const EnterpriseSecurityPage: React.FC = () => {
   const { t } = useTranslation();
+  const { effectiveRole } = useWebuiEnterpriseMode();
+  const isAdmin = isEnterpriseAdminRole(effectiveRole);
   const logsState = useEnterpriseAsyncData(
     listAuditLogs,
     [],
@@ -33,18 +37,26 @@ const EnterpriseSecurityPage: React.FC = () => {
       <div className='max-w-1200px mx-auto'>
         <ModulePageHeader
           title={t('settings.enterpriseConsole.navSecurity', { defaultValue: '安全与审计' })}
-          description={t('admin.security.desc', {
-            defaultValue: '操作审计日志与安全事件追踪，保障企业数据合规。',
-          })}
+          description={
+            isAdmin
+              ? t('admin.security.descAdmin', {
+                  defaultValue: '全组织操作审计日志与安全事件追踪，保障企业团队数据合规。',
+                })
+              : t('admin.security.descMember', {
+                  defaultValue: '查看您与同团队成员的操作审计记录（不含其他团队）。',
+                })
+          }
         />
         <Card bordered={false} className='rd-12px'>
           <ModuleDataState
             loading={logsState.loading}
             error={logsState.error}
             empty={logsState.data.length === 0}
-            emptyDescription={t('admin.security.empty', {
-              defaultValue: '暂无审计日志。操作记录将自动生成。',
-            })}
+            emptyDescription={
+              isAdmin
+                ? t('admin.security.empty', { defaultValue: '暂无审计日志。操作记录将自动生成。' })
+                : t('admin.security.emptyMember', { defaultValue: '暂无团队相关审计记录。' })
+            }
           >
             <Table
               data={logsState.data}

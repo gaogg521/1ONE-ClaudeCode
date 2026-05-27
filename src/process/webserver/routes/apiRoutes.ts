@@ -26,6 +26,7 @@ import { registerKanbanRoutes } from './kanbanRoutes';
 import { registerAdminRoutes } from './adminRoutes';
 import { registerTeamTasksRoutes } from './teamTasksRoutes';
 import { registerDevOpsRoutes } from './devopsRoutes';
+import { registerNotificationRoutes } from './notificationRoutes';
 
 /** Max upload size in bytes (30MB per Issue #1233) */
 const MAX_UPLOAD_SIZE = 30 * 1024 * 1024;
@@ -698,6 +699,7 @@ export function registerApiRoutes(app: Express): void {
   registerKanbanRoutes(app);
   registerAdminRoutes(app);
   registerTeamTasksRoutes(app, { rateLimit: apiRateLimiter, auth: validateApiAccess });
+  registerNotificationRoutes(app, { rateLimit: apiRateLimiter, auth: validateApiAccess });
   registerDevOpsRoutes(app);
 
   /**

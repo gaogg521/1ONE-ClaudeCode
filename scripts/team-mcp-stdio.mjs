@@ -267,5 +267,47 @@ You will be notified of the result either way.`,
   TEAM_MCP_TOKEN
 );
 
+// ---- team_enterprise_members ----
+createTeamTool(
+  server,
+  'team_enterprise_members',
+  `List human enterprise members who can be assigned follow-up work.
+
+Use before team_issue_escalate when you need to assign a blocker to a colleague.
+Returns usernames suitable for assign_to_member (e.g. "@alice").`,
+  {},
+  TEAM_MCP_PORT,
+  TEAM_AGENT_SLOT_ID,
+  TEAM_MCP_TOKEN
+);
+
+// ---- team_issue_escalate ----
+createTeamTool(
+  server,
+  'team_issue_escalate',
+  `Create a follow-up enterprise Issue when you hit a blocker (Multica-style handoff).
+
+Use when:
+- Required data/instrumentation is missing
+- A definition is ambiguous and needs a human decision
+- Another teammate (human or agent) must own the next step
+
+This creates a CTeam requirement, optionally assigns a human member (kanban task)
+and/or an agent teammate (team task), and posts a comment on the parent issue.`,
+  {
+    subject: z.string().describe('Short title for the follow-up issue'),
+    description: z.string().optional().describe('Detailed context for the assignee'),
+    blocker_reason: z.string().optional().describe('Why the current work is blocked'),
+    parent_issue_id: z.string().optional().describe('Parent requirement/issue ID to link and comment on'),
+    assign_to_agent: z.string().optional().describe('Agent teammate name to assign (e.g. "frontend-agent")'),
+    assign_to_member: z.string().optional().describe('Human member username to assign (e.g. "@alice" or "alice")'),
+    issue_type: z.enum(['story', 'bug', 'task']).optional().describe('Issue type (default: task)'),
+    priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().describe('Priority (default: high)'),
+  },
+  TEAM_MCP_PORT,
+  TEAM_AGENT_SLOT_ID,
+  TEAM_MCP_TOKEN
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);

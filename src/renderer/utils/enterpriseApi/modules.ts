@@ -6,6 +6,7 @@
 
 import { getCsrfToken } from '@process/webserver/middleware/csrfClient';
 import { fetchWebuiApi } from '@/renderer/utils/webuiApiBase';
+import type { UserNotificationRecord } from '@/common/types/userNotification';
 import { enterpriseGet, enterpriseMutate } from './client';
 
 export type ArtifactRepo = {
@@ -13,6 +14,9 @@ export type ArtifactRepo = {
   name: string;
   repo_type: string;
   endpoint: string;
+  scope?: string;
+  team_id?: string | null;
+  created_by?: string;
 };
 
 export type ArtifactRecord = {
@@ -24,6 +28,8 @@ export type ArtifactRecord = {
   repo_name: string;
   download_count: number;
   scope: string;
+  team_id?: string | null;
+  created_by?: string;
 };
 
 export type CodeRepo = {
@@ -33,6 +39,9 @@ export type CodeRepo = {
   provider: string;
   default_branch: string;
   credential_id: string;
+  scope?: string;
+  team_id?: string | null;
+  created_by?: string;
 };
 
 export type DoraMetricRecord = {
@@ -47,6 +56,9 @@ export type McpRegistryRecord = {
   endpoint: string;
   enabled?: boolean;
   hasKeys?: boolean;
+  scope?: string;
+  team_id?: string | null;
+  created_by?: string;
 };
 
 export type RagDocumentRecord = {
@@ -60,6 +72,8 @@ export type RagDocumentRecord = {
   created_at?: number;
   chunk_count?: number;
   scope?: string;
+  team_id?: string | null;
+  created_by?: string;
 };
 
 export type RagSearchResultRecord = {
@@ -265,6 +279,13 @@ export async function createRagDocument(payload: Record<string, unknown>): Promi
   await enterpriseMutate('/api/admin/rag/documents', 'POST', payload);
 }
 
+export async function updateRagDocumentScope(
+  id: string,
+  payload: { scope: string; team_id?: string | null }
+): Promise<void> {
+  await enterpriseMutate(`/api/admin/rag/documents/${encodeURIComponent(id)}`, 'PATCH', payload);
+}
+
 export async function deleteRagDocument(id: string): Promise<void> {
   await enterpriseMutate(`/api/admin/rag/documents/${id}`, 'DELETE', {});
 }
@@ -288,7 +309,8 @@ export async function importRagFeishuDocument(
 }
 
 export async function uploadRagDocument(
-  file: File
+  file: File,
+  options?: { scope?: string; team_id?: string | null }
 ): Promise<{ id: string; status: string }> {
   const token = getCsrfToken();
   const headers: Record<string, string> = {};
@@ -297,6 +319,12 @@ export async function uploadRagDocument(
   }
   const formData = new FormData();
   formData.append('file', file);
+  if (options?.scope) {
+    formData.append('scope', options.scope);
+  }
+  if (options?.team_id) {
+    formData.append('team_id', options.team_id);
+  }
   const response = await fetchWebuiApi('/api/admin/rag/upload', {
     method: 'POST',
     headers,
@@ -392,6 +420,24 @@ export async function deleteRequirement(requirementId: string): Promise<void> {
     `/api/admin/requirements/${encodeURIComponent(requirementId)}`,
     'DELETE',
     {}
+  );
+}
+
+export type RequirementCommentRecord = {
+  id: string;
+  tenant_id: string;
+  requirement_id: string;
+  author_type: 'user' | 'agent' | 'autopilot';
+  author_id: string | null;
+  author_name: string;
+  body: string;
+  metadata: Record<string, unknown> | null;
+  created_at: number;
+};
+
+export async function listRequirementComments(requirementId: string): Promise<RequirementCommentRecord[]> {
+  return enterpriseGet<RequirementCommentRecord[]>(
+    `/api/admin/requirements/${encodeURIComponent(requirementId)}/comments`
   );
 }
 
@@ -496,4 +542,31 @@ export async function triggerPipelineRun(
 
 export async function getPipelineRun(runId: string): Promise<PipelineRunRecord> {
   return enterpriseGet<PipelineRunRecord>(`/api/admin/pipelines/runs/${runId}`);
+}
+
+export async function listNotifications(options?: {
+  unreadOnly?: boolean;
+  limit?: number;
+}): Promise<UserNotificationRecord[]> {
+  const params = new URLSearchParams();
+  if (options?.unreadOnly) {
+    params.set('unreadOnly', '1');
+  }
+  if (options?.limit) {
+    params.set('limit', String(options.limit));
+  }
+  const query = params.toString();
+  return enterpriseGet(`/api/notifications${query ? `?${query}` : ''}`);
+}
+
+export async function getUnreadNotificationCount(): Promise<{ count: number }> {
+  return enterpriseGet<{ count: number }>('/api/notifications/unread-count');
+}
+
+export async function markNotificationRead(notificationId: string): Promise<void> {
+  await enterpriseMutate(`/api/notifications/${encodeURIComponent(notificationId)}/read`, 'PATCH', {});
+}
+
+export async function markAllNotificationsRead(): Promise<{ updated: number }> {
+  return enterpriseMutate<{ updated: number }>('/api/notifications/read-all', 'POST', {});
 }

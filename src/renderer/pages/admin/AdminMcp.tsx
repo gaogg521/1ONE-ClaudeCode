@@ -24,10 +24,15 @@ import {
 import { Delete, Edit, Plus } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
 import AdminPageWrapper from './components/AdminPageWrapper';
 import ModuleDataState from './components/ModuleDataState';
 import ModulePageHeader from './components/ModulePageHeader';
-import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
+import ResourceScopeFields from './components/ResourceScopeFields';
+import ScopeOwnershipCell from './components/ScopeOwnershipCell';
+import { useTeamNameMap } from '@/renderer/hooks/enterprise/useTeamNameMap';
+import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import {
   deleteMcpRegistry,
   importMcpRegistryBatch,
@@ -48,6 +53,8 @@ type EnvItem = {
 
 const AdminMcp: React.FC = () => {
   const { t } = useTranslation();
+  const { effectiveRole } = useWebuiEnterpriseMode();
+  const isAdmin = isEnterpriseAdminRole(effectiveRole);
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [batchVisible, setBatchVisible] = useState(false);
@@ -68,6 +75,7 @@ const AdminMcp: React.FC = () => {
 
   // Custom environment variables state
   const [envList, setEnvList] = useState<EnvItem[]>([]);
+  const [resourceScope, setResourceScope] = useState({ scope: 'personal', teamId: null as string | null });
 
   const connectorsState = useEnterpriseAsyncData<McpConnector[]>(
     useCallback(async () => {
@@ -82,10 +90,13 @@ const AdminMcp: React.FC = () => {
     t('admin.mcp.messages.loadFailed', { defaultValue: '加载 MCP 服务失败' })
   );
 
+  const { getTeamName, teams } = useTeamNameMap();
+
   const handleOpenAdd = () => {
     setEditingId(null);
     setMcpType('stdio');
     setEnvList([{ key: '', value: '' }]);
+    setResourceScope({ scope: 'personal', teamId: null });
     form.resetFields();
     form.setFieldsValue({ type: 'stdio', enabled: true });
     setModalVisible(true);
@@ -94,6 +105,7 @@ const AdminMcp: React.FC = () => {
   const handleOpenEdit = (record: McpConnector) => {
     setEditingId(record.id);
     setMcpType(record.type);
+    setResourceScope({ scope: record.scope || 'personal', teamId: record.team_id ?? null });
     form.resetFields();
     form.setFieldsValue({
       name: record.name,
@@ -115,6 +127,10 @@ const AdminMcp: React.FC = () => {
   const handleSave = useCallback(async () => {
     try {
       const values = await form.validate();
+      if (resourceScope.scope === 'team' && !resourceScope.teamId) {
+        Message.warning(t('admin.scope.teamRequired', { defaultValue: '请选择团队' }));
+        return;
+      }
       setSaving(true);
 
       // Convert envList to record object, filtering out empty keys
@@ -132,6 +148,8 @@ const AdminMcp: React.FC = () => {
         endpoint: values.endpoint.trim(),
         enabled: values.enabled,
         env: envRecord,
+        scope: resourceScope.scope,
+        ...(resourceScope.scope === 'team' && resourceScope.teamId ? { team_id: resourceScope.teamId } : {}),
       });
 
       Message.success(t('admin.mcp.messages.saveSuccess', { defaultValue: 'MCP 服务保存成功' }));
@@ -148,7 +166,7 @@ const AdminMcp: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [connectorsState, editingId, envList, form, t]);
+  }, [connectorsState, editingId, envList, form, resourceScope, t]);
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -172,7 +190,9 @@ const AdminMcp: React.FC = () => {
           type: record.type,
           endpoint: record.endpoint,
           enabled: checked,
-          env: {}, // Maintain existing env credentials
+          env: {},
+          scope: record.scope,
+          ...(record.team_id ? { team_id: record.team_id } : {}),
         });
         Message.success(t('admin.mcp.messages.saveSuccess', { defaultValue: '状态更新成功' }));
         await connectorsState.reload();
@@ -253,6 +273,19 @@ const AdminMcp: React.FC = () => {
       ),
     },
     {
+      title: t('admin.mcp.table.scope', { defaultValue: '归属' }),
+      key: 'scope',
+      width: 180,
+      render: (_col: unknown, record: McpConnector) => (
+        <ScopeOwnershipCell
+          scope={record.scope}
+          teamId={record.team_id}
+          createdBy={record.created_by}
+          getTeamName={getTeamName}
+        />
+      ),
+    },
+    {
       title: t('admin.mcp.table.enabled', { defaultValue: '状态' }),
       dataIndex: 'enabled',
       key: 'enabled',
@@ -301,7 +334,7 @@ const AdminMcp: React.FC = () => {
         <ModulePageHeader
           title={t('admin.mcp.title', { defaultValue: 'MCP 代理注册' })}
           description={t('admin.mcp.desc', {
-            defaultValue: '注册并管理企业内部 Model Context Protocol (MCP) 代理服务器。支持配置 Stdio 或 SSE 服务，并加密托管环境变量。',
+            defaultValue: '注册并管理团队 MCP 代理。成员可创建个人或团队工具，管理员可设为组织共享。',
           })}
           actions={
             <>
@@ -407,6 +440,14 @@ const AdminMcp: React.FC = () => {
             >
               <Switch />
             </Form.Item>
+
+            <ResourceScopeFields
+              scope={resourceScope.scope}
+              teamId={resourceScope.teamId}
+              teams={teams}
+              isAdmin={isAdmin}
+              onChange={setResourceScope}
+            />
 
             {/* Dynamic Credentials Section */}
             <div className='border-t border-border-1 pt-16px mt-16px'>

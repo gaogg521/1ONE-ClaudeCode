@@ -8,8 +8,12 @@ import { randomUUID } from 'node:crypto';
 import { CodeRepoRepository } from '@process/services/database/repositories/devops/codeRepoRepository';
 
 export class CcodeService {
-  static async listRepos(tenantId: string): Promise<unknown[]> {
-    return CodeRepoRepository.list(tenantId);
+  static async listRepos(input: {
+    tenantId: string;
+    userId: string;
+    isAdmin: boolean;
+  }): Promise<unknown[]> {
+    return CodeRepoRepository.list(input.tenantId, input.userId, input.isAdmin);
   }
 
   static async createRepo(input: {
@@ -19,6 +23,9 @@ export class CcodeService {
     provider?: string;
     credentialId?: string;
     defaultBranch?: string;
+    scope: string;
+    teamId: string | null;
+    createdBy: string;
   }): Promise<{ id: string }> {
     const name = input.name.trim();
     const url = input.url.trim();
@@ -34,6 +41,9 @@ export class CcodeService {
       provider: input.provider || 'gitlab',
       credentialId: input.credentialId || '',
       defaultBranch: input.defaultBranch || 'main',
+      scope: input.scope,
+      teamId: input.teamId,
+      createdBy: input.createdBy,
       now: Date.now(),
     });
     return { id };

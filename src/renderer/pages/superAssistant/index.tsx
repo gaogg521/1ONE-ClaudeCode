@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Message, Result } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { ipcBridge } from '@/common';
 import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
@@ -14,17 +15,20 @@ import {
   updateRequirement,
   updateTeamTask,
 } from '@/renderer/utils/enterpriseApi/modules';
-import type { SuperAssistantTab } from './constants';
-import { SUPER_ASSISTANT_TABS } from './constants';
+import CreateSharedTaskModal from './components/CreateSharedTaskModal';
 import SuperAssistantHeader from './components/SuperAssistantHeader';
 import IssuesWorkbench from './components/IssuesWorkbench';
-import OverviewTab from './components/OverviewTab';
 import AgentsTab from './components/AgentsTab';
 import SkillsTab from './components/SkillsTab';
 import RuntimesTab from './components/RuntimesTab';
 import SettingsTab from './components/SettingsTab';
 import type { SuperAssistantIssueAssignmentMap } from './hooks/useSuperAssistantData';
+import { pickEnterpriseCollaborationContext } from './hooks/useEnterpriseCollaborationContext';
 import { useSuperAssistantData } from './hooks/useSuperAssistantData';
+import {
+  buildIssueAssignmentPrompt,
+  buildSuperAssistantAutopilotDefaults,
+} from './utils/autopilotDefaults';
 
 type NavigationIssueContext = {
   id: string;
@@ -150,17 +154,11 @@ function parseIssueTaskMetadata(task: TeamTaskRecord): SuperAssistantIssueTaskMe
 }
 
 function parseSuperAssistantSearch(search: string): {
-  tab: SuperAssistantTab | null;
   issueId: string | null;
 } {
   const params = new URLSearchParams(search);
-  const tab = params.get('tab');
   const issueId = params.get('issueId');
-  const resolvedTab = SUPER_ASSISTANT_TABS.includes(tab as SuperAssistantTab)
-    ? (tab as SuperAssistantTab)
-    : null;
   return {
-    tab: resolvedTab,
     issueId,
   };
 }
@@ -171,12 +169,12 @@ const SuperAssistantPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
   const { hasJoinedEnterprise, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
-  const [activeTab, setActiveTab] = useState<SuperAssistantTab>('overview');
   const [issueAssignments, setIssueAssignments] = useState<SuperAssistantIssueAssignmentMap>({});
   const [issueAssignmentTaskIds, setIssueAssignmentTaskIds] = useState<Record<string, string>>({});
   const isAdmin = isEnterpriseAdminRole(user?.role);
   const superAssistantData = useSuperAssistantData(hasJoinedEnterprise, isAdmin, issueAssignments);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [sharedTaskVisible, setSharedTaskVisible] = useState(false);
   const currentTeam = superAssistantData.primaryTeam
     ? {
         id: superAssistantData.primaryTeam.id,
@@ -310,6 +308,23 @@ const SuperAssistantPage: React.FC = () => {
       }
     >;
   }, [issueAssignments, superAssistantData.agentExecutionGroups]);
+  const collaborationContext = useMemo(
+    () =>
+      pickEnterpriseCollaborationContext({
+        ragDocumentCount: superAssistantData.ragDocumentCount,
+        skillCount: superAssistantData.skillCount,
+        skillNames: superAssistantData.skillNames,
+        enabledMcpCount: superAssistantData.enabledMcpCount,
+        mcpNames: superAssistantData.mcpNames,
+      }),
+    [
+      superAssistantData.enabledMcpCount,
+      superAssistantData.mcpNames,
+      superAssistantData.ragDocumentCount,
+      superAssistantData.skillCount,
+      superAssistantData.skillNames,
+    ]
+  );
   const assignableAgents = useMemo(
     () =>
       (superAssistantData.primaryTeam?.agents ?? []).map((agent) => ({
@@ -318,13 +333,32 @@ const SuperAssistantPage: React.FC = () => {
       })),
     [superAssistantData.primaryTeam]
   );
-  const routedState = useMemo(() => parseSuperAssistantSearch(location.search), [location.search]);
-
-  useEffect(() => {
-    if (routedState.tab) {
-      setActiveTab(routedState.tab);
+  const primaryLeadAgent = useMemo(() => {
+    const team = superAssistantData.primaryTeam;
+    if (!team) {
+      return null;
     }
-  }, [routedState.tab]);
+    return team.agents.find((agent) => agent.slotId === team.leadAgentId) ?? team.agents[0] ?? null;
+  }, [superAssistantData.primaryTeam]);
+  const autopilotDefaults = useMemo(
+    () =>
+      buildSuperAssistantAutopilotDefaults({
+        teamId: superAssistantData.primaryTeam?.id,
+        leadAgent: primaryLeadAgent,
+        requirementId: currentIssue?.id,
+        skillNames: superAssistantData.skillNames,
+        mentionUserIds: superAssistantData.openAssigneeUserIds,
+        postBackToIssue: Boolean(currentIssue?.id),
+      }),
+    [
+      currentIssue?.id,
+      primaryLeadAgent,
+      superAssistantData.openAssigneeUserIds,
+      superAssistantData.primaryTeam?.id,
+      superAssistantData.skillNames,
+    ]
+  );
+  const routedState = useMemo(() => parseSuperAssistantSearch(location.search), [location.search]);
 
   useEffect(() => {
     if (routedState.issueId && superAssistantData.issueLookup[routedState.issueId]) {
@@ -332,39 +366,72 @@ const SuperAssistantPage: React.FC = () => {
     }
   }, [routedState.issueId, superAssistantData.issueLookup]);
 
+  const ensureTeamSession = useCallback(
+    async (teamId: string, fallbackMessage: string) => {
+      try {
+        await ipcBridge.team.ensureSession.invoke({ teamId });
+        return true;
+      } catch (error) {
+        Message.error(getEnterpriseActionError(error, fallbackMessage));
+        return false;
+      }
+    },
+    []
+  );
+
   const handleBreakdownIssue = () => navigate(buildKanbanPath(currentIssue, currentTeam));
-  const handleOpenTeamFlow = () =>
-    navigate(
-      superAssistantData.primaryTeam
-        ? buildTeamPath(superAssistantData.primaryTeam.id, currentIssue, currentIssueAssignment?.slotId)
-        : '/enterprise/teams'
+  const handleOpenTeamFlow = async () => {
+    if (!superAssistantData.primaryTeam) {
+      navigate('/enterprise/teams');
+      return;
+    }
+    const ready = await ensureTeamSession(
+      superAssistantData.primaryTeam.id,
+      t('common.superAssistant.ensureTeamSessionFailed', { defaultValue: '启动团队执行流失败' })
     );
-  const handleOpenSharedTasks = () =>
-    navigate(
-      superAssistantData.primaryTeam
-        ? buildTeamScopedPath(
-            '/tasks',
-            superAssistantData.primaryTeam.id,
-            superAssistantData.primaryTeam.name,
-            currentIssue
-          )
-        : buildTeamScopedPath('/tasks', undefined, undefined, currentIssue)
-    );
-  const handleOpenSharedSessions = () =>
-    navigate(
-      superAssistantData.primaryTeam
-        ? buildTeamScopedPath(
-            '/sessions',
-            superAssistantData.primaryTeam.id,
-            superAssistantData.primaryTeam.name,
-            currentIssue
-          )
-        : buildTeamScopedPath('/sessions', undefined, undefined, currentIssue)
-    );
+    if (!ready) {
+      return;
+    }
+    navigate(buildTeamPath(superAssistantData.primaryTeam.id, currentIssue, currentIssueAssignment?.slotId));
+  };
+  const handleOpenSharedTasks = () => setSharedTaskVisible(true);
+  const handleOpenSharedSessions = async () => {
+    if (superAssistantData.primaryTeam) {
+      const ready = await ensureTeamSession(
+        superAssistantData.primaryTeam.id,
+        t('common.superAssistant.ensureSharedSessionFailed', { defaultValue: '启动共享会话失败' })
+      );
+      if (!ready) {
+        return;
+      }
+      navigate(
+        buildTeamScopedPath(
+          '/sessions',
+          superAssistantData.primaryTeam.id,
+          superAssistantData.primaryTeam.name,
+          currentIssue
+        )
+      );
+      return;
+    }
+    navigate(buildTeamScopedPath('/sessions', undefined, undefined, currentIssue));
+  };
+  const handleOpenEnterpriseKnowledge = () => navigate(showEnterpriseAdminNav ? '/enterprise/rag' : '/super-assistant?tab=skills');
+  const handleOpenEnterpriseDelivery = async () => {
+    if (showEnterpriseAdminNav) {
+      navigate('/enterprise/cteam');
+      return;
+    }
+    await handleOpenTeamFlow();
+  };
   const handleOpenSkillsHub = () => navigate('/settings/skills-hub');
   const handleOpenMcp = () => navigate('/mcp');
   const handleOpenAgentSettings = () => navigate('/settings/agent');
-  const handleAssignIssue = async (slotId: string, agentName: string) => {
+  const handleAssignIssue = async (
+    slotId: string,
+    agentName: string,
+    options?: { navigateAfter?: boolean }
+  ) => {
     if (!currentIssue || !superAssistantData.primaryTeam) {
       return;
     }
@@ -389,8 +456,23 @@ const SuperAssistantPage: React.FC = () => {
         });
       }
 
-      // 分配成功后导航到团队 Agent 会话页，让用户手动触发或 Agent 自动接收
-      navigate(buildTeamPath(superAssistantData.primaryTeam.id, currentIssue, slotId));
+      const ready = await ensureTeamSession(
+        superAssistantData.primaryTeam.id,
+        t('common.superAssistant.ensureAssignedAgentFailed', { defaultValue: '启动 Agent 协作会话失败' })
+      );
+      if (!ready) {
+        return;
+      }
+
+      await ipcBridge.team.sendMessageToAgent.invoke({
+        teamId: superAssistantData.primaryTeam.id,
+        slotId,
+        content: buildIssueAssignmentPrompt(currentIssue, agentName),
+      });
+
+      if (options?.navigateAfter !== false) {
+        navigate(buildTeamPath(superAssistantData.primaryTeam.id, currentIssue, slotId));
+      }
       await loadIssueAssignmentsFromTeam();
     } catch (error) {
       Message.error(
@@ -524,24 +606,19 @@ const SuperAssistantPage: React.FC = () => {
       );
     }
   };
-  const handleOpenAssignedAgent = () => {
+  const handleOpenAssignedAgent = async () => {
     if (!currentIssue || !currentIssueAssignment) {
+      return;
+    }
+    const ready = await ensureTeamSession(
+      currentIssueAssignment.teamId,
+      t('common.superAssistant.ensureAssignedAgentFailed', { defaultValue: '启动 Agent 协作会话失败' })
+    );
+    if (!ready) {
       return;
     }
     navigate(buildTeamPath(currentIssueAssignment.teamId, currentIssue, currentIssueAssignment.slotId));
   };
-
-  const tabLabels = useMemo<Record<SuperAssistantTab, string>>(
-    () => ({
-      overview: t('common.superAssistant.tabs.overview', { defaultValue: '总览' }),
-      issues: t('common.superAssistant.tabs.issues', { defaultValue: 'Issues' }),
-      agents: t('common.superAssistant.tabs.agents', { defaultValue: 'Agents' }),
-      skills: t('common.superAssistant.tabs.skills', { defaultValue: 'Skills' }),
-      runtimes: t('common.superAssistant.tabs.runtimes', { defaultValue: '运行时' }),
-      settings: t('common.superAssistant.tabs.settings', { defaultValue: '设置' }),
-    }),
-    [t]
-  );
 
   if (!hasJoinedEnterprise) {
     return (
@@ -560,132 +637,110 @@ const SuperAssistantPage: React.FC = () => {
     );
   }
 
-  const renderActiveTab = () => {
-    switch (activeTab) {
-      case 'overview':
-        return (
-          <OverviewTab
-            isAdmin={isAdmin}
-            openIssueCount={superAssistantData.openIssueCount}
-            visibleIssueCount={superAssistantData.visibleIssueCount}
-            totalAgentCount={superAssistantData.totalAgentCount}
-            activeAgentCount={superAssistantData.activeAgentCount}
-            teamConversationCount={superAssistantData.teamConversationCount}
-            featuredIssueSubject={superAssistantData.featuredIssue?.subject}
-            skillCount={superAssistantData.skillCount}
-            enabledMcpCount={superAssistantData.enabledMcpCount}
-            teamCount={superAssistantData.teamSummaries.length}
-            onBreakdownIssue={handleBreakdownIssue}
-            onOpenTeamFlow={handleOpenTeamFlow}
-            onOpenSharedTasks={handleOpenSharedTasks}
-            onOpenSharedSessions={handleOpenSharedSessions}
-            onOpenSkills={handleOpenSkillsHub}
-            onOpenMcp={handleOpenMcp}
-            onOpenRuntimes={() => setActiveTab('runtimes')}
-          />
-        );
-      case 'issues':
-        return (
-          <IssuesWorkbench
-            isAdmin={isAdmin}
-            loading={superAssistantData.loading}
-            boardColumns={superAssistantData.boardColumns}
-            issueBoardFeedbackById={issueBoardFeedbackById}
-            currentIssue={currentIssue}
-            assignableAgents={assignableAgents}
-            currentAssignmentAgentName={currentIssueAssignment?.agentName ?? null}
-            currentIssueActivityFeedback={currentIssueActivityFeedback}
-            onSelectIssue={setSelectedIssueId}
-            onBreakdownIssue={handleBreakdownIssue}
-            onAssignIssue={handleAssignIssue}
-            onMarkIssueBlocked={handleMarkIssueBlocked}
-            onClearIssueBlocked={handleClearIssueBlocked}
-            onUnassignIssue={handleUnassignIssue}
-            onMoveIssueToReview={handleMoveIssueToReview}
-            onMarkIssueDone={handleMarkIssueDone}
-            onOpenAssignedAgent={handleOpenAssignedAgent}
-            onOpenKanban={handleBreakdownIssue}
-            onOpenTeamFlow={handleOpenTeamFlow}
-            onOpenSharedTasks={handleOpenSharedTasks}
-            onOpenSharedSessions={handleOpenSharedSessions}
-            onOpenEnterpriseModule={() => navigate(showEnterpriseAdminNav ? '/enterprise/auth' : '/enterprise')}
-            onOpenSkills={handleOpenSkillsHub}
-            onOpenMcp={handleOpenMcp}
-          />
-        );
-      case 'agents':
-        return (
-          <AgentsTab executionGroups={superAssistantData.agentExecutionGroups} />
-        );
-      case 'skills':
-        return (
-          <SkillsTab
-            skillCount={superAssistantData.skillCount}
-            skillNames={superAssistantData.skillNames}
-            enabledMcpCount={superAssistantData.enabledMcpCount}
-            mcpNames={superAssistantData.mcpNames}
-            onOpenSkillsHub={handleOpenSkillsHub}
-            onOpenMcp={handleOpenMcp}
-          />
-        );
-      case 'runtimes':
-        return (
-          <RuntimesTab
-            totalAgentCount={superAssistantData.totalAgentCount}
-            activeAgentCount={superAssistantData.activeAgentCount}
-            enabledMcpCount={superAssistantData.enabledMcpCount}
-            onOpenAgentSettings={handleOpenAgentSettings}
-            onOpenModelSettings={() => navigate('/settings/model')}
-          />
-        );
-      case 'settings':
-        return (
-          <SettingsTab
-            isAdmin={isAdmin}
-            onOpenEnterpriseConsole={() => navigate('/enterprise')}
-            onOpenWebuiSettings={() => navigate('/settings/webui')}
-          />
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
     <div className='h-full overflow-auto px-20px py-16px'>
       <SuperAssistantHeader
         tenantLabel={tenantLabel}
         isAdmin={isAdmin}
-        onOpenOverview={() => setActiveTab('overview')}
-        onOpenIssues={() => setActiveTab('issues')}
+        openIssueCount={superAssistantData.openIssueCount}
+        activeAgentCount={superAssistantData.activeAgentCount}
+        skillCount={superAssistantData.skillCount}
+        onOpenKanban={handleBreakdownIssue}
+        onOpenTeamFlow={handleOpenTeamFlow}
+        onCreateSharedTask={handleOpenSharedTasks}
       />
-
-      <Card>
-        <div role='tablist' className='mb-16px flex flex-wrap gap-8px'>
-          {SUPER_ASSISTANT_TABS.map((tab) => {
-            const active = tab === activeTab;
-            return (
-              <Button
-                key={tab}
-                type={active ? 'primary' : 'secondary'}
-                size='small'
-                role='tab'
-                aria-selected={active}
-                className={`rounded-8px border px-12px py-6px text-12px transition-colors ${
-                  active
-                    ? 'border-[var(--color-primary-6)] bg-[rgba(var(--primary-6),0.12)] text-[var(--color-primary-6)]'
-                    : 'border-[var(--color-border-2)] bg-transparent text-t-secondary'
-                }`}
-                onClick={() => setActiveTab(tab)}
-              >
-                {tabLabels[tab]}
-              </Button>
-            );
-          })}
-        </div>
-
-        {renderActiveTab()}
-      </Card>
+      <div className='space-y-12px'>
+        <Card title={t('common.superAssistant.rebuild.commandCenterTitle', { defaultValue: '任务指挥中心' })}>
+          <div className='text-12px text-t-tertiary'>
+            {t('common.superAssistant.rebuild.commandCenterDesc', {
+              defaultValue:
+                '一个页面完成“分配任务 -> 观察进度 -> 处理阻塞 -> 标记完成”。无需在多个标签页之间来回切换。',
+            })}
+          </div>
+        </Card>
+        <IssuesWorkbench
+          isAdmin={isAdmin}
+          loading={superAssistantData.loading}
+          boardColumns={superAssistantData.boardColumns}
+          issueBoardFeedbackById={issueBoardFeedbackById}
+          currentIssue={currentIssue}
+          assignableAgents={assignableAgents}
+          currentAssignmentAgentName={currentIssueAssignment?.agentName ?? null}
+          currentIssueActivityFeedback={currentIssueActivityFeedback}
+          onSelectIssue={setSelectedIssueId}
+          onBreakdownIssue={handleBreakdownIssue}
+          onAssignIssue={handleAssignIssue}
+          onMarkIssueBlocked={handleMarkIssueBlocked}
+          onClearIssueBlocked={handleClearIssueBlocked}
+          onUnassignIssue={handleUnassignIssue}
+          onMoveIssueToReview={handleMoveIssueToReview}
+          onMarkIssueDone={handleMarkIssueDone}
+          onOpenAssignedAgent={handleOpenAssignedAgent}
+          onOpenKanban={handleBreakdownIssue}
+          onOpenTeamFlow={handleOpenTeamFlow}
+          onOpenSharedTasks={handleOpenSharedTasks}
+          onOpenSharedSessions={handleOpenSharedSessions}
+          onOpenEnterpriseModule={() => navigate(showEnterpriseAdminNav ? '/enterprise/auth' : '/enterprise')}
+          onOpenEnterpriseKnowledge={handleOpenEnterpriseKnowledge}
+          onOpenSkills={handleOpenSkillsHub}
+          onOpenMcp={handleOpenMcp}
+          collaborationContext={collaborationContext}
+          autopilotDefaults={autopilotDefaults}
+        />
+        <Card title={t('common.superAssistant.rebuild.liveExecutionTitle', { defaultValue: '实时执行面板' })}>
+          <div className='mb-10px text-12px text-t-tertiary'>
+            {t('common.superAssistant.rebuild.liveExecutionDesc', {
+              defaultValue: '智能体状态、人类操作、阻塞信息在同一时间线展示，便于快速决策。',
+            })}
+          </div>
+          <AgentsTab executionGroups={superAssistantData.agentExecutionGroups} />
+        </Card>
+        <Card title={t('common.superAssistant.rebuild.compoundTitle', { defaultValue: '能力沉淀与运行时' })}>
+          <div className='mb-10px text-12px text-t-tertiary'>
+            {t('common.superAssistant.rebuild.compoundDesc', {
+              defaultValue: '每次任务结果都应沉淀为技能；运行时与模型配置决定可持续执行能力。',
+            })}
+          </div>
+          <div className='grid gap-12px xl:grid-cols-2'>
+            <SkillsTab
+              skillCount={superAssistantData.skillCount}
+              skillNames={superAssistantData.skillNames}
+              enabledMcpCount={superAssistantData.enabledMcpCount}
+              mcpNames={superAssistantData.mcpNames}
+              onOpenSkillsHub={handleOpenSkillsHub}
+              onOpenMcp={handleOpenMcp}
+            />
+            <RuntimesTab
+              totalAgentCount={superAssistantData.totalAgentCount}
+              activeAgentCount={superAssistantData.activeAgentCount}
+              enabledMcpCount={superAssistantData.enabledMcpCount}
+              onOpenAgentSettings={handleOpenAgentSettings}
+              onOpenModelSettings={() => navigate('/settings/model')}
+            />
+          </div>
+        </Card>
+        <Card title={t('common.superAssistant.rebuild.systemConfigTitle', { defaultValue: '系统配置入口' })}>
+          <SettingsTab
+            isAdmin={isAdmin}
+            onOpenEnterpriseConsole={() => navigate('/enterprise')}
+            onOpenWebuiSettings={() => navigate('/settings/webui')}
+          />
+        </Card>
+      </div>
+      <CreateSharedTaskModal
+        visible={sharedTaskVisible}
+        onClose={() => setSharedTaskVisible(false)}
+        issueSubject={currentIssue?.subject ?? ''}
+        issueDescription={currentIssue?.description ?? null}
+        assignableAgents={assignableAgents}
+        onCreateWithAgent={
+          currentIssue
+            ? async (slotId, agentName) => {
+                await handleAssignIssue(slotId, agentName, { navigateAfter: false });
+              }
+            : undefined
+        }
+      />
     </div>
   );
 };

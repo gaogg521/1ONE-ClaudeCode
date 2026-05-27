@@ -1651,6 +1651,159 @@ const migration_v40: IMigration = {
 };
 
 /**
+ * Migration v40 -> v41: Add team scope columns to artifact and code repos
+ */
+const migration_v41: IMigration = {
+  version: 41,
+  name: 'Add team scope to artifact and code repos',
+  up: (db) => {
+    const ensureColumn = (table: string, col: string, ddl: string) => {
+      const cols = new Set((db.pragma(`table_info(${table})`) as Array<{ name: string }>).map((c) => c.name));
+      if (!cols.has(col)) db.exec(ddl);
+    };
+    ensureColumn('artifact_repos', 'scope', `ALTER TABLE artifact_repos ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`);
+    ensureColumn('artifact_repos', 'team_id', `ALTER TABLE artifact_repos ADD COLUMN team_id TEXT`);
+    ensureColumn('artifact_repos', 'created_by', `ALTER TABLE artifact_repos ADD COLUMN created_by TEXT NOT NULL DEFAULT ''`);
+    ensureColumn('artifacts', 'team_id', `ALTER TABLE artifacts ADD COLUMN team_id TEXT`);
+    ensureColumn('code_repos', 'scope', `ALTER TABLE code_repos ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`);
+    ensureColumn('code_repos', 'team_id', `ALTER TABLE code_repos ADD COLUMN team_id TEXT`);
+    ensureColumn('code_repos', 'created_by', `ALTER TABLE code_repos ADD COLUMN created_by TEXT NOT NULL DEFAULT ''`);
+    console.log('[Migration v41] Added team scope columns to artifact_repos, artifacts, and code_repos');
+  },
+  down: (_db) => {
+    console.log('[Migration v41] Rolled back: columns retained (SQLite cannot drop columns)');
+  },
+};
+
+/**
+ * Migration v41 -> v42: Backfill legacy scoped repo ownership metadata
+ */
+const migration_v42: IMigration = {
+  version: 42,
+  name: 'Backfill legacy scoped repo ownership metadata',
+  up: (db) => {
+    const adminRoles = `'org_admin', 'system_admin', 'admin'`;
+    db.exec(`
+      UPDATE artifact_repos
+      SET created_by = (
+        SELECT u.id FROM users u
+        WHERE u.tenant_id = artifact_repos.tenant_id
+          AND u.role IN (${adminRoles})
+        ORDER BY u.created_at ASC
+        LIMIT 1
+      )
+      WHERE (created_by = '' OR created_by IS NULL)
+        AND EXISTS (
+          SELECT 1 FROM users u
+          WHERE u.tenant_id = artifact_repos.tenant_id
+            AND u.role IN (${adminRoles})
+        )
+    `);
+    db.exec(`
+      UPDATE code_repos
+      SET created_by = (
+        SELECT u.id FROM users u
+        WHERE u.tenant_id = code_repos.tenant_id
+          AND u.role IN (${adminRoles})
+        ORDER BY u.created_at ASC
+        LIMIT 1
+      )
+      WHERE (created_by = '' OR created_by IS NULL)
+        AND EXISTS (
+          SELECT 1 FROM users u
+          WHERE u.tenant_id = code_repos.tenant_id
+            AND u.role IN (${adminRoles})
+        )
+    `);
+    db.exec(`
+      UPDATE artifacts
+      SET created_by = (
+        SELECT ar.created_by FROM artifact_repos ar WHERE ar.id = artifacts.repo_id
+      )
+      WHERE (created_by = '' OR created_by IS NULL)
+        AND repo_id IN (SELECT id FROM artifact_repos WHERE created_by != '')
+    `);
+    db.exec(`
+      UPDATE artifacts
+      SET team_id = (
+        SELECT ar.team_id FROM artifact_repos ar WHERE ar.id = artifacts.repo_id
+      )
+      WHERE team_id IS NULL
+        AND repo_id IN (SELECT id FROM artifact_repos WHERE team_id IS NOT NULL)
+    `);
+    console.log('[Migration v42] Backfilled legacy scoped repo ownership metadata');
+  },
+  down: (_db) => {
+    console.log('[Migration v42] Rolled back: backfilled ownership retained');
+  },
+};
+
+/**
+ * Migration v42 -> v43: Requirement comments for Autopilot issue postback
+ */
+const migration_v43: IMigration = {
+  version: 43,
+  name: 'Add requirement_comments table',
+  up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS requirement_comments (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        requirement_id TEXT NOT NULL,
+        author_type TEXT NOT NULL DEFAULT 'user',
+        author_id TEXT,
+        author_name TEXT NOT NULL,
+        body TEXT NOT NULL,
+        metadata TEXT,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY(requirement_id) REFERENCES requirements(id) ON DELETE CASCADE
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_requirement_comments_req ON requirement_comments(requirement_id)');
+    console.log('[Migration v43] Added requirement_comments table');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_requirement_comments_req');
+    db.exec('DROP TABLE IF EXISTS requirement_comments');
+    console.log('[Migration v43] Rolled back requirement_comments');
+  },
+};
+
+/**
+ * Migration v43 -> v44: In-app user notifications (WebUI notification center)
+ */
+const migration_v44: IMigration = {
+  version: 44,
+  name: 'Add user_notifications table',
+  up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS user_notifications (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        link_path TEXT,
+        metadata TEXT,
+        read_at INTEGER,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_user_notifications_user ON user_notifications(user_id, created_at DESC)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_user_notifications_unread ON user_notifications(user_id, read_at)');
+    console.log('[Migration v44] Added user_notifications table');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_user_notifications_unread');
+    db.exec('DROP INDEX IF EXISTS idx_user_notifications_user');
+    db.exec('DROP TABLE IF EXISTS user_notifications');
+    console.log('[Migration v44] Rolled back user_notifications');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -1675,6 +1828,10 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v38,
   migration_v39,
   migration_v40,
+  migration_v41,
+  migration_v42,
+  migration_v43,
+  migration_v44,
 ];
 
 /**

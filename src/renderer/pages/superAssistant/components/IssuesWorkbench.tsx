@@ -2,7 +2,13 @@ import React, { useState } from 'react';
 import { Badge, Button, Card, Empty, Modal, Tag, Tooltip } from '@arco-design/web-react';
 import { Robot, Timer, User } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import CreateTaskDialog from '@/renderer/pages/cron/ScheduledTasksPage/CreateTaskDialog';
+import EnterpriseCollaborationContextPanel from './EnterpriseCollaborationContextPanel';
+import IssueCommentsPanel from './IssueCommentsPanel';
+import type { SuperAssistantAutopilotDefaults } from '../utils/autopilotDefaults';
 import type { SuperAssistantBoardColumn, SuperAssistantIssueItem } from '../hooks/useSuperAssistantData';
+import type { EnterpriseCollaborationContext } from '../hooks/useEnterpriseCollaborationContext';
 
 type AssignableIssueAgent = {
   slotId: string;
@@ -44,8 +50,15 @@ type IssuesWorkbenchProps = {
   onOpenSharedTasks: () => void;
   onOpenSharedSessions: () => void;
   onOpenEnterpriseModule: () => void;
+  onOpenEnterpriseKnowledge: () => void;
   onOpenSkills: () => void;
   onOpenMcp: () => void;
+  collaborationContext: Pick<
+    EnterpriseCollaborationContext,
+    'ragDocumentCount' | 'ragReady' | 'skillCount' | 'skillNames' | 'enabledMcpCount' | 'mcpNames'
+  >;
+  autopilotDefaults?: SuperAssistantAutopilotDefaults | null;
+  issueCommentsRefreshToken?: number;
 };
 
 function getStatusTag(
@@ -87,11 +100,33 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
   onOpenSharedTasks,
   onOpenSharedSessions,
   onOpenEnterpriseModule,
+  onOpenEnterpriseKnowledge,
   onOpenSkills,
   onOpenMcp,
+  collaborationContext,
+  autopilotDefaults,
+  issueCommentsRefreshToken = 0,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [autopilotVisible, setAutopilotVisible] = useState(false);
+  const [autopilotCreateVisible, setAutopilotCreateVisible] = useState(false);
+  const [autopilotPreset, setAutopilotPreset] = useState<{
+    name: string;
+    prompt: string;
+    frequency?: 'weekly' | 'weekdays';
+    postBackToIssue?: boolean;
+  } | null>(null);
+
+  const buildPresetAutopilotContext = (postBackToIssue?: boolean) => {
+    if (!autopilotDefaults) {
+      return undefined;
+    }
+    return {
+      ...autopilotDefaults.autopilotContext,
+      postBackToIssue: postBackToIssue ?? autopilotDefaults.autopilotContext.postBackToIssue,
+    };
+  };
 
   // 所有 issues
   const allIssues = boardColumns.flatMap((col) => col.items);
@@ -246,6 +281,10 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
                   })}
                 </div>
               )}
+              <IssueCommentsPanel
+                requirementId={currentIssue.id}
+                refreshToken={issueCommentsRefreshToken}
+              />
             </div>
           </Card>
 
@@ -317,6 +356,21 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
                 </div>
               </div>
 
+              {/* 企业知识上下文 */}
+              <div>
+                <div className='text-11px font-600 text-t-tertiary mb-6px uppercase tracking-wide'>
+                  {t('common.superAssistant.collaborationContextTitle', { defaultValue: '企业知识上下文' })}
+                </div>
+                <EnterpriseCollaborationContextPanel
+                  issueSubject={currentIssue.subject}
+                  loading={loading}
+                  context={collaborationContext}
+                  onOpenEnterpriseKnowledge={onOpenEnterpriseKnowledge}
+                  onOpenSkills={onOpenSkills}
+                  onOpenMcp={onOpenMcp}
+                />
+              </div>
+
               {/* 快捷入口 */}
               <div>
                 <div className='text-11px font-600 text-t-tertiary mb-6px uppercase tracking-wide'>
@@ -336,38 +390,92 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
         </div>
       )}
 
-      {/* Autopilots 弹窗 — 定时/自动触发入口 */}
+      {/* Autopilots 弹窗 — 参考 Multica：定时自动触发 Agent 执行 */}
       <Modal
-        title={t('common.superAssistant.autopilotsTitle', { defaultValue: 'Autopilots — 定时自动触发' })}
+        title={t('common.superAssistant.autopilotsTitle', { defaultValue: 'Autopilots — 7×24 自动执行' })}
         visible={autopilotVisible}
         onCancel={() => setAutopilotVisible(false)}
         footer={null}
-        style={{ width: 520 }}
+        style={{ width: 560 }}
       >
         <div className='space-y-12px text-13px text-t-secondary'>
           <div className='p-12px bg-fill-2 rd-8px'>
             <div className='font-600 text-t-primary mb-4px'>
-              {t('common.superAssistant.autopilotDesc', { defaultValue: '什么是 Autopilots？' })}
+              {t('common.superAssistant.autopilotDesc', { defaultValue: '像 Multica 的 db-boy 一样，让 Agent 按计划自动干活' })}
             </div>
             <div className='text-12px'>
               {t('common.superAssistant.autopilotDescDetail', {
-                defaultValue: '参考 Multica 的 Autopilots 设计：设置长期指令，让 Agent 按计划自动执行——例如每天早上做 standup 总结、每周一扫描未关闭 Issue 并分配。',
+                defaultValue:
+                  '设置长期指令后，Agent 会按 cron 定时拉起执行：例如每周一 9:00 汇总指标、每日扫描未关闭 Issue、遇到阻塞自动开新任务 @ 相关同事。',
               })}
             </div>
           </div>
-          <div className='p-12px border border-dashed border-[var(--color-border-2)] rd-8px text-center text-t-tertiary'>
-            <Timer size={24} className='mx-auto mb-8px opacity-40' />
-            <div className='text-12px'>
-              {t('common.superAssistant.autopilotComingSoon', {
-                defaultValue: 'Autopilots 功能即将上线。当前可通过「创建共享任务」手动触发 Agent 执行。',
-              })}
-            </div>
-            <Button size='small' type='outline' className='mt-10px' onClick={() => { setAutopilotVisible(false); onOpenSharedTasks(); }}>
-              {t('common.superAssistant.createSharedTask', { defaultValue: '创建共享任务' })}
+          <div className='grid gap-8px'>
+            <Button
+              type='outline'
+              long
+              onClick={() => {
+                setAutopilotPreset({
+                  name: '每周交付指标扫描',
+                  prompt:
+                    '扫描当前企业 CTeam 中上周仍未关闭的需求与阻塞项，输出 Markdown 表格（需求、负责人、状态、等待时长），并 @ 相关负责人。',
+                  frequency: 'weekly',
+                  postBackToIssue: Boolean(autopilotDefaults?.autopilotContext.requirementId),
+                });
+                setAutopilotVisible(false);
+                setAutopilotCreateVisible(true);
+              }}
+            >
+              每周一 9:00 · 扫描未关闭 Issue 并汇总
+            </Button>
+            <Button
+              type='outline'
+              long
+              onClick={() => {
+                setAutopilotPreset({
+                  name: '每日 Standup 摘要',
+                  prompt:
+                    '汇总团队昨日完成的任务、今日进行中的任务和当前阻塞项，生成简洁的 Standup 摘要，适合发到团队协作频道。',
+                  frequency: 'weekdays',
+                  postBackToIssue: Boolean(autopilotDefaults?.autopilotContext.requirementId),
+                });
+                setAutopilotVisible(false);
+                setAutopilotCreateVisible(true);
+              }}
+            >
+              每个工作日 9:30 · Standup 摘要
+            </Button>
+            <Button
+              type='primary'
+              long
+              onClick={() => {
+                setAutopilotPreset(null);
+                setAutopilotVisible(false);
+                setAutopilotCreateVisible(true);
+              }}
+            >
+              自定义 Autopilot…
+            </Button>
+            <Button type='text' long onClick={() => { setAutopilotVisible(false); navigate('/scheduled'); }}>
+              管理全部定时任务
             </Button>
           </div>
         </div>
       </Modal>
+      <CreateTaskDialog
+        visible={autopilotCreateVisible}
+        onClose={() => {
+          setAutopilotCreateVisible(false);
+          setAutopilotPreset(null);
+        }}
+        conversationTitle={autopilotPreset?.name ?? '超级助手 Autopilot'}
+        agentType='claude'
+        initialName={autopilotPreset?.name}
+        initialPrompt={autopilotPreset?.prompt}
+        initialFrequency={autopilotPreset?.frequency ?? (autopilotPreset ? 'weekly' : 'manual')}
+        initialAgentKey={autopilotDefaults?.initialAgentKey}
+        autopilotContext={buildPresetAutopilotContext(autopilotPreset?.postBackToIssue)}
+      />
     </div>
   );
 };

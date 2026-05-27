@@ -50,7 +50,6 @@ const CAPABILITY_KEYS = new Set<EnterpriseNavKey>([
   'ccode',
   'ctest',
   'cflow',
-  'cagent',
 ]);
 
 const CAPABILITY_SUMMARY: Partial<Record<EnterpriseNavKey, string>> = {
@@ -61,7 +60,6 @@ const CAPABILITY_SUMMARY: Partial<Record<EnterpriseNavKey, string>> = {
   ccode: '代码资产接入与交付链路关联。',
   ctest: '测试计划、用例与状态聚合。',
   cflow: '需求到发布的价值流打点与瓶颈分析。',
-  cagent: '企业知识与工具受控编排的 AI 助手入口。',
 };
 
 const CARD_ICONS: Record<EnterpriseNavKey, React.ReactNode> = {
@@ -160,7 +158,7 @@ const EnterpriseHome: React.FC = () => {
           </div>
           <div>
             <div className='text-12px opacity-75 font-600 tracking-wider mb-2px uppercase'>
-              {t('settings.enterpriseConsole.desktopKicker', { defaultValue: '企业级研发控制台' })}
+              {t('settings.enterpriseConsole.desktopKicker', { defaultValue: '企业团队研发控制台' })}
             </div>
             <Typography.Title heading={4} style={{ color: '#fff', margin: 0, fontWeight: 700 }}>
               {tenantLabel}
@@ -173,6 +171,9 @@ const EnterpriseHome: React.FC = () => {
             <div className='mt-12px flex items-center gap-8px flex-wrap'>
               <Button size='small' onClick={() => handleOpenModule('/sessions')}>
                 {t('nav.sessions', { defaultValue: 'Sessions' })}
+              </Button>
+              <Button size='small' onClick={() => handleOpenModule('/super-assistant')}>
+                {t('nav.superAssistant', { defaultValue: '超级助手' })}
               </Button>
               <Button size='small' onClick={() => handleOpenModule('/workspace')}>
                 {t('nav.workspace', { defaultValue: 'Workspace' })}

@@ -29,6 +29,28 @@ function formatMs(ms: number): string {
   return `${(ms / 86_400_000).toFixed(1)}d`;
 }
 
+function resolveStageMetrics(record: FlowStageRecord): { waitMs: number; processMs: number } {
+  let processMs = record.process_duration_ms ?? 0;
+  if (processMs <= 0 && record.exit_time && record.entry_time) {
+    processMs = Math.max(0, record.exit_time - record.entry_time);
+  }
+  let waitMs = record.wait_duration_ms ?? 0;
+  // 兼容旧数据：等待时间与处理时间被重复写入同一时长
+  if (waitMs > 0 && processMs > 0 && waitMs === processMs) {
+    waitMs = 0;
+  }
+  return { waitMs, processMs };
+}
+
+function resolveRequirementTitle(reqId: string, stages: FlowStageRecord[]): string {
+  const subject = stages.find((stage) => stage.req_subject)?.req_subject;
+  if (subject) return subject;
+  if (reqId === 'unlinked') {
+    return '未关联需求';
+  }
+  return reqId.slice(0, 8);
+}
+
 const CFlowBoard: React.FC = () => {
   const { t } = useTranslation();
   const stagesState = useEnterpriseAsyncData(listValueStreamStages, [], '加载价值流数据失败');
@@ -42,15 +64,21 @@ const CFlowBoard: React.FC = () => {
     byReq.set(key, arr);
   });
 
-  // 全局各阶段平均等待时间（用于瓶颈识别）
-  const stageAvgWait = new Map<string, number>();
+  // 全局各阶段平均处理时间（用于瓶颈识别）
+  const stageAvgProcess = new Map<string, number>();
   STAGE_ORDER.forEach((stage) => {
-    const records = stagesState.data.filter((s) => s.stage_name === stage && s.wait_duration_ms > 0);
+    const records = stagesState.data
+      .filter((s) => s.stage_name === stage)
+      .map((record) => resolveStageMetrics(record))
+      .filter((metrics) => metrics.processMs > 0);
     if (records.length > 0) {
-      stageAvgWait.set(stage, records.reduce((sum, r) => sum + r.wait_duration_ms, 0) / records.length);
+      stageAvgProcess.set(
+        stage,
+        records.reduce((sum, metrics) => sum + metrics.processMs, 0) / records.length
+      );
     }
   });
-  const maxAvgWait = Math.max(0, ...Array.from(stageAvgWait.values()));
+  const maxAvgProcess = Math.max(0, ...Array.from(stageAvgProcess.values()));
 
   return (
     <AdminPageWrapper>
@@ -63,12 +91,12 @@ const CFlowBoard: React.FC = () => {
         />
 
         {/* 瓶颈热力图 */}
-        {stageAvgWait.size > 0 && (
-          <Card bordered={false} className='rd-12px' title={t('admin.cflow.bottleneck', { defaultValue: '阶段平均等待时间（瓶颈识别）' })}>
+        {stageAvgProcess.size > 0 && (
+          <Card bordered={false} className='rd-12px' title={t('admin.cflow.bottleneck', { defaultValue: '阶段平均处理时间（瓶颈识别）' })}>
             <div className='flex gap-12px flex-wrap'>
               {STAGE_ORDER.map((stage) => {
-                const avg = stageAvgWait.get(stage) ?? 0;
-                const pct = maxAvgWait > 0 ? Math.round((avg / maxAvgWait) * 100) : 0;
+                const avg = stageAvgProcess.get(stage) ?? 0;
+                const pct = maxAvgProcess > 0 ? Math.round((avg / maxAvgProcess) * 100) : 0;
                 return (
                   <div key={stage} className='flex-1 min-w-120px'>
                     <div className='flex items-center justify-between mb-4px'>
@@ -97,11 +125,17 @@ const CFlowBoard: React.FC = () => {
         >
           <div className='flex flex-col gap-12px'>
             {Array.from(byReq.entries()).map(([reqId, flowStages]) => {
-              const reqName = flowStages[0]?.req_subject ?? reqId.slice(0, 8);
+              const reqName = resolveRequirementTitle(reqId, flowStages);
               const sortedStages = [...flowStages].sort((a, b) => a.entry_time - b.entry_time);
               const completedStageNames = new Set(sortedStages.map((s) => s.stage_name));
-              const totalWait = sortedStages.reduce((sum, s) => sum + (s.wait_duration_ms ?? 0), 0);
-              const totalProcess = sortedStages.reduce((sum, s) => sum + (s.process_duration_ms ?? 0), 0);
+              const totalWait = sortedStages.reduce(
+                (sum, stage) => sum + resolveStageMetrics(stage).waitMs,
+                0
+              );
+              const totalProcess = sortedStages.reduce(
+                (sum, stage) => sum + resolveStageMetrics(stage).processMs,
+                0
+              );
               const flowEfficiency = totalWait + totalProcess > 0
                 ? Math.round((totalProcess / (totalWait + totalProcess)) * 100)
                 : 0;
@@ -145,14 +179,17 @@ const CFlowBoard: React.FC = () => {
                             <Tag size='small' color={isCompleted ? (STAGE_COLORS[stage] ?? 'gray') : 'gray'}>
                               {stage}
                             </Tag>
-                            {record && (
-                              <div className='mt-4px text-10px text-t-tertiary'>
-                                <div>等待 {formatMs(record.wait_duration_ms)}</div>
-                                {record.process_duration_ms > 0 && (
-                                  <div>处理 {formatMs(record.process_duration_ms)}</div>
-                                )}
-                              </div>
-                            )}
+                            {record && (() => {
+                              const metrics = resolveStageMetrics(record);
+                              return (
+                                <div className='mt-4px text-10px text-t-tertiary'>
+                                  <div>等待 {formatMs(metrics.waitMs)}</div>
+                                  {metrics.processMs > 0 && (
+                                    <div>处理 {formatMs(metrics.processMs)}</div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                           {idx < STAGE_ORDER.length - 1 && (
                             <div className={['w-20px h-1px flex-shrink-0', isCompleted && completedStageNames.has(STAGE_ORDER[idx + 1]) ? 'bg-primary' : 'bg-[var(--color-border-2)]'].join(' ')} />

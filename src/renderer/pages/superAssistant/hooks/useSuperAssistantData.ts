@@ -1,12 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ipcBridge } from '@/common';
 import type {
+  CodeRepo,
   McpRegistryRecord,
+  PipelineListItem,
+  RagDocumentRecord,
   RequirementPriority,
   RequirementRecord,
   SkillRecord,
 } from '@/renderer/utils/enterpriseApi/modules';
-import { listMcpRegistry, listRequirementsTree, listSkills } from '@/renderer/utils/enterpriseApi/modules';
+import {
+  listCodeRepos,
+  listMcpRegistry,
+  listPipelines,
+  listRagDocuments,
+  listRequirementsTree,
+  listSkills,
+} from '@/renderer/utils/enterpriseApi/modules';
 import { useConversationHistoryContext } from '@/renderer/hooks/context/ConversationHistoryContext';
 import { useTeamList } from '@/renderer/pages/team/hooks/useTeamList';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
@@ -99,6 +109,11 @@ type UseSuperAssistantDataResult = {
   skillNames: string[];
   enabledMcpCount: number;
   mcpNames: string[];
+  ragDocumentCount: number;
+  ragChunkCount: number;
+  codeRepoCount: number;
+  pipelineCount: number;
+  openAssigneeUserIds: string[];
 };
 
 type RuntimeStatusInfo = {
@@ -158,6 +173,9 @@ export function useSuperAssistantData(
   const [requirements, setRequirements] = useState<RequirementRecord[]>([]);
   const [skills, setSkills] = useState<SkillRecord[]>([]);
   const [mcpRegistry, setMcpRegistry] = useState<McpRegistryRecord[]>([]);
+  const [ragDocuments, setRagDocuments] = useState<RagDocumentRecord[]>([]);
+  const [codeRepos, setCodeRepos] = useState<CodeRepo[]>([]);
+  const [pipelines, setPipelines] = useState<PipelineListItem[]>([]);
   const [runtimeStatusMap, setRuntimeStatusMap] = useState<Map<string, RuntimeStatusInfo>>(new Map());
   const [loading, setLoading] = useState(enabled);
 
@@ -166,19 +184,29 @@ export function useSuperAssistantData(
       setRequirements([]);
       setSkills([]);
       setMcpRegistry([]);
+      setRagDocuments([]);
+      setCodeRepos([]);
+      setPipelines([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    const [requirementsResult, skillsResult, mcpResult] = await Promise.allSettled([
+    const [requirementsResult, skillsResult, mcpResult, ragResult, codeRepoResult, pipelineResult] =
+      await Promise.allSettled([
       listRequirementsTree(),
       listSkills(),
       listMcpRegistry(),
-    ]);
+        listRagDocuments(),
+        listCodeRepos(),
+        listPipelines(),
+      ]);
     setRequirements(requirementsResult.status === 'fulfilled' ? (requirementsResult.value ?? []) : []);
     setSkills(skillsResult.status === 'fulfilled' ? (skillsResult.value ?? []) : []);
     setMcpRegistry(mcpResult.status === 'fulfilled' ? (mcpResult.value ?? []) : []);
+    setRagDocuments(ragResult.status === 'fulfilled' ? (ragResult.value ?? []) : []);
+    setCodeRepos(codeRepoResult.status === 'fulfilled' ? (codeRepoResult.value ?? []) : []);
+    setPipelines(pipelineResult.status === 'fulfilled' ? (pipelineResult.value ?? []) : []);
     setLoading(false);
   }, [enabled]);
 
@@ -508,6 +536,18 @@ export function useSuperAssistantData(
     [enabledMcpNames, issueAssignments, prioritizedOpenIssues, runtimeStatusMap, skills, teamConversationCountByTeam, teams, visibleRequirements]
   );
 
+  const openAssigneeUserIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          visibleRequirements
+            .filter((item) => item.status !== 'completed' && item.assigned_to)
+            .map((item) => item.assigned_to as string)
+        ),
+      ],
+    [visibleRequirements]
+  );
+
   return {
     loading,
     refresh,
@@ -537,6 +577,11 @@ export function useSuperAssistantData(
     skillCount: skills.length,
     skillNames: skills.slice(0, 3).map((skill) => skill.name),
     enabledMcpCount: mcpRegistry.filter((item) => item.enabled).length,
-    mcpNames: mcpRegistry.slice(0, 3).map((item) => item.name),
+    mcpNames: mcpRegistry.filter((item) => item.enabled).slice(0, 3).map((item) => item.name),
+    ragDocumentCount: ragDocuments.length,
+    ragChunkCount: ragDocuments.reduce((sum, doc) => sum + (Number(doc.chunk_count) || 0), 0),
+    codeRepoCount: codeRepos.length,
+    pipelineCount: pipelines.length,
+    openAssigneeUserIds,
   };
 }

@@ -6,6 +6,8 @@ const navigateMock = vi.hoisted(() => vi.fn());
 const loginMock = vi.hoisted(() => vi.fn());
 const loginWithLdapMock = vi.hoisted(() => vi.fn());
 const fetchMock = vi.hoisted(() => vi.fn());
+const locationSearchMock = vi.hoisted(() => ({ current: '' }));
+const readRedirectFromSearchMock = vi.hoisted(() => vi.fn(() => null));
 
 vi.mock('@renderer/assets/logos/brand/app.png', () => ({
   default: 'login-logo.png',
@@ -31,7 +33,7 @@ vi.mock('@/renderer/services/i18n', () => ({
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
-  useLocation: () => ({ search: '' }),
+  useLocation: () => ({ search: locationSearchMock.current }),
 }));
 
 vi.mock('@/common/auth/enterpriseRoles', () => ({
@@ -40,7 +42,8 @@ vi.mock('@/common/auth/enterpriseRoles', () => ({
 
 vi.mock('@/renderer/utils/postLoginRedirect', () => ({
   consumePostLoginRedirect: vi.fn(() => null),
-  readRedirectFromSearch: vi.fn(() => null),
+  peekPostLoginRedirect: vi.fn(() => '/sessions'),
+  readRedirectFromSearch: readRedirectFromSearchMock,
 }));
 
 vi.mock('@/renderer/utils/platform', () => ({
@@ -189,6 +192,8 @@ import LoginPage from '@/renderer/pages/login';
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    locationSearchMock.current = '';
+    readRedirectFromSearchMock.mockReturnValue(null);
     fetchMock.mockResolvedValue({
       json: async () => ({
         success: true,
@@ -218,5 +223,34 @@ describe('LoginPage', () => {
     expect(screen.queryByText('使用钉钉登录')).not.toBeInTheDocument();
     expect(screen.queryByText('使用企业微信登录')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'login.submit' })).toBeInTheDocument();
+  });
+
+  it('shows enterprise join hint when redirect targets enterprise join', async () => {
+    locationSearchMock.current = '?redirect=%2Fenterprise%2Fjoin';
+    readRedirectFromSearchMock.mockReturnValue('/enterprise/join');
+    fetchMock.mockResolvedValue({
+      json: async () => ({
+        success: true,
+        data: {
+          mode: 'standalone',
+          ldapEnabled: false,
+          feishuEnabled: false,
+          dingtalkEnabled: false,
+          wecomEnabled: false,
+          ldapConfigured: false,
+          feishuConfigured: false,
+          dingtalkConfigured: false,
+          wecomConfigured: false,
+        },
+      }),
+    });
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('登录成功后将进入企业团队版（成员、团队、邀请码等）。您也可在登录后使用邀请码加入组织。')
+      ).toBeInTheDocument();
+    });
   });
 });

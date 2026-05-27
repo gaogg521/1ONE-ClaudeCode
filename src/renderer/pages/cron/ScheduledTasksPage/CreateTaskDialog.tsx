@@ -11,6 +11,7 @@ import ModalWrapper from '@renderer/components/base/ModalWrapper';
 import { Robot } from '@icon-park/react';
 import { ipcBridge } from '@/common';
 import type { ICreateCronJobParams, ICronAgentConfig, ICronJob } from '@/common/adapter/ipcBridge';
+import type { AutopilotContext } from '@/common/types/autopilotContext';
 import { useConversationAgents } from '@renderer/pages/conversation/hooks/useConversationAgents';
 import { getAgentLogo } from '@renderer/utils/model/agentLogo';
 import { CUSTOM_AVATAR_IMAGE_MAP } from '@/renderer/pages/guid/constants';
@@ -29,6 +30,11 @@ interface CreateTaskDialogProps {
   conversationId?: string;
   conversationTitle?: string;
   agentType?: string;
+  initialName?: string;
+  initialPrompt?: string;
+  initialFrequency?: FrequencyType;
+  initialAgentKey?: string;
+  autopilotContext?: AutopilotContext;
 }
 
 type FrequencyType = 'manual' | 'hourly' | 'daily' | 'weekdays' | 'weekly';
@@ -94,6 +100,11 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   conversationId: _conversationId,
   conversationTitle,
   agentType,
+  initialName,
+  initialPrompt,
+  initialFrequency,
+  initialAgentKey,
+  autopilotContext,
 }) => {
   const { t } = useTranslation();
   const [form] = Form.useForm();
@@ -124,12 +135,19 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
       });
     } else {
       form.resetFields();
-      setFrequency('manual');
+      setFrequency(initialFrequency ?? 'weekly');
       setTime('09:00');
       setWeekday('MON');
       setExecutionMode('new_conversation');
+      if (initialName || initialPrompt || initialAgentKey) {
+        form.setFieldsValue({
+          name: initialName ?? '',
+          prompt: initialPrompt ?? '',
+          ...(initialAgentKey ? { agent: initialAgentKey } : {}),
+        });
+      }
     }
-  }, [visible, editJob, form]);
+  }, [visible, editJob, form, initialAgentKey, initialFrequency, initialName, initialPrompt]);
 
   const showTimePicker = frequency === 'daily' || frequency === 'weekdays' || frequency === 'weekly';
   const showWeekdayPicker = frequency === 'weekly';
@@ -226,6 +244,18 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
       const scheduleDesc = scheduleInfo.description;
 
       const { agentConfig, resolvedAgentType } = resolveAgentConfig(values.agent);
+      const mergedAgentConfig: ICronAgentConfig | undefined = agentConfig
+        ? {
+            ...agentConfig,
+            autopilotContext: autopilotContext ?? agentConfig.autopilotContext,
+          }
+        : autopilotContext
+          ? {
+              backend: resolvedAgentType,
+              name: values.name,
+              autopilotContext,
+            }
+          : undefined;
 
       if (isEditMode) {
         // Edit mode: update existing job
@@ -242,7 +272,7 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
             metadata: {
               ...editJob!.metadata,
               agentType: resolvedAgentType,
-              agentConfig,
+              agentConfig: mergedAgentConfig,
               updatedAt: Date.now(),
             },
           },
@@ -260,7 +290,8 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
           agentType: resolvedAgentType,
           createdBy: 'user',
           executionMode,
-          agentConfig,
+          agentConfig: mergedAgentConfig,
+          autopilotContext,
         };
         await ipcBridge.cron.addJob.invoke(params);
         Message.success(t('cron.page.createSuccess'));

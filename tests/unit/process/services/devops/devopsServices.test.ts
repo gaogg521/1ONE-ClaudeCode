@@ -85,7 +85,13 @@ describe('devops services', () => {
 
   it('rejects invalid cpack repo payloads', async () => {
     await expect(
-      CpackService.createRepo({ tenantId: 'tenant-1', name: '   ' })
+      CpackService.createRepo({
+        tenantId: 'tenant-1',
+        name: '   ',
+        scope: 'personal',
+        teamId: null,
+        createdBy: 'user-1',
+      })
     ).rejects.toThrow('name required');
     expect(createArtifactRepoMock).not.toHaveBeenCalled();
   });
@@ -96,6 +102,9 @@ describe('devops services', () => {
         tenantId: 'tenant-1',
         name: 'repo',
         url: '   ',
+        scope: 'personal',
+        teamId: null,
+        createdBy: 'user-1',
       })
     ).rejects.toThrow('name and url required');
     expect(createCodeRepoMock).not.toHaveBeenCalled();

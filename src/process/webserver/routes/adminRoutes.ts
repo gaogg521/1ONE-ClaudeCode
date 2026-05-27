@@ -21,6 +21,7 @@ import nodemailer from 'nodemailer';
 import { resolvedSmtpFromConfig } from '../auth/smtpConfig';
 import { isEnterpriseAdminRole } from '../auth/enterpriseRoles';
 import { DEFAULT_TENANT_ID, isEnterpriseTenantId } from '@/common/config/webuiEnterpriseConfig';
+import { getTeamPeerUserIds } from './resourceScope';
 import {
   EnterpriseJoinError,
   createEnterpriseInvite,
@@ -291,16 +292,22 @@ export function registerAdminRoutes(app: Express): void {
     }
   });
 
-  // GET /api/admin/member-dashboard — 成员在线状态与任务完成情况
-  app.get('/api/admin/member-dashboard', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+  // GET /api/admin/member-dashboard — 成员在线状态与任务完成情况（管理员看全租户，成员看同团队）
+  app.get('/api/admin/member-dashboard', apiRateLimiter, auth, async (req, res) => {
     try {
       const adminTenantId = resolveAdminTenantId(req);
+      const isAdmin = isEnterpriseAdminRole(req.user!.role);
       const db = await getDatabase();
       const driver = db.getDriver();
       const allUsers = await UserRepository.listUsers();
-      const users = isEnterpriseTenantId(adminTenantId)
+      let users = isEnterpriseTenantId(adminTenantId)
         ? allUsers.filter((u) => u.tenant_id === adminTenantId)
         : allUsers;
+
+      if (!isAdmin) {
+        const peerIds = new Set(getTeamPeerUserIds(driver, adminTenantId, req.user!.id));
+        users = users.filter((u) => peerIds.has(u.id));
+      }
 
       const now = Date.now();
       const ONLINE_THRESHOLD_MS = 15 * 60 * 1000; // 15分钟内登录视为在线
@@ -358,20 +365,31 @@ export function registerAdminRoutes(app: Express): void {
    *
    */
 
-  // GET /api/admin/teams — list teams in tenant
-  app.get('/api/admin/teams', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+  // GET /api/admin/teams — list teams (admin: all; member: joined teams only)
+  app.get('/api/admin/teams', apiRateLimiter, auth, async (req, res) => {
     try {
       const db = await getDatabase();
       const driver = db.getDriver();
       const tenantId = resolveAdminTenantId(req);
-      const rows = driver
-        .prepare(
-          `SELECT id, tenant_id, user_id, name, workspace, workspace_mode, lead_agent_id, agents, created_at, updated_at
-           FROM teams
-           WHERE tenant_id = ?
-           ORDER BY updated_at DESC`
-        )
-        .all(tenantId) as Array<Record<string, unknown>>;
+      const isAdmin = isEnterpriseAdminRole(req.user!.role);
+      const rows = (isAdmin
+        ? driver
+          .prepare(
+            `SELECT id, tenant_id, user_id, name, workspace, workspace_mode, lead_agent_id, agents, created_at, updated_at
+             FROM teams
+             WHERE tenant_id = ?
+             ORDER BY updated_at DESC`
+          )
+          .all(tenantId)
+        : driver
+          .prepare(
+            `SELECT t.id, t.tenant_id, t.user_id, t.name, t.workspace, t.workspace_mode, t.lead_agent_id, t.agents, t.created_at, t.updated_at
+             FROM teams t
+             INNER JOIN team_memberships m ON m.team_id = t.id AND m.tenant_id = t.tenant_id
+             WHERE t.tenant_id = ? AND m.user_id = ?
+             ORDER BY t.updated_at DESC`
+          )
+          .all(tenantId, req.user!.id)) as Array<Record<string, unknown>>;
       res.json({ success: true, data: rows });
     } catch (err) {
       console.error('[AdminRoute] listTeams error:', err);

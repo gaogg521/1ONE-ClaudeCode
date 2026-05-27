@@ -22,6 +22,8 @@ export type FeishuUserInfo = {
 
 type FeishuApiResponse<T> = { code: number; msg?: string; data?: T };
 
+const FEISHU_HTTP_TIMEOUT_MS = 12_000;
+
 function asFeishuResponse<T>(value: unknown): FeishuApiResponse<T> | null {
   if (!value || typeof value !== 'object') return null;
   const obj = value as Record<string, unknown>;
@@ -46,12 +48,32 @@ export function buildFeishuAuthorizeUrl(input: {
   return url.toString();
 }
 
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = FEISHU_HTTP_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Feishu request timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function exchangeFeishuCodeForUserAccessToken(params: {
     appId: string;
     appSecret: string;
     code: string;
+    redirectUri?: string;
   }): Promise<string> {
-    const res = await fetch('https://open.feishu.cn/open-apis/authen/v2/oauth/token', {
+    const res = await fetchWithTimeout('https://open.feishu.cn/open-apis/authen/v2/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -59,6 +81,7 @@ export async function exchangeFeishuCodeForUserAccessToken(params: {
         client_id: params.appId,
         client_secret: params.appSecret,
         code: params.code,
+        ...(params.redirectUri ? { redirect_uri: params.redirectUri } : {}),
       }),
     });
     const data = (await res.json().catch((): null => null)) as unknown;
@@ -77,7 +100,7 @@ export async function exchangeFeishuCodeForUserAccessToken(params: {
   }
 
 export async function fetchFeishuUserInfo(userAccessToken: string): Promise<FeishuUserInfo> {
-    const res = await fetch('https://open.feishu.cn/open-apis/authen/v1/user_info', {
+    const res = await fetchWithTimeout('https://open.feishu.cn/open-apis/authen/v1/user_info', {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${userAccessToken}`,
@@ -113,7 +136,7 @@ export async function testFeishuAppCredentials(appId: string, appSecret: string)
   if (!id || !secret || secret === '******') {
     throw new Error('App ID and App Secret are required for connection test');
   }
-  const res = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
+  const res = await fetchWithTimeout('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ app_id: id, app_secret: secret }),

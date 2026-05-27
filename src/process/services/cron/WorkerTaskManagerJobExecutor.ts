@@ -24,6 +24,7 @@ import type { CronJob } from './CronStore';
 import type { ICronJobExecutor } from './ICronJobExecutor';
 import { addMessage } from '@process/utils/message';
 import { getCronSkillDir, hasCronSkillFile } from './cronSkillFile';
+import { enrichAutopilotPrompt } from './autopilotPostback';
 import { skillSuggestWatcher } from './SkillSuggestWatcher';
 
 /** Lazy-import to break circular dependency: cronServiceSingleton ↔ conversationServiceSingleton */
@@ -43,7 +44,7 @@ export class WorkerTaskManagerJobExecutor implements ICronJobExecutor {
     return this.busyGuard.isProcessing(conversationId);
   }
 
-  async executeJob(job: CronJob, onAcquired?: () => void, preparedConversationId?: string): Promise<string | void> {
+  async executeJob(job: CronJob, onAcquired?: (conversationId: string) => void, preparedConversationId?: string): Promise<string | void> {
     let conversationId = preparedConversationId ?? job.metadata.conversationId;
 
     // Create a conversation when needed (skip if already prepared):
@@ -101,7 +102,7 @@ export class WorkerTaskManagerJobExecutor implements ICronJobExecutor {
     this.busyGuard.setProcessing(conversationId, true);
     // Notify caller so it can register onceIdle callbacks while the conversation
     // is already marked busy (prevents premature idle fires).
-    onAcquired?.();
+    onAcquired?.(conversationId);
 
     const workspace = (task as { workspace?: string }).workspace;
     const workspaceFiles = workspace ? await copyFilesToDirectory(workspace, [], false) : [];
@@ -337,7 +338,10 @@ export class WorkerTaskManagerJobExecutor implements ICronJobExecutor {
    *   Pre-computed by the caller so the same condition drives both prompt and detection.
    */
   private buildMessageText(job: CronJob, hasSkill: boolean, inlineSkillSuggest: boolean): string {
-    const rawText = job.target.payload.text;
+    const rawText = enrichAutopilotPrompt(
+      job.target.payload.text,
+      job.metadata.agentConfig?.autopilotContext
+    );
 
     if (job.target.executionMode !== 'new_conversation') {
       return buildExistingConvPrompt(job.name, job.schedule.description, rawText);

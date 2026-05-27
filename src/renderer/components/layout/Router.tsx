@@ -29,9 +29,6 @@ const CCodeRepoList = React.lazy(() => import('@renderer/pages/admin/CCodeRepoLi
 const CMeasDashboard = React.lazy(() => import('@renderer/pages/admin/CMeasDashboard'));
 const CTestManagement = React.lazy(() => import('@renderer/pages/admin/CTestManagement'));
 const CFlowBoard = React.lazy(() => import('@renderer/pages/admin/CFlowBoard'));
-const EnterpriseAgentWorkspace = React.lazy(
-  () => import('@renderer/pages/enterprise/components/EnterpriseAgentWorkspace')
-);
 const EnterpriseJoinLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseJoinLayout'));
 const EnterpriseLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseLayout'));
 const EnterpriseHome = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseHome'));
@@ -218,7 +215,7 @@ const PanelRoute: React.FC = () => {
             <Route path='cmeas' element={withRouteFallback(CMeasDashboard)} />
             <Route path='ctest' element={withRouteFallback(CTestManagement)} />
             <Route path='cflow' element={withRouteFallback(CFlowBoard)} />
-            <Route path='cagent' element={withRouteFallback(EnterpriseAgentWorkspace)} />
+            <Route path='cagent' element={<Navigate to='/super-assistant?tab=overview' replace />} />
             <Route path='usage' element={withRouteFallback(EnterpriseUsagePage)} />
             <Route path='security' element={withRouteFallback(EnterpriseSecurityPage)} />
           </Route>

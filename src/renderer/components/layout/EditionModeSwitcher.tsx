@@ -117,10 +117,10 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
 
   const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId;
   const personalLabel = t('settings.edition.personal', { defaultValue: '个人版' });
-  const enterpriseLabel = t('settings.edition.enterprise', { defaultValue: '企业版' });
+  const enterpriseLabel = t('settings.edition.enterprise', { defaultValue: '企业团队版' });
   const helpContent = (
     <div className={styles.helpPopover}>
-      <p className={styles.helpTitle}>{t('settings.edition.helpTitle', { defaultValue: '个人版 vs 企业版' })}</p>
+      <p className={styles.helpTitle}>{t('settings.edition.helpTitle', { defaultValue: '个人版 / 企业团队版 / 管理后台 区别' })}</p>
       <p className={styles.helpP}>
         {t('settings.edition.helpPersonal', {
           defaultValue: '个人版：本机/自己的账号与数据，界面即当前会话工作区。',
@@ -129,7 +129,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
       <p className={styles.helpP}>
         {t('settings.edition.helpEnterprise', {
           defaultValue:
-            '企业版：同一套工作区，但以企业身份使用（需先加入）。界面不会变成「管理页」。',
+            '企业团队版：同一套工作区，但以企业身份使用（需先加入）。界面不会变成「管理页」。',
         })}
       </p>
       <p className={styles.helpP}>
@@ -214,7 +214,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
       {showEnterpriseAdminNav ? (
         <Tooltip
           content={t('settings.edition.adminConsoleHint', {
-            defaultValue: '组织管理后台（成员、LDAP、邀请码、邮件）与上方「企业版」工作区是独立入口。',
+            defaultValue: '组织管理后台（成员、LDAP、邀请码、邮件）与上方「企业团队版」工作区是独立入口。',
           })}
         >
           <Button size='small' type='outline' onClick={() => void openAdminConsole()}>
@@ -225,7 +225,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
       {isDesktop && activeEdition === 'enterprise' && !hasJoinedEnterprise ? (
         <Tooltip
           content={t('settings.edition.desktopLoginHint', {
-            defaultValue: '桌面端企业版需在浏览器登录；加入企业后工作区与个人版相同结构。',
+            defaultValue: '桌面端企业团队版需在浏览器登录；加入企业后工作区与个人版相同结构。',
           })}
         >
           <Button size='small' type='text' onClick={() => void openEnterpriseLoginInBrowser()}>
@@ -234,15 +234,6 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
         </Tooltip>
       ) : null}
       </div>
-      <p className={styles.barHint}>
-        {activeEdition === 'enterprise'
-          ? t('settings.edition.barHintEnterprise', {
-              defaultValue: '企业版 = 企业身份下的同一工作台；配 LDAP/发邀请码请用「管理后台」。',
-            })
-          : t('settings.edition.barHintPersonal', {
-              defaultValue: '个人版 = 本机/个人场景；与公司企业版共用界面，仅账号与数据范围不同。',
-            })}
-      </p>
     </div>
   );
 };

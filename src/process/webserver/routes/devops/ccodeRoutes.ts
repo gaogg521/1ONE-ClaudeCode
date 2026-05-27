@@ -6,13 +6,25 @@
 
 import type { Express } from 'express';
 import { apiRateLimiter } from '../../middleware/security';
+import { isEnterpriseAdminRole } from '../../auth/enterpriseRoles';
+import { getDatabase } from '@process/services/database';
+import { CodeRepoRepository } from '@process/services/database/repositories/devops/codeRepoRepository';
 import { CcodeService } from '@process/services/devops/ccode/ccodeService';
+import {
+  canManageScopedResource,
+  resolveResourceScope,
+} from '../resourceScope';
 import { resolveDevopsTenantId, type DevopsRouteAuth } from './shared';
 
 export function registerCcodeRoutes(app: Express, auth: DevopsRouteAuth): void {
   app.get('/api/admin/code-repos', apiRateLimiter, auth, async (req, res) => {
     try {
-      const rows = await CcodeService.listRepos(resolveDevopsTenantId(req));
+      const tenantId = resolveDevopsTenantId(req);
+      const rows = await CcodeService.listRepos({
+        tenantId,
+        userId: req.user!.id,
+        isAdmin: isEnterpriseAdminRole(req.user!.role),
+      });
       res.json({ success: true, data: rows });
     } catch {
       res.status(500).json({ success: false, message: 'Internal server error' });
@@ -21,13 +33,27 @@ export function registerCcodeRoutes(app: Express, auth: DevopsRouteAuth): void {
 
   app.post('/api/admin/code-repos', apiRateLimiter, auth, async (req, res) => {
     try {
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const tenantId = resolveDevopsTenantId(req);
+      const resolvedScope = resolveResourceScope(req, driver, tenantId, {
+        scope: req.body?.scope,
+        team_id: req.body?.team_id,
+      });
+      if ('error' in resolvedScope) {
+        res.status(resolvedScope.status).json({ success: false, message: resolvedScope.error });
+        return;
+      }
       const data = await CcodeService.createRepo({
-        tenantId: resolveDevopsTenantId(req),
+        tenantId,
         name: String(req.body?.name ?? ''),
         url: String(req.body?.url ?? ''),
         provider: String(req.body?.provider ?? 'gitlab'),
         credentialId: String(req.body?.credential_id ?? ''),
         defaultBranch: String(req.body?.default_branch ?? 'main'),
+        scope: resolvedScope.scope,
+        teamId: resolvedScope.teamId,
+        createdBy: req.user!.id,
       });
       res.json({ success: true, data });
     } catch (error) {
@@ -41,7 +67,20 @@ export function registerCcodeRoutes(app: Express, auth: DevopsRouteAuth): void {
 
   app.delete('/api/admin/code-repos/:id', apiRateLimiter, auth, async (req, res) => {
     try {
-      await CcodeService.deleteRepo(String(req.params.id), resolveDevopsTenantId(req));
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const tenantId = resolveDevopsTenantId(req);
+      const id = String(req.params.id);
+      const resource = await CodeRepoRepository.getScope(id, tenantId);
+      if (!resource) {
+        res.status(404).json({ success: false, message: 'Not found' });
+        return;
+      }
+      if (!canManageScopedResource(req, driver, tenantId, resource)) {
+        res.status(403).json({ success: false, message: 'Forbidden' });
+        return;
+      }
+      await CcodeService.deleteRepo(id, tenantId);
       res.json({ success: true });
     } catch {
       res.status(500).json({ success: false, message: 'Internal server error' });

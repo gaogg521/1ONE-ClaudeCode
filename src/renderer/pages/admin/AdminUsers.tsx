@@ -6,11 +6,15 @@
 
 import React from 'react';
 import { Spin } from '@arco-design/web-react';
+import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import UsersPage from '@/renderer/pages/users';
 import { useEnterpriseGate } from '@/renderer/pages/settings/enterpriseGateContext';
 
 const AdminUsers: React.FC = () => {
   const gate = useEnterpriseGate();
+  const { effectiveRole } = useWebuiEnterpriseMode();
+  const enterpriseAccess = isEnterpriseAdminRole(effectiveRole) ? 'full' : 'profile';
   if (gate.status === 'loading') {
     return (
       <div className='flex justify-center py-40px'>
@@ -18,7 +22,7 @@ const AdminUsers: React.FC = () => {
       </div>
     );
   }
-  return <UsersPage enterpriseAccess='full' />;
+  return <UsersPage enterpriseAccess={enterpriseAccess} />;
 };
 
 export default AdminUsers;

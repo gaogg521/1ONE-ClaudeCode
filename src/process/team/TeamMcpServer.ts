@@ -13,6 +13,11 @@ import * as path from 'node:path';
 import type { Mailbox } from './Mailbox';
 import type { TaskManager } from './TaskManager';
 import type { TeamAgent } from './types';
+import {
+  escalateEnterpriseIssue,
+  listEnterpriseMembers,
+} from '@process/services/devops/enterpriseIssueEscalationService';
+import { buildLeadEscalationInboxMessage } from '@process/services/devops/enterpriseNotificationService';
 
 type SpawnAgentFn = (agentName: string, agentType?: string) => Promise<TeamAgent>;
 
@@ -249,6 +254,10 @@ export class TeamMcpServer {
         return this.handleRenameAgent(args);
       case 'team_shutdown_agent':
         return this.handleShutdownAgent(args, fromSlotId);
+      case 'team_issue_escalate':
+        return this.handleIssueEscalate(args, fromSlotId);
+      case 'team_enterprise_members':
+        return this.handleEnterpriseMembers();
       default:
         throw new Error(`Unknown tool: ${toolName}`);
     }
@@ -483,5 +492,89 @@ export class TeamMcpServer {
 
     this.params.renameAgent(resolvedSlotId, newName);
     return `Agent renamed: "${oldName}" → "${newName.trim()}"`;
+  }
+
+  private async handleEnterpriseMembers(): Promise<string> {
+    const dbTeam = await this.resolveTeamTenant();
+    if (!dbTeam) {
+      throw new Error('Team context not found');
+    }
+    const members = await listEnterpriseMembers(this.params.teamId, dbTeam.tenantId);
+    if (members.length === 0) {
+      return 'No enterprise members found for assignment.';
+    }
+    const lines = members.map((member) => `- @${member.username} (${member.id.slice(0, 8)}${member.role ? `, ${member.role}` : ''})`);
+    return `## Enterprise Members\nAssign human work with team_issue_escalate(assign_to_member="@username").\n${lines.join('\n')}`;
+  }
+
+  private async handleIssueEscalate(args: Record<string, unknown>, callerSlotId?: string): Promise<string> {
+    const agents = this.params.getAgents();
+    const caller =
+      (callerSlotId && agents.find((agent) => agent.slotId === callerSlotId)) ??
+      agents.find((agent) => agent.role === 'lead') ??
+      agents[0];
+    if (!caller) {
+      throw new Error('No agent identity available for escalation');
+    }
+
+    const result = await escalateEnterpriseIssue(
+      {
+        teamId: this.params.teamId,
+        agentSlotId: caller.slotId,
+        agentName: caller.agentName,
+        subject: String(args.subject ?? ''),
+        description: args.description ? String(args.description) : undefined,
+        blockerReason: args.blocker_reason ? String(args.blocker_reason) : undefined,
+        parentRequirementId: args.parent_issue_id ? String(args.parent_issue_id) : undefined,
+        assignToAgent: args.assign_to_agent ? String(args.assign_to_agent) : undefined,
+        assignToMember: args.assign_to_member ? String(args.assign_to_member) : undefined,
+        issueType: args.issue_type ? (String(args.issue_type) as 'story' | 'bug' | 'task') : undefined,
+        priority: args.priority ? (String(args.priority) as 'low' | 'medium' | 'high' | 'urgent') : undefined,
+      },
+      {
+        resolveAgentSlotId: (agentRef) => this.resolveSlotId(agentRef),
+        createTeamTask: (payload) => this.params.taskManager.create(payload),
+        wakeAgent: (slotId) => this.params.wakeAgent(slotId),
+      }
+    );
+
+    const lead = agents.find((agent) => agent.role === 'lead');
+    if (lead && lead.slotId !== caller.slotId) {
+      const inboxMessage = buildLeadEscalationInboxMessage({
+        agentName: caller.agentName,
+        subject: result.subject,
+        requirementId: result.requirementId,
+        parentRequirementId: args.parent_issue_id ? String(args.parent_issue_id) : undefined,
+        assignedMemberUsername: result.assignedMemberUsername,
+        assignedAgentName: result.assignedAgentName,
+      });
+      await this.params.mailbox.write({
+        teamId: this.params.teamId,
+        toAgentId: lead.slotId,
+        fromAgentId: caller.slotId,
+        content: inboxMessage,
+        summary: 'Agent blocker escalation',
+      });
+      await this.params.wakeAgent(lead.slotId);
+    }
+
+    const parts = [
+      `Enterprise issue created: [${result.requirementId.slice(0, 8)}] "${result.subject}"`,
+      result.assignedAgentName ? `Assigned agent: ${result.assignedAgentName}` : null,
+      result.assignedMemberUsername ? `Assigned member: @${result.assignedMemberUsername}` : null,
+      args.parent_issue_id ? `Linked to parent issue ${String(args.parent_issue_id).slice(0, 8)}` : null,
+    ].filter(Boolean);
+
+    return parts.join('\n');
+  }
+
+  private async resolveTeamTenant(): Promise<{ tenantId: string } | null> {
+    const { getDatabase } = await import('@process/services/database');
+    const db = await getDatabase();
+    const row = db
+      .getDriver()
+      .prepare(`SELECT tenant_id FROM teams WHERE id = ?`)
+      .get(this.params.teamId) as { tenant_id: string } | undefined;
+    return row ? { tenantId: row.tenant_id } : null;
   }
 }

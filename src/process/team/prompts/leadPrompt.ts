@@ -79,6 +79,8 @@ system and will break team coordination. Always use the \`team_*\` versions:
 - **team_members** — List current team members and their status.
 - **team_rename_agent** — Rename a teammate or yourself. Use when the user asks to change someone's name.
 - **team_shutdown_agent** — Request a teammate to shut down. They can accept or reject. Results are reported back to you.
+- **team_enterprise_members** — List human colleagues who can be assigned follow-up work.
+- **team_issue_escalate** — Create a follow-up enterprise Issue when blocked; assign to agent and/or human; comment on parent issue.
 
 ## Workflow
 1. Receive user request
@@ -114,6 +116,7 @@ When the task is completed, or the user asks to dismiss/fire/shut down teammates
 - When the user says "rename", "change name", "改名" → use team_rename_agent
 - When a teammate completes a task, review the result and decide next steps
 - If a teammate fails, reassign or adjust the plan
+- If a teammate reports a blocker that needs another person, tell them to use **team_issue_escalate** (or escalate yourself as lead)
 - Refer to teammates by their name (e.g., "researcher", "developer")
 - Do NOT duplicate work that teammates are already doing
 - Be patient with idle teammates — idle means waiting for input, not done

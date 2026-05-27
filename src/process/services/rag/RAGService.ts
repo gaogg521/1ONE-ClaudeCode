@@ -17,27 +17,69 @@ let pipelinePromise: any = null;
  */
 export class RAGService {
   private static extractor: any = null;
+  private static useFallbackEmbedding = false;
+  private static fallbackNotified = false;
   private static modelName = 'Xenova/all-MiniLM-L6-v2'; // 超轻量、仅 80MB 的世界级向量模型
+
+  private static normalizeVector(vector: number[]): number[] {
+    let norm = 0;
+    for (const value of vector) {
+      norm += value * value;
+    }
+    if (norm === 0) return vector;
+    const denom = Math.sqrt(norm);
+    return vector.map((value) => value / denom);
+  }
+
+  /**
+   * 兜底 embedding：当本地 transformers 初始化失败时，使用可复现的 hash 向量避免 RAG 全部失败。
+   */
+  private static buildFallbackEmbedding(text: string, dim = 384): number[] {
+    const vector = new Array<number>(dim).fill(0);
+    const tokens = (text || '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (tokens.length === 0) {
+      return vector;
+    }
+
+    for (const token of tokens) {
+      let hash = 2166136261;
+      for (let i = 0; i < token.length; i++) {
+        hash ^= token.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+      const index = Math.abs(hash) % dim;
+      vector[index] += 1;
+    }
+
+    return this.normalizeVector(vector);
+  }
 
   /**
    * 初始化本地 Transformers Pipeline
    */
   private static async initPipeline(): Promise<any> {
+    if (this.useFallbackEmbedding) return null;
     if (this.extractor) return this.extractor;
     if (pipelinePromise) return pipelinePromise;
 
     pipelinePromise = (async () => {
       try {
-        // 注入 sharp 模块虚拟 Mock 拦截器，100% 避开 win32-x64 原生二进制文件丢失报错
-        // Intercept 'sharp' loading and return an empty mock to prevent native .node resolution failure
+        // 注入 sharp 模块 Mock，避开 win32-x64 原生二进制缺失导致的 require 崩溃
         try {
-          const moduleAlias = require('node:module');
-          const originalRequire = moduleAlias.prototype.require;
-          moduleAlias.prototype.require = function (this: any, name: string) {
-            if (name === 'sharp') {
-              return {}; // 返回空对象，绕过 native require 异常
+          const Module = require('module') as {
+            _load: (request: string, parent: unknown, isMain: boolean) => unknown;
+          };
+          const originalLoad = Module._load;
+          Module._load = function (request: string, parent: unknown, isMain: boolean): unknown {
+            if (request === 'sharp') {
+              return {};
             }
-            return originalRequire.apply(this, arguments);
+            return originalLoad.call(this, request, parent, isMain);
           };
         } catch (mockError) {
           console.warn('[RAGService] Failed to inject sharp mock:', mockError);
@@ -71,9 +113,12 @@ export class RAGService {
         return extractor;
       } catch (error) {
         this.extractor = null;
+        this.useFallbackEmbedding = true;
+        const reason = error instanceof Error ? error.message : String(error);
+        console.error('[RAGService] Failed to initialize embedding pipeline, switching to fallback embedding:', reason);
+        return null;
+      } finally {
         pipelinePromise = null;
-        console.error('[RAGService] Failed to initialize embedding pipeline:', error);
-        throw error;
       }
     })();
 
@@ -122,15 +167,27 @@ export class RAGService {
    */
   public static async getEmbedding(text: string): Promise<number[]> {
     try {
+      if (this.useFallbackEmbedding) {
+        if (!this.fallbackNotified) {
+          this.fallbackNotified = true;
+          console.warn('[RAGService] Using fallback embedding mode.');
+        }
+        return this.buildFallbackEmbedding(text);
+      }
       const extractor = await this.initPipeline();
+      if (!extractor) {
+        return this.buildFallbackEmbedding(text);
+      }
       const output = await extractor(text, { pooling: 'mean', normalize: true });
 
       // 输出是一个 Tensor，包含浮点数组，转为标准的 JS number[]
       const vector = Array.from(output.data) as number[];
       return vector;
     } catch (error) {
-      console.error('[RAGService] Failed to compute text embedding:', error);
-      throw error;
+      this.useFallbackEmbedding = true;
+      const reason = error instanceof Error ? error.message : String(error);
+      console.error('[RAGService] Failed to compute text embedding, fallback enabled:', reason);
+      return this.buildFallbackEmbedding(text);
     }
   }
 

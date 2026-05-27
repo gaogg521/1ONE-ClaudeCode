@@ -31,6 +31,16 @@ import { registerCmeasRoutes } from './devops/cmeasRoutes';
 import { registerCpackRoutes } from './devops/cpackRoutes';
 import { registerCteamRoutes } from './devops/cteamRoutes';
 import { registerCtestRoutes } from './devops/ctestRoutes';
+import {
+  canManageScopedResource,
+  getScopedResourceOrNull,
+  resolveResourceScope,
+  getTeamPeerUserIds,
+  VISIBLE_RESOURCE_WHERE,
+  VISIBLE_RESOURCE_WHERE_ALIAS,
+  type ResolvedResourceScope,
+  type ResourceScopeError,
+} from './resourceScope';
 
 /**
  * 校验管理员权限中间件
@@ -50,10 +60,8 @@ function resolveTenantId(req: Request): string {
   return (req.user?.tenant_id ?? 'default').trim() || 'default';
 }
 
-function resolveRagScope(req: Request, requestedScope: unknown): 'organization' | 'personal' {
-  return requestedScope === 'organization' && isEnterpriseAdminRole(req.user!.role)
-    ? 'organization'
-    : 'personal';
+function isScopeError(value: ResolvedResourceScope | ResourceScopeError): value is ResourceScopeError {
+  return 'error' in value;
 }
 
 function insertRagDocumentRecord(input: {
@@ -64,7 +72,8 @@ function insertRagDocumentRecord(input: {
   filePath: string;
   fileSize: number;
   mimeType: string;
-  scope: 'organization' | 'personal';
+  scope: ResolvedResourceScope['scope'];
+  teamId: string | null;
   createdBy: string;
 }): void {
   const now = Date.now();
@@ -72,8 +81,8 @@ function insertRagDocumentRecord(input: {
     .prepare(
       `INSERT INTO rag_documents (
         id, tenant_id, title, file_path, file_size, mime_type,
-        status, chunk_count, last_error, scope, created_by, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 'indexing', 0, NULL, ?, ?, ?, ?)`
+        status, chunk_count, last_error, scope, team_id, created_by, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 'indexing', 0, NULL, ?, ?, ?, ?, ?)`
     )
     .run(
       input.docId,
@@ -83,6 +92,7 @@ function insertRagDocumentRecord(input: {
       input.fileSize,
       input.mimeType,
       input.scope,
+      input.teamId,
       input.createdBy,
       now,
       now
@@ -156,6 +166,14 @@ export function registerDevOpsRoutes(app: Express): void {
       const db = await getDatabase();
       const driver = db.getDriver();
       const docId = randomUUID();
+      const resolvedScope = resolveResourceScope(req, driver, tenantId, {
+        scope: req.body?.scope,
+        team_id: req.body?.team_id,
+      });
+      if (isScopeError(resolvedScope)) {
+        res.status(resolvedScope.status).json({ success: false, message: resolvedScope.error });
+        return;
+      }
       insertRagDocumentRecord({
         driver,
         docId,
@@ -164,7 +182,8 @@ export function registerDevOpsRoutes(app: Express): void {
         filePath: `memory://${file.originalname}`,
         fileSize: file.size,
         mimeType: file.mimetype || 'application/octet-stream',
-        scope: resolveRagScope(req, req.body?.scope),
+        scope: resolvedScope.scope,
+        teamId: resolvedScope.teamId,
         createdBy: userId,
       });
       queueRagDocumentIndexing({ driver, docId, title: file.originalname, content });
@@ -210,6 +229,14 @@ export function registerDevOpsRoutes(app: Express): void {
       const db = await getDatabase();
       const driver = db.getDriver();
       const docId = randomUUID();
+      const resolvedScope = resolveResourceScope(req, driver, tenantId, {
+        scope: req.body?.scope,
+        team_id: req.body?.team_id,
+      });
+      if (isScopeError(resolvedScope)) {
+        res.status(resolvedScope.status).json({ success: false, message: resolvedScope.error });
+        return;
+      }
       insertRagDocumentRecord({
         driver,
         docId,
@@ -218,7 +245,8 @@ export function registerDevOpsRoutes(app: Express): void {
         filePath: url.trim(),
         fileSize: Buffer.byteLength(content),
         mimeType: 'text/html',
-        scope: resolveRagScope(req, req.body?.scope),
+        scope: resolvedScope.scope,
+        teamId: resolvedScope.teamId,
         createdBy: userId,
       });
       queueRagDocumentIndexing({ driver, docId, title: docTitle, content });
@@ -262,6 +290,14 @@ export function registerDevOpsRoutes(app: Express): void {
       const db = await getDatabase();
       const driver = db.getDriver();
       const docId = randomUUID();
+      const resolvedScope = resolveResourceScope(req, driver, tenantId, {
+        scope: req.body?.scope,
+        team_id: req.body?.team_id,
+      });
+      if (isScopeError(resolvedScope)) {
+        res.status(resolvedScope.status).json({ success: false, message: resolvedScope.error });
+        return;
+      }
       insertRagDocumentRecord({
         driver,
         docId,
@@ -270,7 +306,8 @@ export function registerDevOpsRoutes(app: Express): void {
         filePath: url.trim(),
         fileSize: Buffer.byteLength(imported.content),
         mimeType: imported.mimeType,
-        scope: resolveRagScope(req, req.body?.scope),
+        scope: resolvedScope.scope,
+        teamId: resolvedScope.teamId,
         createdBy: userId,
       });
       queueRagDocumentIndexing({ driver, docId, title: docTitle, content: imported.content });
@@ -422,22 +459,41 @@ export function registerDevOpsRoutes(app: Express): void {
 
       // CFlow 自动打点：当需求状态发生流转时，写入价值流阶段记录
       if (updates.status) {
-        const stageMap: Record<string, string> = { backlog: '需求分析', planning: '设计规划', developing: '开发编码', testing: '测试验证', completed: '部署发布' };
+        const stageMap: Record<string, string> = {
+          backlog: '需求分析',
+          planning: '设计规划',
+          developing: '开发编码',
+          testing: '测试验证',
+          completed: '部署发布',
+        };
         const stageName = stageMap[updates.status];
         if (stageName) {
           const nowFl = Date.now();
           try {
-            // 查询该需求上一个阶段的 entry_time，计算等待时间
-            const prevStage = driver
-              .prepare(`SELECT entry_time FROM value_stream_stages WHERE requirement_id = ? ORDER BY entry_time DESC LIMIT 1`)
-              .get(id) as { entry_time: number } | undefined;
-            const waitMs = prevStage ? Math.max(0, nowFl - prevStage.entry_time) : 0;
-            driver.prepare(`INSERT INTO value_stream_stages (id, tenant_id, requirement_id, stage_name, entry_time, exit_time, wait_duration_ms, process_duration_ms) VALUES (?,?,?,?,?,?,?,?)`).run(randomUUID(), tenantId, id, stageName, nowFl, null, waitMs, 0);
-            // 同时关闭上一个阶段（设置 exit_time 和 process_duration_ms）
-            if (prevStage) {
-              driver.prepare(`UPDATE value_stream_stages SET exit_time = ?, process_duration_ms = ? WHERE requirement_id = ? AND exit_time IS NULL AND entry_time = ?`)
-                .run(nowFl, waitMs, id, prevStage.entry_time);
+            const openStage = driver
+              .prepare(
+                `SELECT id, entry_time FROM value_stream_stages
+                 WHERE requirement_id = ? AND exit_time IS NULL
+                 ORDER BY entry_time DESC LIMIT 1`
+              )
+              .get(id) as { id: string; entry_time: number } | undefined;
+
+            if (openStage) {
+              const processMs = Math.max(0, nowFl - openStage.entry_time);
+              driver
+                .prepare(
+                  `UPDATE value_stream_stages SET exit_time = ?, process_duration_ms = ? WHERE id = ?`
+                )
+                .run(nowFl, processMs, openStage.id);
             }
+
+            driver
+              .prepare(
+                `INSERT INTO value_stream_stages
+                 (id, tenant_id, requirement_id, stage_name, entry_time, exit_time, wait_duration_ms, process_duration_ms)
+                 VALUES (?,?,?,?,?,?,?,?)`
+              )
+              .run(randomUUID(), tenantId, id, stageName, nowFl, null, 0, 0);
           } catch { /* ignore flow logging errors */ }
         }
       }
@@ -474,6 +530,55 @@ export function registerDevOpsRoutes(app: Express): void {
     }
   });
 
+  // GET /api/admin/requirements/:id/comments — Issue 评论（含 Autopilot 回写）
+  app.get('/api/admin/requirements/:id/comments', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const requirementId = String(req.params.id);
+      const db = await getDatabase();
+      const driver = db.getDriver();
+
+      const requirement = driver
+        .prepare(`SELECT id FROM requirements WHERE id = ? AND tenant_id = ?`)
+        .get(requirementId, tenantId);
+      if (!requirement) {
+        res.status(404).json({ success: false, message: 'Requirement not found' });
+        return;
+      }
+
+      const rows = driver
+        .prepare(
+          `SELECT id, tenant_id, requirement_id, author_type, author_id, author_name, body, metadata, created_at
+           FROM requirement_comments
+           WHERE requirement_id = ? AND tenant_id = ?
+           ORDER BY created_at DESC
+           LIMIT 50`
+        )
+        .all(requirementId, tenantId) as Array<{
+          id: string;
+          tenant_id: string;
+          requirement_id: string;
+          author_type: string;
+          author_id: string | null;
+          author_name: string;
+          body: string;
+          metadata: string | null;
+          created_at: number;
+        }>;
+
+      res.json(
+        rows.map((row) => ({
+          ...row,
+          author_type: row.author_type as 'user' | 'agent' | 'autopilot',
+          metadata: row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : null,
+        }))
+      );
+    } catch (err) {
+      console.error('[DevOpsRoute] list requirement comments error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
   // ==========================================
   // 2. RAG 知识库核心 API
   // ==========================================
@@ -487,10 +592,10 @@ export function registerDevOpsRoutes(app: Express): void {
       const db = await getDatabase();
       const driver = db.getDriver();
 
-      // 管理员看全部，普通用户只看自己的+组织共享的
+      // 管理员看全部，普通用户看组织共享 + 个人 + 所属团队
       const rows = isAdmin
         ? driver.prepare(`SELECT id, tenant_id, title, file_path, file_size, mime_type, status, chunk_count, last_error, scope, team_id, created_by, created_at, updated_at FROM rag_documents WHERE tenant_id = ? ORDER BY created_at DESC`).all(tenantId)
-        : driver.prepare(`SELECT id, tenant_id, title, file_path, file_size, mime_type, status, chunk_count, last_error, scope, team_id, created_by, created_at, updated_at FROM rag_documents WHERE tenant_id = ? AND (scope = 'organization' OR created_by = ?) ORDER BY created_at DESC`).all(tenantId, userId);
+        : driver.prepare(`SELECT id, tenant_id, title, file_path, file_size, mime_type, status, chunk_count, last_error, scope, team_id, created_by, created_at, updated_at FROM rag_documents WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY created_at DESC`).all(tenantId, userId, tenantId, userId);
 
       res.json({ success: true, data: rows });
     } catch (err) {
@@ -504,17 +609,21 @@ export function registerDevOpsRoutes(app: Express): void {
     try {
       const tenantId = resolveTenantId(req);
       const userId = req.user!.id;
-      const { title, content, scope } = req.body;
+      const { title, content, scope, team_id } = req.body;
 
       if (!title?.trim() || !content?.trim()) {
         res.status(400).json({ success: false, message: 'Title and content are required' });
         return;
       }
 
-      const docScope = (scope === 'organization' && isEnterpriseAdminRole(req.user!.role)) ? 'organization' : 'personal';
-
       const db = await getDatabase();
       const driver = db.getDriver();
+      const resolvedScope = resolveResourceScope(req, driver, tenantId, { scope, team_id });
+      if (isScopeError(resolvedScope)) {
+        res.status(resolvedScope.status).json({ success: false, message: resolvedScope.error });
+        return;
+      }
+
       const docId = randomUUID();
 
       insertRagDocumentRecord({
@@ -525,7 +634,8 @@ export function registerDevOpsRoutes(app: Express): void {
         filePath: 'memory://text',
         fileSize: Buffer.byteLength(content),
         mimeType: 'text/plain',
-        scope: docScope,
+        scope: resolvedScope.scope,
+        teamId: resolvedScope.teamId,
         createdBy: userId,
       });
       queueRagDocumentIndexing({ driver, docId, title: title.trim(), content });
@@ -537,10 +647,44 @@ export function registerDevOpsRoutes(app: Express): void {
     }
   });
 
+  // PATCH /api/admin/rag/documents/:id — 更新文档可见范围（管理员或资源管理者）
+  app.patch('/api/admin/rag/documents/:id', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const id = String(req.params.id);
+      const { scope, team_id } = req.body;
+
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const resource = getScopedResourceOrNull(driver, tenantId, 'rag_documents', id);
+      if (!resource || !canManageScopedResource(req, driver, tenantId, resource)) {
+        res.status(404).json({ success: false, message: 'Document not found' });
+        return;
+      }
+
+      const resolvedScope = resolveResourceScope(req, driver, tenantId, { scope, team_id });
+      if (isScopeError(resolvedScope)) {
+        res.status(resolvedScope.status).json({ success: false, message: resolvedScope.error });
+        return;
+      }
+
+      driver
+        .prepare(`UPDATE rag_documents SET scope = ?, team_id = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`)
+        .run(resolvedScope.scope, resolvedScope.teamId, Date.now(), id, tenantId);
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[DevOpsRoute] update RAG document scope error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
   // POST /api/admin/rag/query — 相似度语义检索测试（Top-K 余弦比对）
   app.post('/api/admin/rag/query', apiRateLimiter, auth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const isAdmin = isEnterpriseAdminRole(req.user!.role);
       const query = String(req.body?.query ?? '').trim();
       const limit = Math.min(Math.max(Number(req.body?.limit) || 5, 1), 20);
 
@@ -555,15 +699,24 @@ export function registerDevOpsRoutes(app: Express): void {
       // 1. 将查询文本实时转化为向量 (384 维)
       const queryVector = await RAGService.getEmbedding(query);
 
-      // 2. 从数据库加载所有当前租户的 Chunks（包含二进制 Blob）
-      const rows = driver
-        .prepare(
-          `SELECT c.content, c.chunk_index, c.embedding, d.title
-           FROM rag_document_chunks c
-           JOIN rag_documents d ON d.id = c.document_id
-           WHERE d.tenant_id = ?`
-        )
-        .all(tenantId) as any[];
+      // 2. 从数据库加载当前用户可见的 Chunks
+      const rows = (isAdmin
+        ? driver
+          .prepare(
+            `SELECT c.content, c.chunk_index, c.embedding, d.title
+             FROM rag_document_chunks c
+             JOIN rag_documents d ON d.id = c.document_id
+             WHERE d.tenant_id = ?`
+          )
+          .all(tenantId)
+        : driver
+          .prepare(
+            `SELECT c.content, c.chunk_index, c.embedding, d.title
+             FROM rag_document_chunks c
+             JOIN rag_documents d ON d.id = c.document_id
+             WHERE d.tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE_ALIAS('d')}`
+          )
+          .all(tenantId, userId, tenantId, userId)) as any[];
 
       // 3. 在内存中极速计算余弦相似度并排序
       const scoredResults = rows
@@ -592,21 +745,20 @@ export function registerDevOpsRoutes(app: Express): void {
   app.delete('/api/admin/rag/documents/:id', apiRateLimiter, auth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
-      const userId = req.user!.id;
-      const isAdmin = isEnterpriseAdminRole(req.user!.role);
       const id = String(req.params.id);
 
       const db = await getDatabase();
       const driver = db.getDriver();
 
-      const whereClause = isAdmin
-        ? 'id = ? AND tenant_id = ?'
-        : 'id = ? AND tenant_id = ? AND created_by = ?';
-      const params = isAdmin ? [id, tenantId] : [id, tenantId, userId];
+      const resource = getScopedResourceOrNull(driver, tenantId, 'rag_documents', id);
+      if (!resource || !canManageScopedResource(req, driver, tenantId, resource)) {
+        res.status(404).json({ success: false, message: 'Document not found' });
+        return;
+      }
 
       const result = driver
-        .prepare(`DELETE FROM rag_documents WHERE ${whereClause}`)
-        .run(...params);
+        .prepare(`DELETE FROM rag_documents WHERE id = ? AND tenant_id = ?`)
+        .run(id, tenantId);
 
       if (result.changes === 0) {
         res.status(404).json({ success: false, message: 'Document not found' });
@@ -635,7 +787,7 @@ export function registerDevOpsRoutes(app: Express): void {
 
       const rows = (isAdmin
         ? driver.prepare(`SELECT id, tenant_id, name, type, endpoint, env_json, enabled, scope, team_id, created_by, created_at, updated_at FROM mcp_registry WHERE tenant_id = ? ORDER BY name ASC`).all(tenantId)
-        : driver.prepare(`SELECT id, tenant_id, name, type, endpoint, env_json, enabled, scope, team_id, created_by, created_at, updated_at FROM mcp_registry WHERE tenant_id = ? AND (scope = 'organization' OR created_by = ?) ORDER BY name ASC`).all(tenantId, userId)) as any[];
+        : driver.prepare(`SELECT id, tenant_id, name, type, endpoint, env_json, enabled, scope, team_id, created_by, created_at, updated_at FROM mcp_registry WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY name ASC`).all(tenantId, userId, tenantId, userId)) as any[];
 
       // 为了安全，不返回具体的 env_json 明文，仅以布尔标记其是否配置过
       const safeRows = rows.map((row) => {
@@ -654,6 +806,9 @@ export function registerDevOpsRoutes(app: Express): void {
           type: row.type,
           endpoint: row.endpoint,
           enabled: row.enabled === 1,
+          scope: row.scope,
+          team_id: row.team_id,
+          created_by: row.created_by,
           hasKeys,
           created_at: row.created_at,
           updated_at: row.updated_at,
@@ -668,12 +823,11 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // POST /api/admin/mcp/registry — 注册或编辑外部 MCP 节点
-  app.post('/api/admin/mcp/registry', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+  app.post('/api/admin/mcp/registry', apiRateLimiter, auth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const userId = req.user!.id;
-      const isAdmin = isEnterpriseAdminRole(req.user!.role);
-      const { id, name, type, endpoint, env, enabled, scope } = req.body;
+      const { id, name, type, endpoint, env, enabled, scope, team_id } = req.body;
 
       if (!name?.trim() || !endpoint?.trim() || !type) {
         res.status(400).json({ success: false, message: 'name, type and endpoint are required' });
@@ -693,12 +847,15 @@ export function registerDevOpsRoutes(app: Express): void {
 
       if (id) {
         // 编辑模式
-        const existing = driver
-          .prepare(`SELECT 1 FROM mcp_registry WHERE id = ? AND tenant_id = ?`)
-          .get(id, tenantId);
-
-        if (!existing) {
+        const existing = getScopedResourceOrNull(driver, tenantId, 'mcp_registry', id);
+        if (!existing || !canManageScopedResource(req, driver, tenantId, existing)) {
           res.status(404).json({ success: false, message: 'MCP registry not found' });
+          return;
+        }
+
+        const resolvedScope = resolveResourceScope(req, driver, tenantId, { scope, team_id });
+        if (isScopeError(resolvedScope)) {
+          res.status(resolvedScope.status).json({ success: false, message: resolvedScope.error });
           return;
         }
 
@@ -724,20 +881,24 @@ export function registerDevOpsRoutes(app: Express): void {
         driver
           .prepare(
             `UPDATE mcp_registry
-             SET name = ?, type = ?, endpoint = ?, env_json = ?, enabled = ?, updated_at = ?
+             SET name = ?, type = ?, endpoint = ?, env_json = ?, enabled = ?, scope = ?, team_id = ?, updated_at = ?
              WHERE id = ? AND tenant_id = ?`
           )
-          .run(name.trim(), type, endpoint.trim(), finalEnv, enabled ? 1 : 0, now, id, tenantId);
+          .run(name.trim(), type, endpoint.trim(), finalEnv, enabled ? 1 : 0, resolvedScope.scope, resolvedScope.teamId, now, id, tenantId);
       } else {
         // 新建模式
+        const resolvedScope = resolveResourceScope(req, driver, tenantId, { scope, team_id });
+        if (isScopeError(resolvedScope)) {
+          res.status(resolvedScope.status).json({ success: false, message: resolvedScope.error });
+          return;
+        }
         const nextId = randomUUID();
-        const mcpScope = (scope === 'organization' && isAdmin) ? 'organization' : 'personal';
         driver
           .prepare(
-            `INSERT INTO mcp_registry (id, tenant_id, name, type, endpoint, env_json, enabled, scope, created_by, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO mcp_registry (id, tenant_id, name, type, endpoint, env_json, enabled, scope, team_id, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
-          .run(nextId, tenantId, name.trim(), type, endpoint.trim(), envJsonStr, enabled ? 1 : 0, mcpScope, req.user!.id, now, now);
+          .run(nextId, tenantId, name.trim(), type, endpoint.trim(), envJsonStr, enabled ? 1 : 0, resolvedScope.scope, resolvedScope.teamId, userId, now, now);
       }
 
       res.json({ success: true });
@@ -748,13 +909,19 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // DELETE /api/admin/mcp/registry/:id — 注销 MCP 连接
-  app.delete('/api/admin/mcp/registry/:id', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+  app.delete('/api/admin/mcp/registry/:id', apiRateLimiter, auth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const id = String(req.params.id);
 
       const db = await getDatabase();
       const driver = db.getDriver();
+
+      const resource = getScopedResourceOrNull(driver, tenantId, 'mcp_registry', id);
+      if (!resource || !canManageScopedResource(req, driver, tenantId, resource)) {
+        res.status(404).json({ success: false, message: 'MCP not found' });
+        return;
+      }
 
       const result = driver
         .prepare(`DELETE FROM mcp_registry WHERE id = ? AND tenant_id = ?`)
@@ -781,10 +948,17 @@ export function registerDevOpsRoutes(app: Express): void {
       const tenantId = resolveTenantId(req);
       const userId = req.user!.id;
       const isAdmin = isEnterpriseAdminRole(req.user!.role);
-      const db = await getDatabase(); const driver = db.getDriver();
+      const db = await getDatabase();
+      const driver = db.getDriver();
       const rows = (isAdmin
         ? driver.prepare(`SELECT * FROM audit_logs WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 200`).all(tenantId)
-        : driver.prepare(`SELECT * FROM audit_logs WHERE tenant_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 200`).all(tenantId, userId)) as any[];
+        : (() => {
+          const peerIds = getTeamPeerUserIds(driver, tenantId, userId);
+          const placeholders = peerIds.map(() => '?').join(',');
+          return driver
+            .prepare(`SELECT * FROM audit_logs WHERE tenant_id = ? AND user_id IN (${placeholders}) ORDER BY created_at DESC LIMIT 200`)
+            .all(tenantId, ...peerIds);
+        })()) as any[];
       res.json({ success: true, data: rows });
     } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
   });
@@ -832,7 +1006,7 @@ export function registerDevOpsRoutes(app: Express): void {
       const driver = db.getDriver();
       const rows = (isAdmin
         ? driver.prepare(`SELECT id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at FROM skills_registry WHERE tenant_id = ? ORDER BY name ASC`).all(tenantId)
-        : driver.prepare(`SELECT id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at FROM skills_registry WHERE tenant_id = ? AND (scope = 'organization' OR created_by = ?) ORDER BY name ASC`).all(tenantId, userId)) as any[];
+        : driver.prepare(`SELECT id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at FROM skills_registry WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY name ASC`).all(tenantId, userId, tenantId, userId)) as any[];
       res.json({ success: true, data: rows });
     } catch (err) {
       console.error('[DevOpsRoute] list skills error:', err);
@@ -841,26 +1015,37 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // POST /api/admin/skills — 创建/编辑技能
-  app.post('/api/admin/skills', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+  app.post('/api/admin/skills', apiRateLimiter, auth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const userId = req.user!.id;
-      const isAdmin = isEnterpriseAdminRole(req.user!.role);
-      const { id, name, description, content, enabled, scope } = req.body;
+      const { id, name, description, content, enabled, scope, team_id } = req.body;
       if (!name?.trim()) { res.status(400).json({ success: false, message: 'name required' }); return; }
       const db = await getDatabase();
       const driver = db.getDriver();
       const now = Date.now();
       if (id) {
-        const existing = driver.prepare(`SELECT 1 FROM skills_registry WHERE id = ? AND tenant_id = ?`).get(id, tenantId);
-        if (!existing) { res.status(404).json({ success: false, message: 'Skill not found' }); return; }
-        driver.prepare(`UPDATE skills_registry SET name=?, description=?, content=?, enabled=?, updated_at=? WHERE id=? AND tenant_id=?`)
-          .run(name.trim(), description||'', content||'', enabled?1:0, now, id, tenantId);
+        const existing = getScopedResourceOrNull(driver, tenantId, 'skills_registry', id);
+        if (!existing || !canManageScopedResource(req, driver, tenantId, existing)) {
+          res.status(404).json({ success: false, message: 'Skill not found' });
+          return;
+        }
+        const resolvedScope = resolveResourceScope(req, driver, tenantId, { scope: scope ?? existing.scope, team_id: team_id ?? existing.team_id });
+        if (isScopeError(resolvedScope)) {
+          res.status(resolvedScope.status).json({ success: false, message: resolvedScope.error });
+          return;
+        }
+        driver.prepare(`UPDATE skills_registry SET name=?, description=?, content=?, enabled=?, scope=?, team_id=?, updated_at=? WHERE id=? AND tenant_id=?`)
+          .run(name.trim(), description||'', content||'', enabled?1:0, resolvedScope.scope, resolvedScope.teamId, now, id, tenantId);
       } else {
-        const skillScope = (scope === 'organization' && isAdmin) ? 'organization' : 'personal';
+        const resolvedScope = resolveResourceScope(req, driver, tenantId, { scope, team_id });
+        if (isScopeError(resolvedScope)) {
+          res.status(resolvedScope.status).json({ success: false, message: resolvedScope.error });
+          return;
+        }
         const nextId = randomUUID();
-        driver.prepare(`INSERT INTO skills_registry (id, tenant_id, name, description, content, enabled, scope, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)
-          .run(nextId, tenantId, name.trim(), description||'', content||'', enabled?1:0, skillScope, userId, now, now);
+        driver.prepare(`INSERT INTO skills_registry (id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+          .run(nextId, tenantId, name.trim(), description||'', content||'', enabled?1:0, resolvedScope.scope, resolvedScope.teamId, userId, now, now);
       }
       res.json({ success: true });
     } catch (err) {
@@ -870,17 +1055,18 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // DELETE /api/admin/skills/:id — 删除技能
-  app.delete('/api/admin/skills/:id', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+  app.delete('/api/admin/skills/:id', apiRateLimiter, auth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
-      const userId = req.user!.id;
-      const isAdmin = isEnterpriseAdminRole(req.user!.role);
       const id = String(req.params.id);
       const db = await getDatabase();
       const driver = db.getDriver();
-      const where = isAdmin ? 'id=? AND tenant_id=?' : 'id=? AND tenant_id=? AND created_by=?';
-      const params = isAdmin ? [id, tenantId] : [id, tenantId, userId];
-      const result = driver.prepare(`DELETE FROM skills_registry WHERE ${where}`).run(...params);
+      const resource = getScopedResourceOrNull(driver, tenantId, 'skills_registry', id);
+      if (!resource || !canManageScopedResource(req, driver, tenantId, resource)) {
+        res.status(404).json({ success: false, message: 'Skill not found' });
+        return;
+      }
+      const result = driver.prepare(`DELETE FROM skills_registry WHERE id=? AND tenant_id=?`).run(id, tenantId);
       if (result.changes === 0) { res.status(404).json({ success: false, message: 'Skill not found' }); return; }
       res.json({ success: true });
     } catch (err) {

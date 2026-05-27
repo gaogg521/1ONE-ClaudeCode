@@ -7,7 +7,7 @@
 import type { Express, Request, Response } from 'express';
 import { AuthService } from '@process/webserver/auth/service/AuthService';
 import { AuthMiddleware } from '@process/webserver/auth/middleware/AuthMiddleware';
-import { UserRepository } from '@process/webserver/auth/repository/UserRepository';
+import { UserRepository, type AuthUser } from '@process/webserver/auth/repository/UserRepository';
 import { AuthProviderRepository } from '@process/webserver/auth/repository/AuthProviderRepository';
 import { AuthIdentityRepository } from '@process/webserver/auth/repository/AuthIdentityRepository';
 import type { AuthProviderType } from '@process/services/database/types';
@@ -30,30 +30,87 @@ import {
   resolveFeishuExternalId,
   type FeishuProviderConfig,
 } from '../auth/providers/FeishuAuthProvider';
+import { resolvePostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
 
 const FEISHU_QR_SDK_URL =
   'https://lf-package-cn.feishucdn.com/obj/feishu-static/lark/passport/qrcode/LarkSSOSDKWebQRCode-1.0.3.js';
 
-const feishuStateStore: Map<string, number> = new Map();
+type FeishuStateEntry = {
+  expiresAt: number;
+  redirectTarget: string;
+};
+
+const DEFAULT_POST_LOGIN_TARGET = '/sessions';
+const feishuStateStore: Map<string, FeishuStateEntry> = new Map();
 const FEISHU_STATE_TTL_MS = 10 * 60 * 1000;
 
-function issueFeishuState(): string {
+function normalizePostLoginTarget(raw: unknown): string {
+  if (typeof raw !== 'string') {
+    return DEFAULT_POST_LOGIN_TARGET;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('/')) {
+    return DEFAULT_POST_LOGIN_TARGET;
+  }
+  if (trimmed.startsWith('//') || trimmed.includes('://')) {
+    return DEFAULT_POST_LOGIN_TARGET;
+  }
+  return trimmed;
+}
+
+function normalizeWebRole(role: string | undefined): 'member' | 'org_admin' | 'system_admin' {
+  if (!role) return 'member';
+  if (role === 'admin') return 'system_admin';
+  if (role === 'user') return 'member';
+  if (role === 'system_admin' || role === 'org_admin' || role === 'member') return role;
+  return 'member';
+}
+
+function buildAuthResponseUser(
+  user: Pick<AuthUser, 'id' | 'username' | 'tenant_id' | 'role'>,
+  roleOverride?: string
+): {
+  id: string;
+  username: string;
+  role: 'member' | 'org_admin' | 'system_admin';
+  tenant_id: string;
+} {
+  return {
+    id: user.id,
+    username: user.username,
+    role: normalizeWebRole(roleOverride ?? user.role),
+    tenant_id: user.tenant_id ?? 'default',
+  };
+}
+
+function issueFeishuState(redirectTarget: string): string {
   const state = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-  feishuStateStore.set(state, Date.now() + FEISHU_STATE_TTL_MS);
+  feishuStateStore.set(state, {
+    expiresAt: Date.now() + FEISHU_STATE_TTL_MS,
+    redirectTarget,
+  });
   return state;
 }
 
-function consumeFeishuState(state: string): boolean {
-  const expiry = feishuStateStore.get(state);
+function consumeFeishuState(state: string): FeishuStateEntry | null {
+  const entry = feishuStateStore.get(state);
   feishuStateStore.delete(state);
-  if (!expiry) return false;
-  return Date.now() <= expiry;
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) return null;
+  return entry;
+}
+
+function fallbackFeishuStateEntry(): FeishuStateEntry {
+  return {
+    expiresAt: Date.now() + FEISHU_STATE_TTL_MS,
+    redirectTarget: DEFAULT_POST_LOGIN_TARGET,
+  };
 }
 
 function cleanupFeishuState(): void {
   const now = Date.now();
-  for (const [k, exp] of feishuStateStore.entries()) {
-    if (now > exp) feishuStateStore.delete(k);
+  for (const [k, entry] of feishuStateStore.entries()) {
+    if (now > entry.expiresAt) feishuStateStore.delete(k);
   }
 }
 
@@ -212,7 +269,8 @@ export function registerAuthRoutes(app: Express): void {
         return;
       }
 
-      const state = issueFeishuState();
+      const redirectTarget = normalizePostLoginTarget(req.query.redirect);
+      const state = issueFeishuState(redirectTarget);
       const goto = buildFeishuAuthorizeUrl({ appId, redirectUri, state });
 
       if (mode === 'qr') {
@@ -239,15 +297,17 @@ export function registerAuthRoutes(app: Express): void {
         res.status(400).send('Missing code/state');
         return;
       }
-      if (!consumeFeishuState(state)) {
-        res.status(400).send('Invalid state');
-        return;
+      const stateEntry = consumeFeishuState(state);
+      if (!stateEntry) {
+        console.warn('[AuthRoute] feishu callback state missing/expired, fallback to default redirect');
       }
+      const effectiveStateEntry = stateEntry ?? fallbackFeishuStateEntry();
 
       const providerRow = await AuthProviderRepository.getProvider('feishu');
       const cfg = (providerRow?.config ?? {}) as unknown as FeishuProviderConfig;
       const appId = cfg.appId || process.env.FEISHU_APP_ID || '';
       const appSecret = cfg.appSecret || process.env.FEISHU_APP_SECRET || '';
+      const redirectUri = cfg.redirectUri || process.env.FEISHU_REDIRECT_URI || '';
       if (!providerRow?.enabled) {
         res.status(404).send('Feishu login is not enabled');
         return;
@@ -257,7 +317,7 @@ export function registerAuthRoutes(app: Express): void {
         return;
       }
 
-      const token = await exchangeFeishuCodeForUserAccessToken({ appId, appSecret, code });
+      const token = await exchangeFeishuCodeForUserAccessToken({ appId, appSecret, code, redirectUri });
       const userInfo = await fetchFeishuUserInfo(token);
       const externalIdField = (cfg.externalIdField ?? 'union_id') as 'union_id' | 'open_id';
       const externalId = resolveFeishuExternalId(userInfo, externalIdField);
@@ -277,11 +337,8 @@ export function registerAuthRoutes(app: Express): void {
         return;
       }
 
-      const sessionToken = await AuthService.generateToken({
-        id: user.id,
-        username: user.username,
-        role: user.role ?? 'user',
-      });
+      const authUser = buildAuthResponseUser(user);
+      const sessionToken = await AuthService.generateToken(authUser);
 
       await UserRepository.updateLastLogin(user.id);
       res.cookie(AUTH_CONFIG.COOKIE.NAME, sessionToken, {
@@ -289,9 +346,23 @@ export function registerAuthRoutes(app: Express): void {
         maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,
       });
 
-      // Unified landing: enter system homepage
-      res.redirect('/');
+      const target = resolvePostLoginRedirectPath(
+        effectiveStateEntry.redirectTarget,
+        authUser.role,
+        authUser.tenant_id,
+        false
+      );
+      res.redirect(`/#${target}`);
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.toLowerCase().includes('invalid_grant')) {
+        res.status(400).send('Feishu auth code expired or invalid. Please retry login.');
+        return;
+      }
+      if (msg.toLowerCase().includes('timeout')) {
+        res.status(504).send('Feishu login timeout. Please retry.');
+        return;
+      }
       console.error('[AuthRoute] feishu callback error:', error);
       res.status(500).send('Internal server error');
     }
@@ -345,10 +416,7 @@ export function registerAuthRoutes(app: Express): void {
       res.json({
         success: true,
         message: 'Login successful',
-        user: {
-          id: user.id,
-          username: user.username,
-        },
+        user: buildAuthResponseUser(user),
         token,
       });
     } catch (error) {
@@ -394,10 +462,11 @@ export function registerAuthRoutes(app: Express): void {
         return;
       }
 
+      const effectiveRole = result.isAdmin ? 'system_admin' : normalizeWebRole(user.role);
       const token = await AuthService.generateToken({
         id: user.id,
         username: user.username,
-        role: result.isAdmin ? 'admin' : (user.role ?? 'user'),
+        role: effectiveRole,
       });
 
       await UserRepository.updateLastLogin(user.id);
@@ -409,13 +478,29 @@ export function registerAuthRoutes(app: Express): void {
       res.json({
         success: true,
         message: 'Login successful',
-        user: { id: user.id, username: user.username },
+        user: buildAuthResponseUser(user, effectiveRole),
         token,
       });
     } catch (error: any) {
       const msg = error instanceof Error ? error.message : String(error);
-      if (msg.toLowerCase().includes('invalidcredentials') || msg.toLowerCase().includes('invalid credentials')) {
+      const lower = msg.toLowerCase();
+      const code = String(error?.code ?? '').toUpperCase();
+      if (
+        lower.includes('invalidcredentials') ||
+        lower.includes('invalid credentials') ||
+        lower.includes('user not found')
+      ) {
         res.status(401).json({ success: false, message: 'Invalid username or password' });
+        return;
+      }
+      if (
+        lower.includes('timeout') ||
+        code === 'ETIMEDOUT' ||
+        code === 'ECONNREFUSED' ||
+        code === 'ECONNRESET' ||
+        code === 'ENOTFOUND'
+      ) {
+        res.status(503).json({ success: false, message: 'LDAP service unavailable. Please retry later.' });
         return;
       }
       console.error('[AuthRoute] ldap login error:', error);

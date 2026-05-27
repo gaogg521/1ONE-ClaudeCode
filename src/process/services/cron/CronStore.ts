@@ -41,6 +41,7 @@ export type CronJob = {
       isPreset?: boolean;
       customAgentId?: string;
       presetAgentType?: string;
+      autopilotContext?: import('@/common/types/autopilotContext').AutopilotContext;
     };
   };
   state: {

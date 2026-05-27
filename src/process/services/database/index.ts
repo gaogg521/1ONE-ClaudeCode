@@ -2059,6 +2059,7 @@ export class OneCmdDatabase {
 
   createPersonalTask(task: {
     id: string;
+    tenant_id?: string;
     user_id: string;
     subject: string;
     status: string;
@@ -2071,11 +2072,12 @@ export class OneCmdDatabase {
     try {
       this.db
         .prepare(
-          `INSERT INTO tasks (id, user_id, subject, status, active_form, session_name, assigned_to, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO tasks (id, tenant_id, user_id, subject, status, active_form, session_name, assigned_to, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           task.id,
+          task.tenant_id ?? 'default',
           task.user_id,
           task.subject,
           task.status,
@@ -2106,7 +2108,13 @@ export class OneCmdDatabase {
   > {
     try {
       const rows = user_id
-        ? this.db.prepare('SELECT * FROM tasks WHERE tenant_id = ? AND user_id = ? ORDER BY created_at DESC').all(tenant_id, user_id)
+        ? this.db
+            .prepare(
+              `SELECT * FROM tasks
+               WHERE tenant_id = ? AND (user_id = ? OR assigned_to = ?)
+               ORDER BY created_at DESC`
+            )
+            .all(tenant_id, user_id, user_id)
         : this.db.prepare('SELECT * FROM tasks WHERE tenant_id = ? ORDER BY created_at DESC').all(tenant_id);
       return { success: true, data: rows as any[] };
     } catch (error: any) {

@@ -46,7 +46,16 @@ describe('enterprise paths', () => {
     expect(getVisibleEnterpriseNavItems('member', false).map((item) => item.key)).toEqual([
       'home',
       'users',
-      'cagent',
+      'cteam',
+      'rag',
+      'mcp',
+      'skills',
+      'milestones',
+      'cpack',
+      'ccode',
+      'cmeas',
+      'usage',
+      'security',
     ]);
 
     expect(getVisibleEnterpriseNavItems('org_admin', false).map((item) => item.key)).toContain(

@@ -204,5 +204,17 @@
   "superAssistant.openWebuiSettings": "Open WebUI settings",
   "superAssistant.settingsEnterpriseTitle": "Enterprise module configuration entry",
   "superAssistant.settingsEnterpriseDesc": "Continue into the existing enterprise console for members, auth, mail, MCP, and governance settings.",
-  "superAssistant.openEnterpriseConsole": "Open enterprise console"
+  "superAssistant.openEnterpriseConsole": "Open enterprise console",
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications yet",
+    "markAllRead": "Mark all as read",
+    "kinds": {
+      "issue_comment": "Issue update",
+      "issue_escalation": "Issue escalation",
+      "autopilot": "Autopilot",
+      "task_assigned": "Task assigned",
+      "lead_alert": "Blocker alert"
+    }
+  }
 }

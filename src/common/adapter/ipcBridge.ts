@@ -948,6 +948,7 @@ export interface ICronAgentConfig {
   isPreset?: boolean;
   customAgentId?: string;
   presetAgentType?: string;
+  autopilotContext?: import('@/common/types/autopilotContext').AutopilotContext;
 }
 
 export interface ICreateCronJobParams {
@@ -963,6 +964,7 @@ export interface ICreateCronJobParams {
   createdBy: 'user' | 'agent';
   executionMode?: 'existing' | 'new_conversation';
   agentConfig?: ICronAgentConfig;
+  autopilotContext?: import('@/common/types/autopilotContext').AutopilotContext;
 }
 
 interface ISendMessageParams {

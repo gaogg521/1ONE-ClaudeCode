@@ -354,7 +354,10 @@ export async function authenticateWithLdap(
   debug?: { memberOf?: string[] };
 }> {
     const loginAttr = resolveLoginAttribute(config);
-    const rawFilter = (config.searchFilter || `(${loginAttr}={{username}})`).trim();
+    const defaultFilter = username.includes('@')
+      ? `(|(${loginAttr}={{username}})(userPrincipalName={{username}})(mail={{username}}))`
+      : `(|(${loginAttr}={{username}})(sAMAccountName={{username}})(uid={{username}}))`;
+    const rawFilter = (config.searchFilter || defaultFilter).trim();
     const safeUser = escapeLdapFilterValue(username.trim());
     const filter = rawFilter.replace(/\{\{\s*username\s*\}\}/gi, safeUser);
     const attrs = Array.from(new Set(['dn', loginAttr, 'memberOf', ...(config.externalIdAttribute ? [config.externalIdAttribute] : [])]));
@@ -363,7 +366,7 @@ export async function authenticateWithLdap(
     const serviceClient = createClient(config);
     try {
       const bindPrincipal = resolveLdapBindPrincipal(config);
-      if (bindPrincipal && config.bindPassword) {
+      if (bindPrincipal && config.bindPassword && String(config.bindPassword).trim() !== PASSWORD_MASK) {
         await bindAsync(serviceClient, bindPrincipal, String(config.bindPassword));
       }
       const { dn: userDn, entry } = await searchUserAsync(serviceClient, config.baseDN, filter, attrs);

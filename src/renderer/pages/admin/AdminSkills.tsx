@@ -4,11 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useState } from 'react';
-import { Button, Card, Form, Input, Message, Modal, Popconfirm, Select, Space, Switch, Table, Tag } from '@arco-design/web-react';
+import React, { useState } from 'react';
+import { Button, Card, Form, Input, Message, Modal, Popconfirm, Space, Switch, Table } from '@arco-design/web-react';
 import { Delete, Edit, Plus, Refresh } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
+import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
 import {
   deleteSkill,
@@ -20,16 +22,28 @@ import {
 import AdminPageWrapper from './components/AdminPageWrapper';
 import ModuleDataState from './components/ModuleDataState';
 import ModulePageHeader from './components/ModulePageHeader';
+import ResourceScopeFields from './components/ResourceScopeFields';
+import ScopeOwnershipCell from './components/ScopeOwnershipCell';
+import { useTeamNameMap } from '@/renderer/hooks/enterprise/useTeamNameMap';
 
 const AdminSkills: React.FC = () => {
   const { t } = useTranslation();
+  const { effectiveRole } = useWebuiEnterpriseMode();
+  const isAdmin = isEnterpriseAdminRole(effectiveRole);
   const [modalVisible, setModalVisible] = useState(false);
   const [batchVisible, setBatchVisible] = useState(false);
   const [batchJson, setBatchJson] = useState('');
   const [batchError, setBatchError] = useState<string | null>(null);
   const [batchSaving, setBatchSaving] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: '', description: '', content: '', enabled: true, scope: 'personal' as string });
+  const [form, setForm] = useState({
+    name: '',
+    description: '',
+    content: '',
+    enabled: true,
+    scope: 'personal' as string,
+    teamId: null as string | null,
+  });
 
   const rowsState = useEnterpriseAsyncData(
     listSkills,
@@ -37,14 +51,43 @@ const AdminSkills: React.FC = () => {
     t('admin.skills.loadFailed', { defaultValue: '加载失败' })
   );
 
-  const openCreate = () => { setEditId(null); setForm({ name: '', description: '', content: '', enabled: true, scope: 'personal' }); setModalVisible(true); };
-  const openEdit = (r: SkillRecord) => { setEditId(r.id); setForm({ name: r.name, description: r.description || '', content: r.content || '', enabled: r.enabled === 1, scope: r.scope || 'personal' }); setModalVisible(true); };
+  const { getTeamName, teams } = useTeamNameMap();
+
+  const openCreate = () => {
+    setEditId(null);
+    setForm({ name: '', description: '', content: '', enabled: true, scope: 'personal', teamId: null });
+    setModalVisible(true);
+  };
+  const openEdit = (r: SkillRecord) => {
+    setEditId(r.id);
+    setForm({
+      name: r.name,
+      description: r.description || '',
+      content: r.content || '',
+      enabled: r.enabled === 1,
+      scope: r.scope || 'personal',
+      teamId: r.team_id,
+    });
+    setModalVisible(true);
+  };
 
   const handleSave = async () => {
     if (!form.name.trim()) { Message.warning(t('admin.skills.nameRequired', { defaultValue: '名称不能为空' })); return; }
+    if (form.scope === 'team' && !form.teamId) {
+      Message.warning(t('admin.scope.teamRequired', { defaultValue: '请选择团队' }));
+      return;
+    }
     setBatchSaving(true);
     try {
-      await saveSkill({ id: editId, ...form, content: form.content.trim() });
+      await saveSkill({
+        id: editId,
+        name: form.name,
+        description: form.description,
+        content: form.content.trim(),
+        enabled: form.enabled,
+        scope: form.scope,
+        ...(form.scope === 'team' && form.teamId ? { team_id: form.teamId } : {}),
+      });
       Message.success(editId ? t('admin.skills.updated', { defaultValue: '已更新' }) : t('admin.skills.created', { defaultValue: '已创建' }));
       setModalVisible(false);
       await rowsState.reload();
@@ -67,10 +110,21 @@ const AdminSkills: React.FC = () => {
   const columns = [
     { title: t('admin.skills.name', { defaultValue: '名称' }), dataIndex: 'name' },
     { title: t('admin.skills.description', { defaultValue: '描述' }), dataIndex: 'description', render: (v: string) => v || '—' },
-    { title: t('admin.skills.scope', { defaultValue: '范围' }), dataIndex: 'scope', render: (v: string) => v === 'organization' ? <Tag color='arcoblue'>{t('admin.scope.organization', { defaultValue: '组织共享' })}</Tag> : <Tag color='gray'>{t('admin.scope.personal', { defaultValue: '个人' })}</Tag> },
+    {
+      title: t('admin.skills.scope', { defaultValue: '归属' }),
+      dataIndex: 'scope',
+      render: (_: unknown, r: SkillRecord) => (
+        <ScopeOwnershipCell
+          scope={r.scope}
+          teamId={r.team_id}
+          createdBy={r.created_by}
+          getTeamName={getTeamName}
+        />
+      ),
+    },
     {
       title: t('admin.skills.enabled', { defaultValue: '启用' }), dataIndex: 'enabled',
-      render: (_: unknown, r: SkillRecord) => <Switch size='small' checked={r.enabled === 1} onChange={async (v) => { try { await saveSkill({ id: r.id, name: r.name, description: r.description, content: r.content, enabled: v, scope: r.scope }); await rowsState.reload(); } catch (error) { Message.error(getEnterpriseActionError(error, t('admin.skills.saveFailed', { defaultValue: '保存失败' }))); } }} />
+      render: (_: unknown, r: SkillRecord) => <Switch size='small' checked={r.enabled === 1} onChange={async (v) => { try { await saveSkill({ id: r.id, name: r.name, description: r.description, content: r.content, enabled: v, scope: r.scope, ...(r.team_id ? { team_id: r.team_id } : {}) }); await rowsState.reload(); } catch (error) { Message.error(getEnterpriseActionError(error, t('admin.skills.saveFailed', { defaultValue: '保存失败' }))); } }} />
     },
     {
       title: t('admin.skills.actions', { defaultValue: '操作' }),
@@ -89,7 +143,7 @@ const AdminSkills: React.FC = () => {
     <AdminPageWrapper>
       <ModulePageHeader
         title={t('admin.skills.title', { defaultValue: '企业 Skills 技能仓库' })}
-        description={t('admin.skills.desc', { defaultValue: '统一管理企业 AI 技能。管理员可设为"组织共享"供全公司使用。' })}
+        description={t('admin.skills.desc', { defaultValue: '统一管理团队 AI 技能。成员可创建个人或团队共享技能，管理员可设为组织共享。' })}
         actions={
           <>
             <Button icon={<Refresh />} onClick={() => void rowsState.reload()}>{t('common.refresh', { defaultValue: '刷新' })}</Button>
@@ -114,7 +168,13 @@ const AdminSkills: React.FC = () => {
           <Form.Item label={t('admin.skills.name', { defaultValue: '名称' })} required><Input value={form.name} onChange={(v) => setForm((s) => ({ ...s, name: v }))} /></Form.Item>
           <Form.Item label={t('admin.skills.description', { defaultValue: '描述' })}><Input value={form.description} onChange={(v) => setForm((s) => ({ ...s, description: v }))} /></Form.Item>
           <Form.Item label={t('admin.skills.content', { defaultValue: 'Skill 内容 (Markdown)' })}><Input.TextArea value={form.content} onChange={(v) => setForm((s) => ({ ...s, content: v }))} autoSize={{ minRows: 4, maxRows: 12 }} /></Form.Item>
-          <Form.Item label={t('admin.skills.scope', { defaultValue: '可见范围' })}><Select value={form.scope} onChange={(v) => setForm((s) => ({ ...s, scope: String(v) }))}><Select.Option value='personal'>{t('admin.scope.personal', { defaultValue: '个人' })}</Select.Option><Select.Option value='organization'>{t('admin.scope.organization', { defaultValue: '组织共享' })}</Select.Option></Select></Form.Item>
+          <ResourceScopeFields
+            scope={form.scope}
+            teamId={form.teamId}
+            teams={teams}
+            isAdmin={isAdmin}
+            onChange={({ scope, teamId }) => setForm((s) => ({ ...s, scope, teamId }))}
+          />
         </Form>
       </Modal>
 

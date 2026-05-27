@@ -131,6 +131,31 @@ describe('devopsRoutes', () => {
         data: expect.objectContaining({ id: expect.any(String) }),
       });
     });
+
+    it('PATCH /api/admin/requirements/:id - closes open stage and records process duration on status change', async () => {
+      mockGet
+        .mockReturnValueOnce({ id: 'req-1' })
+        .mockReturnValueOnce({ id: 'stage-open', entry_time: 1_000 });
+
+      const handler = getRouteHandler(app, 'patch', '/api/admin/requirements/:id');
+      const req = {
+        user: { id: 'test-user-id', tenant_id: 'tenant-123' },
+        params: { id: 'req-1' },
+        body: { status: 'developing' },
+      } as any;
+      const res = createResponseMock();
+
+      await handler(req, res, () => {});
+
+      expect(mockRun).toHaveBeenCalled();
+      expect(mockDriver.prepare).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE value_stream_stages SET exit_time = ?, process_duration_ms = ? WHERE id = ?')
+      );
+      expect(mockDriver.prepare).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO value_stream_stages')
+      );
+      expect(res.json).toHaveBeenCalledWith({ success: true });
+    });
   });
 
   describe('RAG 知识库 API', () => {
@@ -286,11 +311,12 @@ describe('devopsRoutes', () => {
     });
 
     it('DELETE /api/admin/rag/documents/:id - 级联删除文档及向量切片', async () => {
+      mockGet.mockReturnValueOnce({ scope: 'personal', team_id: null, created_by: 'test-user-id' });
       mockRun.mockReturnValueOnce({ changes: 1 });
 
       const handler = getRouteHandler(app, 'delete', '/api/admin/rag/documents/:id');
       const req = {
-        user: { tenant_id: 'tenant-123', role: 'org_admin' },
+        user: { id: 'test-user-id', tenant_id: 'tenant-123', role: 'org_admin' },
         params: { id: 'doc-1' },
       } as any;
       const res = createResponseMock();

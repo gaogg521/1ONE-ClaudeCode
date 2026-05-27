@@ -87,7 +87,7 @@ const EditionWorkspaceGuide: React.FC = () => {
         }),
         body: t('settings.edition.guideJoinedPersonalBody', {
           defaultValue:
-            '您已是企业成员（{{tenant}}），当前仍为「个人版」视图。主工作台里的团队协同与企业能力入口已经可用；若切换到「企业版」，则会以公司身份作为默认工作上下文。',
+            '您已是企业成员（{{tenant}}），当前仍为「个人版」视图。主工作台里的团队协同与企业能力入口已经可用；若切换到「企业团队版」，则会以公司身份作为默认工作上下文。',
           tenant: tenantLabel,
         }),
       };
@@ -98,17 +98,17 @@ const EditionWorkspaceGuide: React.FC = () => {
         title: t('settings.edition.guidePersonalTitle', { defaultValue: '当前：个人版工作区' }),
         body: t('settings.edition.guidePersonalBody', {
           defaultValue:
-            '这里和「企业版」使用同一套会话、任务、工作区界面，差别在于账号与数据范围：个人版面向本机/自己的使用场景。若公司开通了企业版，可在标题栏切换到「企业版」并用邀请码或 LDAP/飞书 登录加入。',
+            '这里和「企业团队版」使用同一套会话、任务、工作区界面，差别在于账号与数据范围：个人版面向本机/自己的使用场景。若公司开通了企业团队版，可在标题栏切换到「企业团队版」并用邀请码或 LDAP/飞书 登录加入。',
         }),
       };
     }
     if (!hasJoinedEnterprise) {
       return {
         type: 'warning' as const,
-        title: t('settings.edition.guideEnterprisePendingTitle', { defaultValue: '企业版：尚未加入组织' }),
+        title: t('settings.edition.guideEnterprisePendingTitle', { defaultValue: '企业团队版：尚未加入组织' }),
         body: t('settings.edition.guideEnterprisePendingBody', {
           defaultValue:
-            '切换「企业版」不会打开管理后台。请先在浏览器登录（LDAP/飞书/本地账户等），或在「加入企业」页输入邀请码；加入后才会回到此工作区并以企业身份使用。',
+            '切换「企业团队版」不会打开管理后台。请先在浏览器登录（LDAP/飞书/本地账户等），或在「加入企业」页输入邀请码；加入后才会回到此工作区并以企业身份使用。',
         }),
       };
     }
@@ -116,19 +116,19 @@ const EditionWorkspaceGuide: React.FC = () => {
       return {
         type: 'info' as const,
         title: t('settings.edition.guideEnterpriseAdminTitle', {
-          defaultValue: '当前：企业版工作区（{{tenant}}）',
+          defaultValue: '当前：企业团队版工作区（{{tenant}}）',
           tenant: tenantLabel,
         }),
         body: t('settings.edition.guideEnterpriseAdminBody', {
           defaultValue:
-            '日常聊天、任务与个人版相同，只是以企业身份运行。配置成员、LDAP、飞书、邀请码、邮件等请点左侧「管理后台」或标题栏「管理后台」—— 那不是「企业版」切换，而是组织治理专用入口。',
+            '日常聊天、任务与个人版相同，只是以企业身份运行。配置成员、LDAP、飞书、邀请码、邮件等请点左侧「管理后台」或标题栏「管理后台」—— 那不是「企业团队版」切换，而是组织治理专用入口。',
         }),
       };
     }
     return {
       type: 'info' as const,
       title: t('settings.edition.guideEnterpriseMemberTitle', {
-        defaultValue: '当前：企业版工作区（{{tenant}}）',
+        defaultValue: '当前：企业团队版工作区（{{tenant}}）',
         tenant: tenantLabel,
       }),
       body: t('settings.edition.guideEnterpriseMemberBody', {
@@ -155,7 +155,7 @@ const EditionWorkspaceGuide: React.FC = () => {
           <div className={styles.guideActions}>
             {managementMode === 'standalone' && hasJoinedEnterprise ? (
               <Button size='mini' type='primary' onClick={switchToEnterpriseEdition}>
-                {t('settings.edition.guideSwitchEnterprise', { defaultValue: '切换到企业版' })}
+                {t('settings.edition.guideSwitchEnterprise', { defaultValue: '切换到企业团队版' })}
               </Button>
             ) : null}
             {managementMode === 'enterprise' && !hasJoinedEnterprise ? (

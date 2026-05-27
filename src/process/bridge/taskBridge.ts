@@ -64,6 +64,7 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
       const now = Date.now();
       const task = {
         id: randomUUID(),
+        tenant_id: DESKTOP_TENANT_ID,
         user_id: DESKTOP_USER_ID,
         subject: input.subject,
         status: input.status ?? 'pending',

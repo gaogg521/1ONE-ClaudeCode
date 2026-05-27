@@ -82,6 +82,8 @@ system and will break team coordination. Always use the \`team_*\` versions:
 - **team_task_list** — Check what tasks are available.
 - **team_members** — See who else is on the team.
 - **team_rename_agent** — Rename yourself or request the lead to rename you.
+- **team_enterprise_members** — List human colleagues for follow-up assignment.
+- **team_issue_escalate** — When blocked, open a follow-up Issue and assign agent/human (Multica handoff).
 
 ## How to Work
 1. Read your unread messages to understand your assignment
@@ -105,6 +107,7 @@ If you receive a message with type \`shutdown_request\`, the lead is asking you 
 - Focus on your assigned tasks — don't go beyond what was asked
 - Report back to the lead when you finish, including a summary of what you did
 - If you get stuck, send a message to the lead asking for guidance
+- If you are blocked by missing data, ambiguous definitions, or need another owner: use **team_issue_escalate** (include parent_issue_id when you know it). The assignee gets Feishu/email notification; the lead gets an inbox alert.
 - You can communicate with other teammates directly if needed
 - Use your native tools (Read, Write, Bash, etc.) for implementation work
 
