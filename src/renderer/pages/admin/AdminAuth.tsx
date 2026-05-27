@@ -17,9 +17,10 @@ const AdminAuth: React.FC = () => {
     <AdminPageWrapper>
       <div className='max-w-960px mx-auto'>
         <ModulePageHeader
-          title={t('settings.authProviders.enterprisePageTitle', { defaultValue: '认证与邮件' })}
+          title={t('settings.authProviders.enterprisePageTitle', { defaultValue: '企业认证与邮件' })}
           description={t('settings.authProviders.enterprisePageDesc', {
-            defaultValue: '统一管理企业登录接入与组织邮件发信基础设施，认证提供方与邮箱配置在同一层级维护。',
+            defaultValue:
+              '仅组织管理员可配置企业 SSO 与邮件发信。默认建议同时只启用一种 SSO，登录页将展示已启用的认证入口。',
           })}
         />
         <AuthProvidersModalContent

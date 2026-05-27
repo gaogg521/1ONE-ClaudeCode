@@ -36,4 +36,16 @@ export function registerCteamRoutes(app: Express, auth: DevopsRouteAuth): void {
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
+
+  app.get('/api/admin/milestones/:id/epics', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const epics = await CteamMilestoneService.listMilestoneEpics(
+        resolveDevopsTenantId(req),
+        String(req.params.id)
+      );
+      res.json({ success: true, data: epics });
+    } catch {
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
 }

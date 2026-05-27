@@ -92,7 +92,6 @@ describe('EnterpriseRuntimeProvider', () => {
 
     expect(result.current.visibleNavItems.map((item) => item.key)).toEqual([
       'home',
-      'users',
       'cteam',
       'rag',
       'mcp',

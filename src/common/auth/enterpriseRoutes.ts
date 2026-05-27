@@ -70,7 +70,7 @@ export const ENTERPRISE_ROUTE_META: EnterpriseRouteMeta[] = [
   {
     key: 'users',
     path: ENTERPRISE_USERS_PATH,
-    requiresRole: 'member',
+    requiresRole: 'admin',
     platformPolicy: 'all',
   },
   {

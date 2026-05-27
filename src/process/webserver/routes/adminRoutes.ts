@@ -29,6 +29,10 @@ import {
   listEnterpriseInvites,
   revokeEnterpriseInvite,
 } from '../auth/enterpriseJoinService';
+import {
+  assertEnterpriseSsoEnableAllowed,
+  isEnterpriseSsoProvider,
+} from '../auth/enterpriseSsoPolicy';
 
 const PROTECTED_IDS = new Set(['system_default_user']);
 
@@ -114,6 +118,25 @@ export function registerAdminRoutes(app: Express): void {
       }
       const enabled = Boolean(req.body?.enabled);
       const config = (req.body?.config && typeof req.body.config === 'object') ? (req.body.config as Record<string, unknown>) : {};
+      const allowMultipleSso = Boolean(req.body?.allowMultipleSso);
+
+      if (enabled && isEnterpriseSsoProvider(provider)) {
+        const policy = await assertEnterpriseSsoEnableAllowed({
+          provider,
+          enabled,
+          allowMultipleSso,
+        });
+        if (!policy.ok) {
+          res.status(409).json({
+            success: false,
+            code: 'SSO_PROVIDER_CONFLICT',
+            message:
+              '已有其他企业登录方式处于启用状态。默认仅允许同时启用一种，以避免多套组织架构冲突。若确需启用多种，请确认后重试。',
+            data: { conflicts: policy.conflicts },
+          });
+          return;
+        }
+      }
 
       const existing = await AuthProviderRepository.getProvider(provider);
       const next = { ...existing?.config, ...config } as Record<string, unknown>;

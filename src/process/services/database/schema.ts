@@ -220,6 +220,7 @@ export function initSchema(db: ISqliteDriver): void {
     status TEXT NOT NULL DEFAULT 'backlog', -- 'proposed', 'backlog', 'developing', 'testing', 'completed'
     priority TEXT NOT NULL DEFAULT 'medium', -- 'low', 'medium', 'high', 'urgent'
     assigned_to TEXT,
+    milestone_id TEXT,
     creator_id TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
@@ -228,6 +229,7 @@ export function initSchema(db: ISqliteDriver): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_parent ON requirements(parent_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_status ON requirements(status)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_assigned ON requirements(assigned_to)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_milestone ON requirements(milestone_id)');
 
   // 2. RAG 知识库：文档元数据表 / RAG Documents Metadata table
   db.exec(`CREATE TABLE IF NOT EXISTS rag_documents (
@@ -464,4 +466,4 @@ export function setDatabaseVersion(db: ISqliteDriver, version: number): void {
  * Current database schema version
  * Update this when adding new migrations in migrations.ts
  */
-export const CURRENT_DB_VERSION = 44;
+export const CURRENT_DB_VERSION = 45;

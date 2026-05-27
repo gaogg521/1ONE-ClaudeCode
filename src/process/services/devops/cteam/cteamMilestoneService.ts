@@ -5,11 +5,18 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { MilestoneRepository } from '@process/services/database/repositories/devops/milestoneRepository';
+import {
+  MilestoneRepository,
+  type MilestoneEpicRecord,
+} from '@process/services/database/repositories/devops/milestoneRepository';
 
 export class CteamMilestoneService {
   static async listMilestones(tenantId: string): Promise<unknown[]> {
     return MilestoneRepository.list(tenantId);
+  }
+
+  static async listMilestoneEpics(tenantId: string, milestoneId: string): Promise<MilestoneEpicRecord[]> {
+    return MilestoneRepository.listEpics(tenantId, milestoneId);
   }
 
   static async createMilestone(input: {

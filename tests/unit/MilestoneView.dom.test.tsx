@@ -10,6 +10,10 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
+
 vi.mock('@arco-design/web-react', () => {
   const Form = ({ children }: React.PropsWithChildren) => <div>{children}</div>;
   Form.Item = ({ label, children }: React.PropsWithChildren<{ label?: string }>) => (
@@ -43,6 +47,8 @@ vi.mock('@arco-design/web-react', () => {
       </button>
     ),
     Card: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+    Drawer: () => null,
+    Empty: () => <div />,
     Form,
     Input,
     Message: {

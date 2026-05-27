@@ -30,9 +30,9 @@ const NAV_LABELS: Record<
   Pick<EnterpriseNavItem, 'labelKey' | 'labelDefault' | 'comingSoon'>
 > = {
   home: { labelKey: 'settings.enterpriseConsole.navHome', labelDefault: '概览' },
-  users: { labelKey: 'settings.enterpriseConsole.navUsers', labelDefault: '用户与成员' },
+  users: { labelKey: 'settings.enterpriseConsole.navUsers', labelDefault: '用户管理' },
   teams: { labelKey: 'settings.enterpriseConsole.navTeams', labelDefault: '团队与组织' },
-  auth: { labelKey: 'settings.enterpriseConsole.navAuth', labelDefault: '认证与邮件' },
+  auth: { labelKey: 'settings.enterpriseConsole.navAuth', labelDefault: '企业认证' },
   invites: { labelKey: 'settings.enterpriseConsole.navInvites', labelDefault: '邀请码' },
   cteam: { labelKey: 'admin.cteam.nav', labelDefault: 'CTeam 敏捷协同' },
   rag: { labelKey: 'settings.enterpriseConsole.navRagConfig', labelDefault: '团队知识库' },

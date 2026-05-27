@@ -34,8 +34,10 @@ import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client'
 import {
   createRequirement,
   deleteRequirement,
+  listMilestones,
   listRequirementsTree,
   updateRequirement,
+  type MilestoneRecord,
 } from '@/renderer/utils/enterpriseApi/modules';
 import AdminPageWrapper from './components/AdminPageWrapper';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -56,6 +58,7 @@ export interface IRequirement {
   status: RequirementStatus;
   priority: RequirementPriority;
   assigned_to: string | null;
+  milestone_id?: string | null;
   creator_id: string;
   created_at: number;
   updated_at: number;
@@ -185,7 +188,7 @@ function findRequirementFocus(requirements: IRequirement[], issueId: string): Re
 }
 
 function trimBulletPrefix(line: string): string {
-  return line.replace(/^\s*(?:[-*•]|\d+[\.\、\)])\s*/, '').trim();
+  return line.replace(/^\s*(?:[-*•]|\d+[.、)])\s*/, '').trim();
 }
 
 function splitAiInputLines(input: string): string[] {
@@ -288,6 +291,7 @@ const AdminKanban: React.FC = () => {
   const [batchImportJson, setBatchImportJson] = useState('');
   const [batchImportError, setBatchImportError] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<IRequirement | null>(null);
+  const [milestones, setMilestones] = useState<MilestoneRecord[]>([]);
 
   const issueContext = useMemo(() => parseIssueContext(location.search), [location.search]);
 
@@ -304,8 +308,9 @@ const AdminKanban: React.FC = () => {
   const loadRequirements = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await listRequirementsTree();
+      const [list, milestoneRows] = await Promise.all([listRequirementsTree(), listMilestones()]);
       setRequirements(list ?? []);
+      setMilestones(milestoneRows ?? []);
       if ((list?.length ?? 0) > 0 && !selectedEpicId) {
         // Default select the first epic to open kanban board
         setSelectedEpicId(list[0].id);
@@ -536,6 +541,23 @@ const AdminKanban: React.FC = () => {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEpicMilestoneChange = async (epicId: string, milestoneId?: string) => {
+    try {
+      await updateRequirement(epicId, { milestone_id: milestoneId ?? null });
+      Message.success(
+        t('admin.kanban.message.milestoneBound', { defaultValue: '已更新版本里程碑绑定' })
+      );
+      await loadRequirements();
+    } catch (error) {
+      Message.error(
+        getEnterpriseActionError(
+          error,
+          t('admin.kanban.message.updateFailed', { defaultValue: '看板状态流转更新失败' })
+        )
+      );
     }
   };
 
@@ -775,6 +797,12 @@ const AdminKanban: React.FC = () => {
                           defaultValue: '包含 {{count}} 个子项',
                         })}
                       </div>
+                      {epic.milestone_id ? (
+                        <div className='text-10px text-[rgb(var(--primary-6))] mt-4px truncate'>
+                          {milestones.find((item) => item.id === epic.milestone_id)?.name ??
+                            t('admin.kanban.milestoneBound', { defaultValue: '已绑定里程碑' })}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -784,6 +812,30 @@ const AdminKanban: React.FC = () => {
 
           {/* 右侧：5 种状态研发看板 */}
           <Col span={19}>
+            {currentEpic ? (
+              <Card bordered={false} className='mb-12px rd-8px'>
+                <div className='flex items-center justify-between gap-12px flex-wrap'>
+                  <Typography.Text bold>{currentEpic.subject}</Typography.Text>
+                  <div className='flex items-center gap-8px min-w-240px'>
+                    <span className='text-12px text-t-tertiary shrink-0'>
+                      {t('admin.kanban.milestoneLabel', { defaultValue: '版本里程碑' })}
+                    </span>
+                    <Select
+                      allowClear
+                      placeholder={t('admin.kanban.milestonePlaceholder', { defaultValue: '选择里程碑' })}
+                      value={currentEpic.milestone_id ?? undefined}
+                      options={milestones.map((item) => ({ label: item.name, value: item.id }))}
+                      onChange={(value) => void handleEpicMilestoneChange(currentEpic.id, value)}
+                    />
+                    {currentEpic.milestone_id ? (
+                      <Button size='mini' type='text' onClick={() => void navigate('/enterprise/milestones')}>
+                        {t('admin.kanban.openMilestones', { defaultValue: '版本规划' })}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </Card>
+            ) : null}
             <Row gutter={12} className='h-full' style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
               {KANBAN_STATUSES.map((status) => {
                 const columnCards = kanbanCards.filter((c) => c.status === status.key);

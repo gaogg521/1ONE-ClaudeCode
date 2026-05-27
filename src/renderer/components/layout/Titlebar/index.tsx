@@ -9,6 +9,7 @@ import WindowControls from '../WindowControls';
 import EditionModeSwitcher from '@/renderer/components/layout/EditionModeSwitcher';
 import EnterpriseEditionBadge from '@/renderer/components/layout/EnterpriseEditionBadge';
 import EnterpriseNotificationCenter from '@/renderer/components/layout/EnterpriseNotificationCenter';
+import WorkspaceIdentityPanel from '@/renderer/components/layout/WorkspaceIdentityPanel';
 import { WORKSPACE_STATE_EVENT, dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
 import type { WorkspaceStateDetail } from '@renderer/utils/workspace/workspaceEvents';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
@@ -270,12 +271,15 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
         title={layout?.isMobile ? mobileCenterTitle : appTitle}
       >
         {layout?.isMobile ? (
-          <span className='app-titlebar__brand-mobile'>
+          <span className='app-titlebar__brand-mobile inline-flex items-center gap-8px min-w-0'>
+            <WorkspaceIdentityPanel compact />
             <AionLogoMark />
-            <span className='app-titlebar__brand-text'>{mobileCenterTitle}</span>
+            <span className='app-titlebar__brand-text truncate'>{mobileCenterTitle}</span>
           </span>
         ) : (
           <span className='app-titlebar__brand-desktop inline-flex items-center gap-10px min-w-0'>
+            <WorkspaceIdentityPanel />
+            <span className='shrink-0 text-t-tertiary'>|</span>
             <span className='shrink-0'>{appTitle}</span>
             <EnterpriseEditionBadge size='small' />
           </span>

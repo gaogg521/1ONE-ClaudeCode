@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Card, Divider, Form, Input, Message, Radio, Space, Switch, Tabs, Typography } from '@arco-design/web-react';
+import { Alert, Button, Card, Divider, Form, Input, Message, Modal, Radio, Space, Switch, Tabs, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { fetchWebuiApiJson, type WebuiApiJsonError } from '@/renderer/utils/webuiApiBase';
@@ -15,6 +15,8 @@ import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
 import { PASSWORD_MASK } from '@/common/config/constants';
 
 type ProviderId = 'ldap' | 'feishu' | 'dingtalk' | 'wecom' | 'smtp';
+
+const SSO_PROVIDER_IDS = new Set<ProviderId>(['ldap', 'feishu', 'dingtalk', 'wecom']);
 
 type AuthProvidersModalContentProps = {
   visibleProviders?: ProviderId[];
@@ -313,6 +315,85 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
       .finally(() => setLoading(false));
   }, [enabledProviders, loadAdminEmail, loadProvider, t]);
 
+  const persistProvider = useCallback(
+    async (provider: ProviderId, allowMultipleSso = false) => {
+      const withPolicy = (payload: Record<string, unknown>) =>
+        JSON.stringify({
+          ...payload,
+          ...(allowMultipleSso ? { allowMultipleSso: true } : {}),
+        });
+
+      if (provider === 'ldap') {
+        await apiFetch(`/api/admin/auth/providers/${provider}`, {
+          method: 'PUT',
+          body: withPolicy({ enabled: ldapEnabled, config: ldapConfigForPersist(ldapConfig) }),
+        });
+        return;
+      }
+      if (provider === 'feishu') {
+        await apiFetch(`/api/admin/auth/providers/${provider}`, {
+          method: 'PUT',
+          body: withPolicy({ enabled: feishuEnabled, config: feishuConfig }),
+        });
+        return;
+      }
+      if (provider === 'dingtalk') {
+        await apiFetch(`/api/admin/auth/providers/${provider}`, {
+          method: 'PUT',
+          body: withPolicy({
+            enabled: dingtalkEnabled,
+            config: {
+              ...dingtalkConfig,
+              appSecret: dingtalkConfig.appSecret.trim() || (dingtalkSecretMasked ? '******' : ''),
+            },
+          }),
+        });
+        return;
+      }
+      if (provider === 'wecom') {
+        await apiFetch(`/api/admin/auth/providers/${provider}`, {
+          method: 'PUT',
+          body: withPolicy({
+            enabled: wecomEnabled,
+            config: {
+              ...wecomConfig,
+              secret: wecomConfig.secret.trim() || (wecomSecretMasked ? '******' : ''),
+            },
+          }),
+        });
+        return;
+      }
+      await apiFetch(`/api/admin/auth/providers/${provider}`, {
+        method: 'PUT',
+        body: withPolicy({
+          enabled: smtpEnabled,
+          config: {
+            host: smtpConfig.host.trim(),
+            port: smtpConfig.port.trim(),
+            secure: smtpConfig.secure,
+            user: smtpConfig.user.trim(),
+            from: smtpConfig.from.trim(),
+            pass: smtpConfig.pass.trim() || (smtpConfig.passIsMasked ? '******' : ''),
+          },
+        }),
+      });
+    },
+    [
+      dingtalkConfig,
+      dingtalkEnabled,
+      dingtalkSecretMasked,
+      feishuConfig,
+      feishuEnabled,
+      ldapConfig,
+      ldapEnabled,
+      smtpConfig,
+      smtpEnabled,
+      wecomConfig,
+      wecomEnabled,
+      wecomSecretMasked,
+    ]
+  );
+
   const save = useCallback(
     async (provider: ProviderId) => {
       if (saveBusyRef.current) {
@@ -325,79 +406,46 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
       saveBusyRef.current = true;
       setLoading(true);
       try {
-        if (provider === 'ldap') {
-          await apiFetch(`/api/admin/auth/providers/${provider}`, {
-            method: 'PUT',
-            body: JSON.stringify({ enabled: ldapEnabled, config: ldapConfigForPersist(ldapConfig) }),
-          });
-        } else if (provider === 'feishu') {
-          await apiFetch(`/api/admin/auth/providers/${provider}`, {
-            method: 'PUT',
-            body: JSON.stringify({ enabled: feishuEnabled, config: feishuConfig }),
-          });
-        } else if (provider === 'dingtalk') {
-          await apiFetch(`/api/admin/auth/providers/${provider}`, {
-            method: 'PUT',
-            body: JSON.stringify({
-              enabled: dingtalkEnabled,
-              config: {
-                ...dingtalkConfig,
-                appSecret: dingtalkConfig.appSecret.trim() || (dingtalkSecretMasked ? '******' : ''),
-              },
-            }),
-          });
-        } else if (provider === 'wecom') {
-          await apiFetch(`/api/admin/auth/providers/${provider}`, {
-            method: 'PUT',
-            body: JSON.stringify({
-              enabled: wecomEnabled,
-              config: {
-                ...wecomConfig,
-                secret: wecomConfig.secret.trim() || (wecomSecretMasked ? '******' : ''),
-              },
-            }),
-          });
-        } else {
-          await apiFetch(`/api/admin/auth/providers/${provider}`, {
-            method: 'PUT',
-            body: JSON.stringify({
-              enabled: smtpEnabled,
-              config: {
-                host: smtpConfig.host.trim(),
-                port: smtpConfig.port.trim(),
-                secure: smtpConfig.secure,
-                user: smtpConfig.user.trim(),
-                from: smtpConfig.from.trim(),
-                pass: smtpConfig.pass.trim() || (smtpConfig.passIsMasked ? '******' : ''),
-              },
-            }),
-          });
-        }
+        await persistProvider(provider);
         Message.success(t('settings.authProviders.saveOk', { defaultValue: '已保存' }));
         await loadProvider(provider);
       } catch (error) {
+        const err = error as WebuiApiJsonError;
+        if (err.code === 'SSO_PROVIDER_CONFLICT' && SSO_PROVIDER_IDS.has(provider)) {
+          Modal.confirm({
+            title: t('settings.authProviders.ssoConflictTitle', {
+              defaultValue: '确认启用多种企业登录？',
+            }),
+            content: t('settings.authProviders.ssoConflictDesc', {
+              defaultValue:
+                '当前已有其他企业登录方式处于启用状态。同时启用多种 SSO 可能导致多套组织架构并存、成员身份重复绑定。默认建议仅保留一种。仍要继续启用吗？',
+            }),
+            okText: t('common.confirm', { defaultValue: '确定' }),
+            cancelText: t('common.cancel', { defaultValue: '取消' }),
+            onOk: async () => {
+              saveBusyRef.current = true;
+              setLoading(true);
+              try {
+                await persistProvider(provider, true);
+                Message.success(t('settings.authProviders.saveOk', { defaultValue: '已保存' }));
+                await loadProvider(provider);
+              } catch (retryError) {
+                Message.error(formatAuthProviderError(retryError, t));
+              } finally {
+                setLoading(false);
+                saveBusyRef.current = false;
+              }
+            },
+          });
+          return;
+        }
         Message.error(formatAuthProviderError(error, t));
       } finally {
         setLoading(false);
         saveBusyRef.current = false;
       }
     },
-    [
-      dingtalkConfig,
-      dingtalkEnabled,
-      dingtalkSecretMasked,
-      feishuConfig,
-      feishuEnabled,
-      ldapConfig,
-      ldapEnabled,
-      loadProvider,
-      smtpConfig,
-      smtpEnabled,
-      t,
-      wecomConfig,
-      wecomEnabled,
-      wecomSecretMasked,
-    ]
+    [ldapConfig.host, loadProvider, persistProvider, t]
   );
 
   const testLdap = useCallback(async () => {
@@ -486,7 +534,16 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
   );
 
   return (
-    <Tabs defaultActiveTab={initialActiveTab} type='rounded'>
+    <>
+      <Alert
+        type='info'
+        className='mb-12px'
+        content={t('settings.authProviders.ssoPolicyHint', {
+          defaultValue:
+            '企业 SSO（LDAP / 飞书 / 钉钉 / 企微）默认仅建议同时启用一种，以避免多套组织架构冲突。邮件 SMTP 配置独立，不受此限制。',
+        })}
+      />
+      <Tabs defaultActiveTab={initialActiveTab} type='rounded'>
       {visibleProviderSet.has('ldap') ? (
         <Tabs.TabPane
         key='ldap'
@@ -947,6 +1004,7 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
       </Tabs.TabPane>
       ) : null}
     </Tabs>
+    </>
   );
 };
 

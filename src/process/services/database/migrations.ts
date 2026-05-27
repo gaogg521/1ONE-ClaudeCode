@@ -1804,6 +1804,23 @@ const migration_v44: IMigration = {
 };
 
 /**
+ * Migration v44 -> v45: Link CTeam epics to version milestones
+ */
+const migration_v45: IMigration = {
+  version: 45,
+  name: 'Add requirements.milestone_id for version planning',
+  up: (db) => {
+    db.exec('ALTER TABLE requirements ADD COLUMN milestone_id TEXT');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_milestone ON requirements(milestone_id)');
+    console.log('[Migration v45] Added requirements.milestone_id');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_requirements_milestone');
+    console.log('[Migration v45] Rolled back requirements.milestone_id index (column retained)');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -1832,13 +1849,14 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v42,
   migration_v43,
   migration_v44,
+  migration_v45,
 ];
 
 /**
  * Get migrations needed to upgrade from one version to another
  */
 export function getMigrationsToRun(fromVersion: number, toVersion: number): IMigration[] {
-  return ALL_MIGRATIONS.filter((m) => m.version > fromVersion && m.version <= toVersion).sort(
+  return ALL_MIGRATIONS.filter((m) => m.version > fromVersion && m.version <= toVersion).toSorted(
     (a, b) => a.version - b.version
   );
 }
@@ -1847,7 +1865,7 @@ export function getMigrationsToRun(fromVersion: number, toVersion: number): IMig
  * Get migrations needed to downgrade from one version to another
  */
 export function getMigrationsToRollback(fromVersion: number, toVersion: number): IMigration[] {
-  return ALL_MIGRATIONS.filter((m) => m.version > toVersion && m.version <= fromVersion).sort(
+  return ALL_MIGRATIONS.filter((m) => m.version > toVersion && m.version <= fromVersion).toSorted(
     (a, b) => b.version - a.version
   );
 }

@@ -211,6 +211,7 @@ export type RequirementRecord = {
   status: RequirementStatus;
   priority: RequirementPriority;
   assigned_to: string | null;
+  milestone_id?: string | null;
   creator_id: string;
   created_at: number;
   updated_at: number;
@@ -392,6 +393,20 @@ export async function listMilestones(): Promise<MilestoneRecord[]> {
 
 export async function createMilestone(payload: Record<string, unknown>): Promise<void> {
   await enterpriseMutate('/api/admin/milestones', 'POST', payload);
+}
+
+export type MilestoneEpicRecord = {
+  id: string;
+  subject: string;
+  status: string;
+  priority: string;
+  updated_at: number;
+};
+
+export async function listMilestoneEpics(milestoneId: string): Promise<MilestoneEpicRecord[]> {
+  return enterpriseGet<MilestoneEpicRecord[]>(
+    `/api/admin/milestones/${encodeURIComponent(milestoneId)}/epics`
+  );
 }
 
 export async function listRequirementsTree(): Promise<RequirementRecord[]> {

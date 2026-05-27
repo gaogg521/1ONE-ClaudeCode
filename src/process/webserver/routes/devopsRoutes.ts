@@ -329,7 +329,7 @@ export function registerDevOpsRoutes(app: Express): void {
       // 查询所有需求记录
       const rows = driver
         .prepare(
-          `SELECT id, tenant_id, parent_id, type, subject, description, status, priority, assigned_to, creator_id, created_at, updated_at
+          `SELECT id, tenant_id, parent_id, type, subject, description, status, priority, assigned_to, milestone_id, creator_id, created_at, updated_at
            FROM requirements
            WHERE tenant_id = ?
            ORDER BY created_at ASC`
@@ -363,7 +363,7 @@ export function registerDevOpsRoutes(app: Express): void {
   app.post('/api/admin/requirements', apiRateLimiter, auth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
-      const { parent_id, type, subject, description, status, priority, assigned_to } = req.body;
+      const { parent_id, type, subject, description, status, priority, assigned_to, milestone_id } = req.body;
 
       if (!subject?.trim()) {
         res.status(400).json({ success: false, message: 'Subject is required' });
@@ -381,10 +381,20 @@ export function registerDevOpsRoutes(app: Express): void {
       const id = randomUUID();
       const now = Date.now();
 
+      if (type === 'epic' && milestone_id) {
+        const milestone = driver
+          .prepare(`SELECT id FROM milestones WHERE id = ? AND tenant_id = ?`)
+          .get(String(milestone_id), tenantId);
+        if (!milestone) {
+          res.status(400).json({ success: false, message: 'Milestone not found' });
+          return;
+        }
+      }
+
       driver
         .prepare(
-          `INSERT INTO requirements (id, tenant_id, parent_id, type, subject, description, status, priority, assigned_to, creator_id, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO requirements (id, tenant_id, parent_id, type, subject, description, status, priority, assigned_to, milestone_id, creator_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           id,
@@ -396,6 +406,7 @@ export function registerDevOpsRoutes(app: Express): void {
           status || 'backlog',
           priority || 'medium',
           assigned_to || null,
+          type === 'epic' && milestone_id ? String(milestone_id) : null,
           req.user!.id,
           now,
           now
@@ -418,10 +429,9 @@ export function registerDevOpsRoutes(app: Express): void {
       const db = await getDatabase();
       const driver = db.getDriver();
 
-      // 验证是否属于当前租户
       const existing = driver
-        .prepare(`SELECT 1 FROM requirements WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId);
+        .prepare(`SELECT type FROM requirements WHERE id = ? AND tenant_id = ?`)
+        .get(id, tenantId) as { type: string } | undefined;
 
       if (!existing) {
         res.status(404).json({ success: false, message: 'Requirement not found' });
@@ -431,9 +441,25 @@ export function registerDevOpsRoutes(app: Express): void {
       const fieldsToUpdate: string[] = [];
       const values: any[] = [];
 
-      const allowedFields = ['subject', 'description', 'status', 'priority', 'assigned_to'];
+      const allowedFields = ['subject', 'description', 'status', 'priority', 'assigned_to', 'milestone_id'];
       for (const field of allowedFields) {
         if (updates[field] !== undefined) {
+          if (field === 'milestone_id') {
+            if (existing.type !== 'epic') {
+              res.status(400).json({ success: false, message: 'Only epics can bind to milestones' });
+              return;
+            }
+            const nextMilestoneId = updates[field] ? String(updates[field]) : null;
+            if (nextMilestoneId) {
+              const milestone = driver
+                .prepare(`SELECT id FROM milestones WHERE id = ? AND tenant_id = ?`)
+                .get(nextMilestoneId, tenantId);
+              if (!milestone) {
+                res.status(400).json({ success: false, message: 'Milestone not found' });
+                return;
+              }
+            }
+          }
           fieldsToUpdate.push(`${field} = ?`);
           values.push(updates[field]);
         }
@@ -731,7 +757,7 @@ export function registerDevOpsRoutes(app: Express): void {
           };
         })
         .filter((r) => r.score >= 0.3) // 过滤掉相关性极低的数据（余弦相似度阈值过滤）
-        .sort((a, b) => b.score - a.score) // 相关性从高到低排序
+        .toSorted((a, b) => b.score - a.score) // 相关性从高到低排序
         .slice(0, limit);
 
       res.json({ success: true, data: scoredResults });
