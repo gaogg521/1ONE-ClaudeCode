@@ -35,7 +35,6 @@ export type EnterpriseRouteMeta = {
   path: string;
   aliases?: string[];
   requiresRole: EnterpriseRouteRole;
-  requiresElevation: boolean;
   platformPolicy: EnterprisePlatformPolicy;
   visibleInNav?: boolean;
 };
@@ -66,35 +65,30 @@ export const ENTERPRISE_ROUTE_META: EnterpriseRouteMeta[] = [
     key: 'home',
     path: ENTERPRISE_HOME_PATH,
     requiresRole: 'member',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'users',
     path: ENTERPRISE_USERS_PATH,
     requiresRole: 'member',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'teams',
     path: ENTERPRISE_TEAMS_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'auth',
     path: ENTERPRISE_AUTH_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'invites',
     path: ENTERPRISE_INVITES_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
@@ -102,98 +96,84 @@ export const ENTERPRISE_ROUTE_META: EnterpriseRouteMeta[] = [
     path: ENTERPRISE_CTEAM_PATH,
     aliases: [ENTERPRISE_KANBAN_PATH],
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'rag',
     path: ENTERPRISE_RAG_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'mcp',
     path: ENTERPRISE_MCP_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'skills',
     path: ENTERPRISE_SKILLS_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'pipeline-editor',
     path: ENTERPRISE_PIPELINE_EDITOR_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'milestones',
     path: ENTERPRISE_MILESTONES_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'cpack',
     path: ENTERPRISE_CPACK_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'ccode',
     path: ENTERPRISE_CCODE_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'cmeas',
     path: ENTERPRISE_CMEAS_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'ctest',
     path: ENTERPRISE_CTEST_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'cflow',
     path: ENTERPRISE_CFLOW_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'cagent',
     path: ENTERPRISE_CAGENT_PATH,
     requiresRole: 'member',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'usage',
     path: ENTERPRISE_USAGE_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
   {
     key: 'security',
     path: ENTERPRISE_SECURITY_PATH,
     requiresRole: 'admin',
-    requiresElevation: false,
     platformPolicy: 'all',
   },
 ];

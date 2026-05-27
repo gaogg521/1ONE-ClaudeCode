@@ -21,7 +21,6 @@ export type EnterpriseNavItem = {
   labelKey: string;
   labelDefault: string;
   requiresRole: EnterpriseRouteRole;
-  requiresElevation: boolean;
   platformPolicy: EnterprisePlatformPolicy;
   comingSoon?: boolean;
 };
@@ -60,7 +59,6 @@ function toNavItem(key: EnterpriseNavKey): EnterpriseNavItem {
     key,
     path: route.path,
     requiresRole: route.requiresRole,
-    requiresElevation: route.requiresElevation,
     platformPolicy: route.platformPolicy,
     ...NAV_LABELS[key],
   };

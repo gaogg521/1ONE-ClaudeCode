@@ -54,7 +54,7 @@ describe('enterprise paths', () => {
     );
   });
 
-  it('does not require secondary verification for enterprise navigation items', () => {
-    expect(ENTERPRISE_NAV_ITEMS.every((item) => item.requiresElevation === false)).toBe(true);
+  it('does not expose secondary verification metadata on enterprise navigation items', () => {
+    expect(ENTERPRISE_NAV_ITEMS.every((item) => !Object.hasOwn(item, 'requiresElevation'))).toBe(true);
   });
 });

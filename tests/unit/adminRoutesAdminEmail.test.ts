@@ -103,6 +103,15 @@ function getRouteHandler(app: express.Express, method: 'get' | 'put', path: stri
   return layer?.route?.stack?.at(-1)?.handle as express.RequestHandler;
 }
 
+function getRouteStack(app: express.Express, method: 'get' | 'put', path: string): Array<{ handle: express.RequestHandler }> {
+  const layer = app.router.stack.find(
+    (entry: { route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> } }) =>
+      entry.route?.path === path && entry.route?.methods?.[method]
+  );
+
+  return layer?.route?.stack ?? [];
+}
+
 describe('registerAdminRoutes admin email endpoints', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -156,5 +165,16 @@ describe('registerAdminRoutes admin email endpoints', () => {
 
     expect(mockSetAdminEmail).toHaveBeenCalledWith('admin@example.com');
     expect(res.json).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('does not register a global enterprise elevation middleware on admin routes', async () => {
+    const { registerAdminRoutes } = await import('@process/webserver/routes/adminRoutes');
+    const app = express();
+    registerAdminRoutes(app);
+
+    const stack = getRouteStack(app, 'get', '/api/admin/auth/providers');
+
+    expect(stack).toHaveLength(4);
+    expect(stack.map((layer) => layer.handle.name)).not.toContain('requireEnterpriseElevation');
   });
 });

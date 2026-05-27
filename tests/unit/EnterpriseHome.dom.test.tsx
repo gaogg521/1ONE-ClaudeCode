@@ -60,8 +60,6 @@ describe('EnterpriseHome', () => {
       },
     });
     useEnterpriseRuntimeMock.mockReturnValue({
-      elevated: false,
-      eligible: true,
       openVerifyModal: vi.fn(),
       visibleNavItems: [
         {
@@ -69,35 +67,30 @@ describe('EnterpriseHome', () => {
           path: '/enterprise/cteam',
           labelKey: 'nav.cteam',
           labelDefault: 'CTeam 敏捷协同',
-          requiresElevation: true,
         },
         {
           key: 'rag',
           path: '/enterprise/rag',
           labelKey: 'nav.rag',
           labelDefault: '知识库配置',
-          requiresElevation: true,
         },
         {
           key: 'mcp',
           path: '/enterprise/mcp',
           labelKey: 'nav.mcp',
           labelDefault: 'MCP 外部集成',
-          requiresElevation: true,
         },
         {
           key: 'pipeline-editor',
           path: '/enterprise/pipeline-editor',
           labelKey: 'nav.pipeline',
           labelDefault: '流水线编排器',
-          requiresElevation: true,
         },
         {
           key: 'ccode',
           path: '/enterprise/ccode',
           labelKey: 'nav.ccode',
           labelDefault: '代码库',
-          requiresElevation: true,
         },
       ],
     });
@@ -123,8 +116,6 @@ describe('EnterpriseHome', () => {
   it('opens enterprise modules directly instead of forcing a verification modal', async () => {
     const openVerifyModal = vi.fn();
     useEnterpriseRuntimeMock.mockReturnValue({
-      elevated: false,
-      eligible: true,
       openVerifyModal,
       visibleNavItems: [
         {
@@ -132,7 +123,6 @@ describe('EnterpriseHome', () => {
           path: '/enterprise/mcp',
           labelKey: 'nav.mcp',
           labelDefault: 'MCP 外部集成',
-          requiresElevation: true,
         },
       ],
     });
