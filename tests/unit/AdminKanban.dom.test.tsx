@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const locationMock = vi.hoisted(() => ({ pathname: '/enterprise/cteam', search: '' }));
 const listRequirementsTreeMock = vi.hoisted(() => vi.fn());
+const listMilestonesMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 const createRequirementMock = vi.hoisted(() => vi.fn());
 
@@ -83,9 +84,20 @@ vi.mock('@arco-design/web-react', () => {
   const Select = ({
     children,
     value,
-  }: React.PropsWithChildren<{ value?: string }>) => (
+    options,
+    onChange,
+  }: React.PropsWithChildren<{
+    value?: string;
+    options?: Array<{ label: string; value: string }>;
+    onChange?: (value: string) => void;
+  }>) => (
     <div>
       {value ? <span>{`selected:${value}`}</span> : null}
+      {options?.map((option) => (
+        <button key={option.value} type='button' onClick={() => onChange?.(option.value)}>
+          {option.label}
+        </button>
+      ))}
       {children}
     </div>
   );
@@ -170,6 +182,7 @@ vi.mock('@/renderer/utils/enterpriseApi/modules', () => ({
   createRequirement: (...args: unknown[]) => createRequirementMock(...args),
   deleteRequirement: vi.fn(),
   listRequirementsTree: () => listRequirementsTreeMock(),
+  listMilestones: () => listMilestonesMock(),
   updateRequirement: vi.fn(),
 }));
 
@@ -186,6 +199,7 @@ describe('AdminKanban', () => {
     navigateMock.mockReset();
     createRequirementMock.mockReset();
     createRequirementMock.mockResolvedValue({ id: 'feature-1' });
+    listMilestonesMock.mockResolvedValue([]);
     locationMock.pathname = '/enterprise/cteam';
     locationMock.search = '';
     listRequirementsTreeMock.mockResolvedValue([

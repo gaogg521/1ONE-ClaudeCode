@@ -31,6 +31,7 @@ vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
     effectiveRole: 'member',
     showEnterpriseAdminNav: false,
     hasJoinedEnterprise: true,
+    managementMode: 'enterprise',
     enterpriseContext: { tenantId: 'tenant-1', tenantName: 'Acme Corp' },
     setManagementMode: vi.fn(),
     openEnterpriseAdminInBrowser: vi.fn(),
@@ -95,7 +96,7 @@ describe('WorkspaceIdentityPanel', () => {
   it('renders username and organization in titlebar trigger', () => {
     render(<WorkspaceIdentityPanel />);
     expect(screen.getByText('alice')).toBeTruthy();
-    expect(screen.getByText('Acme Corp')).toBeTruthy();
+    expect(screen.getByText('Acme Corp · 企业团队版')).toBeTruthy();
   });
 
   it('renders compact mode with avatar trigger only', () => {

@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { Avatar, Divider, Dropdown, Menu, Message, Tag, Typography } from '@arco-design/web-react';
 import { Logout, Peoples } from '@icon-park/react';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import type { WebuiManagementMode } from '@/common/config/webuiEnterpriseConfig';
 import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import type { WorkspaceUserProfile } from '@/common/types/workspaceProfile';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
@@ -17,6 +18,7 @@ import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useWorkspaceUserProfile } from '@/renderer/hooks/enterprise/useWorkspaceUserProfile';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { setPostLoginRedirect } from '@/renderer/utils/postLoginRedirect';
 import styles from './WorkspaceIdentityPanel.module.css';
 
 type WorkspaceIdentityPanelProps = {
@@ -30,37 +32,57 @@ function resolveRoleLabel(role: string, t: (key: string, opts?: Record<string, u
   return t('settings.workspaceIdentity.roleMember', { defaultValue: '成员' });
 }
 
+function buildOrgLine(
+  profile: WorkspaceUserProfile,
+  managementMode: WebuiManagementMode,
+  t: (key: string, opts?: Record<string, unknown>) => string
+): string {
+  if (!profile.joinedEnterprise) {
+    return t('settings.edition.personal', { defaultValue: '个人版' });
+  }
+  const tenant = profile.tenantName ?? profile.tenantId;
+  const editionLabel =
+    managementMode === 'enterprise'
+      ? t('settings.workspaceIdentity.editionEnterprise', { defaultValue: '企业团队版' })
+      : t('settings.workspaceIdentity.personalView', { defaultValue: '个人版视图' });
+  return `${tenant} · ${editionLabel}`;
+}
+
 const ProfileMenu: React.FC<{
   profile: WorkspaceUserProfile;
+  managementMode: WebuiManagementMode;
   onPickAvatar: () => void;
   onLogout: () => void;
   onSwitchPersonal: () => void;
   onSwitchEnterprise: () => void;
   onOpenAdmin: () => void;
   showAdmin: boolean;
-  isDesktop: boolean;
   canUploadAvatar: boolean;
 }> = ({
   profile,
+  managementMode,
   onPickAvatar,
   onLogout,
   onSwitchPersonal,
   onSwitchEnterprise,
   onOpenAdmin,
   showAdmin,
-  isDesktop,
   canUploadAvatar,
 }) => {
   const { t } = useTranslation();
+  const isEnterpriseView = managementMode === 'enterprise';
 
   return (
     <Menu className={styles.menu}>
       <div className={styles.menuHeader}>
         <Typography.Text bold>{profile.username}</Typography.Text>
+        {profile.email ? (
+          <Typography.Paragraph type='secondary' className={styles.menuSub}>
+            {profile.email}
+          </Typography.Paragraph>
+        ) : null}
         <Typography.Paragraph type='secondary' className={styles.menuSub}>
-          {profile.joinedEnterprise
-            ? profile.tenantName ?? profile.tenantId
-            : t('settings.edition.personal', { defaultValue: '个人版' })}
+          {buildOrgLine(profile, managementMode, t)}
         </Typography.Paragraph>
         <Tag size='small'>{resolveRoleLabel(profile.role, t)}</Tag>
       </div>
@@ -88,11 +110,17 @@ const ProfileMenu: React.FC<{
         </Menu.Item>
       ) : null}
       {profile.joinedEnterprise ? (
-        <Menu.Item key='personal' onClick={onSwitchPersonal}>
-          {t('settings.workspaceIdentity.switchPersonal', { defaultValue: '切换到个人版' })}
-        </Menu.Item>
+        isEnterpriseView ? (
+          <Menu.Item key='personal' onClick={onSwitchPersonal}>
+            {t('settings.workspaceIdentity.switchPersonal', { defaultValue: '切换到个人版' })}
+          </Menu.Item>
+        ) : (
+          <Menu.Item key='enterprise' onClick={onSwitchEnterprise}>
+            {t('settings.workspaceIdentity.switchEnterpriseEdition', { defaultValue: '切换到企业团队版' })}
+          </Menu.Item>
+        )
       ) : (
-        <Menu.Item key='enterprise' onClick={onSwitchEnterprise}>
+        <Menu.Item key='join' onClick={onSwitchEnterprise}>
           {t('settings.workspaceIdentity.switchEnterprise', { defaultValue: '加入 / 切换企业' })}
         </Menu.Item>
       )}
@@ -101,14 +129,12 @@ const ProfileMenu: React.FC<{
           {t('settings.edition.openAdminConsole', { defaultValue: '管理后台' })}
         </Menu.Item>
       ) : null}
-      {!isDesktop ? (
-        <Menu.Item key='logout' onClick={onLogout}>
-          <span className={styles.logoutItem}>
-            <Logout theme='outline' size={14} />
-            {t('settings.workspaceIdentity.logout', { defaultValue: '退出登录' })}
-          </span>
-        </Menu.Item>
-      ) : null}
+      <Menu.Item key='logout' onClick={onLogout}>
+        <span className={styles.logoutItem}>
+          <Logout theme='outline' size={14} />
+          {t('settings.workspaceIdentity.logout', { defaultValue: '退出登录' })}
+        </span>
+      </Menu.Item>
     </Menu>
   );
 };
@@ -128,6 +154,32 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
   ) && enterpriseMode.showEnterpriseAdminNav;
 
   const avatarSrc = avatarDisplayUrl ?? undefined;
+
+  const switchEdition = useCallback(
+    (next: WebuiManagementMode) => {
+      void enterpriseMode.setManagementMode(next).then(async () => {
+        if (next === 'enterprise') {
+          if (isDesktop && !enterpriseMode.hasJoinedEnterprise) {
+            void navigate('/enterprise/join');
+            await enterpriseMode.openEnterpriseLoginInBrowser();
+            return;
+          }
+          if (auth.status !== 'authenticated') {
+            setPostLoginRedirect('/sessions');
+            void navigate(`/login?redirect=${encodeURIComponent('/sessions')}`);
+            return;
+          }
+        }
+        void navigate('/sessions');
+      });
+    },
+    [
+      auth.status,
+      enterpriseMode,
+      isDesktop,
+      navigate,
+    ]
+  );
 
   if (!visible || !profile) {
     return null;
@@ -161,12 +213,14 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
   };
 
   const handleSwitchPersonal = () => {
-    void enterpriseMode.setManagementMode('standalone').then(() => {
-      void navigate('/sessions');
-    });
+    switchEdition('standalone');
   };
 
   const handleSwitchEnterprise = () => {
+    if (profile.joinedEnterprise) {
+      switchEdition('enterprise');
+      return;
+    }
     void navigate('/enterprise/join');
   };
 
@@ -177,23 +231,21 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
     }
   };
 
+  const orgLine = buildOrgLine(profile, enterpriseMode.managementMode, t);
+
   const droplist = (
     <ProfileMenu
       profile={profile}
+      managementMode={enterpriseMode.managementMode}
       onPickAvatar={handleAvatarPick}
       onLogout={() => void handleLogout()}
       onSwitchPersonal={handleSwitchPersonal}
       onSwitchEnterprise={handleSwitchEnterprise}
       onOpenAdmin={() => void handleOpenAdmin()}
       showAdmin={showAdmin}
-      isDesktop={isDesktop}
       canUploadAvatar={canUploadAvatar}
     />
   );
-
-  const orgLine = profile.joinedEnterprise
-    ? profile.tenantName ?? profile.tenantId
-    : t('settings.edition.personal', { defaultValue: '个人版' });
 
   return (
     <>

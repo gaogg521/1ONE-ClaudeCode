@@ -27,16 +27,15 @@ import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpris
 import { ENTERPRISE_JOIN_PATH } from '@/renderer/pages/enterprise/paths';
 import { EnterpriseGateProvider } from '@/renderer/pages/settings/enterpriseGateContext';
 import { getEnterpriseNavItemByPath } from '@/renderer/pages/enterprise/enterpriseNav';
-import { formatEnterpriseRole } from '@/renderer/pages/enterprise/enterpriseRoleLabel';
 import EnterpriseNavSidebar from '@/renderer/pages/enterprise/components/EnterpriseNavSidebar';
 import '@/renderer/styles/enterprise-theme.css';
 import styles from '@/renderer/pages/enterprise/EnterpriseLayout.module.css';
 
 const EnterpriseLayoutContent: React.FC = () => {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { status: authStatus } = useAuth();
   const navigate = useNavigate();
-  const { enterpriseContext, effectiveRole } = useWebuiEnterpriseMode();
+  const { enterpriseContext } = useWebuiEnterpriseMode();
   const runtime = useEnterpriseRuntime();
   const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId ?? '';
 
@@ -86,9 +85,11 @@ const EnterpriseLayoutContent: React.FC = () => {
   return (
     <div className='app-shell flex flex-col size-full min-h-0 bg-1' data-enterprise-theme='true'>
       <Titlebar workspaceAvailable={false} />
-      <div className='px-16px pt-8px shrink-0'>
-        <EditionModeSwitcher variant='bar' />
-      </div>
+      {authStatus !== 'authenticated' ? (
+        <div className='px-16px pt-8px shrink-0'>
+          <EditionModeSwitcher variant='bar' />
+        </div>
+      ) : null}
       <div className='flex flex-1 min-h-0'>
         <EnterpriseNavSidebar
           tenantLabel={tenantLabel}
@@ -98,10 +99,14 @@ const EnterpriseLayoutContent: React.FC = () => {
         />
         <main className={styles.main}>
           <div className={styles.headerRow}>
-            <div className='flex flex-wrap items-center gap-8px'>
-              <Tag color='arcoblue'>{formatEnterpriseRole(effectiveRole ?? user?.role, t)}</Tag>
-              {user?.username ? <Tag>{user.username}</Tag> : null}
-            </div>
+            <Typography.Text type='secondary'>
+              {tenantLabel
+                ? t('settings.enterpriseConsole.workspaceForTenant', {
+                    defaultValue: '{{tenant}} 企业控制台',
+                    tenant: tenantLabel,
+                  })
+                : t('settings.enterpriseConsole.title', { defaultValue: '企业控制台' })}
+            </Typography.Text>
             <div className='flex flex-wrap gap-8px'>
               <Button size='small' onClick={() => void navigate('/sessions')}>
                 {t('settings.enterpriseConsole.backToPersonal', { defaultValue: '返回个人工作台' })}

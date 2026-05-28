@@ -7,7 +7,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ipcBridge } from '@/common';
 import WindowControls from '../WindowControls';
 import EditionModeSwitcher from '@/renderer/components/layout/EditionModeSwitcher';
-import EnterpriseEditionBadge from '@/renderer/components/layout/EnterpriseEditionBadge';
 import EnterpriseNotificationCenter from '@/renderer/components/layout/EnterpriseNotificationCenter';
 import WorkspaceIdentityPanel from '@/renderer/components/layout/WorkspaceIdentityPanel';
 import { WORKSPACE_STATE_EVENT, dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
@@ -79,6 +78,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const showSiderToggle = Boolean(layout?.setSiderCollapsed) && !(layout?.isMobile && isSettingsRoute);
   const showBackToChatButton = Boolean(layout?.isMobile && isSettingsRoute);
   const showNewConversationButton = Boolean(layout?.isMobile && workspaceAvailable);
+  const showIdentityPanel = auth.status === 'authenticated';
   const showNotificationCenter = Boolean(
     enterpriseMode.webuiApiBase &&
       enterpriseMode.hasJoinedEnterprise &&
@@ -281,12 +281,11 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
             <WorkspaceIdentityPanel />
             <span className='shrink-0 text-t-tertiary'>|</span>
             <span className='shrink-0'>{appTitle}</span>
-            <EnterpriseEditionBadge size='small' />
           </span>
         )}
       </div>
       <div ref={toolbarRef} className='app-titlebar__toolbar'>
-        {!layout?.isMobile ? <EditionModeSwitcher variant='compact' /> : null}
+        {!layout?.isMobile && !showIdentityPanel ? <EditionModeSwitcher variant='compact' /> : null}
         <EnterpriseNotificationCenter enabled={showNotificationCenter} />
         {showNewConversationButton && (
           <button

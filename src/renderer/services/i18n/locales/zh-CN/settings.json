@@ -386,6 +386,7 @@
     "navSecurity": "安全与审计",
     "navComingSoon": "即将推出",
     "backToPersonal": "返回个人工作台",
+    "workspaceForTenant": "{{tenant}} 企业控制台",
     "roleSystemAdmin": "系统管理员",
     "roleOrgAdmin": "组织管理员",
     "roleMember": "成员",
@@ -579,7 +580,10 @@
     "switchEnterprise": "加入 / 切换企业",
     "logout": "退出登录",
     "avatarUpdated": "头像已更新",
-    "avatarFailed": "头像更新失败"
+    "avatarFailed": "头像更新失败",
+    "editionEnterprise": "企业团队版",
+    "personalView": "个人版视图",
+    "switchEnterpriseEdition": "切换到企业团队版"
   },
   "webui.managementModeTitle": "管理模式",
   "webui.managementModeDesc": "此处仅配置本机 WebUI（端口、admin 密码）。「企业团队版工作区」在标题栏切换；组织管理（LDAP、邀请码）在侧栏「管理后台」。",
