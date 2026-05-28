@@ -23,6 +23,32 @@
   background: var(--color-fill-2);
 }
 
+.triggerCard {
+  width: 100%;
+  max-width: none;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--color-bg-1);
+}
+
+.avatar {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.avatar :global(.arco-avatar) {
+  border-radius: 50%;
+}
+
+.avatar img,
+.avatar :global(.arco-avatar-image) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
 .avatar :global(.arco-avatar-image) {
   object-fit: cover;
 }
@@ -61,6 +87,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.metaCard {
+  gap: 4px;
+}
+
+.nameCard {
+  max-width: none;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.orgCard,
+.deptCard {
+  max-width: none;
+  white-space: normal;
+  line-height: 1.35;
 }
 
 .orgUnitText {

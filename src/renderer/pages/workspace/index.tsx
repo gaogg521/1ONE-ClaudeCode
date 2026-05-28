@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+﻿import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Empty, Typography } from '@arco-design/web-react';
 import { Right, Setting } from '@icon-park/react';
@@ -7,6 +7,7 @@ import { useConversationHistoryContext } from '@/renderer/hooks/context/Conversa
 import { getActivityTime } from '@/renderer/utils/chat/timeline';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import PageContentShell from '@/renderer/components/layout/PageContentShell';
+import { getProjectDisplayName, readPinnedProjects } from '@/renderer/utils/workspace/pinnedProjects';
 
 const LAST_ACTIVE_TEAM_SCOPE_STORAGE_KEY = 'workspace:last-active-team-scope';
 
@@ -107,6 +108,17 @@ const WorkspacePage: React.FC = () => {
       });
     });
 
+    readPinnedProjects().forEach((workspace, index) => {
+      if (map.has(workspace)) return;
+      map.set(workspace, {
+        workspace,
+        displayName: getProjectDisplayName(workspace),
+        latestOpenPath: undefined,
+        latestConversationName: undefined,
+        time: Date.now() - index,
+      });
+    });
+
     return [...map.values()].toSorted((a, b) => b.time - a.time);
   }, [conversations, groupedHistory.timelineSections]);
 
@@ -203,7 +215,7 @@ const WorkspacePage: React.FC = () => {
         <Button
           icon={<Setting theme='outline' size='16' />}
           onClick={() => {
-            void navigate('/workspace/settings');
+            void navigate('/workspace/settings/projects');
           }}
         >
           {t('workspace.hub.projectSettings', { defaultValue: '项目设置' })}
@@ -223,7 +235,7 @@ const WorkspacePage: React.FC = () => {
                 {t('common.workspace.hub.enterpriseDesc', {
                   defaultValue:
                     '已加入 {{tenant}}。现在可以从主工作台直接进入企业协同与平台能力，不必先切到独立管理页。',
-                  tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业团队版' }),
+                  tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' }),
                 })}
               </div>
             </div>
@@ -291,7 +303,7 @@ const WorkspacePage: React.FC = () => {
                   </Button>
                   <Button
                     onClick={() => {
-                      void navigate('/workspace/settings');
+                      void navigate('/workspace/settings/projects');
                     }}
                   >
                     {t('workspace.hub.goToProjectSettings', { defaultValue: '项目设置' })}
@@ -309,7 +321,9 @@ const WorkspacePage: React.FC = () => {
                 onClick={() => {
                   if (w.latestOpenPath) {
                     void navigate(w.latestOpenPath);
+                    return;
                   }
+                  void navigate('/guid', { state: { workspace: w.workspace } });
                 }}
               >
                 <div className='flex items-center justify-between gap-12px'>

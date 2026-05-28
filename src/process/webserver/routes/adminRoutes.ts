@@ -101,7 +101,7 @@ export function registerAdminRoutes(app: Express): void {
           cfg[key] = '******';
         }
       }
-      res.json({ success: true, data: { provider, enabled: row.enabled, config: cfg, updated_at: row.updated_at } });
+      res.json({ success: true, data: { provider, enabled: row.enabled ? 1 : 0, config: cfg, updated_at: row.updated_at } });
     } catch (err) {
       console.error('[AdminRoute] getAuthProvider error:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });

@@ -487,12 +487,15 @@ const handleAppReady = async (): Promise<void> => {
     } else {
       try {
         const savedCloseToTray = await ProcessConfig.get('system.closeToTray');
-        setCloseToTrayEnabled(savedCloseToTray ?? false);
+        setCloseToTrayEnabled(app.isPackaged ? (savedCloseToTray ?? false) : true);
         if (getCloseToTrayEnabled()) {
           createOrUpdateTray();
         }
       } catch {
-        // Ignore storage read errors, default to false
+        setCloseToTrayEnabled(!app.isPackaged);
+        if (getCloseToTrayEnabled()) {
+          createOrUpdateTray();
+        }
       }
 
       onCloseToTrayChanged((enabled) => {

@@ -56,9 +56,9 @@ const AddModelModal = ModalHOC<{ data?: IProvider; onSubmit: (model: IProvider) 
         cancelText={t('common.cancel')}
         okButtonProps={{ disabled: !model }}
       >
-        <div className='flex flex-col gap-16px pt-20px'>
+        <div className='settings-modal-surface flex flex-col gap-16px pt-20px px-16px pb-16px'>
           <div className='space-y-8px'>
-            <div className='text-13px font-500 text-t-secondary'>{t('settings.addModelPlaceholder')}</div>
+            <div className='settings-form-section-title'>{t('settings.addModelPlaceholder')}</div>
             <Select
               showSearch
               options={optionsList}
@@ -76,14 +76,14 @@ const AddModelModal = ModalHOC<{ data?: IProvider; onSubmit: (model: IProvider) 
           {/* New API 协议选择 / New API Protocol Selection */}
           {isNewApi && (
             <div className='space-y-8px'>
-              <div className='text-13px font-500 text-t-secondary'>{t('settings.modelProtocol')}</div>
+              <div className='settings-form-section-title'>{t('settings.modelProtocol')}</div>
               <Select
                 value={modelProtocol}
                 onChange={setModelProtocol}
                 options={NEW_API_PROTOCOL_OPTIONS}
                 triggerProps={{ getPopupContainer: (node) => node.parentElement || document.body }}
               />
-              <div className='text-11px text-t-secondary leading-4'>{t('settings.modelProtocolTip')}</div>
+              <div className='settings-content-summary text-11px leading-4'>{t('settings.modelProtocolTip')}</div>
             </div>
           )}
 

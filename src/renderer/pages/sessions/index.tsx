@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sessions — Claude Code 会话中心（接真实数据）
  */
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
@@ -10,6 +10,8 @@ import type { TChatConversation } from '@/common/config/storage';
 import type { TTeam } from '@/common/types/teamTypes';
 import { useTranslation } from 'react-i18next';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { openAdminConsole } from '@/renderer/utils/openAdminConsole';
 import { useTeamList } from '@/renderer/pages/team/hooks/useTeamList';
 import TeamCreateModal from '@/renderer/pages/team/components/TeamCreateModal';
 
@@ -127,7 +129,11 @@ function buildTeamSessionPath(teamId: string, issueId?: string | null, issueSubj
   return `/team/${teamId}?${params.toString()}`;
 }
 
-const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) => void }> = ({ conv, onDelete }) => {
+const SessionCard: React.FC<{
+  conv: TChatConversation;
+  onDelete: (id: string) => void;
+  matchPreview?: string;
+}> = ({ conv, onDelete, matchPreview }) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const backend = getBackendInfo(conv);
@@ -246,6 +252,11 @@ const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) =>
           </Tooltip>
         </div>
       </div>
+      {matchPreview ? (
+        <Typography.Ellipsis className='text-12px text-t-tertiary' style={{ marginTop: 6, maxWidth: '100%' }}>
+          {matchPreview}
+        </Typography.Ellipsis>
+      ) : null}
       <div style={{ marginTop: 6, fontSize: 12, color: 'var(--color-text-3)', display: 'flex', gap: 16 }}>
         <span>修改: {formatTime(conv.modifyTime)}</span>
         <span>创建: {formatTime(conv.createTime)}</span>
@@ -254,17 +265,51 @@ const SessionCard: React.FC<{ conv: TChatConversation; onDelete: (id: string) =>
   );
 };
 
+const CONTENT_SEARCH_PAGE_SIZE = 100;
+const CONTENT_SEARCH_MAX_PAGES = 10;
+const CONTENT_SEARCH_DEBOUNCE_MS = 250;
+
+async function fetchContentMatchMap(keyword: string): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  let page = 0;
+
+  while (page < CONTENT_SEARCH_MAX_PAGES) {
+    const result = await ipcBridge.database.searchConversationMessages.invoke({
+      keyword,
+      page,
+      pageSize: CONTENT_SEARCH_PAGE_SIZE,
+    });
+
+    for (const item of result.items) {
+      if (!map.has(item.conversation.id)) {
+        map.set(item.conversation.id, item.previewText);
+      }
+    }
+
+    if (!result.hasMore) {
+      break;
+    }
+    page += 1;
+  }
+
+  return map;
+}
+
 const SessionsPage: React.FC = () => {
   const { t } = useTranslation();
   const [convs, setConvs] = useState<TChatConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [contentMatchMap, setContentMatchMap] = useState<Map<string, string>>(() => new Map());
+  const [contentSearchLoading, setContentSearchLoading] = useState(false);
   const [activeDateKey, setActiveDateKey] = useState<string | null>(null);
   const [createTeamVisible, setCreateTeamVisible] = useState(false);
   const location = useLocation();
   const [scope, setScope] = useState<WorkspaceScope>(() => resolveWorkspaceScope(location.search));
   const navigate = useNavigate();
   const { hasJoinedEnterprise, isEnterpriseEdition, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
+  const enterpriseMode = useWebuiEnterpriseMode();
   const { mutate: refreshTeams } = useTeamList();
   const {
     teamId: scopedTeamId,
@@ -274,6 +319,15 @@ const SessionsPage: React.FC = () => {
   } = parseWorkspaceScopeSearch(location.search);
   const isCurrentTeamScope = scope === 'team' && Boolean(scopedTeamId);
   const isTeamScopeWithoutTeam = scope === 'team' && !scopedTeamId;
+
+  const handleOpenAdminConsole = useCallback(() => {
+    void openAdminConsole({
+      navigate: (path) => {
+        void navigate(path);
+      },
+      openEnterpriseAdminInBrowser: enterpriseMode.openEnterpriseAdminInBrowser,
+    });
+  }, [enterpriseMode.openEnterpriseAdminInBrowser, navigate]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -317,6 +371,48 @@ const SessionsPage: React.FC = () => {
     setActiveDateKey(null);
   }, [location.search]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, CONTENT_SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    const keyword = debouncedSearch.trim();
+    if (!keyword) {
+      setContentMatchMap(new Map());
+      setContentSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setContentSearchLoading(true);
+
+    void fetchContentMatchMap(keyword)
+      .then((map) => {
+        if (!cancelled) {
+          setContentMatchMap(map);
+        }
+      })
+      .catch((error) => {
+        console.error('[SessionsPage] Content search failed:', error);
+        if (!cancelled) {
+          setContentMatchMap(new Map());
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setContentSearchLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedSearch]);
+
   const handleDelete = useCallback(async (id: string) => {
     try {
       await ipcBridge.conversation.remove.invoke({ id });
@@ -352,9 +448,17 @@ const SessionsPage: React.FC = () => {
       return true;
     });
     const q = search.trim().toLowerCase();
-    if (!q) return scopeFiltered;
-    return scopeFiltered.filter((c) => (c.name || '').toLowerCase().includes(q));
-  }, [convs, scope, scopedTeamId, search]);
+    const debouncedQ = debouncedSearch.trim().toLowerCase();
+    if (!q && !debouncedQ) return scopeFiltered;
+
+    return scopeFiltered.filter((c) => {
+      const nameMatch = q ? (c.name || '').toLowerCase().includes(q) : false;
+      const contentMatch = debouncedQ ? contentMatchMap.has(c.id) : false;
+      return nameMatch || contentMatch;
+    });
+  }, [convs, scope, scopedTeamId, search, debouncedSearch, contentMatchMap]);
+
+  const isSearchActive = Boolean(search.trim());
 
   // Default view: show latest 10 (by modifyTime). Remaining are grouped into "folders" by create date.
   const { recent, folders } = useMemo(() => {
@@ -367,9 +471,9 @@ const SessionsPage: React.FC = () => {
       list.push(c);
       map.set(key, list);
     }
-    const folderKeys = [...map.keys()].sort((a, b) => b.localeCompare(a));
+    const folderKeys = [...map.keys()].toSorted((a, b) => b.localeCompare(a));
     const folderItems = folderKeys.map((k) => {
-      const list = [...(map.get(k) ?? [])].sort((a, b) => b.createTime - a.createTime);
+      const list = [...(map.get(k) ?? [])].toSorted((a, b) => b.createTime - a.createTime);
       const latest = list[0];
       const subtitle = latest?.name || '';
       const lastModify = latest?.modifyTime ?? 0;
@@ -479,14 +583,14 @@ const SessionsPage: React.FC = () => {
               {t('common.workspace.hub.enterpriseDesc', {
                 defaultValue:
                   '已加入 {{tenant}}。现在可以从主工作台直接进入企业协同与平台能力，不必先切到独立管理页。',
-                tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业团队版' }),
+                tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' }),
               })}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <Tag size='small' color={isEnterpriseEdition ? 'arcoblue' : 'gray'}>
               {isEnterpriseEdition
-                ? t('settings.edition.enterprise', { defaultValue: '企业团队版' })
+                ? t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' })
                 : t('settings.edition.personal', { defaultValue: '个人版' })}
             </Tag>
             {tenantLabel ? (
@@ -500,7 +604,7 @@ const SessionsPage: React.FC = () => {
               })}
             </Button>
             {showEnterpriseAdminNav ? (
-              <Button size='small' type='outline' onClick={() => navigate('/enterprise/auth')}>
+              <Button size='small' type='outline' onClick={handleOpenAdminConsole}>
                 {t('settings.edition.openAdminConsole', { defaultValue: '管理后台' })}
               </Button>
             ) : null}
@@ -616,6 +720,11 @@ const SessionsPage: React.FC = () => {
             <Spin />
           </div>
         ) : filtered.length === 0 ? (
+          isSearchActive && contentSearchLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+              <Spin />
+            </div>
+          ) : (
           <div style={{ padding: '40px 0' }}>
             <Empty
               description={
@@ -640,9 +749,19 @@ const SessionsPage: React.FC = () => {
               </div>
             )}
           </div>
+          )
         ) : (
           <>
-            {activeDateKey ? (
+            {isSearchActive ? (
+              filtered.map((c) => (
+                <SessionCard
+                  key={c.id}
+                  conv={c}
+                  onDelete={handleDelete}
+                  matchPreview={contentMatchMap.get(c.id)}
+                />
+              ))
+            ) : activeDateKey ? (
               activeFolder?.conversations.map((c) => <SessionCard key={c.id} conv={c} onDelete={handleDelete} />)
             ) : (
               <>

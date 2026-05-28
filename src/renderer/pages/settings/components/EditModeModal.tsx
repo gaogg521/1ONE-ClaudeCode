@@ -202,7 +202,7 @@ const EditModeModal = ModalHOC<{ data?: IProvider; onChange(data: IProvider): vo
         cancelText={t('common.cancel')}
       >
         {messageContext}
-        <div className='py-20px'>
+        <div className='settings-modal-surface py-20px px-16px'>
           <Form form={form} layout='vertical'>
             {/* 模型供应商名称（可编辑，带 Logo）/ Model Provider name (editable, with Logo) */}
             <Form.Item

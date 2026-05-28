@@ -37,28 +37,30 @@ const DeleteAssistantModal: React.FC<DeleteAssistantModalProps> = ({
       wrapStyle={{ zIndex: 10000 }}
       maskStyle={{ zIndex: 9999 }}
     >
-      <p>
-        {t('settings.deleteAssistantConfirm', {
-          defaultValue: 'Are you sure you want to delete this assistant? This action cannot be undone.',
-        })}
-      </p>
-      {activeAssistant?.isBuiltin ? (
-        <p className='mt-8px text-13px text-t-secondary'>
-          {t('settings.deleteBuiltinAssistantExtra', {
-            defaultValue:
-              'Built-in assistants are removed from your list and will not reappear after restart. You can use Duplicate to keep a copy first.',
+      <div className='settings-modal-surface p-16px'>
+        <p>
+          {t('settings.deleteAssistantConfirm', {
+            defaultValue: 'Are you sure you want to delete this assistant? This action cannot be undone.',
           })}
         </p>
-      ) : null}
-      {activeAssistant && (
-        <div className='mt-12px p-12px bg-fill-2 rounded-lg flex items-center gap-12px'>
-          <AssistantAvatar assistant={activeAssistant} size={32} avatarImageMap={avatarImageMap} />
-          <div>
-            <div className='font-medium'>{activeAssistant.name}</div>
-            <div className='text-12px text-t-secondary'>{activeAssistant.description}</div>
+        {activeAssistant?.isBuiltin ? (
+          <div className='settings-note-card mt-8px text-13px'>
+            {t('settings.deleteBuiltinAssistantExtra', {
+              defaultValue:
+                'Built-in assistants are removed from your list and will not reappear after restart. You can use Duplicate to keep a copy first.',
+            })}
           </div>
-        </div>
-      )}
+        ) : null}
+        {activeAssistant && (
+          <div className='settings-card-grid-item mt-12px p-12px flex items-center gap-12px'>
+            <AssistantAvatar assistant={activeAssistant} size={32} avatarImageMap={avatarImageMap} />
+            <div>
+              <div className='settings-card-header__title'>{activeAssistant.name}</div>
+              <div className='text-12px text-t-secondary'>{activeAssistant.description}</div>
+            </div>
+          </div>
+        )}
+      </div>
     </Modal>
   );
 };

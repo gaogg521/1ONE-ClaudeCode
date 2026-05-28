@@ -1,30 +1,45 @@
 .guide {
-  margin: 0 12px 8px;
+  margin: 0 12px 6px;
   flex-shrink: 0;
 }
 
 @media (min-width: 768px) {
   .guide {
-    margin: 0 16px 10px;
+    margin: 0 16px 8px;
   }
 }
 
-.guideBody {
+.guide :global(.arco-alert) {
+  align-items: center;
+  padding: 4px 10px;
+}
+
+.guide :global(.arco-alert-body) {
+  flex: 1;
+  min-width: 0;
+}
+
+.guideRow {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
 .guideText {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--color-text-2);
 }
 
-.guideActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+.guideRow :global(.arco-btn-text) {
+  flex-shrink: 0;
+  padding: 0 4px;
+  height: auto;
+  font-size: 12px;
 }

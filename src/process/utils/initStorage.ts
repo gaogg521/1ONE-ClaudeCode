@@ -736,8 +736,9 @@ const ensureBuiltinMcpServers = async (): Promise<void> => {
 
       const needsPathUpdate =
         existing.transport.type === 'stdio' &&
-        existing.transport.command === 'node' &&
-        ((existing.transport.args || [])[0] !== scriptPath || needsNameMigration);
+        (existing.transport.command !== 'node' ||
+          (existing.transport.args || [])[0] !== scriptPath ||
+          needsNameMigration);
 
       const needsMigration = shouldEnable && !existing.enabled;
 
@@ -750,7 +751,7 @@ const ensureBuiltinMcpServers = async (): Promise<void> => {
             : existing.transport.env;
           updatedTransport = {
             ...existing.transport,
-            ...(needsPathUpdate && { args: [scriptPath] }),
+            ...(needsPathUpdate && { command: 'node', args: [scriptPath] }),
             ...(needsMigration && { env: mergedEnv }),
           };
         }
@@ -802,10 +803,13 @@ const ensureBuiltinMcpServers = async (): Promise<void> => {
       const existing = mcpServers[codegraphIdx];
       const existingStdio = existing.transport.type === 'stdio' ? existing.transport : null;
       const targetStdio = codegraphServer.transport.type === 'stdio' ? codegraphServer.transport : null;
+      const legacyScriptCommand =
+        existingStdio?.command != null && /\.(?:js|cjs|mjs)$/i.test(existingStdio.command);
       const needsUpdate =
         existing.enabled !== codegraphShouldEnable ||
         existingStdio?.command !== targetStdio?.command ||
-        (existingStdio?.args || []).join(' ') !== (targetStdio?.args || []).join(' ');
+        (existingStdio?.args || []).join(' ') !== (targetStdio?.args || []).join(' ') ||
+        legacyScriptCommand;
       if (needsUpdate) {
         mcpServers[codegraphIdx] = {
           ...codegraphServer,

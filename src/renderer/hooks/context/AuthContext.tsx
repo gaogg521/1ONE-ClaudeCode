@@ -8,7 +8,7 @@ import {
   clearCsrfSessionToken,
 } from '@process/webserver/middleware/csrfClient';
 import { CSRF_COOKIE_NAME } from '@process/webserver/config/constants';
-import { getWebuiApiBaseUrl } from '@/renderer/utils/webuiApiBase';
+import { getWebuiApiBaseUrl, fetchWebuiApi } from '@/renderer/utils/webuiApiBase';
 
 type AuthStatus = 'checking' | 'authenticated' | 'unauthenticated';
 
@@ -29,6 +29,7 @@ type LoginErrorCode =
   | 'invalidCredentials'
   | 'tooManyAttempts'
   | 'serverError'
+  | 'dbUnavailable'
   | 'networkError'
   | 'csrfError'
   | 'unknown';
@@ -41,13 +42,18 @@ interface LoginResult {
   user?: AuthUser;
 }
 
+interface LogoutOptions {
+  /** Join flow: clear session in UI without restoring desktop operator identity. */
+  force?: boolean;
+}
+
 interface AuthContextValue {
   ready: boolean;
   user: AuthUser | null;
   status: AuthStatus;
   login: (params: LoginParams) => Promise<LoginResult>;
   loginWithLdap: (params: LoginParams) => Promise<LoginResult>;
-  logout: () => Promise<void>;
+  logout: (options?: LogoutOptions) => Promise<void>;
   refresh: () => Promise<void>;
   clearAuthCache: () => void;
 }
@@ -145,6 +151,7 @@ async function loginViaWebui(path: string, body: Record<string, unknown>): Promi
   const data = (await response.json()) as {
     success: boolean;
     message?: string;
+    code?: string;
     user?: AuthUser;
     token?: string;
   };
@@ -154,7 +161,8 @@ async function loginViaWebui(path: string, body: Record<string, unknown>): Promi
   if (!response.ok || !data.success || !data.user) {
     let code: LoginErrorCode = 'unknown';
     const message = data?.message ?? 'Login failed';
-    if (response.status === 401) code = 'invalidCredentials';
+    if (data.code === 'db_unavailable' || response.status === 503) code = 'dbUnavailable';
+    else if (response.status === 401) code = 'invalidCredentials';
     else if (response.status === 403) code = 'csrfError';
     else if (response.status === 429) code = 'tooManyAttempts';
     else if (response.status >= 500) code = 'serverError';
@@ -164,18 +172,34 @@ async function loginViaWebui(path: string, body: Record<string, unknown>): Promi
   return { success: true, user: data.user };
 }
 
+const DESKTOP_OPERATOR_USER_ID = 'desktop-local-admin';
+
 async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
   try {
-    const [statusResult, enterpriseResult] = await Promise.all([
-      webui.getStatus.invoke(),
-      webui.getEnterpriseContext.invoke(),
-    ]);
+    const statusResult = await webui.getStatus.invoke();
     if (!statusResult.success || !statusResult.data) {
       return null;
     }
+
+    try {
+      const response = await fetchWebuiApi('/api/auth/user');
+      if (response.ok) {
+        const data = (await response.json()) as {
+          success?: boolean;
+          user?: AuthUser;
+        };
+        if (data.success && data.user) {
+          return data.user;
+        }
+      }
+    } catch {
+      // WebUI not running or no HTTP session yet — fall back to desktop operator identity.
+    }
+
+    const enterpriseResult = await webui.getEnterpriseContext.invoke();
     const enterpriseContext = enterpriseResult.success ? enterpriseResult.data : undefined;
     return {
-      id: 'desktop-local-admin',
+      id: DESKTOP_OPERATOR_USER_ID,
       username: statusResult.data.adminUsername || 'admin',
       tenant_id: enterpriseContext?.tenantId,
       role: (enterpriseContext?.role as AuthUser['role']) ?? 'system_admin',
@@ -184,6 +208,10 @@ async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
     console.error('Failed to fetch desktop current user:', error);
     return null;
   }
+}
+
+export function isDesktopOperatorUser(user: AuthUser | null | undefined): boolean {
+  return user?.id === DESKTOP_OPERATOR_USER_ID;
 }
 
 export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
@@ -231,7 +259,13 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         if (!result.success) {
           return result;
         }
-        await refresh();
+        if (result.user) {
+          setUser(result.user);
+          setStatus('authenticated');
+          setReady(true);
+        } else {
+          await refresh();
+        }
         return result;
       }
 
@@ -267,6 +301,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       const data = (await response.json()) as {
         success: boolean;
         message?: string;
+        code?: string;
         user?: AuthUser;
       };
 
@@ -277,7 +312,9 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         let message = data?.message ?? 'Login failed';
         let shouldClearCache = false;
 
-        if (response.status === 401) {
+        if (data.code === 'db_unavailable' || response.status === 503) {
+          code = 'dbUnavailable';
+        } else if (response.status === 401) {
           code = 'invalidCredentials';
         } else if (response.status === 403) {
           // CSRF validation failed - clear cache
@@ -357,7 +394,13 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         if (!result.success) {
           return result;
         }
-        await refresh();
+        if (result.user) {
+          setUser(result.user);
+          setStatus('authenticated');
+          setReady(true);
+        } else {
+          await refresh();
+        }
         return result;
       }
 
@@ -370,11 +413,17 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         body: JSON.stringify(withCsrfToken({ username: trimmedUsername, password })),
       });
 
-      const data = (await response.json().catch((): null => null)) as any;
+      const data = (await response.json().catch((): null => null)) as {
+        success?: boolean;
+        message?: string;
+        code?: string;
+        user?: AuthUser;
+      } | null;
       if (!response.ok || !data?.success || !data?.user) {
         let code: LoginErrorCode = 'unknown';
         let message = data?.message ?? 'Login failed';
-        if (response.status === 401) code = 'invalidCredentials';
+        if (data?.code === 'db_unavailable' || response.status === 503) code = 'dbUnavailable';
+        else if (response.status === 401) code = 'invalidCredentials';
         else if (response.status === 429) code = 'tooManyAttempts';
         else if (response.status >= 500) code = 'serverError';
         return { success: false, code, message };
@@ -393,49 +442,72 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     }
   }, [refresh]);
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (options?: LogoutOptions) => {
+    const forceSignOut = options?.force === true;
+
+    const finishLogout = (currentUser: AuthUser | null) => {
+      clearAuthCache();
+      if (forceSignOut) {
+        setUser(null);
+        setStatus('unauthenticated');
+      } else {
+        setUser(currentUser);
+        setStatus(currentUser ? 'authenticated' : 'unauthenticated');
+      }
+      setReady(true);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+      }
+    };
+
     if (isDesktopRuntime) {
       try {
-        const base = await getWebuiApiBaseUrl();
-        if (base) {
-          await fetch(`${base}/logout`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify(withCsrfToken({})),
-          });
-        }
+        await fetchWebuiApi('/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(withCsrfToken({})),
+        });
       } catch (error) {
         console.error('Desktop WebUI logout request failed:', error);
       } finally {
-        clearAuthCache();
-        await refresh();
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+        if (forceSignOut) {
+          finishLogout(null);
+          return;
         }
+        let currentUser: AuthUser | null = null;
+        try {
+          const response = await fetchWebuiApi('/api/auth/user');
+          if (response.ok) {
+            const data = (await response.json()) as {
+              success?: boolean;
+              user?: AuthUser;
+            };
+            if (data.success && data.user) {
+              currentUser = data.user;
+            }
+          }
+        } catch {
+          // WebUI session cleared or unavailable.
+        }
+        finishLogout(currentUser);
       }
       return;
     }
 
     try {
-      await fetch('/logout', {
+      await fetchWebuiApi('/logout', {
         method: 'POST',
-        // Logout also needs CSRF token / 登出同样需要 CSRF Token
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
         body: JSON.stringify(withCsrfToken({})),
       });
     } catch (error) {
       console.error('Logout request failed:', error);
     } finally {
-      setUser(null);
-      setStatus('unauthenticated');
-      // Clear cache on logout for security
-      clearAuthCache();
+      finishLogout(null);
     }
   }, []);
 

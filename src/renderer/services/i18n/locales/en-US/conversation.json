@@ -24,6 +24,7 @@
   "history": {
     "recents": "Recents",
     "noHistory": "No chat history",
+    "sessionsSiderHint": "The full session hub is on the right. Use this panel to return to chat or search quickly.",
     "deleteTitle": "Delete",
     "deleteConfirm": "Are you sure you want to delete this chat?",
     "confirmDelete": "Delete",
@@ -67,6 +68,7 @@
     "pinFailed": "Pin operation failed",
     "pinnedSection": "Pinned",
     "favoritesSection": "Favorites",
+    "sectionTitle": "History",
     "deleteSuccess": "Deleted successfully",
     "deleteFailed": "Delete failed"
   },

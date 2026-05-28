@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -12,7 +12,11 @@ import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpris
 import { previewEnterpriseInvite } from '@/renderer/utils/enterpriseJoinApi';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 
-const WebuiJoinEnterprisePanel: React.FC = () => {
+type WebuiJoinEnterprisePanelProps = {
+  embedded?: boolean;
+};
+
+const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ embedded = false }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const isDesktop = isElectronDesktop();
@@ -112,7 +116,7 @@ const WebuiJoinEnterprisePanel: React.FC = () => {
       Message.success(
         t('settings.webui.createEnterpriseSuccess', {
           tenant: name,
-          defaultValue: '已创建企业「{{tenant}}」。请在标题栏切换到「企业团队版」进入工作区；组织管理请用侧栏「管理后台」。',
+          defaultValue: '已创建企业「{{tenant}}」。请在标题栏切换到「1ONE Code 企业版」进入工作区；组织管理请用侧栏「管理后台」。',
         })
       );
       setOrgName('');
@@ -129,16 +133,20 @@ const WebuiJoinEnterprisePanel: React.FC = () => {
   }
 
   return (
-    <div className='mb-16px p-16px rd-12px border border-border-2 bg-2'>
-      <div className='text-14px font-600 text-t-primary mb-4px'>
-        {t('settings.webui.joinEnterpriseTitle', { defaultValue: '加入企业（可选）' })}
-      </div>
-      <Typography.Paragraph type='secondary' className='text-12px mb-12px'>
-        {t('settings.webui.joinEnterpriseDesc', {
-          defaultValue:
-            '默认使用单机 WebUI。若贵司已开通企业团队版，可通过邀请码加入；系统管理员也可在此创建新企业。',
-        })}
-      </Typography.Paragraph>
+    <div className={embedded ? undefined : 'mb-16px p-16px rd-12px border border-border-2 bg-2'}>
+      {!embedded ? (
+        <>
+          <div className='text-14px font-600 text-t-primary mb-4px'>
+            {t('settings.webui.joinEnterpriseTitle', { defaultValue: '加入企业（可选）' })}
+          </div>
+          <Typography.Paragraph type='secondary' className='text-12px mb-12px'>
+            {t('settings.webui.joinEnterpriseDesc', {
+              defaultValue:
+                '默认使用单机 WebUI。若贵司已开通1ONE Code 企业版，可通过邀请码加入；系统管理员也可在此创建新企业。',
+            })}
+          </Typography.Paragraph>
+        </>
+      ) : null}
       {isDesktop && !webuiApiBase ? (
         <Alert
           className='mb-12px'

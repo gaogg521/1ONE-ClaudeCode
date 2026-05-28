@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export const ANONYMOUS_WORKSPACE_USER_ID = 'anonymous';
+
 export type WorkspaceTeamMembership = {
   teamId: string;
   teamName: string;

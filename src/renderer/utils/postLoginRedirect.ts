@@ -6,7 +6,7 @@
 
 const POST_LOGIN_REDIRECT_KEY = 'one-post-login-redirect';
 
-const DEFAULT_POST_LOGIN_PATH = '/sessions';
+const DEFAULT_POST_LOGIN_PATH = '/guid';
 
 /** Allowed internal hash-router paths after login (must start with `/`, no protocol). */
 function normalizeRedirectPath(raw: string | null | undefined): string | null {

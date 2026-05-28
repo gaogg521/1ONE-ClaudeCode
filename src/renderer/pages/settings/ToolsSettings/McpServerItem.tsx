@@ -44,7 +44,7 @@ const McpServerItem: React.FC<McpServerItemProps> = ({
       key={server.id}
       activeKey={isCollapsed ? ['1'] : []}
       onChange={onToggleCollapse}
-      className='mb-4 [&_div.arco-collapse-item-header-title]:flex-1'
+      className='settings-collapsible-card mb-4 [&_div.arco-collapse-item-header-title]:flex-1'
     >
       <Collapse.Item
         header={

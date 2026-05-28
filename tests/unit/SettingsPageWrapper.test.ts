@@ -30,8 +30,6 @@ describe('getBuiltinSettingsNavItems', () => {
       'tools',
       'webui',
       'system',
-      'about',
-      'gemini',
     ]);
 
     expect(items.map((item) => item.label)).toEqual([
@@ -42,8 +40,6 @@ describe('getBuiltinSettingsNavItems', () => {
       'Tools',
       'WebUI',
       'System',
-      'About',
-      'Gemini',
     ]);
   });
 

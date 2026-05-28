@@ -21,6 +21,7 @@ import {
   canAccessEnterprisePlatform,
   canAccessEnterpriseRouteRole,
 } from '@/common/auth/enterpriseRoutes';
+import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 
 export type EnterpriseRuntimeStatus =
@@ -78,7 +79,7 @@ export const EnterpriseRuntimeProvider: React.FC<
     if (auth.status !== 'authenticated') {
       return { code: 'not_authenticated', message: '当前未登录企业后台。' };
     }
-    if (!joined) {
+    if (!joined && !isEnterpriseAdminRole(effectiveRole)) {
       return { code: 'not_joined', message: '当前账号尚未加入企业，请先完成企业接入。' };
     }
     if (!canAccessEnterprisePlatform(activeNavItem.platformPolicy, isDesktop)) {

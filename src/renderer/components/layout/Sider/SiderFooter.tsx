@@ -8,18 +8,16 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@arco-design/web-react';
 import { IconMoonFill, IconSunFill } from '@arco-design/web-react/icon';
-import { ArrowCircleLeft, SettingTwo } from '@icon-park/react';
 import classNames from 'classnames';
-import { iconColors } from '@renderer/styles/colors';
 import type { SiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
 import { ConfigStorage } from '@/common/config/storage';
+import WorkspaceIdentityPanel from '../WorkspaceIdentityPanel';
 
 interface SiderFooterProps {
   isMobile: boolean;
-  isSettings: boolean;
+  collapsed: boolean;
   theme: string;
   siderTooltipProps: SiderTooltipProps;
-  onSettingsClick: () => void;
   onThemeToggle: () => void;
 }
 
@@ -102,10 +100,9 @@ async function applyTheme(t: ThemeItem) {
 
 const SiderFooter: React.FC<SiderFooterProps> = ({
   isMobile,
-  isSettings,
+  collapsed,
   theme,
   siderTooltipProps,
-  onSettingsClick,
   onThemeToggle,
 }) => {
   const { t } = useTranslation();
@@ -130,39 +127,43 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
   }, []);
 
   return (
-    <div className='shrink-0 sider-footer mt-auto pt-8px'>
+    <div className='shrink-0 sider-footer pt-8px overflow-hidden'>
       <div className='flex flex-col gap-2px'>
-        {/* 主题行：合并了亮暗切换 + 6个颜色方案 */}
-        {isSettings && (
-          <div
-            className={classNames(
-              'flex items-center justify-between px-12px py-6px rd-0.5rem',
-              isMobile && 'sider-footer-btn-mobile'
-            )}
-          >
-            {/* 左侧：亮/暗切换按钮 */}
-            <Tooltip
-              {...siderTooltipProps}
-              content={theme === 'dark' ? t('settings.lightMode') : t('settings.darkMode')}
-              position='right'
-            >
-              <div
-                onClick={onThemeToggle}
-                className='flex items-center gap-6px cursor-pointer hover:opacity-80 transition-opacity'
-                aria-label={theme === 'dark' ? t('settings.lightMode') : t('settings.darkMode')}
-              >
-                {theme === 'dark' ? (
-                  <IconSunFill style={{ fontSize: 16, color: 'rgb(var(--primary-6))' }} />
-                ) : (
-                  <IconMoonFill style={{ fontSize: 16, color: 'rgb(var(--primary-6))' }} />
-                )}
-                <span className='collapsed-hidden text-12px text-t-secondary'>
-                  {theme === 'dark' ? t('settings.darkMode') : t('settings.lightMode')}
-                </span>
-              </div>
-            </Tooltip>
+        <div className={classNames('pb-6px', collapsed ? 'flex justify-center px-0' : 'px-4px')}>
+          <WorkspaceIdentityPanel compact={collapsed} surface={collapsed ? 'pill' : 'card'} />
+        </div>
 
-            {/* 右侧：6个颜色圆点 */}
+        {/* 主题行：合并了亮暗切换 + 6个颜色方案 */}
+        <div
+          className={classNames(
+            'flex items-center justify-between px-12px py-6px rd-0.5rem',
+            isMobile && 'sider-footer-btn-mobile'
+          )}
+        >
+          {/* 左侧：亮/暗切换按钮 */}
+          <Tooltip
+            {...siderTooltipProps}
+            content={theme === 'dark' ? t('settings.lightMode') : t('settings.darkMode')}
+            position='right'
+          >
+            <div
+              onClick={onThemeToggle}
+              className='flex items-center gap-6px cursor-pointer hover:opacity-80 transition-opacity'
+              aria-label={theme === 'dark' ? t('settings.lightMode') : t('settings.darkMode')}
+            >
+              {theme === 'dark' ? (
+                <IconSunFill style={{ fontSize: 16, color: 'rgb(var(--primary-6))' }} />
+              ) : (
+                <IconMoonFill style={{ fontSize: 16, color: 'rgb(var(--primary-6))' }} />
+              )}
+              <span className='collapsed-hidden text-12px text-t-secondary'>
+                {theme === 'dark' ? t('settings.darkMode') : t('settings.lightMode')}
+              </span>
+            </div>
+          </Tooltip>
+
+          {/* 右侧：展开显示全部主题色；折叠显示当前主题预览 */}
+          {!collapsed ? (
             <div className='collapsed-hidden flex items-center gap-4px'>
               {THEMES.map((th) => (
                 <Tooltip key={th.id} content={th.label} position='top' mini>
@@ -189,32 +190,22 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
                 </Tooltip>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* 设置/返回聊天按钮 */}
-        <Tooltip {...siderTooltipProps} content={isSettings ? t('common.back') : t('common.settings')} position='right'>
-          <div
-            onClick={onSettingsClick}
-            className={classNames(
-              'flex items-center justify-start gap-10px px-12px py-8px rd-0.5rem cursor-pointer transition-colors',
-              isMobile && 'sider-footer-btn-mobile',
-              {
-                'bg-[rgba(var(--primary-6),0.12)] text-primary': isSettings,
-                'hover:bg-hover hover:shadow-sm active:bg-fill-2': !isSettings,
-              }
-            )}
-          >
-            {isSettings ? (
-              <ArrowCircleLeft className='flex' theme='outline' size='24' fill={iconColors.primary} />
-            ) : (
-              <SettingTwo className='flex' theme='outline' size='24' fill={iconColors.primary} />
-            )}
-            <span className='collapsed-hidden text-t-primary'>
-              {isSettings ? t('common.back') : t('common.settings')}
-            </span>
-          </div>
-        </Tooltip>
+          ) : (
+            <Tooltip content={currentTheme.label} position='right' mini>
+              <div
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: '50%',
+                  background: currentTheme.gradient,
+                  border: currentTheme.theme === 'light' ? '2px solid rgba(0,0,0,0.6)' : '2px solid rgba(255,255,255,0.9)',
+                  boxShadow: '0 0 0 1px rgba(255,255,255,0.2), 0 0 6px rgba(255,255,255,0.2)',
+                  flexShrink: 0,
+                }}
+              />
+            </Tooltip>
+          )}
+        </div>
       </div>
     </div>
   );

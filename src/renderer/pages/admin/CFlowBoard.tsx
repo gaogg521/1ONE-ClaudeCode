@@ -126,7 +126,7 @@ const CFlowBoard: React.FC = () => {
           <div className='flex flex-col gap-12px'>
             {Array.from(byReq.entries()).map(([reqId, flowStages]) => {
               const reqName = resolveRequirementTitle(reqId, flowStages);
-              const sortedStages = [...flowStages].sort((a, b) => a.entry_time - b.entry_time);
+              const sortedStages = [...flowStages].toSorted((a, b) => a.entry_time - b.entry_time);
               const completedStageNames = new Set(sortedStages.map((s) => s.stage_name));
               const totalWait = sortedStages.reduce(
                 (sum, stage) => sum + resolveStageMetrics(stage).waitMs,

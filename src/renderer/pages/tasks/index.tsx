@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tasks — 任务看板（团队版）
  * - user: 只看/操作自己的任务
  * - admin: 看全部，可按成员过滤
@@ -14,6 +14,8 @@ import type { TChatConversation } from '@/common/config/storage';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { openAdminConsole } from '@/renderer/utils/openAdminConsole';
 
 type TaskStatus = 'pending' | 'in_progress' | 'completed';
 type WorkspaceScope = 'all' | 'personal' | 'team';
@@ -205,12 +207,22 @@ const TasksPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [scope, setScope] = useState<WorkspaceScope>(() => resolveWorkspaceScope(location.search));
   const { hasJoinedEnterprise, isEnterpriseEdition, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
+  const enterpriseMode = useWebuiEnterpriseMode();
   const {
     teamId: scopedTeamId,
     teamName: scopedTeamName,
     issueId: scopedIssueId,
     issueSubject: scopedIssueSubject,
   } = parseWorkspaceScopeSearch(location.search);
+
+  const handleOpenAdminConsole = useCallback(() => {
+    void openAdminConsole({
+      navigate: (path) => {
+        void navigate(path);
+      },
+      openEnterpriseAdminInBrowser: enterpriseMode.openEnterpriseAdminInBrowser,
+    });
+  }, [enterpriseMode.openEnterpriseAdminInBrowser, navigate]);
 
   const loadMe = useCallback(async () => {
     const info = await kanbanApi.me();
@@ -429,14 +441,14 @@ const TasksPage: React.FC = () => {
               {t('common.workspace.hub.enterpriseDesc', {
                 defaultValue:
                   '已加入 {{tenant}}。现在可以从主工作台直接进入企业协同与平台能力，不必先切到独立管理页。',
-                tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业团队版' }),
+                tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' }),
               })}
             </div>
           </div>
           <div className='flex items-center gap-8px flex-wrap'>
             <Tag size='small' color={isEnterpriseEdition ? 'arcoblue' : 'gray'}>
               {isEnterpriseEdition
-                ? t('settings.edition.enterprise', { defaultValue: '企业团队版' })
+                ? t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' })
                 : t('settings.edition.personal', { defaultValue: '个人版' })}
             </Tag>
             {tenantLabel ? (
@@ -450,7 +462,7 @@ const TasksPage: React.FC = () => {
               })}
             </Button>
             {showEnterpriseAdminNav ? (
-              <Button size='small' type='outline' onClick={() => navigate('/enterprise/auth')}>
+              <Button size='small' type='outline' onClick={handleOpenAdminConsole}>
                 {t('settings.edition.openAdminConsole', { defaultValue: '管理后台' })}
               </Button>
             ) : null}

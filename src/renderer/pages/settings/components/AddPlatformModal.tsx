@@ -413,7 +413,7 @@ const AddPlatformModal = ModalHOC<{
       cancelText={t('common.cancel')}
     >
       {messageContext}
-      <div className='pt-4px pb-12px'>
+      <div className='settings-modal-surface pt-12px pb-12px px-16px'>
         <Form form={form} layout='vertical' className='[&_.arco-form-item]:mb-12px [&_.arco-form-item:last-child]:mb-0'>
           {/* 模型平台选择（第一层）/ Model Platform Selection (first level) */}
           <Form.Item

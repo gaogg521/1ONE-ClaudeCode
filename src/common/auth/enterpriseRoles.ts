@@ -50,13 +50,14 @@ export function resolvePostLoginRedirectPath(
   isDesktop = false
 ): string {
   const joined = hasEnterpriseTenant(tenantId);
+  const isAdmin = isEnterpriseAdminRole(role);
   if (rawTarget === ENTERPRISE_JOIN_PATH || rawTarget.startsWith(`${ENTERPRISE_JOIN_PATH}/`)) {
     return joined ? ENTERPRISE_WORKSPACE_PATH : ENTERPRISE_JOIN_PATH;
   }
 
   const route = getEnterpriseRouteMetaByPath(rawTarget);
   if (route) {
-    if (!joined) {
+    if (!joined && !isAdmin) {
       return ENTERPRISE_JOIN_PATH;
     }
     if (!canAccessEnterpriseRoute(route, role, isDesktop)) {
@@ -66,7 +67,7 @@ export function resolvePostLoginRedirectPath(
   }
 
   if (rawTarget === ENTERPRISE_ADMIN_HOME_PATH || rawTarget.startsWith(`${ENTERPRISE_ADMIN_HOME_PATH}/`)) {
-    return joined ? ENTERPRISE_ADMIN_HOME_PATH : ENTERPRISE_JOIN_PATH;
+    return joined || isAdmin ? ENTERPRISE_ADMIN_HOME_PATH : ENTERPRISE_JOIN_PATH;
   }
   return rawTarget;
 }

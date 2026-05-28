@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -8,40 +8,92 @@ import React from 'react';
 import { Button, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import heroIllustration from '@/renderer/assets/login/enterprise-hero.svg';
+import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import PageContentShell from '@/renderer/components/layout/PageContentShell';
 import WebuiJoinEnterprisePanel from '@/renderer/pages/settings/WebuiSettings/WebuiJoinEnterprisePanel';
-import EnterpriseEntryPaths from '@/renderer/pages/enterprise/EnterpriseEntryPaths';
+import EnterpriseLoginChannelPanel from '@/renderer/pages/enterprise/components/EnterpriseLoginChannelPanel';
+import styles from './EnterpriseOnboarding.module.css';
 
 const EnterpriseOnboarding: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { effectiveRole } = useWebuiEnterpriseMode();
+  const canManageAuth = isEnterpriseAdminRole(effectiveRole);
 
   return (
-    <div className='max-w-720px mx-auto py-32px px-16px'>
-      <Typography.Title heading={4} className='mt-0 mb-8px'>
-        {t('settings.enterpriseConsole.onboardingTitle', { defaultValue: '加入或创建企业' })}
-      </Typography.Title>
-      <Typography.Paragraph type='secondary' className='mb-24px'>
-        {t('settings.enterpriseConsole.onboardingDesc', {
-          defaultValue:
-            '此处是企业团队版工作区入口（未加入时）：先登录（LDAP/飞书/本地等），或用邀请码加入。组织管理后台（成员、LDAP、邀请码）在侧栏单独入口，与上方「个人版 / 企业团队版」切换无关。',
-        })}
-      </Typography.Paragraph>
-      <EnterpriseEntryPaths />
-      <Typography.Title heading={6} className='mt-0 mb-8px'>
-        {t('settings.enterpriseConsole.inviteSectionTitle', { defaultValue: '邀请码加入（需已登录）' })}
-      </Typography.Title>
-      <WebuiJoinEnterprisePanel />
-      <div className='mt-24px pt-16px border-t border-border-2'>
-        <Typography.Paragraph type='secondary' className='mb-12px text-13px'>
-          {t('settings.enterpriseConsole.standaloneHint', {
-            defaultValue: '仅需配置本机 WebUI 服务？请使用单机远程连接设置。',
-          })}
-        </Typography.Paragraph>
-        <Button type='outline' onClick={() => void navigate('/settings/webui')}>
-          {t('settings.enterpriseConsole.goStandaloneWebui', { defaultValue: '前往单机 WebUI 设置' })}
-        </Button>
+    <PageContentShell contentClassName='max-w-760px'>
+      <div className={styles.page}>
+        <header className={styles.hero}>
+          <div className={styles.heroCopy}>
+            <div className={styles.heroBadge}>
+              {t('settings.enterpriseConsole.onboardingBadge', { defaultValue: '1ONE Code 企业版' })}
+            </div>
+            <Typography.Title heading={4} className={styles.heroTitle}>
+              {t('settings.enterpriseConsole.onboardingTitle', { defaultValue: '加入或创建企业' })}
+            </Typography.Title>
+            <Typography.Paragraph className={styles.heroDesc}>
+              {t('settings.enterpriseConsole.onboardingDesc', {
+                defaultValue:
+                  '企业版工作区入口：先通过飞书、钉钉、企微、LDAP 等方式登录，再用邀请码加入组织。成员与认证管理请从侧栏「管理后台」进入。',
+              })}
+            </Typography.Paragraph>
+          </div>
+          <div className={styles.heroVisual} aria-hidden='true'>
+            <img
+              src={heroIllustration}
+              alt=''
+              className={styles.heroVisualImg}
+            />
+          </div>
+        </header>
+
+        <section className={styles.stepSection}>
+          <div className={styles.stepHeader}>
+            <span className={styles.stepIndex}>1</span>
+            <h2 className={styles.stepTitle}>
+              {t('settings.enterpriseConsole.loginChannels.stepSignIn', { defaultValue: '登录组织账号' })}
+            </h2>
+          </div>
+          <EnterpriseLoginChannelPanel embedded />
+        </section>
+
+        <section className={styles.stepSection}>
+          <div className={styles.stepHeader}>
+            <span className={`${styles.stepIndex} ${styles.stepIndexWarm}`}>2</span>
+            <h2 className={styles.stepTitle}>
+              {t('settings.enterpriseConsole.inviteSectionTitle', { defaultValue: '邀请码加入（需已登录）' })}
+            </h2>
+          </div>
+          <WebuiJoinEnterprisePanel embedded />
+        </section>
+
+        <footer className={styles.footer}>
+          <Typography.Paragraph className={styles.footerText}>
+            {canManageAuth
+              ? t('settings.enterpriseConsole.adminAuthHint', {
+                  defaultValue: '您是管理员，可直接进入「认证与邮件」配置企业登录方式（如飞书/LDAP）。',
+                })
+              : t('settings.enterpriseConsole.standaloneHint', {
+                  defaultValue: '仅需配置本机 WebUI 服务？请使用单机远程连接设置。',
+                })}
+          </Typography.Paragraph>
+          <Button
+            type='outline'
+            onClick={() => void navigate(canManageAuth ? '/enterprise/auth' : '/settings/webui')}
+          >
+            {canManageAuth
+              ? t('settings.enterpriseConsole.goEnterpriseAuth', {
+                  defaultValue: '前往认证与邮件',
+                })
+              : t('settings.enterpriseConsole.goStandaloneWebui', {
+                  defaultValue: '前往单机 WebUI 设置',
+                })}
+          </Button>
+        </footer>
       </div>
-    </div>
+    </PageContentShell>
   );
 };
 

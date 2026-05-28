@@ -510,7 +510,7 @@ const GuidPage: React.FC = () => {
                     }}
                     aria-label={t('common.back')}
                   />
-                  <p className={`${styles.heroTitle} text-2xl font-semibold mb-0 text-0`}>
+                  <p className={`${styles.heroTitle} ${styles.heroTitleArt} text-2xl mb-0`}>
                     <span className={styles.heroTitleInlineIcon} aria-hidden='true'>
                       {selectedAssistantAvatar?.kind === 'image' ? (
                         <img
@@ -601,7 +601,7 @@ const GuidPage: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <p className='text-2xl font-semibold mb-0 text-0 text-center'>{heroTitle}</p>
+              <p className={`text-2xl mb-0 text-center ${styles.heroTitleArt}`}>{heroTitle}</p>
             )}
           </div>
 

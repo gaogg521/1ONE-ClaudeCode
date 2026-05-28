@@ -59,7 +59,7 @@ async function fetchWithTimeout(
     return await fetch(url, { ...init, signal: controller.signal });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`Feishu request timeout after ${timeoutMs}ms`);
+      throw new Error(`Feishu request timeout after ${timeoutMs}ms`, { cause: error });
     }
     throw error;
   } finally {

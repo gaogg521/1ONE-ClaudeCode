@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const navigateMock = vi.hoisted(() => vi.fn());
 const conversationHistoryMock = vi.hoisted(() => vi.fn());
 const editionFeaturesMock = vi.hoisted(() => vi.fn());
+const readPinnedProjectsMock = vi.hoisted(() => vi.fn(() => []));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -36,6 +37,11 @@ vi.mock('@/renderer/hooks/context/ConversationHistoryContext', () => ({
   useConversationHistoryContext: () => conversationHistoryMock(),
 }));
 
+vi.mock('@/renderer/utils/workspace/pinnedProjects', () => ({
+  readPinnedProjects: readPinnedProjectsMock,
+  getProjectDisplayName: (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path,
+}));
+
 vi.mock('@/renderer/hooks/webui/useEditionFeatures', () => ({
   useEditionFeatures: () => editionFeaturesMock(),
 }));
@@ -45,6 +51,8 @@ import WorkspacePage from '@/renderer/pages/workspace';
 describe('WorkspacePage', () => {
   beforeEach(() => {
     navigateMock.mockReset();
+    readPinnedProjectsMock.mockReset();
+    readPinnedProjectsMock.mockReturnValue([]);
     window.sessionStorage.clear();
     conversationHistoryMock.mockReturnValue({
       groupedHistory: { timelineSections: [] },
@@ -157,6 +165,24 @@ describe('WorkspacePage', () => {
 
     fireEvent.click(screen.getByText('Alpha Repo'));
     expect(navigateMock).toHaveBeenCalledWith('/team/team-1');
+  });
+
+  it('shows pinned project folders even without conversation history', () => {
+    readPinnedProjectsMock.mockReturnValue(['/repo/demo-project']);
+
+    render(<WorkspacePage />);
+
+    expect(screen.getByText('demo-project')).toBeInTheDocument();
+    expect(screen.queryByText('暂无工作区记录')).not.toBeInTheDocument();
+  });
+
+  it('opens guid with workspace when clicking a pinned project without sessions', () => {
+    readPinnedProjectsMock.mockReturnValue(['/repo/demo-project']);
+
+    render(<WorkspacePage />);
+    fireEvent.click(screen.getByText('demo-project'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/guid', { state: { workspace: '/repo/demo-project' } });
   });
 
   it('keeps the workspace page clean when the user has not joined an enterprise', () => {

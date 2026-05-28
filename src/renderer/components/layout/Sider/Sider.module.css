@@ -1,3 +1,93 @@
+.moduleNav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 6px 6px;
+  border-bottom: 1px solid var(--color-border-2);
+  flex-shrink: 0;
+}
+
+.moduleNavIconOnly {
+  align-items: center;
+  padding-inline: 4px;
+}
+
+.moduleNavItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--color-text-3);
+  border: 1px solid transparent;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.moduleNavIconOnly .moduleNavItem {
+  justify-content: center;
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  gap: 0;
+}
+
+.moduleNavItem:hover {
+  background: var(--color-fill-3);
+  color: var(--color-text-1);
+}
+
+.moduleNavItemActive {
+  color: rgb(var(--primary-6));
+  background: rgba(var(--primary-6), 0.12);
+  border-color: rgba(var(--primary-6), 0.2);
+}
+
+.moduleNavIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.moduleNavLabel {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settingsRoutePanel {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px dashed var(--color-border-2);
+  background: var(--color-fill-2);
+}
+
+.settingsRoutePanelTitle {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--color-text-1);
+}
+
+.settingsRoutePanelBody {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--color-text-1);
+}
+
 /* GPU-friendly: transform applies to the + SVG only (see Sider.tsx), not the padded row or icon frame */
 
 .newChatTrigger {

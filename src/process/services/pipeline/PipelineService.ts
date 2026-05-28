@@ -366,7 +366,7 @@ export class PipelineService {
     try {
       definition = normalizePipelineDefinition(JSON.parse(pipeline.definition_json));
     } catch (err) {
-      throw new Error(`Invalid pipeline definition JSON: ${err}`);
+      throw new Error(`Invalid pipeline definition JSON: ${err}`, { cause: err });
     }
 
     const stagesStatus = (definition.stages || []).map((stage) => ({

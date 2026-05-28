@@ -1,7 +1,7 @@
-import { DeleteOne, EditOne, Peoples, Plus, Pushpin } from '@icon-park/react';
+﻿import { DeleteOne, EditOne, Peoples, Plus, Pushpin } from '@icon-park/react';
 import { Input, Message, Modal, Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { iconColors } from '@renderer/styles/colors';
@@ -10,7 +10,6 @@ import { cleanupSiderTooltips, getSiderTooltipProps } from '@renderer/utils/ui/s
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { blurActiveElement } from '@renderer/utils/ui/focus';
 import { useThemeContext } from '@renderer/hooks/context/ThemeContext';
-import { useAllCronJobs } from '@renderer/pages/cron/useCronJobs';
 import { useTeamList } from '@renderer/pages/team/hooks/useTeamList';
 import { useSWRConfig } from 'swr';
 import TeamCreateModal from '@renderer/pages/team/components/TeamCreateModal';
@@ -18,16 +17,12 @@ import { ipcBridge } from '@/common';
 import SiderItem from './SiderItem';
 import type { SiderMenuItem } from './SiderItem';
 import SiderToolbar from './SiderToolbar';
-import SiderSearchEntry from './SiderSearchEntry';
-import SiderScheduledEntry from './SiderScheduledEntry';
 import SiderFooter from './SiderFooter';
-import CronJobSiderSection from './CronJobSiderSection';
+import SidebarModuleNav from './SidebarModuleNav';
+import { shouldShowSessionSidebarContent } from '@/renderer/components/layout/sidebarNav';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 
 const TEAM_PINNED_KEY = 'team-pinned-ids';
-
-const WorkspaceGroupedHistory = React.lazy(() => import('@renderer/pages/conversation/GroupedHistory'));
-const SettingsSider = React.lazy(() => import('@renderer/pages/settings/components/SettingsSider'));
 
 interface SiderProps {
   onSessionClick?: () => void;
@@ -44,7 +39,6 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const navigate = useNavigate();
   const { closePreview } = usePreviewContext();
   const { theme, setTheme } = useThemeContext();
-  const [isBatchMode, setIsBatchMode] = useState(false);
   const [createTeamVisible, setCreateTeamVisible] = useState(false);
   const { teams, mutate: refreshTeams, removeTeam } = useTeamList();
   const { mutate: globalMutate } = useSWRConfig();
@@ -97,16 +91,8 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     const unpinned = teams.filter((team) => !pinnedIds.includes(team.id));
     return [...pinned, ...unpinned];
   }, [teams, pinnedIds]);
-  const { jobs: cronJobs } = useAllCronJobs();
   const { showTeamsFeature, isEnterpriseEdition, hasJoinedEnterprise } = useEditionFeatures();
   const isSettings = pathname.startsWith('/settings');
-  const lastNonSettingsPathRef = useRef('/guid');
-
-  useEffect(() => {
-    if (!pathname.startsWith('/settings')) {
-      lastNonSettingsPathRef.current = `${pathname}${search}${hash}`;
-    }
-  }, [pathname, search, hash]);
 
   useEffect(() => {
     if (!isSettings) return;
@@ -129,46 +115,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     cleanupSiderTooltips();
     blurActiveElement();
     closePreview();
-    setIsBatchMode(false);
     Promise.resolve(navigate('/guid')).catch((error) => {
-      console.error('Navigation failed:', error);
-    });
-    if (onSessionClick) {
-      onSessionClick();
-    }
-  };
-
-  const handleSettingsClick = () => {
-    cleanupSiderTooltips();
-    blurActiveElement();
-    if (isSettings) {
-      const target = lastNonSettingsPathRef.current || '/guid';
-      Promise.resolve(navigate(target)).catch((error) => {
-        console.error('Navigation failed:', error);
-      });
-    } else {
-      Promise.resolve(navigate('/settings/gemini')).catch((error) => {
-        console.error('Navigation failed:', error);
-      });
-    }
-    if (onSessionClick) {
-      onSessionClick();
-    }
-  };
-
-  const handleConversationSelect = () => {
-    cleanupSiderTooltips();
-    blurActiveElement();
-    closePreview();
-    setIsBatchMode(false);
-  };
-
-  const handleScheduledClick = () => {
-    cleanupSiderTooltips();
-    blurActiveElement();
-    closePreview();
-    setIsBatchMode(false);
-    Promise.resolve(navigate('/scheduled')).catch((error) => {
       console.error('Navigation failed:', error);
     });
     if (onSessionClick) {
@@ -180,61 +127,29 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     void setTheme(theme === 'dark' ? 'light' : 'dark');
   };
 
-  const handleCronNavigate = (path: string) => {
-    cleanupSiderTooltips();
-    blurActiveElement();
-    closePreview();
-    Promise.resolve(navigate(path)).catch(console.error);
-    if (onSessionClick) onSessionClick();
-  };
-
   const tooltipEnabled = collapsed && !isMobile;
   const siderTooltipProps = getSiderTooltipProps(tooltipEnabled);
 
-  const workspaceHistoryProps = {
-    collapsed,
-    tooltipEnabled,
-    onSessionClick,
-    batchMode: isBatchMode,
-    onBatchModeChange: setIsBatchMode,
-  };
+  const showChatSidebarPanel = shouldShowSessionSidebarContent(pathname);
 
   return (
-    <div className='size-full flex flex-col'>
-      {/* Main content area */}
-      <div className='flex-1 min-h-0 overflow-hidden'>
-        {isSettings ? (
-          <Suspense fallback={<div className='size-full' />}>
-            <SettingsSider collapsed={collapsed} tooltipEnabled={tooltipEnabled} />
-          </Suspense>
-        ) : (
-          <div className='size-full flex flex-col'>
-            <SiderToolbar
-              isMobile={isMobile}
-              isBatchMode={isBatchMode}
-              collapsed={collapsed}
-              siderTooltipProps={siderTooltipProps}
-              onNewChat={handleNewChat}
-              onToggleBatchMode={() => setIsBatchMode((prev) => !prev)}
-            />
-            {/* Search entry */}
-            <SiderSearchEntry
-              isMobile={isMobile}
-              collapsed={collapsed}
-              siderTooltipProps={siderTooltipProps}
-              onConversationSelect={handleConversationSelect}
-              onSessionClick={onSessionClick}
-            />
-            {/* Scheduled tasks nav entry - fixed above scroll */}
-            <SiderScheduledEntry
-              isMobile={isMobile}
-              isActive={pathname === '/scheduled'}
-              collapsed={collapsed}
-              siderTooltipProps={siderTooltipProps}
-              onClick={handleScheduledClick}
-            />
-            {/* Scrollable content: team + scheduled tasks + conversation history */}
-            <div className='flex-1 min-h-0 overflow-y-auto'>
+    <div className='size-full flex flex-col min-h-0'>
+      <div className='shrink-0'>
+        <SidebarModuleNav
+          collapsed={collapsed}
+          isMobile={isMobile}
+          siderTooltipProps={siderTooltipProps}
+          onNavigate={onSessionClick}
+        />
+        <SiderToolbar
+          isMobile={isMobile}
+          collapsed={collapsed}
+          siderTooltipProps={siderTooltipProps}
+          onNewChat={handleNewChat}
+        />
+      </div>
+      {showChatSidebarPanel ? (
+        <div className='flex-1 min-h-0 overflow-y-auto'>
               {/* Team section — 企业版且已加入企业 */}
               {isEnterpriseEdition && !hasJoinedEnterprise && !collapsed ? (
                 <div className='shrink-0 mb-8px px-12px py-8px rd-8px border border-dashed border-border-2 bg-fill-2'>
@@ -294,7 +209,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                   <div className='flex items-center justify-between px-12px py-8px'>
                     <span className='text-13px text-t-secondary font-bold leading-20px'>
                       {isEnterpriseEdition
-                        ? t('team.sider.titleEnterprise', { defaultValue: '团队（企业团队版）' })
+                        ? t('team.sider.titleEnterprise', { defaultValue: '团队（1ONE Code 企业版）' })
                         : t('team.sider.title', { defaultValue: '团队' })}
                     </span>
                     <div
@@ -353,7 +268,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                                   await removeTeam(team.id);
                                   Message.success(t('team.sider.deleteSuccess'));
                                   if (pathname.startsWith(`/team/${team.id}`)) {
-                                    Promise.resolve(navigate('/')).catch(() => {});
+                                    Promise.resolve(navigate('/sessions')).catch(() => {});
                                   }
                                 },
                                 style: { borderRadius: '12px' },
@@ -373,26 +288,19 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                     })}
                 </div>
               ) : null}
-              {/* Scheduled section */}
-              {!collapsed && (
-                <CronJobSiderSection jobs={cronJobs} pathname={pathname} onNavigate={handleCronNavigate} />
-              )}
-              <Suspense fallback={<div className='min-h-200px' />}>
-                <WorkspaceGroupedHistory {...workspaceHistoryProps} />
-              </Suspense>
-            </div>
-          </div>
-        )}
+        </div>
+      ) : (
+        <div className='flex-1 min-h-0' aria-hidden='true' />
+      )}
+      <div className='shrink-0'>
+        <SiderFooter
+          isMobile={isMobile}
+          collapsed={collapsed}
+          theme={theme}
+          siderTooltipProps={siderTooltipProps}
+          onThemeToggle={handleQuickThemeToggle}
+        />
       </div>
-      {/* Footer */}
-      <SiderFooter
-        isMobile={isMobile}
-        isSettings={isSettings}
-        theme={theme}
-        siderTooltipProps={siderTooltipProps}
-        onSettingsClick={handleSettingsClick}
-        onThemeToggle={handleQuickThemeToggle}
-      />
       <TeamCreateModal
         visible={createTeamVisible}
         onClose={() => setCreateTeamVisible(false)}

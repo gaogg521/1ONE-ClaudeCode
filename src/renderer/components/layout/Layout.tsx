@@ -8,11 +8,9 @@ import { ipcBridge } from '@/common';
 import PwaPullToRefresh from '@/renderer/components/layout/PwaPullToRefresh';
 import Titlebar from '@/renderer/components/layout/Titlebar';
 import { Layout as ArcoLayout } from '@arco-design/web-react';
-import { Tooltip } from '@arco-design/web-react';
-import { MenuFold, MenuUnfold, CommentOne, FolderOpen, Checklist, Lightning, Server, Brain, AlarmClock, Setting, People, Robot } from '@icon-park/react';
+import { MenuFold, MenuUnfold } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
@@ -24,8 +22,9 @@ import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShor
 import { isElectronDesktop } from '@renderer/utils/platform';
 import EditionRouteGuard from '@/renderer/components/layout/EditionRouteGuard';
 import EditionWorkspaceGuide from '@/renderer/components/layout/EditionWorkspaceGuide';
-import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import '@renderer/styles/layout.css';
+
+export { getSidebarNavItems, type NavItem } from '@/renderer/components/layout/sidebarNav';
 
 const useDebug = () => {
   const [count, setCount] = useState(0);
@@ -57,119 +56,44 @@ const useDebug = () => {
   return { onClick };
 };
 
-export type NavItem = {
-  icon: React.ReactNode;
-  labelKey: string;
-  labelDefault: string;
-  path: string;
-  paths?: string[];
-  /** 仅企业版工作区显示 */
-  enterpriseOnly?: boolean;
-};
-
-const NAV_ITEMS: NavItem[] = [
-  { icon: <CommentOne theme='outline' size={18} />, labelKey: 'nav.sessions', labelDefault: 'Sessions', path: '/sessions', paths: ['/conversation'] },
-  { icon: <FolderOpen theme='outline' size={18} />, labelKey: 'nav.workspace', labelDefault: 'Workspace', path: '/workspace' },
-  { icon: <Checklist theme='outline' size={18} />, labelKey: 'nav.tasks', labelDefault: 'Tasks', path: '/tasks' },
-  {
-    icon: <People theme='outline' size={18} />,
-    labelKey: 'nav.enterpriseConsole',
-    labelDefault: 'Enterprise',
-    path: '/enterprise',
-  },
-  {
-    icon: <Robot theme='outline' size={18} />,
-    labelKey: 'nav.superAssistant',
-    labelDefault: '超级助手',
-    path: '/super-assistant',
-  },
-  { icon: <Lightning theme='outline' size={18} />, labelKey: 'nav.hooks', labelDefault: 'Hooks', path: '/hooks' },
-  { icon: <Server theme='outline' size={18} />, labelKey: 'nav.mcp', labelDefault: 'MCP', path: '/mcp' },
-  { icon: <Brain theme='outline' size={18} />, labelKey: 'nav.memory', labelDefault: 'Memory', path: '/memory' },
-  { icon: <AlarmClock theme='outline' size={18} />, labelKey: 'nav.scheduled', labelDefault: 'Scheduled', path: '/scheduled' },
-  { icon: <Setting theme='outline' size={18} />, labelKey: 'nav.globalSettings', labelDefault: 'Settings', path: '/settings' },
-];
-
-export function getSidebarNavItems(hasJoinedEnterprise: boolean, isEnterpriseEdition: boolean): NavItem[] {
-  let items = NAV_ITEMS;
-  if (!hasJoinedEnterprise) {
-    items = items.filter((x) => x.path !== '/enterprise' && x.path !== '/super-assistant');
-  }
-  if (!isEnterpriseEdition) {
-    items = items.filter((x) => !x.enterpriseOnly);
-  }
-  return items;
-}
-
-const SidebarNavIcons: React.FC = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { t } = useTranslation();
-  const { hasJoinedEnterprise, isEnterpriseEdition } = useEditionFeatures();
-  const items = getSidebarNavItems(hasJoinedEnterprise, isEnterpriseEdition);
-  return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 2,
-      padding: '6px 4px',
-      borderRight: '1px solid var(--color-border-2)',
-      flexShrink: 0,
-      width: 48,
-    }}>
-      {items.map((item) => {
-        const allPaths = [item.path, ...(item.paths ?? [])];
-        const active = allPaths.some((p) => location.pathname.startsWith(p));
-        return (
-          <Tooltip key={item.path} content={t(item.labelKey, { defaultValue: item.labelDefault })} position='right' mini>
-            <div
-              onClick={() => navigate(item.path)}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 8,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: active ? 'var(--color-primary-6)' : 'var(--color-text-3)',
-                background: active ? 'rgba(var(--primary-6), 0.12)' : 'transparent',
-                border: active ? '1px solid rgba(var(--primary-6), 0.2)' : '1px solid transparent',
-                transition: 'all 0.15s',
-                flexShrink: 0,
-              }}
-              onMouseEnter={(e) => {
-                if (!active) {
-                  (e.currentTarget as HTMLElement).style.background = 'var(--color-fill-3)';
-                  (e.currentTarget as HTMLElement).style.color = 'var(--color-text-1)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!active) {
-                  (e.currentTarget as HTMLElement).style.background = 'transparent';
-                  (e.currentTarget as HTMLElement).style.color = 'var(--color-text-3)';
-                }
-              }}
-            >
-              {item.icon}
-            </div>
-          </Tooltip>
-        );
-      })}
-    </div>
-  );
-};
-
 const UpdateModal = React.lazy(() => import('@/renderer/components/settings/UpdateModal'));
 
-const DEFAULT_SIDER_WIDTH = 250;
+const DESKTOP_SIDER_WIDTH_RATIO = 0.2;
+const DESKTOP_SIDER_MIN_WIDTH = 200;
 const DESKTOP_COLLAPSED_WIDTH = 64;
-const SIDER_DRAG_SNAP_THRESHOLD = Math.round((DEFAULT_SIDER_WIDTH + DESKTOP_COLLAPSED_WIDTH) / 2);
 const SIDER_DRAG_HYSTERESIS = 6;
+const SIDER_WIDTH_STORAGE_KEY = '1one:sider-width';
 const MOBILE_SIDER_WIDTH_RATIO = 0.67;
 const MOBILE_SIDER_MIN_WIDTH = 260;
 const MOBILE_SIDER_MAX_WIDTH = 420;
+
+const getDesktopSiderMaxWidth = (viewportWidth: number): number =>
+  Math.max(DESKTOP_SIDER_MIN_WIDTH, Math.min(360, Math.round(viewportWidth * 0.38)));
+
+const getDesktopSiderDefaultWidth = (viewportWidth: number): number =>
+  Math.max(
+    DESKTOP_SIDER_MIN_WIDTH,
+    Math.min(getDesktopSiderMaxWidth(viewportWidth), Math.round(viewportWidth * DESKTOP_SIDER_WIDTH_RATIO))
+  );
+
+const clampDesktopSiderWidth = (width: number, viewportWidth: number): number =>
+  Math.max(DESKTOP_SIDER_MIN_WIDTH, Math.min(getDesktopSiderMaxWidth(viewportWidth), Math.round(width)));
+
+const readStoredSiderWidth = (): number | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    const raw = localStorage.getItem(SIDER_WIDTH_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+};
 
 const detectMobileViewportOrTouch = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -195,6 +119,15 @@ const Layout: React.FC<{
   const [viewportWidth, setViewportWidth] = useState<number>(() =>
     typeof window === 'undefined' ? 390 : window.innerWidth
   );
+  const [desktopSiderWidth, setDesktopSiderWidth] = useState<number>(() => {
+    const vw = typeof window === 'undefined' ? 1280 : window.innerWidth;
+    const stored = readStoredSiderWidth();
+    if (stored !== null) {
+      return clampDesktopSiderWidth(stored, vw);
+    }
+    return getDesktopSiderDefaultWidth(vw);
+  });
+  const [isSiderDragging, setIsSiderDragging] = useState(false);
   const [shouldMountUpdateModal, setShouldMountUpdateModal] = useState(false);
   const { onClick } = useDebug();
   const { contextHolder: multiAgentContextHolder } = useMultiAgentDetection();
@@ -206,10 +139,11 @@ const Layout: React.FC<{
   const location = useLocation();
   const workspaceAvailable = location.pathname.startsWith('/conversation/') || location.pathname.startsWith('/team/') || location.pathname.startsWith('/workspace');
   const collapsedRef = useRef(collapsed);
+  const desktopSiderWidthRef = useRef(desktopSiderWidth);
   const dragStateRef = useRef<{ active: boolean; startX: number; startWidth: number }>({
     active: false,
     startX: 0,
-    startWidth: DEFAULT_SIDER_WIDTH,
+    startWidth: getDesktopSiderDefaultWidth(typeof window === 'undefined' ? 1280 : window.innerWidth),
   });
 
 
@@ -241,13 +175,23 @@ const Layout: React.FC<{
     setCollapsed(true);
   }, [isMobile]);
 
+  useEffect(() => {
+    if (isMobile) {
+      return;
+    }
+    setDesktopSiderWidth((prev) => clampDesktopSiderWidth(prev, viewportWidth));
+  }, [isMobile, viewportWidth]);
+
   // 清理侧栏 Tooltip 残留节点，避免移动端路由切换后浮层卡在左上角
   useEffect(() => {
     cleanupSiderTooltips();
   }, [isMobile, collapsed, location.pathname, location.search, location.hash]);
 
-  // Bridge Main Process logs to F12 Console
+  // Bridge Main Process logs to F12 Console (desktop only)
   useEffect(() => {
+    if (!isElectronDesktop()) {
+      return;
+    }
     const unsubscribe = ipcBridge.application.logStream.on((entry) => {
       const prefix = `%c[Main:${entry.tag}]%c ${entry.message}`;
       const style = 'color:var(--primary);font-weight:bold';
@@ -324,10 +268,14 @@ const Layout: React.FC<{
         MOBILE_SIDER_MIN_WIDTH,
         Math.min(MOBILE_SIDER_MAX_WIDTH, Math.round(viewportWidth * MOBILE_SIDER_WIDTH_RATIO))
       )
-    : DEFAULT_SIDER_WIDTH;
+    : desktopSiderWidth;
   useEffect(() => {
     collapsedRef.current = collapsed;
   }, [collapsed]);
+
+  useEffect(() => {
+    desktopSiderWidthRef.current = desktopSiderWidth;
+  }, [desktopSiderWidth]);
 
   const beginSiderResizeDrag = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
@@ -336,12 +284,13 @@ const Layout: React.FC<{
       dragStateRef.current = {
         active: true,
         startX: event.clientX,
-        startWidth: collapsedRef.current ? DESKTOP_COLLAPSED_WIDTH : DEFAULT_SIDER_WIDTH,
+        startWidth: collapsedRef.current ? DESKTOP_COLLAPSED_WIDTH : desktopSiderWidth,
       };
+      setIsSiderDragging(true);
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
     },
-    [isMobile]
+    [desktopSiderWidth, isMobile]
   );
 
   useEffect(() => {
@@ -350,20 +299,35 @@ const Layout: React.FC<{
       if (!dragState.active) return;
 
       const draggedWidth = dragState.startWidth + (event.clientX - dragState.startX);
-      // Add a small hysteresis zone to avoid rapid toggling near the snap threshold.
-      const shouldCollapse = collapsedRef.current
-        ? draggedWidth < SIDER_DRAG_SNAP_THRESHOLD + SIDER_DRAG_HYSTERESIS
-        : draggedWidth <= SIDER_DRAG_SNAP_THRESHOLD - SIDER_DRAG_HYSTERESIS;
-      if (shouldCollapse !== collapsedRef.current) {
-        setCollapsed(shouldCollapse);
+      const snapThreshold = Math.round((DESKTOP_SIDER_MIN_WIDTH + DESKTOP_COLLAPSED_WIDTH) / 2);
+
+      if (draggedWidth <= snapThreshold - SIDER_DRAG_HYSTERESIS) {
+        if (!collapsedRef.current) {
+          setCollapsed(true);
+        }
+        return;
       }
+
+      if (collapsedRef.current && draggedWidth > snapThreshold + SIDER_DRAG_HYSTERESIS) {
+        setCollapsed(false);
+      }
+
+      const nextWidth = clampDesktopSiderWidth(draggedWidth, window.innerWidth);
+      desktopSiderWidthRef.current = nextWidth;
+      setDesktopSiderWidth(nextWidth);
     };
 
     const endDrag = () => {
       if (!dragStateRef.current.active) return;
       dragStateRef.current.active = false;
+      setIsSiderDragging(false);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
+      try {
+        localStorage.setItem(SIDER_WIDTH_STORAGE_KEY, String(desktopSiderWidthRef.current));
+      } catch {
+        // ignore
+      }
     };
 
     const handleBlur = () => endDrag();
@@ -408,6 +372,7 @@ const Layout: React.FC<{
             width={siderWidth}
             className={classNames('!bg-2 layout-sider', {
               collapsed: collapsed,
+              'layout-sider--dragging': isSiderDragging,
             })}
             style={siderStyle}
           >
@@ -457,33 +422,25 @@ const Layout: React.FC<{
               {/* 侧栏折叠改由标题栏统一控制 / Sidebar folding handled by Titlebar toggle */}
             </ArcoLayout.Header>
 
-            {/* 合并布局：左侧竖向图标列 + 右侧内容 */}
-            <div style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-              {!isMobile && !collapsed && <SidebarNavIcons />}
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <ArcoLayout.Content
-                  className={classNames('p-8px layout-sider-content', !isMobile && 'h-full')}
-                >
-                  {React.isValidElement(sider)
-                    ? React.cloneElement(sider, {
-                        onSessionClick: () => {
-                          cleanupSiderTooltips();
-                          if (isMobile) setCollapsed(true);
-                        },
-                        collapsed,
-                      } as any)
-                    : sider}
-                </ArcoLayout.Content>
-              </div>
-            </div>
+            <ArcoLayout.Content className={classNames('p-8px layout-sider-content flex flex-col min-h-0', !isMobile && 'h-full')}>
+              {React.isValidElement(sider)
+                ? React.cloneElement(sider, {
+                    onSessionClick: () => {
+                      cleanupSiderTooltips();
+                      if (isMobile) setCollapsed(true);
+                    },
+                    collapsed,
+                  } as React.Attributes & { onSessionClick?: () => void; collapsed?: boolean })
+                : sider}
+            </ArcoLayout.Content>
             {!isMobile && (
               <div
-                className='absolute top-0 h-full w-8px z-20 cursor-col-resize group'
-                style={{ right: '-4px' }}
+                className='absolute top-0 h-full w-10px z-30 cursor-col-resize group'
+                style={{ right: '-5px' }}
                 onMouseDown={beginSiderResizeDrag}
                 aria-hidden='true'
               >
-                <div className='absolute top-0 left-1/2 h-full w-1px -translate-x-1/2 bg-transparent group-hover:bg-[var(--color-border-2)] transition-colors duration-150' />
+                <div className='absolute top-0 left-1/2 h-full w-2px -translate-x-1/2 bg-transparent group-hover:bg-[var(--color-border-2)] group-active:bg-[rgb(var(--primary-6))] transition-colors duration-150' />
               </div>
             )}
           </ArcoLayout.Sider>

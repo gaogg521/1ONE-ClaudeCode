@@ -43,13 +43,19 @@ describe('resolvePostLoginRedirectPath', () => {
     );
   });
 
-  it('sends not-joined users targeting admin home to join', () => {
-    expect(resolvePostLoginRedirectPath('/enterprise', 'org_admin', 'default')).toBe('/enterprise/join');
+  it('allows not-joined admins targeting admin home to enter console', () => {
+    expect(resolvePostLoginRedirectPath('/enterprise', 'org_admin', 'default')).toBe('/enterprise');
+  });
+
+  it('keeps not-joined non-admins on join page when targeting admin home', () => {
+    expect(resolvePostLoginRedirectPath('/enterprise', 'member', 'default')).toBe('/enterprise/join');
+  });
+
+  it('blocks joined members from admin-only enterprise routes', () => {
+    expect(resolvePostLoginRedirectPath('/enterprise/users', 'member', 'tenant-a')).toBe('/enterprise');
   });
 
   it('allows joined members into member-visible enterprise routes', () => {
-    expect(resolvePostLoginRedirectPath('/enterprise/users', 'member', 'tenant-a')).toBe(
-      '/enterprise/users'
-    );
+    expect(resolvePostLoginRedirectPath('/enterprise/rag', 'member', 'tenant-a')).toBe('/enterprise/rag');
   });
 });

@@ -56,6 +56,20 @@ const resolveRendererPath = (): {
   return null;
 };
 
+/** Hostnames that should use the Vite dev proxy (HMR-safe on the same machine). */
+export function isLocalWebUiHost(hostHeader: string | undefined): boolean {
+  if (!hostHeader) return true;
+  const trimmed = hostHeader.trim().toLowerCase();
+  if (trimmed.startsWith('[')) {
+    const end = trimmed.indexOf(']');
+    const hostname = end >= 0 ? trimmed.slice(1, end) : trimmed;
+    return hostname === '::1' || hostname === 'localhost';
+  }
+  const hostname = trimmed.split(':')[0] ?? '';
+  if (!hostname) return true;
+  return hostname === 'localhost' || hostname === '127.0.0.1';
+}
+
 /**
  * Create a proxy middleware that forwards requests to the Vite dev server
  */
@@ -160,10 +174,14 @@ function shouldProxyToVite(req: import('express').Request): boolean {
   return true;
 }
 
-function registerViteDevProxy(expressApp: Express): void {
+function registerViteDevProxy(expressApp: Express, localOnly = false): void {
   const proxy = createViteDevProxy();
   expressApp.use((req, res, next) => {
     if (!shouldProxyToVite(req)) {
+      next();
+      return;
+    }
+    if (localOnly && !isLocalWebUiHost(req.headers.host)) {
       next();
       return;
     }
@@ -171,25 +189,69 @@ function registerViteDevProxy(expressApp: Express): void {
   });
 }
 
+function registerRemoteStaticFallback(expressApp: Express): void {
+  expressApp.use((req, res, next) => {
+    if (!shouldProxyToVite(req)) {
+      next();
+      return;
+    }
+    if (isLocalWebUiHost(req.headers.host)) {
+      next();
+      return;
+    }
+    res
+      .status(503)
+      .type('text/plain')
+      .send(
+        '[WebUI] LAN/remote access requires built renderer assets. Run: npx electron-vite build\n' +
+          'Or start with: npm run webui:prod:remote'
+      );
+  });
+}
+
 /**
  * Register static assets and page routes
  *
  * In production: serve built files from out/renderer/
- * In development: proxy to Vite dev server (localhost:5173)
+ * In development (localhost): proxy to Vite dev server for HMR
+ * In development (LAN/remote Host): serve out/renderer/ to avoid Vite HMR reload loops
  */
 export function registerStaticRoutes(expressApp: Express): void {
-  // In dev, prefer proxying to Vite even if out/renderer exists.
-  // Otherwise WebUI may serve stale built assets and appear “not synced”.
   const isProduction = process.env.NODE_ENV === 'production';
-  const hasViteDevServer = typeof process.env['ELECTRON_RENDERER_URL'] === 'string' && !!process.env['ELECTRON_RENDERER_URL'];
+  const hasViteDevServer =
+    typeof process.env['ELECTRON_RENDERER_URL'] === 'string' && !!process.env['ELECTRON_RENDERER_URL'];
   const forceStatic = process.env.ONE_WEBUI_FORCE_STATIC === '1';
-  if (!isProduction && hasViteDevServer && !forceStatic) {
-    console.log(`[WebUI] Dev mode: proxying UI to Vite at http://localhost:${VITE_DEV_PORT} (API routes stay on WebUI)`);
+  const forceVite = process.env.ONE_WEBUI_FORCE_VITE === '1';
+  const resolved = resolveRendererPath();
+
+  if (isProduction || forceStatic) {
+    if (resolved) {
+      console.log(`[WebUI] Serving renderer from: ${resolved.staticRoot}`);
+      registerProductionStaticRoutes(expressApp, resolved.staticRoot, resolved.indexHtml);
+      return;
+    }
+    console.log(`[WebUI] No renderer build found, proxying UI to Vite at http://localhost:${VITE_DEV_PORT}`);
     registerViteDevProxy(expressApp);
     return;
   }
 
-  const resolved = resolveRendererPath();
+  if (!isProduction && hasViteDevServer && !forceStatic && !forceVite) {
+    if (resolved) {
+      console.log(
+        `[WebUI] Dev hybrid: localhost → Vite :${VITE_DEV_PORT}, LAN/remote Host → ${resolved.staticRoot} (API stays on WebUI)`
+      );
+      registerViteDevProxy(expressApp, true);
+      registerProductionStaticRoutes(expressApp, resolved.staticRoot, resolved.indexHtml);
+      return;
+    }
+
+    console.log(
+      `[WebUI] Dev mode: proxying UI to Vite at http://localhost:${VITE_DEV_PORT} (run npx electron-vite build for stable LAN access)`
+    );
+    registerViteDevProxy(expressApp);
+    registerRemoteStaticFallback(expressApp);
+    return;
+  }
 
   if (resolved) {
     console.log(`[WebUI] Serving renderer from: ${resolved.staticRoot}`);
@@ -197,7 +259,6 @@ export function registerStaticRoutes(expressApp: Express): void {
     return;
   }
 
-  // No built assets - proxy to Vite dev server in development mode
   console.log(`[WebUI] No renderer build found, proxying UI to Vite at http://localhost:${VITE_DEV_PORT}`);
   registerViteDevProxy(expressApp);
 }

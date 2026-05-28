@@ -6,6 +6,8 @@ import { ipcBridge } from '@/common';
 import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { openAdminConsole } from '@/renderer/utils/openAdminConsole';
 import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
 import {
   createTeamTask,
@@ -169,6 +171,7 @@ const SuperAssistantPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
   const { hasJoinedEnterprise, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
+  const enterpriseMode = useWebuiEnterpriseMode();
   const [issueAssignments, setIssueAssignments] = useState<SuperAssistantIssueAssignmentMap>({});
   const [issueAssignmentTaskIds, setIssueAssignmentTaskIds] = useState<Record<string, string>>({});
   const isAdmin = isEnterpriseAdminRole(user?.role);
@@ -417,6 +420,18 @@ const SuperAssistantPage: React.FC = () => {
     navigate(buildTeamScopedPath('/sessions', undefined, undefined, currentIssue));
   };
   const handleOpenEnterpriseKnowledge = () => navigate(showEnterpriseAdminNav ? '/enterprise/rag' : '/super-assistant?tab=skills');
+  const handleOpenEnterpriseModule = useCallback(() => {
+    if (!showEnterpriseAdminNav) {
+      void navigate('/enterprise');
+      return;
+    }
+    void openAdminConsole({
+      navigate: (path) => {
+        void navigate(path);
+      },
+      openEnterpriseAdminInBrowser: enterpriseMode.openEnterpriseAdminInBrowser,
+    });
+  }, [enterpriseMode.openEnterpriseAdminInBrowser, navigate, showEnterpriseAdminNav]);
   const handleOpenEnterpriseDelivery = async () => {
     if (showEnterpriseAdminNav) {
       navigate('/enterprise/cteam');
@@ -680,7 +695,7 @@ const SuperAssistantPage: React.FC = () => {
           onOpenTeamFlow={handleOpenTeamFlow}
           onOpenSharedTasks={handleOpenSharedTasks}
           onOpenSharedSessions={handleOpenSharedSessions}
-          onOpenEnterpriseModule={() => navigate(showEnterpriseAdminNav ? '/enterprise/auth' : '/enterprise')}
+          onOpenEnterpriseModule={handleOpenEnterpriseModule}
           onOpenEnterpriseKnowledge={handleOpenEnterpriseKnowledge}
           onOpenSkills={handleOpenSkillsHub}
           onOpenMcp={handleOpenMcp}

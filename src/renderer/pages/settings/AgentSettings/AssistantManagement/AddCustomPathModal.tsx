@@ -42,9 +42,9 @@ const AddCustomPathModal: React.FC<AddCustomPathModalProps> = ({
       wrapStyle={{ zIndex: 10000 }}
       maskStyle={{ zIndex: 9999 }}
     >
-      <div className='flex flex-col gap-16px'>
+      <div className='settings-modal-surface flex flex-col gap-16px p-16px'>
         <div>
-          <div className='text-13px font-medium text-t-primary mb-8px'>
+          <div className='settings-form-section-title mb-8px'>
             {t('common.name', { defaultValue: 'Name' })}
           </div>
           <Input
@@ -55,7 +55,7 @@ const AddCustomPathModal: React.FC<AddCustomPathModalProps> = ({
           />
         </div>
         <div>
-          <div className='text-13px font-medium text-t-primary mb-8px'>
+          <div className='settings-form-section-title mb-8px'>
             {t('settings.skillsHub.customPathLabel', { defaultValue: 'Skill Directory Path' })}
           </div>
           <div className='flex gap-8px'>
@@ -68,7 +68,7 @@ const AddCustomPathModal: React.FC<AddCustomPathModalProps> = ({
               className='flex-1 rd-6px'
             />
             <Button
-              className='rd-6px'
+              className='settings-pill-button rd-6px'
               onClick={async () => {
                 try {
                   const result = await ipcBridge.dialog.showOpen.invoke({ properties: ['openDirectory'] });

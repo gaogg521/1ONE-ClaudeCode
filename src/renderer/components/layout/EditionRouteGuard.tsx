@@ -32,7 +32,7 @@ const EditionRouteGuard: React.FC = () => {
         })
       );
     }
-    void navigate('/sessions', { replace: true });
+    void navigate('/guid', { replace: true });
   }, [location.pathname, navigate, showTeamsFeature, t]);
 
   return null;

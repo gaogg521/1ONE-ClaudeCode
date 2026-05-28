@@ -1,7 +1,7 @@
 {
   "title": "会话中心",
   "new": "新会话",
-  "searchPlaceholder": "搜索会话...",
+  "searchPlaceholder": "搜索会话标题或内容...",
   "empty": "还没有会话，点击「新会话」开始",
   "emptySearch": "没有匹配的会话",
   "startFirst": "开始第一个会话",

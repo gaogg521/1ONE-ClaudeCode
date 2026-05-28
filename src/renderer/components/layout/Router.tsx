@@ -43,7 +43,6 @@ const AgentSettings = React.lazy(() => import('@renderer/pages/settings/AgentSet
 const AssistantSettings = React.lazy(() => import('@renderer/pages/settings/AssistantSettings'));
 const SkillsHubSettings = React.lazy(() => import('@renderer/pages/settings/SkillsHubSettings'));
 const AionrsSettings = React.lazy(() => import('@renderer/pages/settings/AionrsSettings'));
-const GeminiSettings = React.lazy(() => import('@renderer/pages/settings/GeminiSettings'));
 // Model settings is a high-traffic route and pulls in heavy UI modules.
 // Eager-load it to avoid long Suspense spinner / perceived "freeze" when navigating from Settings.
 import ModeSettings from '@renderer/pages/settings/ModeSettings';
@@ -59,6 +58,7 @@ const TeamIndex = React.lazy(() => import('@renderer/pages/team'));
 const SuperAssistantPage = React.lazy(() => import('@renderer/pages/superAssistant'));
 const WorkspacePage = React.lazy(() => import('@renderer/pages/workspace'));
 const WorkspaceSettingsShell = React.lazy(() => import('@renderer/pages/workspace/WorkspaceSettings'));
+const WorkspaceProjectSettings = React.lazy(() => import('@renderer/pages/workspace/WorkspaceProjectSettings'));
 
 /** Legacy redirect map: old paths → new enterprise paths. */
 const LEGACY_REDIRECTS = [
@@ -76,7 +76,7 @@ const withRouteFallback = (Component: React.LazyExoticComponent<React.ComponentT
   </Suspense>
 );
 
-const ProtectedLayout: React.FC = () => {
+const EnterpriseAuthLayout: React.FC = () => {
   const { status } = useAuth();
   const location = useLocation();
 
@@ -89,7 +89,7 @@ const ProtectedLayout: React.FC = () => {
     if (returnPath && returnPath !== '/login') {
       setPostLoginRedirect(returnPath);
     }
-    return <Navigate to='/login' replace />;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(returnPath || '/enterprise')}`} replace />;
   }
 
   return <Outlet />;
@@ -119,84 +119,93 @@ const LoginRoute: React.FC = () => {
 };
 
 const PanelRoute: React.FC = () => {
-  const { status } = useAuth();
-
   return (
     <HashRouter>
       <Routes>
         <Route path='/login' element={<LoginRoute />} />
-        <Route element={<ProtectedLayout />}>
-          <Route element={withRouteFallback(PersonalShell)}>
-            <Route index element={<Navigate to='/sessions' replace />} />
-            <Route path='/sessions' element={withRouteFallback(SessionsPage)} />
-            <Route path='/workspace' element={withRouteFallback(WorkspacePage)} />
-            <Route path='/workspace/settings' element={<Navigate to='/workspace/settings/model' replace />} />
-            <Route
-              path='/workspace/settings/model'
-              element={
-                <Suspense fallback={<AppLoader />}>
-                  <WorkspaceSettingsShell>
-                    <ModeSettings />
-                  </WorkspaceSettingsShell>
-                </Suspense>
-              }
-            />
-            <Route
-              path='/workspace/settings/assistants'
-              element={
-                <Suspense fallback={<AppLoader />}>
-                  <WorkspaceSettingsShell>
-                    <AssistantSettings />
-                  </WorkspaceSettingsShell>
-                </Suspense>
-              }
-            />
-            <Route
-              path='/workspace/settings/tools'
-              element={
-                <Suspense fallback={<AppLoader />}>
-                  <WorkspaceSettingsShell>
-                    <ToolsSettings />
-                  </WorkspaceSettingsShell>
-                </Suspense>
-              }
-            />
-            <Route
-              path='/workspace/settings/agent'
-              element={
-                <Suspense fallback={<AppLoader />}>
-                  <WorkspaceSettingsShell>
-                    <AgentSettings />
-                  </WorkspaceSettingsShell>
-                </Suspense>
-              }
-            />
-            <Route path='/tasks' element={withRouteFallback(TasksPage)} />
-            <Route path='/super-assistant' element={withRouteFallback(SuperAssistantPage)} />
-            <Route path='/hooks' element={withRouteFallback(HooksPage)} />
-            <Route path='/mcp' element={withRouteFallback(MCPPage)} />
-            <Route path='/memory' element={withRouteFallback(MemoryPage)} />
-            <Route path='/guid' element={withRouteFallback(Guid)} />
-            <Route path='/conversation/:id' element={withRouteFallback(Conversation)} />
-            <Route path='/settings/aionrs' element={withRouteFallback(AionrsSettings)} />
-            <Route path='/team/:id' element={withRouteFallback(TeamIndex)} />
-            <Route path='/settings/gemini' element={withRouteFallback(GeminiSettings)} />
-            <Route path='/settings/model' element={<ModeSettings />} />
-            <Route path='/settings/assistants' element={withRouteFallback(AssistantSettings)} />
-            <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
-            <Route path='/settings/skills-hub' element={withRouteFallback(SkillsHubSettings)} />
-            <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
-            <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
-            <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />
-            <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />
-            <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
-            <Route path='/settings' element={<Navigate to='/settings/agent' replace />} />
-            <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
-            <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
-            <Route path='/scheduled/:jobId' element={withRouteFallback(TaskDetailPage)} />
-          </Route>
-
+        <Route element={withRouteFallback(PersonalShell)}>
+          <Route index element={<Navigate to='/guid' replace />} />
+          <Route path='/sessions' element={withRouteFallback(SessionsPage)} />
+          <Route path='/workspace' element={withRouteFallback(WorkspacePage)} />
+          <Route path='/workspace/settings' element={<Navigate to='/workspace/settings/projects' replace />} />
+          <Route
+            path='/workspace/settings/projects'
+            element={
+              <Suspense fallback={<AppLoader />}>
+                <WorkspaceSettingsShell>
+                  <WorkspaceProjectSettings />
+                </WorkspaceSettingsShell>
+              </Suspense>
+            }
+          />
+          <Route
+            path='/workspace/settings/model'
+            element={
+              <Suspense fallback={<AppLoader />}>
+                <WorkspaceSettingsShell>
+                  <ModeSettings />
+                </WorkspaceSettingsShell>
+              </Suspense>
+            }
+          />
+          <Route
+            path='/workspace/settings/assistants'
+            element={
+              <Suspense fallback={<AppLoader />}>
+                <WorkspaceSettingsShell>
+                  <AssistantSettings />
+                </WorkspaceSettingsShell>
+              </Suspense>
+            }
+          />
+          <Route
+            path='/workspace/settings/tools'
+            element={
+              <Suspense fallback={<AppLoader />}>
+                <WorkspaceSettingsShell>
+                  <ToolsSettings />
+                </WorkspaceSettingsShell>
+              </Suspense>
+            }
+          />
+          <Route
+            path='/workspace/settings/agent'
+            element={
+              <Suspense fallback={<AppLoader />}>
+                <WorkspaceSettingsShell>
+                  <AgentSettings />
+                </WorkspaceSettingsShell>
+              </Suspense>
+            }
+          />
+          <Route path='/tasks' element={withRouteFallback(TasksPage)} />
+          <Route path='/super-assistant' element={withRouteFallback(SuperAssistantPage)} />
+          <Route path='/hooks' element={withRouteFallback(HooksPage)} />
+          <Route path='/mcp' element={withRouteFallback(MCPPage)} />
+          <Route path='/memory' element={withRouteFallback(MemoryPage)} />
+          <Route path='/guid' element={withRouteFallback(Guid)} />
+          <Route path='/conversation/:id' element={withRouteFallback(Conversation)} />
+          <Route path='/settings/aionrs' element={withRouteFallback(AionrsSettings)} />
+          <Route path='/team/:id' element={withRouteFallback(TeamIndex)} />
+          <Route path='/settings/gemini' element={<Navigate to='/settings/system?section=gemini' replace />} />
+          <Route path='/settings/model' element={<ModeSettings />} />
+          <Route path='/settings/assistants' element={withRouteFallback(AssistantSettings)} />
+          <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
+          <Route path='/settings/skills-hub' element={withRouteFallback(SkillsHubSettings)} />
+          <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
+          <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
+          <Route path='/settings/display' element={<Navigate to='/settings/tools' replace />} />
+          <Route path='/settings/about' element={<Navigate to='/settings/system?section=about' replace />} />
+          <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />
+          <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
+          <Route path='/settings' element={<Navigate to='/settings/agent' replace />} />
+          <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
+          <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
+          <Route path='/scheduled/:jobId' element={withRouteFallback(TaskDetailPage)} />
           <Route path='/enterprise/join' element={withRouteFallback(EnterpriseJoinLayout)} />
+        </Route>
+
+        <Route element={<EnterpriseAuthLayout />}>
           <Route path='/enterprise' element={withRouteFallback(EnterpriseLayout)}>
             <Route index element={withRouteFallback(EnterpriseHome)} />
             <Route path='users' element={withRouteFallback(AdminUsers)} />
@@ -225,7 +234,7 @@ const PanelRoute: React.FC = () => {
             <Route key={from} path={from} element={<Navigate to={to} replace />} />
           ))}
         </Route>
-        <Route path='*' element={<Navigate to={status === 'authenticated' ? '/sessions' : '/login'} replace />} />
+        <Route path='*' element={<Navigate to='/guid' replace />} />
       </Routes>
     </HashRouter>
   );

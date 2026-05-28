@@ -164,7 +164,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
 
     return (
       <div className='space-y-12px'>
-        <div className='flex items-center gap-8px text-13px font-medium text-t-secondary px-4px'>
+        <div className='settings-content-section-title flex items-center gap-8px px-4px'>
           {title}
           <span className='text-t-tertiary'>({sectionAssistants.length})</span>
         </div>

@@ -12,6 +12,26 @@
   overflow-x: hidden;
 }
 
+@media (min-width: 768px) {
+  .layout-sider > .arco-layout-sider-children {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .layout-sider-header {
+    flex-shrink: 0;
+  }
+
+  .layout-sider-content {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
 /* Disable transition during drag for smooth dragging */
 .layout-sider--dragging {
   transition: none !important;

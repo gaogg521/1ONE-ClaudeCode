@@ -1,33 +1,25 @@
-import loginLogo from '@renderer/assets/logos/brand/app.png';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '@/renderer/services/i18n';
-import { resolvePostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
+import { resolvePostLoginRedirectPath, ENTERPRISE_JOIN_PATH } from '@/common/auth/enterpriseRoles';
 import {
   consumePostLoginRedirect,
   peekPostLoginRedirect,
   readRedirectFromSearch,
 } from '@/renderer/utils/postLoginRedirect';
-import { useLocation, useNavigate } from 'react-router-dom';
-import {
-  Alert,
-  Button,
-  Checkbox,
-  Divider,
-  Input,
-  Message,
-  Radio,
-  Select,
-  Typography,
-} from '@arco-design/web-react';
-import { Lock, User } from '@icon-park/react';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import heroIllustration from '@renderer/assets/login/enterprise-hero.svg';
+import { useFeishuQrLogin } from '@/renderer/hooks/auth/useFeishuQrLogin';
+import { formatOAuthAuthorizeError, startOAuthAuthorize } from '@/renderer/utils/oauthAuthorize';
+import { useLoginUiProviders } from '@/renderer/hooks/auth/useLoginUiProviders';
 import { useAuth } from '../../hooks/context/AuthContext';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import '@/renderer/styles/enterprise-theme.css';
+import LoginFormCard from './components/LoginFormCard';
+import LoginHeroPanel from './components/LoginHeroPanel';
 import './LoginPage.css';
-import '@/renderer/styles/enterprise-theme.css';
 
 type MessageState = {
   type: 'error' | 'success';
@@ -35,11 +27,6 @@ type MessageState = {
 };
 
 type FormMethod = 'local' | 'ldap';
-
-type FeishuQrLoginObj = {
-  matchOrigin?: (origin: string) => boolean;
-  matchData?: (data: unknown) => boolean;
-};
 
 const REMEMBER_ME_KEY = 'rememberMe';
 const REMEMBERED_USERNAME_KEY = 'rememberedUsername';
@@ -65,6 +52,7 @@ const LoginPage: React.FC = () => {
   const location = useLocation();
   const { status, login, loginWithLdap, user } = useAuth();
   const { loading: enterpriseLoading } = useWebuiEnterpriseMode();
+  const providers = useLoginUiProviders();
 
   const resolveLoginTarget = useCallback(
     (loggedInUser?: { role?: string; tenant_id?: string }) => {
@@ -92,21 +80,41 @@ const LoginPage: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [message, setMessage] = useState<MessageState | null>(null);
   const [loading, setLoading] = useState(false);
-  const [loginUiMode, setLoginUiMode] = useState<'loading' | 'standalone' | 'enterprise'>('loading');
-  const [ldapEnabled, setLdapEnabled] = useState(false);
-  const [feishuEnabled, setFeishuEnabled] = useState(false);
-  const [dingtalkEnabled, setDingtalkEnabled] = useState(false);
-  const [wecomEnabled, setWecomEnabled] = useState(false);
-  const [ldapConfigured, setLdapConfigured] = useState(false);
-  const [feishuConfigured, setFeishuConfigured] = useState(false);
-  const [dingtalkConfigured, setDingtalkConfigured] = useState(false);
-  const [wecomConfigured, setWecomConfigured] = useState(false);
-  const [formMethod, setFormMethod] = useState<FormMethod>('local');
-  const [showFeishuQr, setShowFeishuQr] = useState(false);
+  const [formMethod, setFormMethod] = useState<FormMethod>(() => {
+    try {
+      const saved = window.sessionStorage.getItem('login:form-method');
+      if (saved === 'local' || saved === 'ldap') {
+        return saved;
+      }
+    } catch {
+      // ignore
+    }
+    return 'local';
+  });
   const isBrowserWebUi = !isElectronDesktop();
 
-  const [feishuQr, setFeishuQr] = useState<{ sdkUrl: string; goto: string } | null>(null);
-  const feishuListenerRef = useRef<((event: MessageEvent) => void) | null>(null);
+  const postLoginTarget = readRedirectFromSearch(location.search);
+  const enterpriseLoginMode = new URLSearchParams(location.search).get('mode') === 'enterprise';
+  const enterpriseIntent = useMemo(
+    () =>
+      enterpriseLoginMode ||
+      postLoginTarget === '/enterprise/join' ||
+      postLoginTarget?.startsWith('/enterprise/join') ||
+      postLoginTarget === '/enterprise' ||
+      (postLoginTarget?.startsWith('/enterprise') ?? false),
+    [enterpriseLoginMode, postLoginTarget]
+  );
+  const isEnterpriseLogin =
+    isBrowserWebUi ||
+    providers.mode === 'enterprise' ||
+    enterpriseIntent ||
+    enterpriseLoginMode;
+  const showLoginMethods = isEnterpriseLogin;
+  const showEnterpriseExtras = isBrowserWebUi && enterpriseIntent;
+  const pageEdition =
+    providers.mode === 'enterprise' || enterpriseIntent || enterpriseLoginMode
+      ? 'enterprise'
+      : 'standalone';
 
   const messageTimer = useRef<number | undefined>(undefined);
 
@@ -154,58 +162,14 @@ const LoginPage: React.FC = () => {
     }
   }, [enterpriseLoading, navigateAfterLogin, status, user]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadLoginUi = async () => {
-      try {
-        const res = await fetch('/api/auth/login-ui', { credentials: 'include' });
-        const body = (await res.json()) as {
-          success?: boolean;
-          data?: {
-            mode?: 'standalone' | 'enterprise';
-            ldapEnabled?: boolean;
-            feishuEnabled?: boolean;
-            dingtalkEnabled?: boolean;
-            wecomEnabled?: boolean;
-            ldapConfigured?: boolean;
-            feishuConfigured?: boolean;
-            dingtalkConfigured?: boolean;
-            wecomConfigured?: boolean;
-          };
-        };
-        if (!cancelled) {
-          const data = body?.success ? body.data : undefined;
-          const ldapOn = Boolean(data?.ldapEnabled);
-          const feishuOn = Boolean(data?.feishuEnabled);
-          const dingtalkOn = Boolean(data?.dingtalkEnabled);
-          const wecomOn = Boolean(data?.wecomEnabled);
-          setLdapEnabled(ldapOn);
-          setFeishuEnabled(feishuOn);
-          setDingtalkEnabled(dingtalkOn);
-          setWecomEnabled(wecomOn);
-          setLdapConfigured(Boolean(data?.ldapConfigured));
-          setFeishuConfigured(Boolean(data?.feishuConfigured));
-          setDingtalkConfigured(Boolean(data?.dingtalkConfigured));
-          setWecomConfigured(Boolean(data?.wecomConfigured));
-          const mode =
-            data?.mode === 'enterprise' || ldapOn || feishuOn || dingtalkOn || wecomOn
-              ? 'enterprise'
-              : 'standalone';
-          setLoginUiMode(mode);
-          if (ldapOn) {
-            setFormMethod('ldap');
-          }
-        }
-      } catch {
-        if (!cancelled) {
-          setLoginUiMode('standalone');
-        }
-      }
-    };
-    void loadLoginUi();
-    return () => {
-      cancelled = true;
-    };
+  const handleFormMethodChange = useCallback((value: FormMethod) => {
+    setFormMethod(value);
+    setMessage(null);
+    try {
+      window.sessionStorage.setItem('login:form-method', value);
+    } catch {
+      // ignore
+    }
   }, []);
 
   const clearMessageLater = useCallback(() => {
@@ -255,11 +219,23 @@ const LoginPage: React.FC = () => {
         return;
       }
 
+      const activeMethod: FormMethod = isEnterpriseLogin ? formMethod : 'local';
+
+      if (activeMethod === 'ldap' && !providers.ldapEnabled) {
+        showMessage({
+          type: 'error',
+          text: t('login.errors.ldapNotEnabled', {
+            defaultValue: 'LDAP 登录尚未启用，请组织管理员在企业控制台启用后再试，或改用本地账户登录。',
+          }),
+        });
+        return;
+      }
+
       setLoading(true);
       setMessage(null);
 
       const result =
-        formMethod === 'ldap'
+        activeMethod === 'ldap'
           ? await loginWithLdap({ username: trimmedUsername, password, remember: rememberMe })
           : await login({ username: trimmedUsername, password, remember: rememberMe });
 
@@ -284,13 +260,22 @@ const LoginPage: React.FC = () => {
         const errorText = (() => {
           switch (result.code) {
             case 'invalidCredentials':
-              return t('login.errors.invalidCredentials');
+              return activeMethod === 'ldap'
+                ? t('login.errors.invalidLdapCredentials', {
+                    defaultValue: '域控账户名或密码错误，或该账号尚未绑定本地用户。请改用本地账户登录，或联系管理员。',
+                  })
+                : t('login.errors.invalidCredentials');
             case 'tooManyAttempts':
               return t('login.errors.tooManyAttempts');
             case 'networkError':
               return t('login.errors.networkError');
             case 'serverError':
               return t('login.errors.serverError');
+            case 'dbUnavailable':
+              return t('login.errors.dbUnavailable', {
+                defaultValue:
+                  '本地数据库不可用。请关闭其他 1ONE 实例并重启应用；若仍失败，请删除损坏的数据库文件后重试。',
+              });
             case 'unknown':
             default:
               return result.message ?? t('login.errors.unknown');
@@ -302,7 +287,19 @@ const LoginPage: React.FC = () => {
 
       setLoading(false);
     },
-    [formMethod, login, loginWithLdap, navigateAfterLogin, password, rememberMe, showMessage, t, username]
+    [
+      formMethod,
+      isEnterpriseLogin,
+      login,
+      loginWithLdap,
+      navigateAfterLogin,
+      password,
+      providers.ldapEnabled,
+      rememberMe,
+      showMessage,
+      t,
+      username,
+    ]
   );
 
   const feishuRedirectTarget = useMemo(
@@ -310,141 +307,69 @@ const LoginPage: React.FC = () => {
     [location.search]
   );
 
-  const buildFeishuAuthorizePath = useCallback(
-    (mode: 'oauth' | 'qr') => {
+  const buildOAuthAuthorizePath = useCallback(
+    (provider: 'feishu' | 'dingtalk' | 'wecom', mode: 'oauth' | 'qr' = 'oauth') => {
       const params = new URLSearchParams({ mode });
       if (feishuRedirectTarget) {
         params.set('redirect', feishuRedirectTarget);
       }
-      return `/api/auth/feishu/authorize?${params.toString()}`;
+      return `/api/auth/${provider}/authorize?${params.toString()}`;
     },
     [feishuRedirectTarget]
   );
 
-  const handleFeishuOauth = useCallback(() => {
-    window.location.href = buildFeishuAuthorizePath('oauth');
-  }, [buildFeishuAuthorizePath]);
+  const buildFeishuAuthorizePath = useCallback(
+    (mode: 'oauth' | 'qr') => buildOAuthAuthorizePath('feishu', mode),
+    [buildOAuthAuthorizePath]
+  );
 
-  const ensureScriptLoaded = useCallback(async (src: string): Promise<void> => {
-    if (typeof window === 'undefined') return;
-    const existing = document.querySelector(`script[data-one-feishu-qr="1"][src="${src}"]`);
-    if (existing) return;
-    await new Promise<void>((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-      script.dataset.oneFeishuQr = '1';
-      script.addEventListener('load', () => resolve(), { once: true });
-      script.addEventListener('error', () => reject(new Error('Failed to load Feishu QR SDK')), { once: true });
-      document.head.appendChild(script);
-    });
-  }, []);
+  const { showQr, setShowQr, initError } = useFeishuQrLogin(buildFeishuAuthorizePath);
 
-  const initFeishuQr = useCallback(async () => {
-    setMessage(null);
-    setFeishuQr(null);
-    try {
-      const res = await fetch(buildFeishuAuthorizePath('qr'), { credentials: 'include' });
-      const raw = (await res.json().catch((): null => null)) as unknown;
-      const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
-      const data = obj?.data && typeof obj.data === 'object' ? (obj.data as Record<string, unknown>) : null;
-      if (!res.ok || obj?.success !== true || !data?.goto || !data?.sdkUrl) {
-        throw new Error((obj?.message as string) ?? 'Failed to init Feishu QR');
+  const runOAuthAuthorize = useCallback(
+    async (path: string) => {
+      const result = await startOAuthAuthorize(path);
+      if (!result.ok) {
+        showMessage({
+          type: 'error',
+          text: formatOAuthAuthorizeError(result.message, t, result.code),
+        });
       }
+    },
+    [showMessage, t]
+  );
 
-      const sdkUrl = String(data.sdkUrl);
-      const goto = String(data.goto);
-      await ensureScriptLoaded(sdkUrl);
+  const handleFeishuOauthClick = useCallback(() => {
+    void runOAuthAuthorize(buildFeishuAuthorizePath('oauth'));
+  }, [buildFeishuAuthorizePath, runOAuthAuthorize]);
 
-      setFeishuQr({ sdkUrl, goto });
-    } catch (error) {
-      console.error('Failed to init Feishu QR:', error);
-      showMessage({ type: 'error', text: t('login.methods.feishuQrError', { defaultValue: '飞书二维码初始化失败' }) });
-    }
-  }, [buildFeishuAuthorizePath, ensureScriptLoaded, showMessage, t]);
+  const handleDingtalkOauth = useCallback(() => {
+    void runOAuthAuthorize(buildOAuthAuthorizePath('dingtalk'));
+  }, [buildOAuthAuthorizePath, runOAuthAuthorize]);
 
-  useEffect(() => {
-    if (!showFeishuQr) {
-      setFeishuQr(null);
-      if (feishuListenerRef.current) {
-        window.removeEventListener('message', feishuListenerRef.current);
-        feishuListenerRef.current = null;
-      }
-      return;
-    }
-    void initFeishuQr();
-    return () => {
-      if (feishuListenerRef.current) {
-        window.removeEventListener('message', feishuListenerRef.current);
-        feishuListenerRef.current = null;
-      }
-    };
-  }, [initFeishuQr, showFeishuQr]);
-
-  useEffect(() => {
-    if (!showFeishuQr || !feishuQr?.goto) return;
-    const QRLogin = (window as unknown as { QRLogin?: (opts: unknown) => unknown }).QRLogin;
-    if (!QRLogin) return;
-
-    const containerId = 'one-feishu-qr-container';
-    const obj = QRLogin({
-      id: containerId,
-      goto: feishuQr.goto,
-      width: '260',
-      height: '300',
-      style: 'width:260px;height:300px;margin:0 auto;',
-    }) as FeishuQrLoginObj;
-
-    const handler = (event: MessageEvent) => {
-      try {
-        if (obj?.matchOrigin?.(event.origin) && obj?.matchData?.(event.data)) {
-          const d = event.data as unknown;
-          const tmpCode =
-            d && typeof d === 'object' && 'tmp_code' in (d as Record<string, unknown>)
-              ? (d as Record<string, unknown>).tmp_code
-              : null;
-          if (tmpCode) {
-            window.location.href = `${feishuQr.goto}&tmp_code=${encodeURIComponent(String(tmpCode))}`;
-          }
-        }
-      } catch {}
-    };
-    feishuListenerRef.current = handler;
-    window.addEventListener('message', handler);
-
-    return () => {
-      window.removeEventListener('message', handler);
-      feishuListenerRef.current = null;
-    };
-  }, [feishuQr, showFeishuQr]);
+  const handleWecomOauth = useCallback(() => {
+    void runOAuthAuthorize(buildOAuthAuthorizePath('wecom'));
+  }, [buildOAuthAuthorizePath, runOAuthAuthorize]);
 
   const methodHint = useMemo(() => {
     if (formMethod === 'ldap') {
       return t('login.methods.ldapHint', { defaultValue: '使用企业域控账户登录' });
     }
-    return t('login.methods.localHint', { defaultValue: '使用本地管理员账户登录' });
+    return t('login.methods.localHint', { defaultValue: '使用系统本地账户登录' });
   }, [formMethod, t]);
 
-  const postLoginTarget = readRedirectFromSearch(location.search);
-  const enterpriseIntent =
-    postLoginTarget === '/enterprise/join' ||
-    postLoginTarget?.startsWith('/enterprise/join') ||
-    postLoginTarget === '/enterprise' ||
-    (postLoginTarget?.startsWith('/enterprise') ?? false);
-  const isEnterpriseLogin = isBrowserWebUi && (loginUiMode === 'enterprise' || enterpriseIntent);
-  const showLdapOption = ldapEnabled;
-  const showFeishuLogin = feishuEnabled;
-  // DingTalk / WeCom admin config is available, but login callbacks are not wired yet.
-  // Do not expose dead-end login buttons until the backend flow exists.
-  const showDingtalkLogin = false && dingtalkEnabled;
-  const showWecomLogin = false && wecomEnabled;
-  const anyOauthLogin = showFeishuLogin || showDingtalkLogin || showWecomLogin;
-  const anyProviderConfigured =
-    ldapConfigured || feishuConfigured || dingtalkConfigured || wecomConfigured;
-  const anyProviderEnabled = ldapEnabled || feishuEnabled || dingtalkEnabled || wecomEnabled;
+  const loginUiLoadError =
+    providers.error === 'db_unavailable'
+      ? 'db_unavailable'
+      : providers.error === 'load_failed'
+        ? 'load_failed'
+        : null;
 
-  if (status === 'checking' || loginUiMode === 'loading') {
+  if (status === 'checking' || (isBrowserWebUi && providers.loading)) {
     return <AppLoader />;
+  }
+
+  if (isBrowserWebUi && enterpriseIntent && status === 'unauthenticated') {
+    return <Navigate to={ENTERPRISE_JOIN_PATH} replace />;
   }
 
   const cardTitle = isEnterpriseLogin
@@ -455,221 +380,104 @@ const LoginPage: React.FC = () => {
     : t('login.standalone.cardSubtitle', {
         defaultValue: '用户名与密码见「设置 → 远程连接 → WebUI」',
       });
+  const heroBadge =
+    pageEdition === 'enterprise'
+      ? t('login.enterprise.heroBadge', { defaultValue: '1ONE Code 企业版' })
+      : t('login.standalone.heroBadge', { defaultValue: 'WEB 控制台' });
+  const heroTitle =
+    pageEdition === 'enterprise'
+      ? t('login.enterprise.heroTitle', { defaultValue: '团队 AI 协作工作台' })
+      : t('login.standalone.heroTitle', { defaultValue: 'WebUI 远程访问' });
+  const heroDescription =
+    pageEdition === 'enterprise'
+      ? t('login.enterprise.brandDesc', {
+          defaultValue:
+            '面向团队的命令行与对话型 AI 体验，统一账号与权限，支持本地、域控与飞书等多种登录方式。',
+        })
+      : t('login.standalone.brandDesc', {
+          defaultValue: '使用本机管理员账户登录，在手机或远程浏览器中管理 1ONE 会话与任务。',
+        });
+  const heroIntroTitle =
+    pageEdition === 'enterprise'
+      ? t('login.enterprise.introTitle', { defaultValue: '专注于企业团队 AI 协作' })
+      : t('login.standalone.introTitle', { defaultValue: '专注于远程运维与会话掌控' });
+  const heroIntroText =
+    pageEdition === 'enterprise'
+      ? t('login.enterprise.introText', {
+          defaultValue:
+            '支持多租户管理、LDAP 域控集成、飞书/钉钉/企微 SSO，为企业团队提供安全、高效的 AI 工作体验。',
+        })
+      : t('login.standalone.introText', {
+          defaultValue:
+            '在浏览器中安全访问本机 1ONE，统一查看任务、会话和运行状态，适合移动办公与远程协作场景。',
+        });
+  const illustrationAlt = t('login.heroIllustrationAlt', {
+    defaultValue: '企业 AI 工作台主视觉',
+  });
 
   return (
     <div
-      className={`login-page${loginUiMode === 'enterprise' ? ' login-page--enterprise' : ''}`}
-      data-enterprise-theme={loginUiMode === 'enterprise' ? 'true' : undefined}
+      className={`login-page login-page--${pageEdition}${isBrowserWebUi ? ' login-page--web' : ' login-page--desktop'}`}
     >
-      {isEnterpriseLogin ? (
-        <div className='login-page__brand' aria-hidden={false}>
-        <div className='login-page__brand-tag'>{t('login.enterprise.tag', { defaultValue: '1ONE' })}</div>
-        <Typography.Title heading={4} className='login-page__brand-title'>
-          {t('login.enterprise.heroTitle', { defaultValue: '企业团队 AI 工作台' })}
-        </Typography.Title>
-        <Typography.Paragraph className='login-page__brand-desc'>
-          {t('login.enterprise.brandDesc', {
-            defaultValue:
-              '面向团队的命令行与对话型 AI 体验，统一账号与权限，支持本地、域控与飞书等多种登录方式。',
-          })}
-        </Typography.Paragraph>
-        <div className='login-page__brand-visual' aria-hidden='true' />
-        <div className='login-page__brand-intro'>
-          <div className='login-page__brand-intro-title'>
-            {t('login.enterprise.introTitle', { defaultValue: '专注于企业团队 AI 协作' })}
-          </div>
-          <div className='login-page__brand-intro-text'>
-            {t('login.enterprise.introText', {
-              defaultValue:
-                '支持多租户管理、LDAP 域控集成、飞书/钉钉/企微 SSO，为企业团队提供安全、高效的 AI 工作体验。',
-            })}
-          </div>
-        </div>
-        </div>
-      ) : null}
+      <LoginHeroPanel
+        badge={heroBadge}
+        title={heroTitle}
+        description={heroDescription}
+        introTitle={heroIntroTitle}
+        introText={heroIntroText}
+        illustrationSrc={heroIllustration}
+        illustrationAlt={illustrationAlt}
+        edition={pageEdition}
+      />
 
-      <div className='login-page__panel'>
-        <div className='login-page__card'>
-          <div className='login-page__lang'>
-            <Select
-              value={i18n.language}
-              onChange={handleLanguageChange}
-              size='small'
-              className='login-page__lang-select'
-              triggerProps={{ autoAlignPopupWidth: false }}
-            >
-              {supportedLanguages.map((lang) => (
-                <Select.Option key={lang.code} value={lang.code}>
-                  {lang.label}
-                </Select.Option>
-              ))}
-            </Select>
-          </div>
-
-          <div className='login-page__card-head'>
-            <div className='login-page__card-icon-wrap' aria-hidden='true'>
-              <img src={loginLogo} alt='' className='login-page__card-icon-img' />
-            </div>
-            <Typography.Title heading={5} className='login-page__card-title'>
-              {cardTitle}
-            </Typography.Title>
-            <Typography.Paragraph type='secondary' className='login-page__card-sub'>
-              {cardSubtitle}
-            </Typography.Paragraph>
-          </div>
-
-          {isBrowserWebUi && anyProviderConfigured && !anyProviderEnabled ? (
-            <Typography.Paragraph type='secondary' className='login-page__method-hint mb-12px'>
-              {t('login.providersDisabledHint', {
-                defaultValue:
-                  '企业登录方式已在后台配置但未启用。请组织管理员在「企业控制台 → 认证与邮件」中启用 LDAP/飞书/钉钉/企业微信 后再使用。',
-              })}
-            </Typography.Paragraph>
-          ) : null}
-
-          {isEnterpriseLogin && enterpriseIntent ? (
-            <Alert
-              className='mb-12px'
-              type='info'
-              content={t('login.enterpriseRedirectHint', {
-                defaultValue: '登录成功后将进入企业团队版（成员、团队、邀请码等）。您也可在登录后使用邀请码加入组织。',
-              })}
-            />
-          ) : null}
-
-          {isEnterpriseLogin ? (
-            <>
-              {showLdapOption ? (
-                <Radio.Group
-                  className='login-page__method-group'
-                  type='button'
-                  value={formMethod}
-                  onChange={(v) => setFormMethod(v as FormMethod)}
-                >
-                  <Radio value='ldap'>{t('login.methods.ldap')}</Radio>
-                  <Radio value='local'>{t('login.methods.local')}</Radio>
-                </Radio.Group>
-              ) : null}
-              <Typography.Paragraph type='secondary' className='login-page__method-hint'>
-                {methodHint}
-              </Typography.Paragraph>
-            </>
-          ) : null}
-
-          <form className='login-page__form' onSubmit={handleSubmit}>
-            <div className='login-page__form-item'>
-              <Typography.Text className='login-page__label'>{t('login.username')}</Typography.Text>
-              <Input
-                id='login-username-input'
-                name='username'
-                prefix={<User theme='outline' size='16' />}
-                placeholder={t('login.usernamePlaceholder')}
-                autoComplete='username'
-                value={username}
-                onChange={setUsername}
-                size='large'
-              />
-            </div>
-
-            <div className='login-page__form-item'>
-              <Typography.Text className='login-page__label'>{t('login.password')}</Typography.Text>
-              <Input.Password
-                id='password'
-                name='password'
-                prefix={<Lock theme='outline' size='16' />}
-                placeholder={t('login.passwordPlaceholder')}
-                autoComplete='current-password'
-                value={password}
-                onChange={setPassword}
-                size='large'
-              />
-            </div>
-
-            <Checkbox checked={rememberMe} onChange={setRememberMe} className='login-page__remember'>
-              {t('login.rememberMe')}
-            </Checkbox>
-
-            <Button type='primary' htmlType='submit' long size='large' loading={loading} className='login-page__submit-btn'>
-              {loading ? t('login.submitting') : t('login.submit')}
-            </Button>
-
-            {isEnterpriseLogin && anyOauthLogin ? (
-              <>
-                <Divider className='login-page__divider'>
-                  {t('login.orDivider', { defaultValue: '或' })}
-                </Divider>
-
-                {showFeishuLogin ? (
-                  <Button
-                    long
-                    size='large'
-                    className='login-page__feishu-oauth mb-8px'
-                    onClick={handleFeishuOauth}
-                    disabled={loading}
-                  >
-                    {t('login.methods.feishuOauth', { defaultValue: '使用飞书登录' })}
-                  </Button>
-                ) : null}
-
-                {showFeishuLogin ? (
-                  <>
-                    <Button
-                      type='text'
-                      long
-                      className='login-page__feishu-qr-toggle'
-                      onClick={() => setShowFeishuQr((v) => !v)}
-                    >
-                      {showFeishuQr
-                        ? t('login.hideFeishuQr', { defaultValue: '收起飞书扫码' })
-                        : t('login.showFeishuQr', { defaultValue: '显示飞书扫码登录' })}
-                    </Button>
-
-                    {showFeishuQr ? (
-                      <div className='login-page__feishu-qr'>
-                        <div className='login-page__feishu-qr-title'>
-                          {t('login.methods.feishuQrTitle', { defaultValue: '或使用飞书扫码登录' })}
-                        </div>
-                        <div id='one-feishu-qr-container' className='login-page__feishu-qr-container' />
-                      </div>
-                    ) : null}
-                  </>
-                ) : null}
-              </>
-            ) : null}
-
-            {isBrowserWebUi && isEnterpriseLogin ? (
-              <div className='login-page__invite-hint mt-16px p-12px rd-8px border border-border-2 bg-fill-2'>
-                <Typography.Text className='text-13px font-500 text-t-primary'>
-                  {t('login.inviteTitle', { defaultValue: '或使用邀请码加入' })}
-                </Typography.Text>
-                <Typography.Paragraph type='secondary' className='text-12px mb-0 mt-4px'>
-                  {t('login.inviteCoexist', {
-                    defaultValue:
-                      '邀请码与企业账号登录可并存：先用上方任一方式登录（本地账户、LDAP、飞书等），登录成功后进入「企业」页输入邀请码即可加入；无需重复注册。',
-                  })}
-                </Typography.Paragraph>
-              </div>
-            ) : null}
-
-            <div
-              role='alert'
-              aria-live='polite'
-              className={`login-page__message ${message ? 'login-page__message--visible' : ''} ${message ? (message.type === 'success' ? 'login-page__message--success' : 'login-page__message--error') : ''}`}
-              hidden={!message}
-            >
-              {message?.text}
-            </div>
-          </form>
-
-          <div className='login-page__footer'>
-            <div className='login-page__footer-content'>
-              <span>{t('login.footerPrimary')}</span>
-              <span className='login-page__footer-divider'>•</span>
-              <span>{t('login.footerSecondary')}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <LoginFormCard
+        t={t}
+        language={i18n.language}
+        supportedLanguages={supportedLanguages}
+        onLanguageChange={handleLanguageChange}
+        cardTitle={cardTitle}
+        cardSubtitle={cardSubtitle}
+        loginUiLoadError={loginUiLoadError}
+        showProvidersDisabledHint={
+          isEnterpriseLogin && providers.anyProviderConfigured && !providers.anyProviderEnabled
+        }
+        showEnterpriseRedirectHint={isBrowserWebUi}
+        isEnterpriseLogin={isEnterpriseLogin}
+        isBrowserWebUi={isBrowserWebUi}
+        showLoginMethods={showLoginMethods}
+        showEnterpriseExtras={showEnterpriseExtras}
+        formMethod={formMethod}
+        onFormMethodChange={handleFormMethodChange}
+        methodHint={methodHint}
+        ldapEnabled={providers.ldapEnabled}
+        ldapConfigured={providers.ldapConfigured}
+        username={username}
+        password={password}
+        onUsernameChange={setUsername}
+        onPasswordChange={setPassword}
+        rememberMe={rememberMe}
+        onRememberMeChange={setRememberMe}
+        onSubmit={handleSubmit}
+        loading={loading}
+        showFeishuLogin={isBrowserWebUi}
+        feishuLoginEnabled={providers.feishuEnabled}
+        showDingtalkLogin={isBrowserWebUi}
+        dingtalkLoginEnabled={providers.dingtalkEnabled}
+        showWecomLogin={isBrowserWebUi}
+        wecomLoginEnabled={providers.wecomEnabled}
+        onFeishuOauth={handleFeishuOauthClick}
+        onDingtalkOauth={handleDingtalkOauth}
+        onWecomOauth={handleWecomOauth}
+        showFeishuQr={showQr}
+        onToggleFeishuQr={() => {
+          setMessage(null);
+          setShowQr((value) => !value);
+        }}
+        feishuQrError={initError}
+        message={message}
+        onContinueAsGuest={() => void navigate('/sessions')}
+        onJoinEnterprise={() => void navigate('/enterprise/join')}
+      />
     </div>
   );
 };

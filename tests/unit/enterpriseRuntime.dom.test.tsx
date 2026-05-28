@@ -114,6 +114,28 @@ describe('EnterpriseRuntimeProvider', () => {
     expect(result.current.issue).toBeNull();
   });
 
+  it('allows admins to open enterprise console before joining a tenant', async () => {
+    useWebuiEnterpriseModeMock.mockReturnValue({
+      loading: false,
+      hasJoinedEnterprise: false,
+      webuiApiBase: 'http://127.0.0.1:25809',
+      enterpriseContext: {
+        joined: false,
+        tenantId: 'default',
+        tenantName: null,
+        role: 'system_admin',
+      },
+      refreshEnterpriseContext: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useEnterpriseRuntime(), { wrapper: enterpriseRuntimeWrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.status).toBe('ready');
+    expect(result.current.issue).toBeNull();
+  });
+
   it('surfaces desktop webui unavailable state before modules load', async () => {
     (window as Window & { electronAPI?: unknown }).electronAPI = {};
     useWebuiEnterpriseModeMock.mockReturnValue({

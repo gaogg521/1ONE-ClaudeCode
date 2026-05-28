@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -1040,7 +1040,7 @@ const AdminKanban: React.FC = () => {
               value={aiInput}
               onChange={setAiInput}
               placeholder={t('admin.kanban.ai.placeholder', {
-                defaultValue: '例如：在企业团队版中加一个 RAG 本地知识库。它需要有解析、切片、余弦搜索 playground，并补齐管理员角色边界与回归测试，最后确保没有回归。',
+                defaultValue: '例如：在1ONE Code 企业版中加一个 RAG 本地知识库。它需要有解析、切片、余弦搜索 playground，并补齐管理员角色边界与回归测试，最后确保没有回归。',
               })}
               autoSize={{ minRows: 4, maxRows: 8 }}
             />

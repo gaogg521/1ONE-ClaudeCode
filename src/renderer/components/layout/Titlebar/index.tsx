@@ -8,7 +8,6 @@ import { ipcBridge } from '@/common';
 import WindowControls from '../WindowControls';
 import EditionModeSwitcher from '@/renderer/components/layout/EditionModeSwitcher';
 import EnterpriseNotificationCenter from '@/renderer/components/layout/EnterpriseNotificationCenter';
-import WorkspaceIdentityPanel from '@/renderer/components/layout/WorkspaceIdentityPanel';
 import { WORKSPACE_STATE_EVENT, dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
 import type { WorkspaceStateDetail } from '@renderer/utils/workspace/workspaceEvents';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
@@ -78,7 +77,6 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const showSiderToggle = Boolean(layout?.setSiderCollapsed) && !(layout?.isMobile && isSettingsRoute);
   const showBackToChatButton = Boolean(layout?.isMobile && isSettingsRoute);
   const showNewConversationButton = Boolean(layout?.isMobile && workspaceAvailable);
-  const showIdentityPanel = auth.status === 'authenticated';
   const showNotificationCenter = Boolean(
     enterpriseMode.webuiApiBase &&
       enterpriseMode.hasJoinedEnterprise &&
@@ -272,20 +270,18 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
       >
         {layout?.isMobile ? (
           <span className='app-titlebar__brand-mobile inline-flex items-center gap-8px min-w-0'>
-            <WorkspaceIdentityPanel compact />
             <AionLogoMark />
             <span className='app-titlebar__brand-text truncate'>{mobileCenterTitle}</span>
           </span>
         ) : (
           <span className='app-titlebar__brand-desktop inline-flex items-center gap-10px min-w-0'>
-            <WorkspaceIdentityPanel />
-            <span className='shrink-0 text-t-tertiary'>|</span>
+            <AionLogoMark />
             <span className='shrink-0'>{appTitle}</span>
           </span>
         )}
       </div>
       <div ref={toolbarRef} className='app-titlebar__toolbar'>
-        {!layout?.isMobile && !showIdentityPanel ? <EditionModeSwitcher variant='compact' /> : null}
+        {!layout?.isMobile ? <EditionModeSwitcher variant='compact' /> : null}
         <EnterpriseNotificationCenter enabled={showNotificationCenter} />
         {showNewConversationButton && (
           <button

@@ -8,10 +8,7 @@ import type { IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
 import { useExtensionSettingsTabs } from '@/renderer/hooks/extensions/useExtensionSettingsTabs';
 import {
   Communication,
-  Computer,
   Earth,
-  Gemini,
-  Info,
   LinkCloud,
   Puzzle,
   Robot,
@@ -21,7 +18,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
-import { BUILTIN_TAB_IDS } from './SettingsSider';
+import { BUILTIN_TAB_IDS, resolveSettingsTabAnchor } from './SettingsSider';
 import './settings.css';
 
 interface SettingsPageWrapperProps {
@@ -36,7 +33,6 @@ type TranslateFn = (key: string, options?: { defaultValue?: string }) => string;
 
 export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): NavItem[] {
   const builtinMap: Record<string, NavItem> = {
-    gemini: { id: 'gemini', label: t('settings.gemini'), icon: <Gemini theme='outline' size='16' />, path: 'gemini' },
     model: { id: 'model', label: t('settings.model'), icon: <LinkCloud theme='outline' size='16' />, path: 'model' },
     assistants: {
       id: 'assistants',
@@ -57,12 +53,6 @@ export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): 
       path: 'skills-hub',
     },
     tools: { id: 'tools', label: t('settings.tools'), icon: <Toolkit theme='outline' size='16' />, path: 'tools' },
-    display: {
-      id: 'display',
-      label: t('settings.display'),
-      icon: <Computer theme='outline' size='16' />,
-      path: 'display',
-    },
     webui: {
       id: 'webui',
       label: t('settings.webui'),
@@ -70,7 +60,6 @@ export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): 
       path: 'webui',
     },
     system: { id: 'system', label: t('settings.system'), icon: <System theme='outline' size='16' />, path: 'system' },
-    about: { id: 'about', label: t('settings.about'), icon: <Info theme='outline' size='16' />, path: 'about' },
   };
 
   return BUILTIN_TAB_IDS.map((id) => builtinMap[id]);
@@ -130,10 +119,11 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
         continue;
       }
       const map = tab.position.placement === 'before' ? beforeMap : afterMap;
-      let list = map.get(tab.position.anchor);
+      const anchor = resolveSettingsTabAnchor(tab.position.anchor);
+      let list = map.get(anchor);
       if (!list) {
         list = [];
-        map.set(tab.position.anchor, list);
+        map.set(anchor, list);
       }
       list.push(tab);
     }
@@ -170,6 +160,27 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
   }, [isDesktop, t, extensionTabs, resolveExtTabName]);
 
   const contentClass = classNames('settings-page-content mx-auto w-full md:max-w-1024px', contentClassName);
+  const renderTopNavItem = (item: NavItem, mobile = false) => {
+    const itemRoute = `/settings/${item.path}`;
+    const active = pathname === itemRoute;
+
+    return (
+      <button
+        key={item.path}
+        type='button'
+        className={classNames(mobile ? 'settings-mobile-top-nav__item' : 'settings-desktop-top-nav__item', {
+          'settings-mobile-top-nav__item--active': mobile && active,
+          'settings-desktop-top-nav__item--active': !mobile && active,
+        })}
+        onClick={() => {
+          void navigate(itemRoute, { replace: true });
+        }}
+      >
+        <span className={mobile ? 'settings-mobile-top-nav__icon' : 'settings-desktop-top-nav__icon'}>{item.icon}</span>
+        <span className={mobile ? 'settings-mobile-top-nav__label' : 'settings-desktop-top-nav__label'}>{item.label}</span>
+      </button>
+    );
+  };
 
   if (isWorkspaceScoped) {
     return (
@@ -190,27 +201,16 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
         header={
           isMobile ? (
             <div className='settings-mobile-top-nav'>
-              {menuItems.map((item) => {
-                const itemRoute = `/settings/${item.path}`;
-                const active = pathname === itemRoute;
-                return (
-                  <button
-                    key={item.path}
-                    type='button'
-                    className={classNames('settings-mobile-top-nav__item', {
-                      'settings-mobile-top-nav__item--active': active,
-                    })}
-                    onClick={() => {
-                      void navigate(itemRoute, { replace: true });
-                    }}
-                  >
-                    <span className='settings-mobile-top-nav__icon'>{item.icon}</span>
-                    <span className='settings-mobile-top-nav__label'>{item.label}</span>
-                  </button>
-                );
-              })}
+              {menuItems.map((item) => renderTopNavItem(item, true))}
             </div>
-          ) : null
+          ) : (
+            <div className='settings-desktop-top-nav'>
+              <div className='settings-desktop-top-nav__title'>
+                {t('nav.globalSettings', { defaultValue: '全局设置' })}
+              </div>
+              <div className='settings-desktop-top-nav__grid'>{menuItems.map((item) => renderTopNavItem(item))}</div>
+            </div>
+          )
         }
       >
         {children}

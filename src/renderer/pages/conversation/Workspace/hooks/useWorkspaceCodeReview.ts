@@ -58,7 +58,7 @@ export function useWorkspaceCodeReview(): UseWorkspaceCodeReviewResult {
           { regex: /\bvar\b/g, severity: 'warning', title: '使用 var 声明', desc: '建议使用 const/let 替代 var 以获得安全的块级作用域' },
           { regex: /\.innerHTML\s*=/g, severity: 'critical', title: 'XSS安全风险', desc: '直接赋值 innerHTML 存在 XSS 安全风险，建议使用 textContent 或 DOMPurify' },
           { regex: /setTimeout\([^,]+,\s*0\)/g, severity: 'warning', title: 'setTimeout(fn, 0) 反模式', desc: 'setTimeout(fn, 0) 是 Hack 写法，建议使用 Promise 微任务或 requestAnimationFrame 替代' },
-          { regex: /\!\s*important/g, severity: 'info', title: 'CSS !important', desc: '使用 !important 覆盖样式可能导致维护困难' },
+          { regex: /!\s*important/g, severity: 'info', title: 'CSS !important', desc: '使用 !important 覆盖样式可能导致维护困难' },
         ];
 
         for (const { file, diff } of diffs) {

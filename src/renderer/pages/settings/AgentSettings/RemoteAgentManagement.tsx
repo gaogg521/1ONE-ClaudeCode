@@ -219,7 +219,7 @@ const RemoteAgentFormModal: React.FC<{
         style={{ maxWidth: '92vw', borderRadius: 16 }}
         contentStyle={{ background: 'var(--bg-1)', borderRadius: 16, padding: '20px 24px 16px', overflow: 'auto' }}
         footer={{
-          render: () => <Button onClick={handleCancelPairing}>{t('settings.remoteAgent.pendingCancel')}</Button>,
+          render: () => <Button className='settings-pill-button' onClick={handleCancelPairing}>{t('settings.remoteAgent.pendingCancel')}</Button>,
         }}
         afterClose={() => {
           stopPolling();
@@ -227,7 +227,7 @@ const RemoteAgentFormModal: React.FC<{
           form.resetFields();
         }}
       >
-        <div className='flex flex-col items-center gap-16px py-32px'>
+        <div className='settings-modal-surface flex flex-col items-center gap-16px py-32px px-16px'>
           {pairingState === 'pending' ? (
             <>
               <Spin size={32} />
@@ -287,7 +287,7 @@ const RemoteAgentFormModal: React.FC<{
         form.resetFields();
       }}
     >
-      <div className='flex flex-col gap-16px pt-8px pb-20px'>
+      <div className='settings-modal-surface flex flex-col gap-16px pt-16px pb-20px px-16px'>
         {/* Avatar + Name row */}
         <div className='flex items-center gap-12px'>
           <EmojiPicker onChange={(emoji) => setAvatar(emoji)}>
@@ -370,6 +370,7 @@ const RemoteAgentFormModal: React.FC<{
             icon={<Speed theme='outline' size='14' />}
             loading={testing}
             onClick={handleTestConnection}
+          className='settings-pill-button'
           >
             {t('settings.remoteAgent.testConnection')}
           </Button>
@@ -384,7 +385,7 @@ const RemoteAgentManagement: React.FC = () => {
   const { data: agents, mutate } = useSWR('remote-agents.list', () => ipcBridge.remoteAgent.list.invoke());
   const [modalVisible, setModalVisible] = useState(false);
   const [editAgent, setEditAgent] = useState<RemoteAgentConfig>();
-  const remoteActionButtonClassName = '!rounded-10px !px-10px';
+  const remoteActionButtonClassName = 'settings-pill-button !px-10px';
 
   const handleAdd = useCallback(() => {
     setEditAgent(undefined);
@@ -418,8 +419,8 @@ const RemoteAgentManagement: React.FC = () => {
 
   return (
     <div className='flex flex-col gap-16px py-16px'>
-      <div className='flex items-center justify-between'>
-        <span className='text-12px text-t-secondary px-16px'>
+      <div className='settings-inline-section-head flex items-center justify-between px-16px'>
+        <span className='settings-content-summary'>
           {t('settings.agentManagement.remoteAgentsDescription')}
         </span>
         <Button
@@ -428,14 +429,14 @@ const RemoteAgentManagement: React.FC = () => {
           size='small'
           icon={<Plus size='16' />}
           onClick={handleAdd}
-          className='rd-100px border-1 border-solid border-[var(--color-border-2)] h-34px px-14px text-t-secondary hover:text-t-primary'
+          className='settings-pill-button rd-100px border-1 border-solid border-[var(--color-border-2)] h-34px px-14px text-t-secondary hover:text-t-primary'
         >
           {t('settings.remoteAgent.add')}
         </Button>
       </div>
 
       {!agents || agents.length === 0 ? (
-        <div className='flex flex-col items-center gap-12px py-48px'>
+        <div className='settings-empty-state flex flex-col items-center gap-12px py-48px mx-16px'>
           <Typography.Text type='secondary' className='text-14px'>
             {t('settings.remoteAgent.emptyTitle')}
           </Typography.Text>
@@ -445,7 +446,7 @@ const RemoteAgentManagement: React.FC = () => {
             size='small'
             icon={<Plus size='16' />}
             onClick={handleAdd}
-            className='rd-100px border-1 border-solid border-[var(--color-border-2)] h-34px px-14px text-t-secondary hover:text-t-primary'
+            className='settings-pill-button rd-100px border-1 border-solid border-[var(--color-border-2)] h-34px px-14px text-t-secondary hover:text-t-primary'
           >
             {t('settings.remoteAgent.emptyAction')}
           </Button>
@@ -455,7 +456,7 @@ const RemoteAgentManagement: React.FC = () => {
           {agents.map((agent) => (
             <div
               key={agent.id}
-              className='flex min-h-[214px] flex-col rounded-12px border border-solid border-[var(--color-border-2)] bg-[var(--color-bg-2)] p-14px transition-colors hover:border-[var(--color-border-3)]'
+              className='settings-card-grid-item flex min-h-[214px] flex-col p-14px'
             >
               <div className='mb-12px flex justify-center'>
                 <Avatar

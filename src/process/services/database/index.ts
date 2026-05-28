@@ -17,6 +17,28 @@ import {
   initSchema,
   setDatabaseVersion,
 } from './schema';
+import { quarantineCorruptedDatabase, removeSqliteSidecars } from './recovery';
+
+function isNativeModuleLoadError(message: string): boolean {
+  return (
+    message.includes('NODE_MODULE_VERSION') ||
+    message.includes('was compiled against') ||
+    message.includes('dlopen')
+  );
+}
+
+function isSqliteCorruptionError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  if (isNativeModuleLoadError(msg)) {
+    return false;
+  }
+  return (
+    msg.includes('database disk image is malformed') ||
+    msg.includes('file is not a database') ||
+    msg.includes('database corruption') ||
+    msg.includes('SQLiteError: database disk image is malformed')
+  );
+}
 import type {
   IAuthIdentityRow,
   IAuthProviderRow,
@@ -100,6 +122,8 @@ export class OneCmdDatabase {
   private readonly defaultUserId = 'system_default_user';
   private readonly systemPasswordPlaceholder = '';
 
+  private static createInFlight: Promise<OneCmdDatabase> | null = null;
+
   private constructor(db: ISqliteDriver) {
     this.db = db;
   }
@@ -109,67 +133,56 @@ export class OneCmdDatabase {
    * This is the only way to obtain an instance — the constructor is private.
    */
   static async create(dbPath: string): Promise<OneCmdDatabase> {
+    if (OneCmdDatabase.createInFlight) {
+      return OneCmdDatabase.createInFlight;
+    }
+
+    OneCmdDatabase.createInFlight = OneCmdDatabase.createOnce(dbPath).finally(() => {
+      OneCmdDatabase.createInFlight = null;
+    });
+    return OneCmdDatabase.createInFlight;
+  }
+
+  private static async createOnce(dbPath: string): Promise<OneCmdDatabase> {
     const dir = path.dirname(dbPath);
     ensureDirectory(dir);
 
-    // Attempt normal initialization
+    let driver: ISqliteDriver | null = null;
     try {
-      const driver = await createDriver(dbPath);
+      driver = await createDriver(dbPath);
       const instance = new OneCmdDatabase(driver);
       instance.initialize();
+      driver = null;
       return instance;
     } catch (error) {
-      // Distinguish driver-level errors (native module mismatch, missing .node file)
-      // from actual database corruption. Driver errors must NOT trigger recovery —
-      // replacing a healthy database because of a build tooling issue causes data loss.
+      if (driver) {
+        try {
+          driver.close();
+        } catch {
+          // ignore close errors during recovery
+        }
+        driver = null;
+      }
+
       const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes('NODE_MODULE_VERSION') || msg.includes('was compiled against') || msg.includes('dlopen')) {
+      if (isNativeModuleLoadError(msg)) {
         console.error(
           '[Database] Native module load error — will NOT attempt recovery (database is likely intact):',
           msg
         );
         throw error;
       }
+      if (!isSqliteCorruptionError(error)) {
+        throw error;
+      }
       console.error('[Database] Failed to initialize, attempting recovery...', error);
     }
 
-    // Recovery: backup corrupted file and start fresh.
-    // IMPORTANT: also remove the WAL (-wal) and shared-memory (-shm) sidecar files.
-    // If they are left behind, SQLite will try to apply the stale WAL to the new
-    // empty database on the next open, which causes another initialization failure
-    // and triggers an infinite recovery loop.
-    if (fs.existsSync(dbPath)) {
-      const backupPath = `${dbPath}.backup.${Date.now()}`;
-      try {
-        fs.renameSync(dbPath, backupPath);
-        console.log(`[Database] Backed up corrupted database to: ${backupPath}`);
-      } catch {
-        try {
-          fs.unlinkSync(dbPath);
-          console.log('[Database] Deleted corrupted database file');
-        } catch (e2) {
-          throw new Error('Database is corrupted and cannot be recovered. Please manually delete: ' + dbPath, {
-            cause: e2,
-          });
-        }
-      }
-    }
-    // Remove stale WAL sidecar files so SQLite starts with a clean slate
-    for (const suffix of ['-wal', '-shm']) {
-      const sidecar = dbPath + suffix;
-      if (fs.existsSync(sidecar)) {
-        try {
-          fs.unlinkSync(sidecar);
-          console.log(`[Database] Removed stale WAL sidecar: ${sidecar}`);
-        } catch (e) {
-          console.warn(`[Database] Could not remove sidecar ${sidecar}:`, e);
-        }
-      }
-    }
+    await quarantineCorruptedDatabase(dbPath);
+    removeSqliteSidecars(dbPath);
 
-    // Retry with fresh file
-    const driver = await createDriver(dbPath);
-    const instance = new OneCmdDatabase(driver);
+    const freshDriver = await createDriver(dbPath);
+    const instance = new OneCmdDatabase(freshDriver);
     instance.initialize();
     return instance;
   }
@@ -2198,10 +2211,15 @@ function resolveDbPath(): string {
 
 export function getDatabase(): Promise<OneCmdDatabase> {
   if (!dbInstancePromise) {
-    dbInstancePromise = OneCmdDatabase.create(resolveDbPath()).then((db) => {
-      dbResolved = db;
-      return db;
-    });
+    dbInstancePromise = OneCmdDatabase.create(resolveDbPath())
+      .then((db) => {
+        dbResolved = db;
+        return db;
+      })
+      .catch((error) => {
+        dbInstancePromise = null;
+        throw error;
+      });
   }
   return dbInstancePromise;
 }

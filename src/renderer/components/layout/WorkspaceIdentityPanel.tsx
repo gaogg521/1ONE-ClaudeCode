@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -13,16 +13,18 @@ import { useNavigate } from 'react-router-dom';
 import type { WebuiManagementMode } from '@/common/config/webuiEnterpriseConfig';
 import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import type { WorkspaceUserProfile } from '@/common/types/workspaceProfile';
+import { ANONYMOUS_WORKSPACE_USER_ID } from '@/common/types/workspaceProfile';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useWorkspaceUserProfile } from '@/renderer/hooks/enterprise/useWorkspaceUserProfile';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import { setPostLoginRedirect } from '@/renderer/utils/postLoginRedirect';
+import { openAdminConsole } from '@/renderer/utils/openAdminConsole';
 import styles from './WorkspaceIdentityPanel.module.css';
 
 type WorkspaceIdentityPanelProps = {
   compact?: boolean;
+  surface?: 'pill' | 'card';
 };
 
 function resolveRoleLabel(role: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
@@ -43,10 +45,39 @@ function buildOrgLine(
   const tenant = profile.tenantName ?? profile.tenantId;
   const editionLabel =
     managementMode === 'enterprise'
-      ? t('settings.workspaceIdentity.editionEnterprise', { defaultValue: '企业团队版' })
+      ? t('settings.workspaceIdentity.editionEnterprise', { defaultValue: '1ONE Code 企业版' })
       : t('settings.workspaceIdentity.personalView', { defaultValue: '个人版视图' });
   return `${tenant} · ${editionLabel}`;
 }
+
+const GuestProfileMenu: React.FC<{
+  onJoinEnterprise: () => void;
+  onAdminLogin: () => void;
+}> = ({ onJoinEnterprise, onAdminLogin }) => {
+  const { t } = useTranslation();
+
+  return (
+    <Menu className={styles.menu}>
+      <div className={styles.menuHeader}>
+        <Typography.Text bold>
+          {t('settings.workspaceIdentity.guestTitle', { defaultValue: '访客模式' })}
+        </Typography.Text>
+        <Typography.Paragraph type='secondary' className={styles.menuSub}>
+          {t('settings.workspaceIdentity.guestDesc', {
+            defaultValue: '当前为单机个人版，可直接使用会话与工作区。加入团队后可使用企业协作能力。',
+          })}
+        </Typography.Paragraph>
+      </div>
+      <Divider margin='8px' />
+      <Menu.Item key='join' onClick={onJoinEnterprise}>
+        {t('settings.workspaceIdentity.guestJoinEnterprise', { defaultValue: '登录 / 加入团队' })}
+      </Menu.Item>
+      <Menu.Item key='admin-login' onClick={onAdminLogin}>
+        {t('settings.workspaceIdentity.guestAdminLogin', { defaultValue: 'WebUI 管理员登录' })}
+      </Menu.Item>
+    </Menu>
+  );
+};
 
 const ProfileMenu: React.FC<{
   profile: WorkspaceUserProfile;
@@ -127,7 +158,7 @@ const ProfileMenu: React.FC<{
           </Menu.Item>
         ) : (
           <Menu.Item key='enterprise' onClick={onSwitchEnterprise}>
-            {t('settings.workspaceIdentity.switchEnterpriseEdition', { defaultValue: '切换到企业团队版' })}
+            {t('settings.workspaceIdentity.switchEnterpriseEdition', { defaultValue: '切换到1ONE Code 企业版' })}
           </Menu.Item>
         )
       ) : (
@@ -150,7 +181,7 @@ const ProfileMenu: React.FC<{
   );
 };
 
-const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact = false }) => {
+const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact = false, surface = 'pill' }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const layout = useLayoutContext();
@@ -172,12 +203,10 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
         if (next === 'enterprise') {
           if (isDesktop && !enterpriseMode.hasJoinedEnterprise) {
             void navigate('/enterprise/join');
-            await enterpriseMode.openEnterpriseLoginInBrowser();
             return;
           }
           if (auth.status !== 'authenticated') {
-            setPostLoginRedirect('/sessions');
-            void navigate(`/login?redirect=${encodeURIComponent('/sessions')}`);
+            void navigate('/enterprise/join');
             return;
           }
         }
@@ -218,10 +247,23 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
     }
   };
 
+  const isGuest = profile.userId === ANONYMOUS_WORKSPACE_USER_ID;
+
+  const handleGuestJoin = () => {
+    void navigate('/enterprise/join');
+  };
+
+  const handleGuestAdminLogin = () => {
+    void navigate('/login');
+  };
+
   const handleLogout = async () => {
+    if (isGuest) {
+      return;
+    }
     await auth.logout();
     if (!isDesktop) {
-      void navigate('/login');
+      void navigate('/sessions');
     }
   };
 
@@ -238,15 +280,28 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
   };
 
   const handleOpenAdmin = async () => {
-    const result = await enterpriseMode.openEnterpriseAdminInBrowser();
+    const result = await openAdminConsole({
+      navigate: (path) => {
+        void navigate(path);
+      },
+      openEnterpriseAdminInBrowser: enterpriseMode.openEnterpriseAdminInBrowser,
+    });
     if (result === 'webui_not_running') {
       void navigate('/settings/webui');
     }
   };
 
-  const orgLine = buildOrgLine(profile, enterpriseMode.managementMode, t);
+  const orgLine = isGuest
+    ? t('settings.workspaceIdentity.guestEdition', { defaultValue: '个人版 · 未登录' })
+    : buildOrgLine(profile, enterpriseMode.managementMode, t);
 
-  const droplist = (
+  const displayName = isGuest
+    ? t('settings.workspaceIdentity.guestName', { defaultValue: '访客' })
+    : profile.username;
+
+  const droplist = isGuest ? (
+    <GuestProfileMenu onJoinEnterprise={handleGuestJoin} onAdminLogin={handleGuestAdminLogin} />
+  ) : (
     <ProfileMenu
       profile={profile}
       managementMode={enterpriseMode.managementMode}
@@ -272,17 +327,24 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
       <Dropdown droplist={droplist} trigger='click' position='bl'>
         <button
           type='button'
-          className={classNames(styles.trigger, compact && styles.triggerCompact, layout?.isMobile && styles.triggerMobile)}
+          className={classNames(
+            styles.trigger,
+            compact && styles.triggerCompact,
+            layout?.isMobile && styles.triggerMobile,
+            surface === 'card' && styles.triggerCard
+          )}
           aria-label={t('settings.workspaceIdentity.openMenu', { defaultValue: '账户与组织' })}
         >
           <Avatar size={compact ? 24 : 28} className={styles.avatar}>
-            {avatarSrc ? <img src={avatarSrc} alt='' /> : profile.username.slice(0, 1).toUpperCase()}
+            {avatarSrc ? <img src={avatarSrc} alt='' /> : displayName.slice(0, 1).toUpperCase()}
           </Avatar>
           {!compact ? (
-            <span className={styles.meta}>
-              <span className={styles.name}>{profile.username}</span>
-              <span className={styles.org}>{orgLine}</span>
-              {profile.orgUnitPath ? <span className={styles.dept}>{profile.orgUnitPath}</span> : null}
+            <span className={classNames(styles.meta, surface === 'card' && styles.metaCard)}>
+              <span className={classNames(styles.name, surface === 'card' && styles.nameCard)}>{displayName}</span>
+              <span className={classNames(styles.org, surface === 'card' && styles.orgCard)}>{orgLine}</span>
+              {!isGuest && profile.orgUnitPath ? (
+                <span className={classNames(styles.dept, surface === 'card' && styles.deptCard)}>{profile.orgUnitPath}</span>
+              ) : null}
             </span>
           ) : null}
         </button>

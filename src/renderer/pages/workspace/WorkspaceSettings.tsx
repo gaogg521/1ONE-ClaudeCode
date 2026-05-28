@@ -11,6 +11,8 @@ const WorkspaceSettings: React.FC<{ children: React.ReactNode }> = ({ children }
   const location = useLocation();
 
   const title = useMemo(() => {
+    if (location.pathname.includes('/workspace/settings/projects'))
+      return t('workspace.settings.projects.title', { defaultValue: '项目目录' });
     if (location.pathname.includes('/workspace/settings/model')) return t('settings.model', { defaultValue: '模型' });
     if (location.pathname.includes('/workspace/settings/assistants'))
       return t('settings.assistants', { defaultValue: '助手' });
@@ -47,6 +49,13 @@ const WorkspaceSettings: React.FC<{ children: React.ReactNode }> = ({ children }
       </div>
 
       <div className='flex flex-wrap gap-8px mb-12px'>
+        <Button
+          size='small'
+          type={location.pathname.includes('/workspace/settings/projects') ? 'primary' : 'secondary'}
+          onClick={() => void navigate('/workspace/settings/projects')}
+        >
+          {t('workspace.settings.projects.title', { defaultValue: '项目目录' })}
+        </Button>
         <Button
           size='small'
           type={location.pathname.includes('/workspace/settings/model') ? 'primary' : 'secondary'}

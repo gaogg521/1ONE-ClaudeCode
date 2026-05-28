@@ -84,24 +84,22 @@ const AddSkillsModal: React.FC<AddSkillsModalProps> = ({
       maskStyle={{ zIndex: 2490 }}
       autoFocus={false}
     >
-      <div className='flex flex-col h-[500px]'>
+      <div className='settings-modal-surface flex flex-col h-[500px] p-16px'>
         {/* Source tabs + actions */}
         <div className='flex items-center justify-between mb-16px shrink-0 gap-16px'>
           <div className='flex-1 overflow-x-auto custom-scrollbar pb-4px'>
-            <div className='flex items-center gap-8px min-w-max'>
+            <div className='settings-modal-chipbar flex items-center gap-8px min-w-max'>
               {externalSources.map((source) => {
                 const isActive = activeSourceTab === source.source;
                 return (
                   <button
                     key={source.source}
                     type='button'
-                    className={`outline-none cursor-pointer px-12px py-6px text-12px rd-[100px] transition-all duration-300 flex items-center gap-6px border ${isActive ? 'bg-primary-6 border-primary-6 text-white shadow-sm font-medium' : 'bg-fill-2 border-transparent text-t-secondary hover:bg-fill-3 hover:text-t-primary'}`}
+                    className={`settings-modal-chip outline-none cursor-pointer ${isActive ? 'settings-modal-chip--active' : ''}`}
                     onClick={() => setActiveSourceTab(source.source)}
                   >
                     {source.name}
-                    <span
-                      className={`px-6px py-1px rd-[100px] text-10px flex items-center justify-center transition-colors ${isActive ? 'bg-white/20 text-white' : 'bg-fill-3 text-t-tertiary border border-border-1'}`}
-                    >
+                    <span className='settings-modal-chip-count'>
                       {source.skills.length}
                     </span>
                   </button>
@@ -139,7 +137,7 @@ const AddSkillsModal: React.FC<AddSkillsModalProps> = ({
         />
 
         {/* Skill list */}
-        <div className='flex-1 overflow-y-auto custom-scrollbar bg-fill-1 rounded-8px p-12px'>
+        <div className='settings-modal-list flex-1 overflow-y-auto custom-scrollbar p-12px'>
           {externalSkillsLoading ? (
             <div className='h-full flex items-center justify-center text-t-tertiary'>
               {t('common.loading', { defaultValue: 'Loading...' })}
@@ -150,10 +148,7 @@ const AddSkillsModal: React.FC<AddSkillsModalProps> = ({
                 {filteredExternalSkills.map((skill) => {
                   const isAdded = customSkills.includes(skill.name);
                   return (
-                    <div
-                      key={skill.directory}
-                      className='flex items-start gap-12px p-12px bg-base border border-transparent hover:border-border-2 rounded-8px transition-colors shadow-sm'
-                    >
+                    <div key={skill.directory} className='settings-card-grid-item flex items-start gap-12px p-12px'>
                       <div className='w-32px h-32px rounded-8px bg-fill-2 border border-border-1 flex items-center justify-center font-bold text-14px text-t-secondary uppercase shrink-0 mt-2px'>
                         {skill.name.charAt(0)}
                       </div>
@@ -177,7 +172,7 @@ const AddSkillsModal: React.FC<AddSkillsModalProps> = ({
                           <Button
                             size='small'
                             disabled
-                            className='rounded-[100px] bg-fill-2 text-t-tertiary border-none'
+                            className='settings-pill-button bg-fill-2 text-t-tertiary border-none'
                           >
                             {t('common.added', { defaultValue: 'Added' })}
                           </Button>
@@ -185,7 +180,7 @@ const AddSkillsModal: React.FC<AddSkillsModalProps> = ({
                           <Button
                             size='small'
                             type='primary'
-                            className='rounded-[100px]'
+                            className='settings-pill-button'
                             onClick={() => {
                               handleAddFoundSkills([skill]);
                             }}
@@ -200,12 +195,12 @@ const AddSkillsModal: React.FC<AddSkillsModalProps> = ({
                 })}
               </div>
             ) : (
-              <div className='h-full flex items-center justify-center text-t-tertiary'>
+              <div className='settings-empty-state h-full flex items-center justify-center text-t-tertiary'>
                 {t('settings.skillsHub.noSearchResults', { defaultValue: 'No skills found' })}
               </div>
             )
           ) : (
-            <div className='h-full flex items-center justify-center text-t-tertiary'>
+            <div className='settings-empty-state h-full flex items-center justify-center text-t-tertiary'>
               {t('settings.noExternalSources', { defaultValue: 'No external skill sources discovered' })}
             </div>
           )}

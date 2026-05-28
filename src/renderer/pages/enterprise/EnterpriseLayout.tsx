@@ -24,6 +24,7 @@ import {
   useEnterpriseRuntime,
 } from '@/renderer/hooks/enterprise/useEnterpriseRuntime';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { ENTERPRISE_JOIN_PATH } from '@/renderer/pages/enterprise/paths';
 import { EnterpriseGateProvider } from '@/renderer/pages/settings/enterpriseGateContext';
 import { getEnterpriseNavItemByPath } from '@/renderer/pages/enterprise/enterpriseNav';
@@ -138,7 +139,7 @@ const EnterpriseLayoutContent: React.FC = () => {
 
 const EnterpriseLayout: React.FC = () => {
   const location = useLocation();
-  const { loading: enterpriseModeLoading, hasJoinedEnterprise } = useWebuiEnterpriseMode();
+  const { loading: enterpriseModeLoading, hasJoinedEnterprise, effectiveRole } = useWebuiEnterpriseMode();
 
   if (enterpriseModeLoading) {
     return (
@@ -151,7 +152,7 @@ const EnterpriseLayout: React.FC = () => {
     );
   }
 
-  if (!hasJoinedEnterprise) {
+  if (!hasJoinedEnterprise && !isEnterpriseAdminRole(effectiveRole)) {
     return <Navigate to={ENTERPRISE_JOIN_PATH} replace />;
   }
 

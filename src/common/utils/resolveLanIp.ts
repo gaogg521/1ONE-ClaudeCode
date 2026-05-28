@@ -27,7 +27,7 @@ const VIRTUAL_INTERFACE_PATTERNS: RegExp[] = [
   /蓝牙/i,
   /wi-?fi\s*direct/i,
   /wireless.*\*/i,
-  /本地连接\s*[\*\d]/,
+  /本地连接\s*[*\d]/,
   /loopback/i,
   /\bppp\d*/i,
   /\btun\d*/i,

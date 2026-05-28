@@ -227,14 +227,14 @@ const ImageGenerationSettingsSection: React.FC<{
 
   return (
     <div
-      className='px-[12px] md:px-[32px] py-[24px] bg-2 rd-12px md:rd-16px border border-border-2'
+      className='settings-content-panel'
       // Electron frameless windows can inherit a draggable region; ensure form controls are interactive.
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       <div className='flex items-center justify-between mb-16px'>
         <div className='flex flex-col gap-4px'>
-          <span className='text-14px text-t-primary'>{t('settings.imageGeneration')}</span>
-          <span className='text-13px text-t-secondary'>{'配置 AI 图像生成服务，支持 DALL-E、Stability AI 等提供商。'}</span>
+          <span className='settings-card-header__title'>{t('settings.imageGeneration')}</span>
+          <span className='settings-content-summary'>{'配置 AI 图像生成服务，支持 DALL-E、Stability AI 等提供商。'}</span>
         </div>
         <div className='flex items-center gap-8px'>
           {builtinImageGenServer?.enabled && builtinImageGenServer.name && (
@@ -296,9 +296,9 @@ const ImageGenerationSettingsSection: React.FC<{
 
         {/* LiteLLM hint — shown for custom preset */}
         {selectedPresetId === 'custom' && (
-          <div className='mt-4px p-12px rd-8px bg-[rgba(var(--primary-6),0.06)] border border-[rgba(var(--primary-6),0.15)] text-12px text-t-secondary space-y-6px'>
-            <div className='font-medium text-t-primary mb-2px'>💡 使用 LiteLLM 代理时的填写格式</div>
-            <div className='font-mono bg-[rgba(0,0,0,0.04)] rd-4px p-8px space-y-2px'>
+          <div className='settings-note-card mt-4px text-12px space-y-6px'>
+            <div className='settings-note-card__title'>💡 使用 LiteLLM 代理时的填写格式</div>
+            <div className='settings-note-card__code font-mono space-y-2px'>
               <div><span className='text-t-tertiary'>Base URL: </span>https://your-litellm.com</div>
               <div><span className='text-t-tertiary'>API Key:  </span>sk-your-litellm-key</div>
               <div><span className='text-t-tertiary'>模型:     </span>dall-e-3</div>
@@ -386,11 +386,11 @@ const SpeechToTextSettingsSection: React.FC<{
   );
 
   return (
-    <div className='px-[12px] md:px-[32px] py-[24px] bg-2 rd-12px md:rd-16px border border-border-2'>
+    <div className='settings-content-panel'>
       <div className='flex items-center justify-between gap-12px mb-8px'>
         <div className='flex flex-col gap-4px'>
-          <span className='text-14px text-t-primary'>{t('settings.speechToText')}</span>
-          <span className='text-13px text-t-secondary'>{t('settings.speechToTextDescription')}</span>
+          <span className='settings-card-header__title'>{t('settings.speechToText')}</span>
+          <span className='settings-content-summary'>{t('settings.speechToTextDescription')}</span>
         </div>
         <Switch
           checked={config.enabled}
@@ -505,9 +505,9 @@ const SpeechToTextSettingsSection: React.FC<{
             <Form.Item label={renderSpeechToTextFieldLabel('settings.speechToTextLanguage', 'optional')}>
               <Input value={config.custom?.language} onChange={(value) => handleCustomChange('language', value)} />
             </Form.Item>
-            <div className='p-12px rd-8px bg-[rgba(var(--primary-6),0.06)] border border-[rgba(var(--primary-6),0.15)] text-12px text-t-secondary space-y-6px'>
-              <div className='font-medium text-t-primary mb-2px'>💡 使用 LiteLLM 代理时的填写格式</div>
-              <div className='font-mono bg-[rgba(0,0,0,0.04)] rd-4px p-8px space-y-2px'>
+            <div className='settings-note-card text-12px space-y-6px'>
+              <div className='settings-note-card__title'>💡 使用 LiteLLM 代理时的填写格式</div>
+              <div className='settings-note-card__code font-mono space-y-2px'>
                 <div><span className='text-t-tertiary'>Base URL: </span>https://your-litellm.com/v1</div>
                 <div><span className='text-t-tertiary'>API Key:  </span>sk-your-litellm-key</div>
                 <div><span className='text-t-tertiary'>模型:     </span>whisper-1</div>
@@ -683,14 +683,14 @@ const ModalMcpManagementSection: React.FC<{
 
   return (
     <div className='flex flex-col gap-16px min-h-0'>
-      <div className='flex gap-8px items-center justify-between'>
-        <div className='text-14px text-t-primary'>{t('settings.mcpSettings')}</div>
+      <div className='settings-inline-section-head flex gap-8px items-center justify-between'>
+        <div className='settings-content-section-title !mb-0'>{t('settings.mcpSettings')}</div>
         <div>{renderAddButton()}</div>
       </div>
 
       <div className='flex-1 min-h-0'>
         {visibleMcpServers.length === 0 && extensionMcpServers.length === 0 ? (
-          <div className='py-24px text-center text-t-secondary text-14px border border-dashed border-border-2 rd-12px'>
+          <div className='settings-empty-state'>
             {t('settings.mcpNoServersFound')}
           </div>
         ) : (
@@ -1012,7 +1012,7 @@ const ToolsModalContent: React.FC = () => {
       <AionScrollArea className='flex-1 min-h-0 pb-16px' disableOverflow={isPageMode}>
         <div className='space-y-16px'>
           {/* MCP 工具配置 */}
-          <div className='px-[12px] md:px-[32px] py-[24px] bg-2 rd-12px md:rd-16px flex flex-col min-h-0 border border-border-2'>
+          <div className='settings-content-panel flex flex-col min-h-0'>
             <div className='flex-1 min-h-0'>
               <AionScrollArea
                 className={classNames('h-full', isPageMode && 'overflow-visible')}

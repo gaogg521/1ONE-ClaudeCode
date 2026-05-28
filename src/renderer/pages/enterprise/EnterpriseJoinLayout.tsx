@@ -7,38 +7,27 @@
 import React, { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { ENTERPRISE_WORKSPACE_PATH } from '@/common/auth/enterpriseRoles';
-import Titlebar from '@/renderer/components/layout/Titlebar';
-import EditionModeSwitcher from '@/renderer/components/layout/EditionModeSwitcher';
+import AppLoader from '@/renderer/components/layout/AppLoader';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
-import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import EnterpriseOnboarding from '@/renderer/pages/enterprise/EnterpriseOnboarding';
 
-/** 企业版入口（未加入）：登录 + 邀请码，不是管理后台。 */
+/** 企业版入口（未加入）：在 PersonalShell 内展示，保留侧栏与新建会话。 */
 const EnterpriseJoinLayout: React.FC = () => {
-  const { status: authStatus } = useAuth();
   const { loading, hasJoinedEnterprise, refreshEnterpriseContext } = useWebuiEnterpriseMode();
 
   useEffect(() => {
     void refreshEnterpriseContext();
   }, [refreshEnterpriseContext]);
 
-  if (!loading && hasJoinedEnterprise) {
+  if (loading) {
+    return <AppLoader />;
+  }
+
+  if (hasJoinedEnterprise) {
     return <Navigate to={ENTERPRISE_WORKSPACE_PATH} replace />;
   }
 
-  return (
-  <div className='app-shell flex flex-col size-full min-h-0 bg-1'>
-    <Titlebar workspaceAvailable={false} />
-    {authStatus !== 'authenticated' ? (
-      <div className='px-16px pt-8px'>
-        <EditionModeSwitcher variant='bar' />
-      </div>
-    ) : null}
-    <div className='flex-1 overflow-y-auto'>
-      <EnterpriseOnboarding />
-    </div>
-  </div>
-  );
+  return <EnterpriseOnboarding />;
 };
 
 export default EnterpriseJoinLayout;

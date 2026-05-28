@@ -105,16 +105,16 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
   const needsLogin = (server.transport.type === 'http' || server.transport.type === 'sse') && oauthStatus?.needsLogin;
 
   return (
-    <div className='flex items-center justify-between w-full min-w-0 gap-8px'>
+    <div className='settings-card-header flex items-center justify-between w-full min-w-0 gap-8px'>
       {/* Left: name + badges + command */}
       <div className='flex flex-col min-w-0 flex-1 gap-2px'>
         <div className='flex items-center gap-6px min-w-0'>
           <StatusDot status={server.status} oauthStatus={oauthStatus} />
-          <span className='text-14px font-medium text-t-primary truncate'>{server.name}</span>
+          <span className='settings-card-header__title truncate'>{server.name}</span>
           <Tag size='small' color={badge.color} className='shrink-0 !text-10px !px-4px !py-0 !leading-16px'>
             {badge.label}
           </Tag>
-          <span className='text-11px text-t-secondary shrink-0'>{statusLabel}</span>
+          <span className='settings-card-header__status shrink-0'>{statusLabel}</span>
           {isReadOnly && (
             <McpAgentStatusDisplay
               serverName={server.name}
@@ -125,7 +125,7 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
           )}
         </div>
         {cmdPreview && (
-          <span className='text-11px text-t-secondary font-mono truncate pl-14px' title={cmdPreview}>
+          <span className='settings-card-header__meta font-mono truncate pl-14px' title={cmdPreview}>
             {cmdPreview}
           </span>
         )}

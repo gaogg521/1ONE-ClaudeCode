@@ -5,35 +5,17 @@
  * stability when navigating settings pages with extensions loaded.
  */
 import { test, expect } from '../fixtures';
-import { goToGuid, goToSettings, goToExtensionSettings, takeScreenshot, waitForSettle } from '../helpers';
+import { goToGuid, goToSettings, goToExtensionSettings, takeScreenshot, waitForSettle, ROUTES, expectUrlContains } from '../helpers';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Themes from Extensions
 // ═════════════════════════════════════════════════════════════════════════════
 
 test.describe('Extension: Themes', () => {
-  test('display settings page loads', async ({ page }) => {
-    await goToSettings(page, 'display');
+  test('legacy display route redirects to tools settings', async ({ page }) => {
+    await page.goto(ROUTES.settings.display);
     await waitForSettle(page);
-    const body = await page.locator('body').textContent();
-    expect(body!.length).toBeGreaterThan(50);
-  });
-
-  test('extension themes may appear in theme list', async ({ page }) => {
-    await goToSettings(page, 'display');
-    await waitForSettle(page);
-
-    const body = await page.locator('body').textContent();
-    // Themes might be rendered as visual cards/thumbnails without text labels
-    // The page should at least be meaningfully rendered
-    expect(body!.length).toBeGreaterThan(100);
-  });
-
-  test('screenshot: display with extension themes', async ({ page }) => {
-    test.skip(!process.env.E2E_SCREENSHOTS, 'screenshots disabled');
-    await goToSettings(page, 'display');
-    await waitForSettle(page);
-    await takeScreenshot(page, 'ext-themes');
+    await expectUrlContains(page, 'tools');
   });
 });
 
@@ -73,7 +55,7 @@ test.describe('Extension: Assistants', () => {
 
 test.describe('Extension System Stability', () => {
   test('navigating across all settings pages with extensions does not crash', async ({ page }) => {
-    const tabs = ['agent', 'tools', 'display', 'webui', 'system', 'about'] as const;
+    const tabs = ['agent', 'tools', 'webui', 'system', 'about'] as const;
 
     for (const tab of tabs) {
       await goToSettings(page, tab);
@@ -96,7 +78,7 @@ test.describe('Extension System Stability', () => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
 
-    const tabs = ['agent', 'tools', 'display', 'webui'] as const;
+    const tabs = ['agent', 'tools', 'webui'] as const;
     for (const tab of tabs) {
       await goToSettings(page, tab);
       await waitForSettle(page);

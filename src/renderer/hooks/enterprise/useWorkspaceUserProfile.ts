@@ -5,7 +5,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { WorkspaceUserProfile } from '@/common/types/workspaceProfile';
+import { ANONYMOUS_WORKSPACE_USER_ID, type WorkspaceUserProfile } from '@/common/types/workspaceProfile';
+import { webui, workspaceProfile } from '@/common/adapter/ipcBridge';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { isElectronDesktop } from '@/renderer/utils/platform';
@@ -23,18 +24,70 @@ function isManagedAvatarUrl(avatarUrl: string): boolean {
   return avatarUrl.includes('/api/auth/profile/avatar');
 }
 
+function inferImageMimeType(file: File): string {
+  if (file.type.startsWith('image/')) {
+    return file.type;
+  }
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  if (ext === 'png') return 'image/png';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'gif') return 'image/gif';
+  return 'image/jpeg';
+}
+
+function decodeBase64Image(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function revokeObjectUrl(url: string | null) {
+  if (url?.startsWith('blob:')) {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export function useWorkspaceUserProfile() {
   const auth = useAuth();
   const enterpriseMode = useWebuiEnterpriseMode();
+  const isDesktopRuntime = isElectronDesktop();
   const [remoteProfile, setRemoteProfile] = useState<WorkspaceUserProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [avatarDisplayUrl, setAvatarDisplayUrl] = useState<string | null>(null);
+  const [avatarRevision, setAvatarRevision] = useState(0);
 
-  const canFetchRemote = Boolean(
-    auth.status === 'authenticated' &&
-      auth.user &&
-      (!isElectronDesktop() || enterpriseMode.webuiApiBase)
-  );
+  const canFetchRemote = Boolean(auth.status === 'authenticated' && auth.user);
+
+  const canUploadAvatar = Boolean(auth.status === 'authenticated' && auth.user);
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
+
+  const ensureDesktopWebuiRunning = useCallback(async () => {
+    if (!isDesktopRuntime) {
+      return;
+    }
+    const statusResult = await webui.getStatus.invoke();
+    if (statusResult.success && statusResult.data?.running) {
+      return;
+    }
+    const startResult = await webui.start.invoke({});
+    if (!startResult.success) {
+      throw new Error(startResult.msg || 'WEBUI_NOT_RUNNING');
+    }
+    for (let i = 0; i < 8; i += 1) {
+      await sleep(250);
+      const probe = await webui.getStatus.invoke();
+      if (probe.success && probe.data?.running) {
+        return;
+      }
+    }
+  }, [isDesktopRuntime]);
 
   const refresh = useCallback(async () => {
     if (!canFetchRemote) {
@@ -43,14 +96,19 @@ export function useWorkspaceUserProfile() {
     }
     setLoading(true);
     try {
-      const data = await fetchWebuiApiJson<WorkspaceUserProfile>('/api/auth/workspace-profile');
-      setRemoteProfile(data);
+      if (isDesktopRuntime) {
+        const result = await workspaceProfile.get.invoke();
+        setRemoteProfile(result.success && result.data ? result.data : null);
+      } else {
+        const data = await fetchWebuiApiJson<WorkspaceUserProfile>('/api/auth/workspace-profile');
+        setRemoteProfile(data);
+      }
     } catch {
       setRemoteProfile(null);
     } finally {
       setLoading(false);
     }
-  }, [canFetchRemote]);
+  }, [canFetchRemote, isDesktopRuntime]);
 
   useEffect(() => {
     void refresh();
@@ -82,7 +140,26 @@ export function useWorkspaceUserProfile() {
     enterpriseMode.hasJoinedEnterprise,
   ]);
 
-  const profile = remoteProfile ?? fallbackProfile;
+  const guestProfile = useMemo<WorkspaceUserProfile | null>(() => {
+    if (auth.status === 'authenticated') {
+      return null;
+    }
+    return {
+      userId: ANONYMOUS_WORKSPACE_USER_ID,
+      username: 'Guest',
+      email: null,
+      role: 'member',
+      tenantId: 'default',
+      tenantName: null,
+      joinedEnterprise: false,
+      avatarUrl: null,
+      orgUnitPath: null,
+      teams: [],
+      updatedAt: Date.now(),
+    };
+  }, [auth.status]);
+
+  const profile = remoteProfile ?? fallbackProfile ?? guestProfile;
 
   useEffect(() => {
     if (!profile?.avatarUrl) {
@@ -103,49 +180,112 @@ export function useWorkspaceUserProfile() {
     let cancelled = false;
     let objectUrl: string | null = null;
 
-    void fetchWebuiApi(resolveAvatarFetchPath(profile.avatarUrl))
-      .then((response) => {
+    const loadAvatar = async () => {
+      try {
+        if (isDesktopRuntime) {
+          const result = await workspaceProfile.readAvatarBuffer.invoke();
+          if (!result.success || !result.data?.base64) {
+            throw new Error(result.msg || 'avatar fetch failed');
+          }
+          const bytes = decodeBase64Image(result.data.base64);
+          const blob = new Blob([Uint8Array.from(bytes)], { type: result.data.mimeType });
+          if (cancelled) {
+            return;
+          }
+          objectUrl = URL.createObjectURL(blob);
+          setAvatarDisplayUrl((prev) => {
+            revokeObjectUrl(prev);
+            return objectUrl;
+          });
+          return;
+        }
+
+        const response = await fetchWebuiApi(resolveAvatarFetchPath(profile.avatarUrl!));
         if (!response.ok) {
           throw new Error('avatar fetch failed');
         }
-        return response.blob();
-      })
-      .then((blob) => {
+        const blob = await response.blob();
         if (cancelled) {
           return;
         }
         objectUrl = URL.createObjectURL(blob);
-        setAvatarDisplayUrl(objectUrl);
-      })
-      .catch(() => {
+        setAvatarDisplayUrl((prev) => {
+          revokeObjectUrl(prev);
+          return objectUrl;
+        });
+      } catch {
         if (!cancelled) {
           setAvatarDisplayUrl(null);
         }
-      });
+      }
+    };
+
+    void loadAvatar();
 
     return () => {
       cancelled = true;
       if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
+        revokeObjectUrl(objectUrl);
       }
     };
-  }, [canFetchRemote, profile?.avatarUrl]);
+  }, [avatarRevision, canFetchRemote, isDesktopRuntime, profile?.avatarUrl, profile?.updatedAt]);
 
   const uploadAvatar = useCallback(
     async (file: File) => {
-      if (!canFetchRemote) {
+      if (!canUploadAvatar) {
         throw new Error('WEBUI_NOT_RUNNING');
       }
-      const formData = new FormData();
-      formData.append('avatar', file);
-      const data = await fetchWebuiApiJson<WorkspaceUserProfile>('/api/auth/profile/avatar', {
-        method: 'POST',
-        body: formData,
-      });
-      setRemoteProfile(data);
-      return data;
+
+      if (isDesktopRuntime) {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await workspaceProfile.uploadAvatar.invoke({
+          mimeType: inferImageMimeType(file),
+          data: new Uint8Array(arrayBuffer),
+        });
+        if (!result.success || !result.data) {
+          throw new Error(result.msg || 'Failed to upload avatar');
+        }
+        const previewUrl = URL.createObjectURL(file);
+        setAvatarDisplayUrl((prev) => {
+          revokeObjectUrl(prev);
+          return previewUrl;
+        });
+        setRemoteProfile(result.data);
+        setAvatarRevision((value) => value + 1);
+        return result.data;
+      }
+
+      const upload = async () => {
+        const formData = new FormData();
+        formData.append('avatar', file);
+        const data = await fetchWebuiApiJson<WorkspaceUserProfile>('/api/auth/profile/avatar', {
+          method: 'POST',
+          body: formData,
+        });
+        const previewUrl = URL.createObjectURL(file);
+        setAvatarDisplayUrl((prev) => {
+          revokeObjectUrl(prev);
+          return previewUrl;
+        });
+        setRemoteProfile(data);
+        setAvatarRevision((value) => value + 1);
+        return data;
+      };
+
+      try {
+        return await upload();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        const isNetworkFailure = message === 'Failed to fetch' || message.includes('Failed to fetch');
+        if (!isNetworkFailure && message !== 'WEBUI_NOT_RUNNING') {
+          throw error;
+        }
+        await ensureDesktopWebuiRunning();
+        await sleep(250);
+        return await upload();
+      }
     },
-    [canFetchRemote]
+    [canUploadAvatar, ensureDesktopWebuiRunning, isDesktopRuntime]
   );
 
   return {
@@ -154,7 +294,7 @@ export function useWorkspaceUserProfile() {
     refresh,
     uploadAvatar,
     avatarDisplayUrl,
-    canUploadAvatar: canFetchRemote,
-    visible: Boolean(profile && auth.status === 'authenticated'),
+    canUploadAvatar,
+    visible: Boolean(profile),
   };
 }

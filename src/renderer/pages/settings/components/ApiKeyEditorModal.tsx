@@ -165,11 +165,11 @@ const ApiKeyEditorModal: React.FC<ApiKeyEditorModalProps> = ({ visible, apiKeys,
       style={{ maxWidth: '500px', width: '90vw' }}
       unmountOnExit
     >
-      <div className='flex flex-col gap-12px'>
+      <div className='settings-modal-surface flex flex-col gap-12px p-16px'>
         {/* Key 列表 */}
-        <div className='flex flex-col gap-8px max-h-300px overflow-y-auto'>
+        <div className='settings-modal-list flex flex-col gap-8px max-h-300px overflow-y-auto p-12px'>
           {keys.map((key) => (
-            <div key={key.id} className='flex items-center gap-8px'>
+            <div key={key.id} className='settings-selectable-row flex items-center gap-8px p-8px'>
               <div className='flex-1'>
                 <Input
                   value={key.value}
@@ -233,7 +233,7 @@ const ApiKeyEditorModal: React.FC<ApiKeyEditorModalProps> = ({ visible, apiKeys,
 
         {/* 底部操作栏 */}
         <div className='flex items-center justify-between pt-12px border-t border-line-2'>
-          <span className='text-11px text-t-secondary'>{t('settings.multiKeyTip')}</span>
+          <span className='settings-content-summary text-11px'>{t('settings.multiKeyTip')}</span>
           <div className='flex items-center gap-8px'>
             {hasMultipleKeys && (
               <>
@@ -259,7 +259,7 @@ const ApiKeyEditorModal: React.FC<ApiKeyEditorModalProps> = ({ visible, apiKeys,
               </>
             )}
             <Button
-              className='flex'
+              className='settings-pill-button flex'
               type='outline'
               size='small'
               icon={<Plus theme='outline' size={14} className='' />}
@@ -273,7 +273,7 @@ const ApiKeyEditorModal: React.FC<ApiKeyEditorModalProps> = ({ visible, apiKeys,
 
         {/* 确认按钮 */}
         <div className='flex justify-end pt-8px'>
-          <Button type='primary' onClick={handleSave}>
+          <Button type='primary' onClick={handleSave} className='settings-pill-button'>
             {t('common.confirm')}
           </Button>
         </div>

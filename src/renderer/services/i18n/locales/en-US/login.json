@@ -2,6 +2,9 @@
   "pageTitle": "1ONE - Sign In",
   "brand": "1ONE",
   "subtitle": "Welcome back, please sign in to your account",
+  "heroIllustrationAlt": "Enterprise AI workspace illustration",
+  "accountName": "Account",
+  "accountNamePlaceholder": "Enter your account name",
   "username": "Username",
   "usernamePlaceholder": "Enter your username",
   "password": "Password",
@@ -16,26 +19,48 @@
   "footerPrimary": "Transform your command-line AI",
   "footerSecondary": "Modern & Efficient",
   "standalone": {
+    "heroBadge": "WEB Console",
     "heroTitle": "WebUI remote access",
     "brandDesc": "Sign in with the local admin account to manage 1ONE from your phone or a remote browser.",
+    "introTitle": "Built for remote operations and session control",
+    "introText": "Securely access your local 1ONE from the browser, keep track of sessions and tasks, and stay productive across devices.",
+    "highlights": {
+      "remoteAccess": "Remote access",
+      "sessionControl": "Session control",
+      "privateLink": "Secure connection"
+    },
     "cardTitle": "Sign in to WebUI",
-    "cardSubtitle": "Use the username and password from Settings → Remote → WebUI"
+    "cardSubtitle": "Username and password are in Settings → Remote → WebUI"
   },
   "enterprise": {
-    "tag": "1ONE",
-    "heroTitle": "Enterprise AI workspace",
+    "tag": "1ONE Code",
+    "heroBadge": "1ONE Code Enterprise",
+    "heroTitle": "Team AI collaboration workspace",
     "brandDesc": "Command-line and conversational AI for teams—with unified accounts and permissions. Supports local, LDAP, and Feishu sign-in.",
+    "introTitle": "Built for enterprise AI collaboration",
+    "introText": "Support multi-tenant governance, LDAP directory integration, and Feishu, DingTalk, or WeCom SSO to deliver a secure and efficient AI workspace.",
+    "highlights": {
+      "unifiedAuth": "Unified auth",
+      "teamWorkspace": "Team workspace",
+      "auditReady": "Audit ready"
+    },
     "cardTitle": "Sign in to your account",
     "cardSubtitle": "Manage your sessions and tasks"
   },
   "methods": {
+    "sectionTitle": "Sign-in method",
+    "otherSectionTitle": "Other sign-in options",
     "label": "Sign-in method",
     "local": "Local account",
+    "localOptionDesc": "Use a local administrator account",
     "ldap": "LDAP directory",
+    "ldapOptionDesc": "Use your corporate directory account",
     "ldapHint": "Sign in with your corporate directory account",
     "localHint": "Sign in with a local administrator account",
+    "ldapDisabledHint": "LDAP is configured but not enabled yet. Ask your organization admin to enable it before using domain login.",
     "feishu": "Feishu account",
     "feishuOauth": "Sign in with Feishu",
+    "feishuOptionDesc": "Best for enterprise single sign-on",
     "feishuQrTitle": "Or scan with Feishu",
     "feishuQrError": "Failed to initialize Feishu QR",
     "dingtalk": "DingTalk",
@@ -44,19 +69,30 @@
     "wecomOauth": "Sign in with WeCom",
     "oauthPending": "{{provider}} OAuth callback is not wired yet. Use LDAP, Feishu, or local sign-in, or join with an invite code after login."
   },
-  "enterpriseRedirectHint": "After sign-in you will enter the enterprise workspace. You can also join an org with an invite code.",
+  "enterpriseRedirectHint": "After sign-in you will enter 1ONE Code Enterprise. You can also join an org with an invite code.",
   "orDivider": "Or",
   "showFeishuQr": "Show Feishu QR sign-in",
   "hideFeishuQr": "Hide Feishu QR",
   "providersDisabledHint": "Enterprise sign-in methods are configured but not enabled. Ask your org admin to enable LDAP, Feishu, DingTalk, or WeCom under Enterprise console → Authentication.",
   "inviteTitle": "Or join with an invite code",
+  "inviteCollapse": "Hide invite code details",
   "inviteCoexist": "Invite codes work alongside enterprise sign-in: sign in with any method above (local, LDAP, Feishu, etc.), then open Enterprise and enter your invite code.",
+  "continueAsGuest": "Continue as guest",
+  "joinEnterprise": "Sign in / join a team",
   "errors": {
     "empty": "Please enter username and password",
     "invalidCredentials": "Invalid username or password",
+    "invalidLdapCredentials": "Invalid domain credentials, or the account is not bound to a local user. Try local account login or contact your admin.",
     "tooManyAttempts": "Too many attempts, please try again later",
     "networkError": "Connection failed, please try again",
     "serverError": "Server error, please try again later",
+    "dbUnavailable": "Local database is unavailable. Close other 1ONE instances and restart the app, or delete the corrupted database file (see app logs) and try again.",
+    "loginUiLoadFailed": "Could not load sign-in options. Refresh the page or contact your administrator.",
+    "ldapNotEnabled": "LDAP sign-in is not enabled yet. Ask your org admin to enable it, or use a local account.",
+    "feishuNotEnabled": "Feishu sign-in is not enabled yet. Ask your org admin to enable it.",
+    "feishuNotConfigured": "Feishu SSO is not configured under Admin console → Authentication → Feishu. Note: the Feishu channel bot in Settings is not org sign-in.",
+    "feishuConfiguredButDisabled": "Feishu is configured but the Enable switch is off, or it conflicts with LDAP/other SSO. Open Admin console → Authentication → Feishu, enable it, and save.",
+    "oauthNotAvailable": "This sign-in method is not available yet. Try another method or contact your admin.",
     "unknown": "Sign-in failed, please try again"
   }
 }

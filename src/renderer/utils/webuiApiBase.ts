@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { captureCsrfTokenFromResponse } from '@process/webserver/middleware/csrfClient';
+import { captureCsrfTokenFromResponse, getCsrfToken, withCsrfHeader } from '@process/webserver/middleware/csrfClient';
 import { webui } from '@/common/adapter/ipcBridge';
 import { normalizeEnterpriseApiError } from '@/renderer/utils/enterpriseApi/error';
 import { isElectronDesktop } from '@/renderer/utils/platform';
@@ -65,15 +65,47 @@ async function getDesktopWebuiAuthHeaders(headers?: HeadersInit): Promise<Header
   }
 }
 
+function withCsrfFormData(body: BodyInit | null | undefined): BodyInit | null | undefined {
+  if (!(body instanceof FormData)) {
+    return body;
+  }
+  const token = getCsrfToken();
+  if (token && !body.has('_csrf')) {
+    body.append('_csrf', token);
+  }
+  return body;
+}
+
+async function ensureCsrfTokenForMutation(base: string, authHeaders: HeadersInit | undefined): Promise<void> {
+  if (getCsrfToken()) {
+    return;
+  }
+  const response = await fetch(`${base}/api/auth/workspace-profile`, {
+    method: 'GET',
+    headers: authHeaders,
+    credentials: 'include',
+  });
+  captureCsrfTokenFromResponse(response);
+}
+
 export async function fetchWebuiApi(path: string, init?: RequestInit): Promise<Response> {
   const base = await getWebuiApiBaseUrl();
   if (!base) {
     throw new Error('WEBUI_NOT_RUNNING');
   }
   const url = path.startsWith('/') ? `${base}${path}` : `${base}/${path}`;
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const authHeaders = await getDesktopWebuiAuthHeaders(init?.headers);
+  const isMutation = method !== 'GET' && method !== 'HEAD';
+  if (isMutation) {
+    await ensureCsrfTokenForMutation(base, authHeaders);
+  }
+  const headers = isMutation ? withCsrfHeader(authHeaders) : authHeaders;
+  const body = isMutation ? withCsrfFormData(init?.body ?? null) : init?.body;
   const response = await fetch(url, {
     ...init,
-    headers: await getDesktopWebuiAuthHeaders(init?.headers),
+    body,
+    headers,
     credentials: 'include',
   });
   captureCsrfTokenFromResponse(response);

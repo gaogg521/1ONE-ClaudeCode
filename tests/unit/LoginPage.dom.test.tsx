@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigateMock = vi.hoisted(() => vi.fn());
@@ -8,6 +8,24 @@ const loginWithLdapMock = vi.hoisted(() => vi.fn());
 const fetchMock = vi.hoisted(() => vi.fn());
 const locationSearchMock = vi.hoisted(() => ({ current: '' }));
 const readRedirectFromSearchMock = vi.hoisted(() => vi.fn(() => null));
+const isDesktopMock = vi.hoisted(() => ({ current: false }));
+const loginUiProvidersMock = vi.hoisted(() => ({
+  current: {
+    loading: false,
+    mode: 'standalone' as 'standalone' | 'enterprise',
+    error: 'none' as const,
+    ldapEnabled: false,
+    feishuEnabled: false,
+    dingtalkEnabled: false,
+    wecomEnabled: false,
+    ldapConfigured: false,
+    feishuConfigured: false,
+    dingtalkConfigured: false,
+    wecomConfigured: false,
+    anyProviderEnabled: false,
+    anyProviderConfigured: false,
+  },
+}));
 
 vi.mock('@renderer/assets/logos/brand/app.png', () => ({
   default: 'login-logo.png',
@@ -34,9 +52,11 @@ vi.mock('@/renderer/services/i18n', () => ({
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
   useLocation: () => ({ search: locationSearchMock.current }),
+  Navigate: ({ to }: { to: string }) => <div data-testid='navigate' data-to={to} />,
 }));
 
 vi.mock('@/common/auth/enterpriseRoles', () => ({
+  ENTERPRISE_JOIN_PATH: '/enterprise/join',
   resolvePostLoginRedirectPath: vi.fn(() => '/sessions'),
 }));
 
@@ -47,7 +67,7 @@ vi.mock('@/renderer/utils/postLoginRedirect', () => ({
 }));
 
 vi.mock('@/renderer/utils/platform', () => ({
-  isElectronDesktop: vi.fn(() => false),
+  isElectronDesktop: vi.fn(() => isDesktopMock.current),
 }));
 
 vi.mock('../../src/renderer/hooks/context/AuthContext', () => ({
@@ -65,12 +85,21 @@ vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
   }),
 }));
 
+vi.mock('@/renderer/hooks/auth/useLoginUiProviders', () => ({
+  useLoginUiProviders: () => loginUiProvidersMock.current,
+}));
+
 vi.mock('@renderer/components/layout/AppLoader', () => ({
   default: () => <div>loading</div>,
 }));
 
 vi.mock('@icon-park/react', () => ({
+  DataServer: () => <span />,
+  HardDisk: () => <span />,
+  Key: () => <span />,
   Lock: () => <span />,
+  Send: () => <span />,
+  Shield: () => <span />,
   User: () => <span />,
 }));
 
@@ -135,11 +164,13 @@ vi.mock('@arco-design/web-react', () => {
   const Radio = ({
     children,
     value,
+    disabled,
   }: React.PropsWithChildren<{
     value?: string;
+    disabled?: boolean;
   }>) => (
     <label>
-      <input type='radio' value={value} />
+      <input type='radio' value={value} disabled={disabled} />
       {children}
     </label>
   );
@@ -193,64 +224,153 @@ describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     locationSearchMock.current = '';
+    isDesktopMock.current = false;
     readRedirectFromSearchMock.mockReturnValue(null);
-    fetchMock.mockResolvedValue({
-      json: async () => ({
-        success: true,
-        data: {
-          mode: 'enterprise',
-          ldapEnabled: false,
-          feishuEnabled: false,
-          dingtalkEnabled: true,
-          wecomEnabled: true,
-          ldapConfigured: false,
-          feishuConfigured: false,
-          dingtalkConfigured: true,
-          wecomConfigured: true,
-        },
-      }),
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    loginUiProvidersMock.current = {
+      loading: false,
+      mode: 'standalone',
+      error: 'none',
+      ldapEnabled: false,
+      feishuEnabled: false,
+      dingtalkEnabled: false,
+      wecomEnabled: false,
+      ldapConfigured: false,
+      feishuConfigured: false,
+      dingtalkConfigured: false,
+      wecomConfigured: false,
+      anyProviderEnabled: false,
+      anyProviderConfigured: false,
+    };
   });
 
-  it('does not render DingTalk or WeCom login buttons before their OAuth callbacks are implemented', async () => {
+  it('shows rich WebUI login form on standalone web access', async () => {
     render(<LoginPage />);
 
     await waitFor(() => {
       expect(screen.getByText('登录您的账户')).toBeInTheDocument();
     });
 
-    expect(screen.queryByText('使用钉钉登录')).not.toBeInTheDocument();
-    expect(screen.queryByText('使用企业微信登录')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'login.submit' })).toBeInTheDocument();
+    expect(screen.getByText('WebUI 远程访问')).toBeInTheDocument();
+    expect(screen.getByText('管理您的会话与任务')).toBeInTheDocument();
+    expect(screen.getByText('登录方式')).toBeInTheDocument();
+    expect(screen.getByText('使用飞书登录')).toBeInTheDocument();
+    expect(screen.getByText('使用钉钉登录')).toBeInTheDocument();
+    expect(screen.getByText('使用企业微信登录')).toBeInTheDocument();
+    expect(
+      screen.getByText('登录成功后将进入 1ONE Code 企业版。您也可在登录后使用邀请码加入组织。')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '继续以访客身份使用' })).not.toBeInTheDocument();
   });
 
-  it('shows enterprise join hint when redirect targets enterprise join', async () => {
-    locationSearchMock.current = '?redirect=%2Fenterprise%2Fjoin';
-    readRedirectFromSearchMock.mockReturnValue('/enterprise/join');
-    fetchMock.mockResolvedValue({
-      json: async () => ({
-        success: true,
-        data: {
-          mode: 'standalone',
-          ldapEnabled: false,
-          feishuEnabled: false,
-          dingtalkEnabled: false,
-          wecomEnabled: false,
-          ldapConfigured: false,
-          feishuConfigured: false,
-          dingtalkConfigured: false,
-          wecomConfigured: false,
-        },
-      }),
-    });
+  it('shows the redesigned hero panel on desktop login as well', async () => {
+    isDesktopMock.current = true;
 
     render(<LoginPage />);
 
     await waitFor(() => {
-      expect(
-        screen.getByText('登录成功后将进入企业团队版（成员、团队、邀请码等）。您也可在登录后使用邀请码加入组织。')
-      ).toBeInTheDocument();
+      expect(screen.getByText('登录 WebUI')).toBeInTheDocument();
     });
+
+    expect(screen.getByText('WebUI 远程访问')).toBeInTheDocument();
+    expect(screen.queryByText('登录方式')).not.toBeInTheDocument();
+  });
+
+  it('shows enterprise login methods when enterprise mode is enabled', async () => {
+    loginUiProvidersMock.current = {
+      ...loginUiProvidersMock.current,
+      mode: 'enterprise',
+      ldapEnabled: true,
+      ldapConfigured: true,
+      dingtalkEnabled: true,
+      wecomEnabled: true,
+      dingtalkConfigured: true,
+      wecomConfigured: true,
+      anyProviderEnabled: true,
+      anyProviderConfigured: true,
+    };
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('登录您的账户')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('登录方式')).toBeInTheDocument();
+    expect(screen.getByText('使用钉钉登录')).toBeInTheDocument();
+    expect(screen.getByText('使用企业微信登录')).toBeInTheDocument();
+  });
+
+  it('shows DingTalk and WeCom quick login buttons on web login', async () => {
+    loginUiProvidersMock.current = {
+      ...loginUiProvidersMock.current,
+      mode: 'enterprise',
+      dingtalkEnabled: true,
+      wecomEnabled: true,
+      dingtalkConfigured: true,
+      wecomConfigured: true,
+      anyProviderEnabled: true,
+      anyProviderConfigured: true,
+    };
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('登录您的账户')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('1ONE Code 企业版')).toBeInTheDocument();
+    expect(screen.getByText('使用钉钉登录')).toBeInTheDocument();
+    expect(screen.getByText('使用企业微信登录')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'login.submit' })).toBeInTheDocument();
+  });
+
+  it('redirects enterprise join intent to join page', async () => {
+    locationSearchMock.current = '?redirect=%2Fenterprise%2Fjoin';
+    readRedirectFromSearchMock.mockReturnValue('/enterprise/join');
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('navigate')).toHaveAttribute('data-to', '/enterprise/join');
+    });
+  });
+
+  it('shows login method section for enterprise mode even without LDAP configured', async () => {
+    loginUiProvidersMock.current = {
+      ...loginUiProvidersMock.current,
+      mode: 'enterprise',
+    };
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('登录方式')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('本地账户')).toBeInTheDocument();
+  });
+
+  it('shows richer method descriptions for enterprise login options', async () => {
+    loginUiProvidersMock.current = {
+      ...loginUiProvidersMock.current,
+      mode: 'enterprise',
+      ldapEnabled: true,
+      feishuEnabled: true,
+      ldapConfigured: true,
+      feishuConfigured: true,
+      anyProviderEnabled: true,
+      anyProviderConfigured: true,
+    };
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('登录方式')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('使用系统本地账户登录')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'LDAP 域控' }));
+    expect(screen.getByText('使用企业域控账户登录')).toBeInTheDocument();
+    expect(screen.getByText('或')).toBeInTheDocument();
   });
 });

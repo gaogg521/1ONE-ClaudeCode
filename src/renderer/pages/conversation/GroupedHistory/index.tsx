@@ -20,6 +20,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import WorkspaceCollapse from '../components/WorkspaceCollapse';
 import ConversationRow from './ConversationRow';
 import DragOverlayContent from './DragOverlayContent';
+import ConversationSearchPopover from './ConversationSearchPopover';
 import SortableConversationRow from './SortableConversationRow';
 import { useBatchSelection } from './hooks/useBatchSelection';
 import { useConversationActions } from './hooks/useConversationActions';
@@ -41,8 +42,44 @@ const ViewAllRow: React.FC<{ label: string; onClick: () => void }> = ({ label, o
   );
 };
 
+const HistorySectionHeader: React.FC<{
+  collapsed: boolean;
+  onSessionClick?: () => void;
+  onConversationSelect?: () => void;
+}> = ({ collapsed, onSessionClick, onConversationSelect }) => {
+  const { t } = useTranslation();
+
+  if (collapsed) {
+    return (
+      <div className='pb-4px'>
+        <ConversationSearchPopover
+          onSessionClick={onSessionClick}
+          onConversationSelect={onConversationSelect}
+          label={t('conversation.historySearch.shortTitle')}
+          buttonClassName='!w-full !h-auto !py-6px !px-0 !justify-center !rd-8px !hover:bg-fill-3 !active:bg-fill-4'
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className='sticky top-0 z-20 bg-fill-2 px-12px pt-8px pb-6px mb-4px'>
+      <div className='text-13px text-t-secondary font-bold leading-20px mb-6px'>
+        {t('conversation.history.sectionTitle', { defaultValue: '历史会话' })}
+      </div>
+      <ConversationSearchPopover
+        onSessionClick={onSessionClick}
+        onConversationSelect={onConversationSelect}
+        label={t('conversation.historySearch.shortTitle')}
+        fullWidth
+      />
+    </div>
+  );
+};
+
 const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
   onSessionClick,
+  onConversationSelect,
   collapsed = false,
   tooltipEnabled = false,
   batchMode = false,
@@ -202,8 +239,15 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
 
   if (timelineSections.length === 0 && pinnedConversations.length === 0 && favoritedConversations.length === 0) {
     return (
-      <div className='py-48px flex-center'>
-        <Empty description={t('conversation.history.noHistory')} />
+      <div className='min-w-0'>
+        <HistorySectionHeader
+          collapsed={collapsed}
+          onSessionClick={onSessionClick}
+          onConversationSelect={onConversationSelect}
+        />
+        <div className='py-48px flex-center'>
+          <Empty description={t('conversation.history.noHistory')} />
+        </div>
       </div>
     );
   }
@@ -212,6 +256,11 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
   if (collapsed) {
     return (
       <div className='px-6px pt-4px pb-8px'>
+        <HistorySectionHeader
+          collapsed={collapsed}
+          onSessionClick={onSessionClick}
+          onConversationSelect={onConversationSelect}
+        />
         <div className='flex flex-col gap-2px'>
           {recentConversations.map((conversation) => renderConversation(conversation))}
         </div>
@@ -350,6 +399,12 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
         visible={showExportDirectorySelector}
         onConfirm={handleSelectExportDirectoryFromModal}
         onCancel={() => setShowExportDirectorySelector(false)}
+      />
+
+      <HistorySectionHeader
+        collapsed={collapsed}
+        onSessionClick={onSessionClick}
+        onConversationSelect={onConversationSelect}
       />
 
       {batchMode && !collapsed && (

@@ -1,10 +1,11 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigateMock = vi.hoisted(() => vi.fn());
 const editionFeaturesMock = vi.hoisted(() => vi.fn());
 const getUserConversationsMock = vi.hoisted(() => vi.fn());
+const searchConversationMessagesMock = vi.hoisted(() => vi.fn());
 const locationMock = vi.hoisted(() => ({ pathname: '/sessions', search: '' }));
 const teamListMock = vi.hoisted(() => vi.fn());
 const teamCreateState = vi.hoisted(() => ({
@@ -51,12 +52,28 @@ vi.mock('@arco-design/web-react', () => ({
   Button: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => (
     <button onClick={onClick}>{children}</button>
   ),
-  Input: ({ placeholder }: { placeholder?: string }) => <input placeholder={placeholder} />,
+  Input: ({
+    placeholder,
+    value,
+    onChange,
+  }: {
+    placeholder?: string;
+    value?: string;
+    onChange?: (value: string) => void;
+  }) => (
+    <input
+      placeholder={placeholder}
+      value={value ?? ''}
+      onChange={(event) => onChange?.(event.target.value)}
+    />
+  ),
   Tag: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Spin: () => <div>loading</div>,
   Empty: ({ description }: { description?: React.ReactNode }) => <div>{description}</div>,
-  Typography: {},
+  Typography: {
+    Ellipsis: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  },
 }));
 
 vi.mock('@/common', () => ({
@@ -64,6 +81,9 @@ vi.mock('@/common', () => ({
     database: {
       getUserConversations: {
         invoke: getUserConversationsMock,
+      },
+      searchConversationMessages: {
+        invoke: searchConversationMessagesMock,
       },
     },
     conversation: {
@@ -82,6 +102,21 @@ vi.mock('@/common', () => ({
 
 vi.mock('@/renderer/hooks/webui/useEditionFeatures', () => ({
   useEditionFeatures: () => editionFeaturesMock(),
+}));
+
+const openEnterpriseAdminInBrowserMock = vi.hoisted(() => vi.fn(async () => 'opened' as const));
+
+vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
+  useWebuiEnterpriseMode: () => ({
+    openEnterpriseAdminInBrowser: openEnterpriseAdminInBrowserMock,
+  }),
+}));
+
+vi.mock('@/renderer/utils/openAdminConsole', () => ({
+  openAdminConsole: vi.fn(async ({ navigate }: { navigate: (path: string) => void }) => {
+    navigate('/enterprise');
+    return 'navigated';
+  }),
 }));
 
 vi.mock('@/renderer/pages/team/hooks/useTeamList', () => ({
@@ -115,6 +150,13 @@ describe('SessionsPage', () => {
     locationMock.pathname = '/sessions';
     locationMock.search = '';
     getUserConversationsMock.mockResolvedValue([]);
+    searchConversationMessagesMock.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 0,
+      pageSize: 100,
+      hasMore: false,
+    });
     teamListMock.mockReturnValue({
       teams: [],
       mutate: vi.fn(),
@@ -274,6 +316,102 @@ describe('SessionsPage', () => {
     expect(await screen.findByText('sessions.empty')).toBeInTheDocument();
     fireEvent.click(screen.getAllByText('新建团队会话')[0]!);
     expect(screen.getByText('create-team-modal')).toBeInTheDocument();
+  });
+
+  it('filters sessions by title and message content', async () => {
+    getUserConversationsMock.mockResolvedValue([
+      {
+        id: 'conversation-title',
+        name: '天气讨论',
+        type: 'gemini',
+        status: 'finished',
+        createTime: 1710000000000,
+        modifyTime: 1710000000000,
+        extra: {},
+      },
+      {
+        id: 'conversation-content',
+        name: '未命名会话',
+        type: 'gemini',
+        status: 'finished',
+        createTime: 1710000001000,
+        modifyTime: 1710000001000,
+        extra: {},
+      },
+      {
+        id: 'conversation-other',
+        name: '无关会话',
+        type: 'gemini',
+        status: 'finished',
+        createTime: 1710000002000,
+        modifyTime: 1710000002000,
+        extra: {},
+      },
+    ]);
+
+    searchConversationMessagesMock.mockImplementation(async ({ keyword }: { keyword: string }) => {
+      if (keyword === '晴天') {
+        return {
+          items: [
+            {
+              conversation: {
+                id: 'conversation-content',
+                name: '未命名会话',
+                type: 'gemini',
+                status: 'finished',
+                createTime: 1710000001000,
+                modifyTime: 1710000001000,
+                extra: {},
+              },
+              messageId: 'message-1',
+              messageType: 'text',
+              messageCreatedAt: 1710000001000,
+              previewText: '今天是个晴天，适合出门。',
+            },
+          ],
+          total: 1,
+          page: 0,
+          pageSize: 100,
+          hasMore: false,
+        };
+      }
+
+      return {
+        items: [],
+        total: 0,
+        page: 0,
+        pageSize: 100,
+        hasMore: false,
+      };
+    });
+
+    render(<SessionsPage />);
+
+    expect(await screen.findByText('天气讨论')).toBeInTheDocument();
+    expect(screen.getByText('未命名会话')).toBeInTheDocument();
+    expect(screen.getByText('无关会话')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('sessions.searchPlaceholder'), {
+      target: { value: '天气' },
+    });
+
+    expect(screen.getByText('天气讨论')).toBeInTheDocument();
+    expect(screen.queryByText('未命名会话')).not.toBeInTheDocument();
+    expect(screen.queryByText('无关会话')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('sessions.searchPlaceholder'), {
+      target: { value: '晴天' },
+    });
+
+    await waitFor(
+      () => {
+        expect(screen.getByText('未命名会话')).toBeInTheDocument();
+        expect(screen.getByText('今天是个晴天，适合出门。')).toBeInTheDocument();
+      },
+      { timeout: 1000 }
+    );
+    expect(screen.queryByText('天气讨论')).not.toBeInTheDocument();
+    expect(screen.queryByText('无关会话')).not.toBeInTheDocument();
   });
 
   it('navigates into the newly created team while preserving current issue context', async () => {

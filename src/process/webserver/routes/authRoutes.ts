@@ -9,6 +9,7 @@ import { AuthService } from '@process/webserver/auth/service/AuthService';
 import { AuthMiddleware } from '@process/webserver/auth/middleware/AuthMiddleware';
 import { UserRepository, type AuthUser } from '@process/webserver/auth/repository/UserRepository';
 import { AuthProviderRepository } from '@process/webserver/auth/repository/AuthProviderRepository';
+import { DB_UNAVAILABLE_RESPONSE, isDatabaseUnavailableError } from '@process/services/database/errors';
 import { AuthIdentityRepository } from '@process/webserver/auth/repository/AuthIdentityRepository';
 import type { AuthProviderType } from '@process/services/database/types';
 import { AUTH_CONFIG, getCookieOptions } from '../config/constants';
@@ -244,6 +245,10 @@ export function registerAuthRoutes(app: Express): void {
       });
     } catch (error) {
       console.error('[AuthRoute] login-ui error:', error);
+      if (isDatabaseUnavailableError(error)) {
+        res.status(503).json(DB_UNAVAILABLE_RESPONSE);
+        return;
+      }
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -262,12 +267,23 @@ export function registerAuthRoutes(app: Express): void {
       const cfg = (providerRow?.config ?? {}) as unknown as FeishuProviderConfig;
       const appId = cfg.appId || process.env.FEISHU_APP_ID || '';
       const redirectUri = cfg.redirectUri || process.env.FEISHU_REDIRECT_URI || '';
-      if (!providerRow?.enabled) {
-        res.status(404).json({ success: false, message: 'Feishu login is not enabled' });
+      const hasSecret = Boolean(String(cfg.appSecret ?? '').trim() || process.env.FEISHU_APP_SECRET);
+      const hasMinimalConfig = Boolean(appId && redirectUri && hasSecret);
+
+      if (!providerRow || !hasMinimalConfig) {
+        res.status(404).json({
+          success: false,
+          code: 'NOT_CONFIGURED',
+          message: 'Feishu login is not configured',
+        });
         return;
       }
-      if (!appId || !redirectUri) {
-        res.status(500).json({ success: false, message: 'Feishu provider not configured' });
+      if (!providerRow.enabled) {
+        res.status(404).json({
+          success: false,
+          code: 'NOT_ENABLED',
+          message: 'Feishu login is configured but not enabled',
+        });
         return;
       }
 
@@ -387,7 +403,8 @@ export function registerAuthRoutes(app: Express): void {
   // 登录尝试严格限流，防止暴力破解
   app.post('/login', authRateLimiter, AuthMiddleware.validateLoginInput, async (req: Request, res: Response) => {
     try {
-      const { username, password } = req.body;
+      const username = typeof req.body.username === 'string' ? req.body.username.trim() : req.body.username;
+      const { password } = req.body;
 
       // Get user from database
       const user = await UserRepository.findByUsername(username);
@@ -432,6 +449,10 @@ export function registerAuthRoutes(app: Express): void {
       });
     } catch (error) {
       console.error('Login error:', error);
+      if (isDatabaseUnavailableError(error)) {
+        res.status(503).json(DB_UNAVAILABLE_RESPONSE);
+        return;
+      }
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });

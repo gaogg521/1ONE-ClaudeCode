@@ -13,24 +13,62 @@ import {
   isBuiltinImageGenName,
   isBuiltinImageGenTransport,
 } from '@process/resources/builtinMcp/constants';
-import { getEnhancedEnv } from '@process/utils/shellEnv';
+import { getEnhancedEnv, resolveNpxPath } from '@process/utils/shellEnv';
 import { safeExec, safeExecFile } from '@process/utils/safeExec';
+import { hasElectronAppPath } from '@process/utils/utils';
+import path from 'path';
+import { existsSync } from 'fs';
 
 /** Env options for exec calls — ensures CLI is found from Finder/launchd launches */
 const getExecEnv = () => ({
   env: { ...getEnhancedEnv(), NODE_OPTIONS: '', TERM: 'dumb', NO_COLOR: '1' } as NodeJS.ProcessEnv,
 });
 
+function resolveNodeRunnerCommand(): string {
+  const env = getEnhancedEnv();
+  const npxPath = resolveNpxPath(env);
+  const nodeName = process.platform === 'win32' ? 'node.exe' : 'node';
+  const nodePath = path.join(path.dirname(npxPath), nodeName);
+  if (existsSync(nodePath)) {
+    return nodePath;
+  }
+  if (hasElectronAppPath()) {
+    return process.execPath;
+  }
+  return 'node';
+}
+
+function looksLikeScriptPath(command: string): boolean {
+  return /\.(?:js|cjs|mjs)$/i.test(command);
+}
+
+export function normalizeClaudeStdioTransport(transport: Extract<IMcpServer['transport'], { type: 'stdio' }>): {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+} {
+  const args = [...(transport.args ?? [])];
+  let command = transport.command;
+  let env = { ...(transport.env ?? {}) };
+
+  if (looksLikeScriptPath(command) && !args.includes(command)) {
+    command = resolveNodeRunnerCommand();
+    args.unshift(transport.command);
+    if (hasElectronAppPath()) {
+      env = { ...env, ELECTRON_RUN_AS_NODE: '1' };
+    }
+  }
+
+  return { command, args, env };
+}
+
 export function buildClaudeStdioJsonConfig(server: IMcpServer): string {
   if (server.transport.type !== 'stdio') {
     throw new Error('Claude stdio JSON config requires a stdio transport');
   }
 
-  return JSON.stringify({
-    command: server.transport.command,
-    args: server.transport.args || [],
-    env: server.transport.env || {},
-  });
+  const normalized = normalizeClaudeStdioTransport(server.transport);
+  return JSON.stringify(normalized);
 }
 
 /**

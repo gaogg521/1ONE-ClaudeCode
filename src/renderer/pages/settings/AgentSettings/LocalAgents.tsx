@@ -251,7 +251,7 @@ const LocalAgents: React.FC = () => {
 
       {/* Detected Agents section */}
       <div className='px-16px mt-8px'>
-        <Typography.Text className='text-12px font-medium text-t-secondary mb-4px block'>
+        <Typography.Text className='settings-content-section-title mb-4px block'>
           {t('settings.agentManagement.detected')}
         </Typography.Text>
       </div>
@@ -298,7 +298,7 @@ const LocalAgents: React.FC = () => {
       {/* Custom Agents section */}
       {(editorVisible || (customAgents && customAgents.length > 0)) && (
         <div className='px-16px mt-16px'>
-          <Typography.Text className='text-12px font-medium text-t-secondary mb-4px block'>
+          <Typography.Text className='settings-content-section-title mb-4px block'>
             {t('settings.agentManagement.customAgents', { defaultValue: 'Custom Agents' })}
           </Typography.Text>
         </div>

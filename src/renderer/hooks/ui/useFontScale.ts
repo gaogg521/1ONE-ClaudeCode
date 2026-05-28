@@ -6,11 +6,14 @@
 
 import { ipcBridge } from '@/common';
 import { useCallback, useEffect, useState } from 'react';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 
 const UI_SCALE_DEFAULT = 1;
 const UI_SCALE_MIN = 0.8;
 const UI_SCALE_MAX = 1.3;
 const UI_SCALE_STEP = 0.05;
+const WEB_UI_SCALE_DEFAULT = 1.08;
+const WEB_UI_SCALE_STORAGE_KEY = 'one.webui.uiScale';
 
 export const FONT_SCALE_DEFAULT = UI_SCALE_DEFAULT;
 export const FONT_SCALE_MIN = UI_SCALE_MIN;
@@ -26,10 +29,30 @@ const clampFontScale = (value: number) => {
 };
 
 const useFontScale = (): [number, (scale: number) => Promise<void>] => {
-  const [fontScale, setFontScaleState] = useState(FONT_SCALE_DEFAULT);
+  const isDesktopRuntime = isElectronDesktop();
+  const [fontScale, setFontScaleState] = useState(isDesktopRuntime ? FONT_SCALE_DEFAULT : WEB_UI_SCALE_DEFAULT);
+
+  const applyWebUiScale = useCallback((scale: number) => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.style.setProperty('--webui-ui-scale', String(scale));
+  }, []);
 
   // 从主进程读取当前缩放，保持 UI 与 Electron 同步 / Pull zoom factor from main to keep UI state aligned
   const fetchZoomFactor = useCallback(async () => {
+    if (!isDesktopRuntime) {
+      try {
+        const stored = window.localStorage.getItem(WEB_UI_SCALE_STORAGE_KEY);
+        const parsed = stored ? Number.parseFloat(stored) : WEB_UI_SCALE_DEFAULT;
+        const clamped = clampFontScale(parsed);
+        setFontScaleState(clamped);
+        applyWebUiScale(clamped);
+      } catch {
+        setFontScaleState(WEB_UI_SCALE_DEFAULT);
+        applyWebUiScale(WEB_UI_SCALE_DEFAULT);
+      }
+      return;
+    }
+
     try {
       const currentFactor = await ipcBridge.application.getZoomFactor.invoke();
       if (typeof currentFactor === 'number') {
@@ -38,7 +61,7 @@ const useFontScale = (): [number, (scale: number) => Promise<void>] => {
     } catch (error) {
       console.error('Failed to fetch zoom factor:', error);
     }
-  }, []);
+  }, [applyWebUiScale, isDesktopRuntime]);
 
   useEffect(() => {
     void fetchZoomFactor();
@@ -49,6 +72,17 @@ const useFontScale = (): [number, (scale: number) => Promise<void>] => {
     async (nextScale: number) => {
       const clamped = clampFontScale(nextScale);
       setFontScaleState(clamped);
+
+      if (!isDesktopRuntime) {
+        applyWebUiScale(clamped);
+        try {
+          window.localStorage.setItem(WEB_UI_SCALE_STORAGE_KEY, String(clamped));
+        } catch {
+          // Ignore storage write errors in restricted browser modes.
+        }
+        return;
+      }
+
       try {
         const updatedFactor = await ipcBridge.application.setZoomFactor.invoke({ factor: clamped });
         if (typeof updatedFactor === 'number' && updatedFactor !== clamped) {
@@ -59,7 +93,7 @@ const useFontScale = (): [number, (scale: number) => Promise<void>] => {
         void fetchZoomFactor();
       }
     },
-    [fetchZoomFactor]
+    [applyWebUiScale, fetchZoomFactor, isDesktopRuntime]
   );
 
   return [fontScale, setFontScale];

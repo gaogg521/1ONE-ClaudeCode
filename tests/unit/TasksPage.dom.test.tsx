@@ -98,6 +98,19 @@ vi.mock('@/renderer/hooks/webui/useEditionFeatures', () => ({
   useEditionFeatures: () => editionFeaturesMock(),
 }));
 
+vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
+  useWebuiEnterpriseMode: () => ({
+    openEnterpriseAdminInBrowser: vi.fn(async () => 'opened' as const),
+  }),
+}));
+
+vi.mock('@/renderer/utils/openAdminConsole', () => ({
+  openAdminConsole: vi.fn(async ({ navigate }: { navigate: (path: string) => void }) => {
+    navigate('/enterprise');
+    return 'navigated';
+  }),
+}));
+
 import TasksPage from '@/renderer/pages/tasks';
 
 describe('TasksPage', () => {

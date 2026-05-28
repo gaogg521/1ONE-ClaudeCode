@@ -82,7 +82,7 @@ function normalizeRequestPathForCsrf(req: Request): string {
  * Same exclusions as legacy `csrf(..., excludedUrls)` but keyed on pathname only (ignores query / hash).
  */
 function shouldBypassCsrfByPath(pathOnly: string): boolean {
-  if (pathOnly === '/login') {
+  if (pathOnly === '/login' || pathOnly === '/api/auth/ldap/login') {
     return true;
   }
   if (pathOnly === '/api/auth/qr-login') {

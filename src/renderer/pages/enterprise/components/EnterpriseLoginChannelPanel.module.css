@@ -1,0 +1,181 @@
+.panel {
+  margin-bottom: 0;
+}
+
+.localSessionBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--primary-6), 0.16);
+  background: rgba(var(--primary-6), 0.05);
+}
+
+.localSessionText {
+  margin: 0 !important;
+  flex: 1;
+  min-width: 200px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text-2);
+}
+
+.signedInBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  background: rgba(34, 197, 94, 0.06);
+}
+
+.signedInIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.14);
+  color: #16a34a;
+}
+
+.signedInText {
+  margin: 0 !important;
+  flex: 1;
+  min-width: 160px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-2);
+}
+
+.loginLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.loginLayoutWithForm {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  align-items: start;
+}
+
+.channelGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.channelTile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 88px;
+  padding: 12px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border-2);
+  background: var(--color-bg-1);
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  appearance: none;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.channelTile:hover {
+  border-color: color-mix(in srgb, var(--channel-accent, rgb(var(--primary-6))) 36%, var(--color-border-2));
+  background: color-mix(in srgb, var(--channel-accent, rgb(var(--primary-6))) 6%, var(--color-bg-1));
+}
+
+.channelTileActive {
+  border-color: color-mix(in srgb, var(--channel-accent, rgb(var(--primary-6))) 48%, var(--color-border-2));
+  background: color-mix(in srgb, var(--channel-accent, rgb(var(--primary-6))) 10%, var(--color-bg-1));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--channel-accent, rgb(var(--primary-6))) 18%, transparent);
+}
+
+.channelIconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--channel-accent, rgb(var(--primary-6))) 10%, var(--color-bg-2));
+}
+
+.channelIconImg {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.channelLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-1);
+  line-height: 1.3;
+}
+
+.loginPanel {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--primary-6), 0.12);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(var(--primary-6), 0.06), transparent 42%),
+    var(--color-bg-2);
+}
+
+.form {
+  max-width: 100%;
+}
+
+.formTitle {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-1);
+}
+
+.label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--color-text-2);
+}
+
+.desktopNote {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-text-3);
+}
+
+@media (max-width: 720px) {
+  .loginLayoutWithForm {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .channelGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .channelGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

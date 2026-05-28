@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -503,7 +503,7 @@ const AdminRag: React.FC = () => {
               field='title'
               rules={[{ required: true, message: t('admin.rag.validation.titleRequired', { defaultValue: '请输入标题' }) }]}
             >
-              <Input placeholder={t('admin.rag.modal.titlePlaceholder', { defaultValue: '例如：1ONE企业团队版部署说明' })} />
+              <Input placeholder={t('admin.rag.modal.titlePlaceholder', { defaultValue: '例如：1ONE Code 企业版部署说明' })} />
             </Form.Item>
             <Form.Item
               label={t('admin.rag.modal.docContent', { defaultValue: '文档内容' })}

@@ -5,10 +5,7 @@ import { useExtensionSettingsTabs } from '@/renderer/hooks/extensions/useExtensi
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
 import {
   Communication,
-  Computer,
   Earth,
-  Gemini,
-  Info,
   Lightning,
   LinkCloud,
   Puzzle,
@@ -33,9 +30,13 @@ export const BUILTIN_TAB_IDS = [
   'tools',
   'webui',
   'system',
-  'about',
-  'gemini',
 ] as const;
+
+/** Remap removed builtin tab anchors so extension tabs keep a stable insertion point. */
+export function resolveSettingsTabAnchor(anchor: string): string {
+  if (anchor === 'display') return 'tools';
+  return anchor;
+}
 
 type SiderItem = {
   id: string;
@@ -60,7 +61,6 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
   const menus: SiderItem[] = useMemo(() => {
     // Build builtin items
     const builtinMap: Record<string, SiderItem> = {
-      gemini: { id: 'gemini', label: t('settings.gemini'), icon: <Gemini />, path: 'gemini' },
       model: { id: 'model', label: t('settings.model'), icon: <LinkCloud />, path: 'model' },
       assistants: {
         id: 'assistants',
@@ -88,7 +88,6 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
         path: 'webui',
       },
       system: { id: 'system', label: t('settings.system'), icon: <System />, path: 'system' },
-      about: { id: 'about', label: t('settings.about'), icon: <Info />, path: 'about' },
     };
 
     const result: SiderItem[] = BUILTIN_TAB_IDS.map((id) => builtinMap[id]);
@@ -103,7 +102,8 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
         unanchored.push(tab);
         continue;
       }
-      const { anchor, placement } = tab.position;
+      const { placement } = tab.position;
+      const anchor = resolveSettingsTabAnchor(tab.position.anchor);
       const map = placement === 'before' ? beforeMap : afterMap;
       let list = map.get(anchor);
       if (!list) {
@@ -155,6 +155,11 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
         'settings-sider--collapsed': collapsed,
       })}
     >
+      {!collapsed ? (
+        <div className='settings-sider__section-title'>
+          {t('nav.globalSettings', { defaultValue: '全局设置' })}
+        </div>
+      ) : null}
       {menus.map((item) => {
         const itemRoute = `/settings/${item.path}`;
         const isSelected = pathname === itemRoute;
@@ -164,9 +169,9 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
               data-settings-id={item.id}
               data-settings-path={item.path}
               className={classNames(
-                'settings-sider__item hover:bg-aou-1 px-12px py-8px rd-8px flex justify-start items-center group cursor-pointer relative overflow-hidden group shrink-0 conversation-item [&.conversation-item+&.conversation-item]:mt-2px',
+                'settings-sider__item px-12px py-10px rd-12px flex justify-start items-center group cursor-pointer relative overflow-hidden shrink-0',
                 {
-                  '!bg-aou-2 ': isSelected,
+                  'settings-sider__item--active': isSelected,
                 }
               )}
               onClick={() => {
@@ -174,7 +179,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
               }}
             >
               {item.isImageIcon ? (
-                <div className='mt-2px ml-2px mr-8px w-20px h-20px flex shrink-0 items-center justify-center'>
+                <div className='settings-sider__item-icon mt-2px ml-2px mr-8px flex shrink-0 items-center justify-center'>
                   {item.icon}
                 </div>
               ) : (
@@ -189,12 +194,12 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
                     theme: 'outline',
                     size: '20',
                     strokeWidth: 3,
-                    className: 'mt-2px ml-2px mr-8px flex text-t-secondary',
+                    className: 'settings-sider__item-icon mt-2px ml-2px mr-8px flex',
                   }
                 )
               )}
               <FlexFullContainer className='h-24px'>
-                <div className='settings-sider__item-label text-nowrap overflow-hidden inline-block w-full text-14px lh-24px whitespace-nowrap text-t-primary'>
+                <div className='settings-sider__item-label text-nowrap overflow-hidden inline-block w-full text-14px lh-24px whitespace-nowrap'>
                   {item.label}
                 </div>
               </FlexFullContainer>

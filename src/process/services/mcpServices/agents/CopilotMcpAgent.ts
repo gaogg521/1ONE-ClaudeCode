@@ -134,7 +134,7 @@ export class CopilotMcpAgent extends AbstractMcpAgent {
     const installOperation = async () => {
       try {
         const config = this.readConfig();
-        const merged = { ...(config.mcpServers ?? {}) };
+        const merged = { ...config.mcpServers };
 
         for (const server of mcpServers) {
           const entry = toCopilotEntry(server.transport);
@@ -160,7 +160,7 @@ export class CopilotMcpAgent extends AbstractMcpAgent {
     const removeOperation = async () => {
       try {
         const config = this.readConfig();
-        const merged = { ...(config.mcpServers ?? {}) };
+        const merged = { ...config.mcpServers };
         if (!(mcpServerName in merged)) {
           return { success: true };
         }

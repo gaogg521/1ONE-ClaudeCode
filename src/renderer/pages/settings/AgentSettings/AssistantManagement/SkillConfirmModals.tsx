@@ -67,16 +67,18 @@ const SkillConfirmModals: React.FC<SkillConfirmModalsProps> = ({
         wrapStyle={{ zIndex: 10000 }}
         maskStyle={{ zIndex: 9999 }}
       >
-        <p>
-          {t('settings.deletePendingSkillConfirm', {
-            defaultValue: `Are you sure you want to remove "${deletePendingSkillName}"? This skill has not been imported yet.`,
-          })}
-        </p>
-        <div className='mt-12px text-12px text-t-secondary bg-fill-2 p-12px rounded-lg'>
-          {t('settings.deletePendingSkillNote', {
-            defaultValue:
-              'This will only remove the skill from the pending list. If you want to add it again later, you can use "Add Skills".',
-          })}
+        <div className='settings-modal-surface p-16px'>
+          <p>
+            {t('settings.deletePendingSkillConfirm', {
+              defaultValue: `Are you sure you want to remove "${deletePendingSkillName}"? This skill has not been imported yet.`,
+            })}
+          </p>
+          <div className='settings-note-card mt-12px text-12px'>
+            {t('settings.deletePendingSkillNote', {
+              defaultValue:
+                'This will only remove the skill from the pending list. If you want to add it again later, you can use "Add Skills".',
+            })}
+          </div>
         </div>
       </Modal>
 
@@ -102,16 +104,18 @@ const SkillConfirmModals: React.FC<SkillConfirmModalsProps> = ({
         wrapStyle={{ zIndex: 10000 }}
         maskStyle={{ zIndex: 9999 }}
       >
-        <p>
-          {t('settings.removeCustomSkillConfirm', {
-            defaultValue: `Are you sure you want to remove "${deleteCustomSkillName}" from this assistant?`,
-          })}
-        </p>
-        <div className='mt-12px text-12px text-t-secondary bg-fill-2 p-12px rounded-lg'>
-          {t('settings.removeCustomSkillNote', {
-            defaultValue:
-              'This will only remove the skill from this assistant. The skill will remain in Builtin Skills and can be re-added later.',
-          })}
+        <div className='settings-modal-surface p-16px'>
+          <p>
+            {t('settings.removeCustomSkillConfirm', {
+              defaultValue: `Are you sure you want to remove "${deleteCustomSkillName}" from this assistant?`,
+            })}
+          </p>
+          <div className='settings-note-card mt-12px text-12px'>
+            {t('settings.removeCustomSkillNote', {
+              defaultValue:
+                'This will only remove the skill from this assistant. The skill will remain in Builtin Skills and can be re-added later.',
+            })}
+          </div>
         </div>
       </Modal>
     </>

@@ -581,4 +581,28 @@ describe('registerAuthRoutes /api/auth/login-ui', () => {
       },
     });
   });
+
+  it('returns db_unavailable when provider list fails due to database corruption', async () => {
+    mockListProviders.mockRejectedValue(
+      new Error('Failed to list auth providers', {
+        cause: new Error(
+          'Database is corrupted and cannot be recovered. Please manually delete: C:\\test\\1one.db'
+        ),
+      })
+    );
+
+    const { registerAuthRoutes } = await import('@process/webserver/routes/authRoutes');
+    const app = express();
+    registerAuthRoutes(app);
+
+    const handler = getRouteHandler(app, '/api/auth/login-ui');
+    const res = createResponseMock() as unknown as express.Response;
+
+    await handler({} as express.Request, res, vi.fn());
+
+    expect((res as unknown as { status: ReturnType<typeof vi.fn> }).status).toHaveBeenCalledWith(503);
+    expect((res as unknown as { json: ReturnType<typeof vi.fn> }).json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, code: 'db_unavailable' })
+    );
+  });
 });

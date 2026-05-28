@@ -97,7 +97,7 @@ describe('WorkspaceIdentityPanel', () => {
   it('renders username and organization in titlebar trigger', () => {
     render(<WorkspaceIdentityPanel />);
     expect(screen.getByText('alice')).toBeTruthy();
-    expect(screen.getByText('Acme Corp · 企业团队版')).toBeTruthy();
+    expect(screen.getByText('Acme Corp · 1ONE Code 企业版')).toBeTruthy();
     expect(screen.getByText('研发中心 / 平台组')).toBeTruthy();
   });
 

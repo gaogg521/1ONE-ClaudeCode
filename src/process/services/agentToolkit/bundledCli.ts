@@ -57,19 +57,19 @@ function readBundledCliPath(runtimeDir: string, relativeCli: string): string | n
 }
 
 function getNodeRunner(): { command: string; baseEnv: Record<string, string> } {
-  if (hasElectronAppPath()) {
-    return {
-      command: process.execPath,
-      baseEnv: { ELECTRON_RUN_AS_NODE: '1' },
-    };
-  }
-
   const env = getEnhancedEnv();
   const npxPath = resolveNpxPath(env);
   const nodeName = process.platform === 'win32' ? 'node.exe' : 'node';
   const nodePath = path.join(path.dirname(npxPath), nodeName);
   if (existsSync(nodePath)) {
     return { command: nodePath, baseEnv: {} };
+  }
+
+  if (hasElectronAppPath()) {
+    return {
+      command: process.execPath,
+      baseEnv: { ELECTRON_RUN_AS_NODE: '1' },
+    };
   }
 
   return { command: 'node', baseEnv: {} };

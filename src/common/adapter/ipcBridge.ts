@@ -23,6 +23,7 @@ import type {
 } from '../update/updateTypes';
 import type { ProtocolDetectionRequest, ProtocolDetectionResponse } from '../utils/protocolDetector';
 import type { SpeechToTextRequest, SpeechToTextResult } from '../types/speech';
+import type { WorkspaceUserProfile } from '../types/workspaceProfile';
 
 export const shell = {
   openFile: bridge.buildProvider<void, string>('open-file'), // 使用系统默认程序打开文件
@@ -880,6 +881,18 @@ export const webui = {
   resetPasswordResult: bridge.buildEmitter<{ success: boolean; newPassword?: string; msg?: string }>(
     'webui.reset-password-result'
   ),
+};
+
+export const workspaceProfile = {
+  get: bridge.buildProvider<IBridgeResponse<WorkspaceUserProfile>, void>('workspace-profile.get'),
+  uploadAvatar: bridge.buildProvider<
+    IBridgeResponse<WorkspaceUserProfile>,
+    { mimeType: string; data: Uint8Array }
+  >('workspace-profile.upload-avatar'),
+  readAvatarBuffer: bridge.buildProvider<
+    IBridgeResponse<{ mimeType: string; base64: string }>,
+    void
+  >('workspace-profile.read-avatar'),
 };
 
 // Cron job management API / 定时任务管理接口

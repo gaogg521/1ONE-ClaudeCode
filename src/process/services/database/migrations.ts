@@ -1810,9 +1810,15 @@ const migration_v45: IMigration = {
   version: 45,
   name: 'Add requirements.milestone_id for version planning',
   up: (db) => {
-    db.exec('ALTER TABLE requirements ADD COLUMN milestone_id TEXT');
+    const tableInfo = db.prepare('PRAGMA table_info(requirements)').all() as Array<{ name: string }>;
+    const hasMilestoneId = tableInfo.some((col) => col.name === 'milestone_id');
+    if (!hasMilestoneId) {
+      db.exec('ALTER TABLE requirements ADD COLUMN milestone_id TEXT');
+      console.log('[Migration v45] Added requirements.milestone_id');
+    } else {
+      console.log('[Migration v45] requirements.milestone_id already exists, skipping');
+    }
     db.exec('CREATE INDEX IF NOT EXISTS idx_requirements_milestone ON requirements(milestone_id)');
-    console.log('[Migration v45] Added requirements.milestone_id');
   },
   down: (db) => {
     db.exec('DROP INDEX IF EXISTS idx_requirements_milestone');
@@ -1827,10 +1833,18 @@ const migration_v46: IMigration = {
   version: 46,
   name: 'Add users.org_unit_path for SSO org profile',
   up: (db) => {
-    db.exec('ALTER TABLE users ADD COLUMN org_unit_path TEXT');
-    db.exec('ALTER TABLE users ADD COLUMN org_profile_source TEXT');
-    db.exec('ALTER TABLE users ADD COLUMN org_profile_synced_at INTEGER');
-    console.log('[Migration v46] Added users org profile columns');
+    const tableInfo = db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>;
+    const hasColumn = (name: string) => tableInfo.some((col) => col.name === name);
+    if (!hasColumn('org_unit_path')) {
+      db.exec('ALTER TABLE users ADD COLUMN org_unit_path TEXT');
+    }
+    if (!hasColumn('org_profile_source')) {
+      db.exec('ALTER TABLE users ADD COLUMN org_profile_source TEXT');
+    }
+    if (!hasColumn('org_profile_synced_at')) {
+      db.exec('ALTER TABLE users ADD COLUMN org_profile_synced_at INTEGER');
+    }
+    console.log('[Migration v46] Ensured users org profile columns');
   },
   down: (db) => {
     console.log('[Migration v46] Rolled back users org profile columns (columns retained)');

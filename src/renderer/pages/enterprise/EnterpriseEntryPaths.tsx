@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -41,7 +41,7 @@ const EnterpriseEntryPaths: React.FC<EnterpriseEntryPathsProps> = ({ compact = f
       }
       return;
     }
-    void navigate(`/login?redirect=${encodeURIComponent(ENTERPRISE_JOIN_PATH)}`);
+    void navigate('/enterprise/join');
   }, [isDesktop, navigate, openEnterpriseLoginInBrowser, t]);
 
   if (compact) {
@@ -51,7 +51,7 @@ const EnterpriseEntryPaths: React.FC<EnterpriseEntryPathsProps> = ({ compact = f
         className='mb-16px'
         content={t('settings.enterpriseConsole.entryPathsCompact', {
           defaultValue:
-            '进入企业团队版需先登录：可使用 LDAP/飞书/钉钉/企业微信（管理员启用后）或本地账户；有邀请码者在登录后可在下方加入。',
+            '进入1ONE Code 企业版需先登录：可使用 LDAP/飞书/钉钉/企业微信（管理员启用后）或本地账户；有邀请码者在登录后可在下方加入。',
         })}
         action={
           status !== 'authenticated' || isDesktop ? (
@@ -67,7 +67,7 @@ const EnterpriseEntryPaths: React.FC<EnterpriseEntryPathsProps> = ({ compact = f
   return (
     <div className='mb-24px p-16px rd-12px border border-border-2 bg-2'>
       <div className='text-15px font-600 text-t-primary mb-8px'>
-        {t('settings.enterpriseConsole.entryPathsTitle', { defaultValue: '进入企业团队版' })}
+        {t('settings.enterpriseConsole.entryPathsTitle', { defaultValue: '进入1ONE Code 企业版' })}
       </div>
       <p className='m-0 text-13px text-t-secondary leading-relaxed mb-12px'>
         {t('settings.enterpriseConsole.entryPathsDesc', {

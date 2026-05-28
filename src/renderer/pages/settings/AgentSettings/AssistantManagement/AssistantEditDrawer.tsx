@@ -6,6 +6,7 @@ import type { AssistantListItem, SkillInfo } from './types';
 import type { SkillPlatform } from '@/common/types/skillMetadata';
 import EmojiPicker from '@/renderer/components/chat/EmojiPicker';
 import MarkdownView from '@/renderer/components/Markdown';
+import classNames from 'classnames';
 import {
   Avatar,
   Button,
@@ -289,10 +290,10 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
       }
     >
       <div className='flex flex-col h-full overflow-hidden'>
-        <div className='flex flex-col flex-1 gap-16px bg-fill-2 rounded-16px p-20px overflow-y-auto'>
+        <div className='settings-drawer-surface flex flex-col flex-1 gap-16px rounded-16px p-20px overflow-y-auto'>
           {/* Name & Avatar */}
           <div className='flex-shrink-0'>
-            <Typography.Text bold>
+            <Typography.Text className='settings-form-section-title'>
               <span className='text-red-500'>*</span>{' '}
               {t('settings.assistantNameAvatar', { defaultValue: 'Name & Avatar' })}
             </Typography.Text>
@@ -334,7 +335,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
 
           {/* Description */}
           <div className='flex-shrink-0'>
-            <Typography.Text bold>
+            <Typography.Text className='settings-form-section-title'>
               {t('settings.assistantDescription', { defaultValue: 'Assistant Description' })}
             </Typography.Text>
             <Input
@@ -350,7 +351,9 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
 
           {/* Main Agent selector */}
           <div className='flex-shrink-0'>
-            <Typography.Text bold>{t('settings.assistantMainAgent', { defaultValue: 'Main Agent' })}</Typography.Text>
+            <Typography.Text className='settings-form-section-title'>
+              {t('settings.assistantMainAgent', { defaultValue: 'Main Agent' })}
+            </Typography.Text>
             <Select
               className='mt-10px w-full rounded-4px'
               value={editAgent}
@@ -391,7 +394,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
           </div>
 
           {/* Summary */}
-          <div className='flex flex-wrap items-center gap-8px p-10px rd-10px bg-fill-1'>
+          <div className='settings-drawer-summary flex flex-wrap items-center gap-8px p-10px'>
             <span className='text-12px text-t-secondary'>
               {t('settings.assistantMainAgent', { defaultValue: 'Main Agent' })}:
             </span>
@@ -409,7 +412,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
           {/* Rules / Prompt */}
           <div className='flex-shrink-0'>
             <div className='flex items-center justify-between'>
-              <Typography.Text bold className='flex-shrink-0'>
+              <Typography.Text className='settings-form-section-title flex-shrink-0'>
                 {t('settings.assistantRules', { defaultValue: 'Rules' })}
               </Typography.Text>
               <Button type='text' size='mini' onClick={() => setRulesExpanded((prev) => !prev)}>
@@ -419,22 +422,20 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
               </Button>
             </div>
             <div
-              className='mt-10px border border-border-2 overflow-hidden rounded-4px'
+              className='settings-drawer-editor-shell mt-10px overflow-hidden'
               style={{ height: rulesContainerHeight }}
             >
               {isRuleEditable && (
-                <div className='flex items-center h-36px bg-fill-2 border-b border-border-2 flex-shrink-0'>
+                <div className='settings-segment-toggle flex items-center h-36px flex-shrink-0'>
                   <Tooltip
                     content={t('settings.promptEditTooltip', {
                       defaultValue: 'Edit assistant rules as Markdown',
                     })}
                   >
                     <div
-                      className={`flex items-center h-full px-16px cursor-pointer transition-all text-13px font-medium select-none border-b-2 border-transparent ${
-                        promptViewMode === 'edit'
-                          ? 'text-primary font-semibold border-primary bg-bg-1'
-                          : 'text-t-primary opacity-80 hover:opacity-100 hover:text-primary'
-                      }`}
+                      className={classNames('settings-segment-toggle__item', {
+                        'settings-segment-toggle__item--active': promptViewMode === 'edit',
+                      })}
                       onClick={() => setPromptViewMode('edit')}
                     >
                       {t('settings.promptEdit', { defaultValue: 'Edit' })}
@@ -446,11 +447,9 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                     })}
                   >
                     <div
-                      className={`flex items-center h-full px-16px cursor-pointer transition-all text-13px font-medium select-none border-b-2 border-transparent ${
-                        promptViewMode === 'preview'
-                          ? 'text-primary font-semibold border-primary bg-bg-1'
-                          : 'text-t-primary opacity-80 hover:opacity-100 hover:text-primary'
-                      }`}
+                      className={classNames('settings-segment-toggle__item', {
+                        'settings-segment-toggle__item--active': promptViewMode === 'preview',
+                      })}
                       onClick={() => setPromptViewMode('preview')}
                     >
                       {t('settings.promptPreview', { defaultValue: 'Preview' })}
@@ -459,7 +458,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                 </div>
               )}
               <div
-                className='bg-fill-2'
+                className='settings-drawer-editor-body'
                 style={{
                   height: isRuleEditable ? 'calc(100% - 36px)' : '100%',
                   overflow: 'auto',
@@ -496,21 +495,23 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
           {showSkills && (
             <div className='flex-shrink-0 mt-16px'>
               <div className='flex items-center justify-between mb-12px'>
-                <Typography.Text bold>{t('settings.assistantSkills', { defaultValue: 'Skills' })}</Typography.Text>
+                <Typography.Text className='settings-form-section-title'>
+                  {t('settings.assistantSkills', { defaultValue: 'Skills' })}
+                </Typography.Text>
                 <Button
                   size='small'
                   type='outline'
                   icon={<Plus size={14} />}
                   onClick={() => setSkillsModalVisible(true)}
-                  className='rounded-[100px]'
+                  className='settings-pill-button'
                 >
                   {t('settings.addSkills', { defaultValue: 'Add Skills' })}
                 </Button>
               </div>
 
-              <div className='mb-12px p-12px rd-12px bg-fill-1 border border-border-1 flex flex-col gap-12px'>
+              <div className='settings-note-card mb-12px flex flex-col gap-12px'>
                 <div className='flex flex-col gap-8px'>
-                  <div className='text-13px font-medium text-t-primary'>
+                  <div className='settings-note-card__title'>
                     {t('settings.skillRecommendationsTitle', { defaultValue: 'Recommended for this Agent' })}
                   </div>
                   {recommendedSkills.length > 0 ? (
@@ -522,7 +523,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                             key={`recommended-${skill.name}`}
                             size='mini'
                             type={isSelected ? 'primary' : 'outline'}
-                            className='rounded-[100px]'
+                            className='settings-pill-button'
                             onClick={() => {
                               if (isSelected) {
                                 setSelectedSkills(selectedSkills.filter((name) => name !== skill.name));
@@ -537,7 +538,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                       })}
                     </div>
                   ) : (
-                    <div className='text-12px text-t-secondary'>
+                    <div className='settings-content-summary'>
                       {t('settings.skillRecommendationsEmpty', {
                         defaultValue: 'No recommendations yet for this Agent type.',
                       })}
@@ -546,7 +547,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                 </div>
 
                 <div className='flex flex-col gap-8px'>
-                  <div className='text-13px font-medium text-t-primary'>
+                  <div className='settings-note-card__title'>
                     {t('settings.skillTemplatesTitle', { defaultValue: 'Skill Templates' })}
                   </div>
                   {templateAssistants.length > 0 ? (
@@ -570,6 +571,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                           size='small'
                           type='outline'
                           disabled={!selectedTemplateAssistant}
+                          className='settings-pill-button'
                           onClick={() => {
                             if (!selectedTemplateAssistant) return;
                             setSelectedSkills(selectedTemplateAssistant.enabledSkills || []);
@@ -581,6 +583,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                           size='small'
                           type='outline'
                           disabled={!selectedTemplateAssistant}
+                          className='settings-pill-button'
                           onClick={() => {
                             if (!selectedTemplateAssistant) return;
                             setSelectedSkills(
@@ -593,7 +596,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div className='text-12px text-t-secondary'>
+                    <div className='settings-content-summary'>
                       {t('settings.skillTemplatesEmpty', {
                         defaultValue: 'No assistant templates with skills available yet.',
                       })}
@@ -602,11 +605,11 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                 </div>
               </div>
 
-              <Collapse defaultActiveKey={['custom-skills']}>
+              <Collapse defaultActiveKey={['custom-skills']} className='settings-collapsible-card'>
                 {/* Custom Skills (Pending + Imported) */}
                 <Collapse.Item
                   header={
-                    <span className='text-13px font-medium'>
+                    <span className='settings-card-header__title'>
                       {t('settings.customSkills', { defaultValue: 'Imported Skills (Library)' })}
                     </span>
                   }
@@ -632,7 +635,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                     {pendingSkills.map((skill) => (
                       <div
                         key={`pending-${skill.name}`}
-                        className='flex items-start gap-8px p-8px hover:bg-fill-1 rounded-4px group'
+                        className='settings-selectable-row flex items-start gap-8px p-8px group'
                       >
                         <Checkbox
                           checked={selectedSkills.includes(skill.name)}
@@ -672,7 +675,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                     {customSkillItems.map((skill) => (
                       <div
                         key={`custom-${skill.name}`}
-                        className='flex items-start gap-8px p-8px hover:bg-fill-1 rounded-4px group'
+                        className='settings-selectable-row flex items-start gap-8px p-8px group'
                       >
                         <Checkbox
                           checked={selectedSkills.includes(skill.name)}
@@ -709,7 +712,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                       </div>
                     ))}
                     {pendingSkills.length === 0 && customSkillItems.length === 0 && (
-                      <div className='text-center text-t-secondary text-12px py-16px'>
+                      <div className='settings-empty-state text-12px py-16px'>
                         {t('settings.noCustomSkills', { defaultValue: 'No custom skills added' })}
                       </div>
                     )}
@@ -719,7 +722,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                 {/* Builtin Skills */}
                 <Collapse.Item
                   header={
-                    <span className='text-13px font-medium'>
+                    <span className='settings-card-header__title'>
                       {t('settings.builtinSkills', { defaultValue: 'Builtin Skills' })}
                     </span>
                   }
@@ -742,7 +745,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                   {builtinSkillItems.length > 0 ? (
                     <div className='space-y-4px'>
                       {builtinSkillItems.map((skill) => (
-                        <div key={skill.name} className='flex items-start gap-8px p-8px hover:bg-fill-1 rounded-4px'>
+                        <div key={skill.name} className='settings-selectable-row flex items-start gap-8px p-8px'>
                           <Checkbox
                             checked={selectedSkills.includes(skill.name)}
                             className='mt-2px cursor-pointer'
@@ -765,7 +768,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                       ))}
                     </div>
                   ) : (
-                    <div className='text-center text-t-secondary text-12px py-16px'>
+                    <div className='settings-empty-state text-12px py-16px'>
                       {t('settings.noBuiltinSkills', { defaultValue: 'No builtin skills available' })}
                     </div>
                   )}

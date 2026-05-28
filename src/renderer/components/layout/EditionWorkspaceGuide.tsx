@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -11,7 +11,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
-import { isElectronDesktop } from '@/renderer/utils/platform';
+import { openAdminConsole } from '@/renderer/utils/openAdminConsole';
 import styles from '@/renderer/components/layout/EditionWorkspaceGuide.module.css';
 
 const WORKSPACE_ROUTE_PREFIXES = ['/sessions', '/workspace', '/tasks', '/conversation', '/guid'];
@@ -42,7 +42,6 @@ const EditionWorkspaceGuide: React.FC = () => {
     setManagementMode,
     openEnterpriseAdminInBrowser,
   } = useWebuiEnterpriseMode();
-  const isDesktop = isElectronDesktop();
 
   const joinedWhilePersonal = managementMode === 'standalone' && hasJoinedEnterprise;
   const storageKey = dismissKey(managementMode, joinedWhilePersonal);
@@ -66,77 +65,83 @@ const EditionWorkspaceGuide: React.FC = () => {
     });
   }, [navigate, setManagementMode]);
 
-  const openAdminConsole = useCallback(async () => {
-    if (isDesktop) {
-      const result = await openEnterpriseAdminInBrowser();
-      if (result === 'webui_not_running') {
-        void navigate('/settings/webui');
-      }
-      return;
-    }
-    void navigate('/enterprise');
-  }, [isDesktop, navigate, openEnterpriseAdminInBrowser]);
+  const openAdminConsoleHandler = useCallback(async () => {
+    await openAdminConsole({
+      navigate: (path) => {
+        void navigate(path);
+      },
+      openEnterpriseAdminInBrowser,
+    });
+  }, [navigate, openEnterpriseAdminInBrowser]);
 
-  const { title, body, type } = useMemo(() => {
+  const { line, type, action } = useMemo(() => {
     if (managementMode === 'standalone' && hasJoinedEnterprise) {
       return {
         type: 'info' as const,
-        title: t('settings.edition.guideJoinedPersonalTitle', {
-          defaultValue: '已加入企业，当前为个人版视图',
+        line: t('settings.edition.guideJoinedPersonalLine', {
+          defaultValue: '已加入 {{tenant}}，当前为个人版视图。',
           tenant: tenantLabel,
         }),
-        body: t('settings.edition.guideJoinedPersonalBody', {
-          defaultValue:
-            '您已是企业成员（{{tenant}}），当前仍为「个人版」视图。主工作台里的团队协同与企业能力入口已经可用；若切换到「企业团队版」，则会以公司身份作为默认工作上下文。',
-          tenant: tenantLabel,
-        }),
+        action: (
+          <Button size='mini' type='text' onClick={switchToEnterpriseEdition}>
+            {t('settings.edition.guideSwitchEnterprise', { defaultValue: '切换到1ONE Code 企业版' })}
+          </Button>
+        ),
       };
     }
     if (managementMode === 'standalone') {
       return {
         type: 'info' as const,
-        title: t('settings.edition.guidePersonalTitle', { defaultValue: '当前：个人版工作区' }),
-        body: t('settings.edition.guidePersonalBody', {
-          defaultValue:
-            '这里和「企业团队版」使用同一套会话、任务、工作区界面，差别在于账号与数据范围：个人版面向本机/自己的使用场景。若公司开通了企业团队版，可在标题栏切换到「企业团队版」并用邀请码或 LDAP/飞书 登录加入。',
-        }),
+        line: t('settings.edition.guidePersonalLine', { defaultValue: '当前为个人版工作区。' }),
+        action: null,
       };
     }
     if (!hasJoinedEnterprise) {
       return {
         type: 'warning' as const,
-        title: t('settings.edition.guideEnterprisePendingTitle', { defaultValue: '企业团队版：尚未加入组织' }),
-        body: t('settings.edition.guideEnterprisePendingBody', {
-          defaultValue:
-            '切换「企业团队版」不会打开管理后台。请先在浏览器登录（LDAP/飞书/本地账户等），或在「加入企业」页输入邀请码；加入后才会回到此工作区并以企业身份使用。',
+        line: t('settings.edition.guideEnterprisePendingLine', {
+          defaultValue: '尚未加入组织，请先登录或输入邀请码加入。',
         }),
+        action: (
+          <Button size='mini' type='text' onClick={() => void navigate('/enterprise/join')}>
+            {t('settings.edition.guideGoJoin', { defaultValue: '前往加入企业' })}
+          </Button>
+        ),
       };
     }
     if (isAdmin) {
       return {
         type: 'info' as const,
-        title: t('settings.edition.guideEnterpriseAdminTitle', {
-          defaultValue: '当前：企业团队版工作区（{{tenant}}）',
+        line: t('settings.edition.guideEnterpriseAdminLine', {
+          defaultValue: '企业版工作区（{{tenant}}）。',
           tenant: tenantLabel,
         }),
-        body: t('settings.edition.guideEnterpriseAdminBody', {
-          defaultValue:
-            '日常聊天、任务与个人版相同，只是以企业身份运行。配置成员、LDAP、飞书、邀请码、邮件等请点左侧「管理后台」或标题栏「管理后台」—— 那不是「企业团队版」切换，而是组织治理专用入口。',
-        }),
+        action: showEnterpriseAdminNav ? (
+          <Button size='mini' type='text' onClick={() => void openAdminConsoleHandler()}>
+            {t('settings.edition.openAdminConsole', { defaultValue: '管理后台' })}
+          </Button>
+        ) : null,
       };
     }
     return {
       type: 'info' as const,
-      title: t('settings.edition.guideEnterpriseMemberTitle', {
-        defaultValue: '当前：企业团队版工作区（{{tenant}}）',
+      line: t('settings.edition.guideEnterpriseMemberLine', {
+        defaultValue: '企业版工作区（{{tenant}}）。',
         tenant: tenantLabel,
       }),
-      body: t('settings.edition.guideEnterpriseMemberBody', {
-        defaultValue:
-          '界面与个人版相同，会话与任务在企业租户下进行。您无需进入管理后台；若看到「管理后台」菜单，说明您同时是组织管理员，仅在做管理时才需要打开。',
-      }),
+      action: null,
     };
-  }, [hasJoinedEnterprise, isAdmin, managementMode, t, tenantLabel]);
+  }, [
+    hasJoinedEnterprise,
+    isAdmin,
+    managementMode,
+    openAdminConsoleHandler,
+    showEnterpriseAdminNav,
+    switchToEnterpriseEdition,
+    t,
+    tenantLabel,
+    navigate,
+  ]);
 
   if (loading || !visible || !isWorkspaceRoute(location.pathname)) {
     return null;
@@ -148,30 +153,10 @@ const EditionWorkspaceGuide: React.FC = () => {
       type={type}
       closable
       onClose={dismiss}
-      title={title}
       content={
-        <div className={styles.guideBody}>
-          <p className={styles.guideText}>{body}</p>
-          <div className={styles.guideActions}>
-            {managementMode === 'standalone' && hasJoinedEnterprise ? (
-              <Button size='mini' type='primary' onClick={switchToEnterpriseEdition}>
-                {t('settings.edition.guideSwitchEnterprise', { defaultValue: '切换到企业团队版' })}
-              </Button>
-            ) : null}
-            {managementMode === 'enterprise' && !hasJoinedEnterprise ? (
-              <Button size='mini' type='primary' onClick={() => void navigate('/enterprise/join')}>
-                {t('settings.edition.guideGoJoin', { defaultValue: '前往加入企业' })}
-              </Button>
-            ) : null}
-            {managementMode === 'enterprise' && hasJoinedEnterprise && showEnterpriseAdminNav ? (
-              <Button size='mini' type='outline' onClick={() => void openAdminConsole()}>
-                {t('settings.edition.openAdminConsole', { defaultValue: '管理后台' })}
-              </Button>
-            ) : null}
-            <Button size='mini' type='text' onClick={dismiss}>
-              {t('settings.edition.guideDismiss', { defaultValue: '知道了，不再提示' })}
-            </Button>
-          </div>
+        <div className={styles.guideRow}>
+          <span className={styles.guideText}>{line}</span>
+          {action}
         </div>
       }
     />

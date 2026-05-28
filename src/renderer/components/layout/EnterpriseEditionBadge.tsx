@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -33,7 +33,7 @@ const EnterpriseEditionBadge: React.FC<EnterpriseEditionBadgeProps> = ({ size = 
   return (
     <span className={styles.wrap}>
       <Tag size={size === 'small' ? 'small' : 'default'} color='arcoblue' className={styles.editionTag}>
-        {t('settings.edition.badgeEnterprise', { defaultValue: '企业团队版' })}
+        {t('settings.edition.badgeEnterprise', { defaultValue: '1ONE Code 企业版' })}
       </Tag>
       {tenantLabel ? (
         <span className={size === 'small' ? styles.tenantSmall : styles.tenant} title={tenantLabel}>

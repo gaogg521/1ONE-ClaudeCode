@@ -13,9 +13,7 @@ import { getZoomFactor, setZoomFactor } from '@process/utils/zoom';
 import { getCdpStatus, updateCdpConfig } from '@process/utils/configureChromium';
 import { initApplicationBridgeCore } from './applicationBridgeCore';
 import type { IStartOnBootStatus } from '@/common/adapter/ipcBridge';
-import { spawn } from 'node:child_process';
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
+import { scheduleApplicationRestart } from '@process/utils/devRestart';
 
 let mainWindowRef: BrowserWindow | null = null;
 
@@ -102,46 +100,8 @@ export function initApplicationBridge(workerTaskManager: IWorkerTaskManager): vo
   initApplicationBridgeCore();
 
   ipcBridge.application.restart.provider(() => {
-    // 清理所有工作进程
     workerTaskManager.clear();
-
-    // In dev (electron-vite + WebUI), app.relaunch() is unreliable on Windows and may
-    // quit without successfully starting the next instance. To avoid a “dead” WebUI,
-    // we explicitly spawn a new Electron process with the same args, then exit.
-    const isDev = !app.isPackaged;
-    if (isDev) {
-      try {
-        // Best-effort: clear dev lockfile so the next instance won't be blocked.
-        const lockfile = path.join(app.getPath('appData'), '1OneClaudeCode-Dev', 'lockfile');
-        void fs.rm(lockfile, { force: true });
-      } catch {
-        // ignore
-      }
-
-      try {
-        const execPath = process.execPath;
-        const args = process.argv.slice(1);
-        const child = spawn(execPath, args, {
-          detached: true,
-          stdio: 'ignore',
-          windowsHide: true,
-          env: process.env,
-          cwd: process.cwd(),
-        });
-        child.unref();
-      } catch {
-        // Fallback to Electron relaunch if spawn fails
-        app.relaunch();
-      }
-
-      // Allow IPC response to flush before exiting (important for WebUI calls).
-      setTimeout(() => app.exit(0), 150);
-      return Promise.resolve();
-    }
-
-    // Production: standard Electron relaunch
-    app.relaunch();
-    app.exit(0);
+    scheduleApplicationRestart();
     return Promise.resolve();
   });
 

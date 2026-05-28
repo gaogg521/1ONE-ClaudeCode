@@ -1,6 +1,6 @@
 {
   "welcome": {
-    "title": "Hi，今天有什么安排？",
+    "title": "快来实现你思想的人生巅峰吧！",
     "placeholder": "发消息、上传文件、打开文件夹或创建定时任务...",
     "uploadFile": "上传文件",
     "linkFolder": "打开文件夹",
@@ -25,6 +25,7 @@
     "recents": "最近",
     "noHistory": "暂无对话历史",
     "viewAll": "查看所有",
+    "sessionsSiderHint": "右侧为完整会话中心。此处提供快捷返回与检索。",
     "deleteTitle": "删除",
     "deleteConfirm": "确定删除该对话吗？",
     "confirmDelete": "删除",
@@ -68,6 +69,7 @@
     "pinFailed": "置顶操作失败",
     "pinnedSection": "置顶",
     "favoritesSection": "收藏夹",
+    "sectionTitle": "历史会话",
     "deleteSuccess": "删除成功",
     "deleteFailed": "删除失败"
   },

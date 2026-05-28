@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -14,6 +14,7 @@ import { resolveEnterpriseEditionPath } from '@/common/auth/enterpriseRoles';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { openAdminConsole as openAdminConsoleRoute } from '@/renderer/utils/openAdminConsole';
 import { setPostLoginRedirect } from '@/renderer/utils/postLoginRedirect';
 import styles from '@/renderer/components/layout/EditionModeSwitcher.module.css';
 
@@ -47,12 +48,10 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
         if (next === 'enterprise') {
           if (isDesktop && !hasJoinedEnterprise) {
             void navigate('/enterprise/join');
-            await openEnterpriseLoginInBrowser();
             return;
           }
           if (status !== 'authenticated') {
-            setPostLoginRedirect('/sessions');
-            void navigate(`/login?redirect=${encodeURIComponent('/sessions')}`);
+            void navigate('/enterprise/join');
             return;
           }
           // 切换到企业版，同样瞬间回到日常开发聊天主台
@@ -74,7 +73,12 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
   );
 
   const openAdminConsole = useCallback(async () => {
-    const result = await openEnterpriseAdminInBrowser();
+    const result = await openAdminConsoleRoute({
+      navigate: (path) => {
+        void navigate(path);
+      },
+      openEnterpriseAdminInBrowser,
+    });
     if (result === 'webui_not_running') {
       void navigate('/settings/webui');
     }
@@ -117,10 +121,10 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
 
   const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId;
   const personalLabel = t('settings.edition.personal', { defaultValue: '个人版' });
-  const enterpriseLabel = t('settings.edition.enterprise', { defaultValue: '企业团队版' });
+  const enterpriseLabel = t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' });
   const helpContent = (
     <div className={styles.helpPopover}>
-      <p className={styles.helpTitle}>{t('settings.edition.helpTitle', { defaultValue: '个人版 / 企业团队版 / 管理后台 区别' })}</p>
+      <p className={styles.helpTitle}>{t('settings.edition.helpTitle', { defaultValue: '个人版 / 1ONE Code 企业版 / 管理后台 区别' })}</p>
       <p className={styles.helpP}>
         {t('settings.edition.helpPersonal', {
           defaultValue: '个人版：本机/自己的账号与数据，界面即当前会话工作区。',
@@ -129,7 +133,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
       <p className={styles.helpP}>
         {t('settings.edition.helpEnterprise', {
           defaultValue:
-            '企业团队版：同一套工作区，但以企业身份使用（需先加入）。界面不会变成「管理页」。',
+            '1ONE Code 企业版：同一套工作区，但以企业身份使用（需先加入）。界面不会变成「管理页」。',
         })}
       </p>
       <p className={styles.helpP}>
@@ -214,7 +218,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
       {showEnterpriseAdminNav ? (
         <Tooltip
           content={t('settings.edition.adminConsoleHint', {
-            defaultValue: '组织管理后台（成员、LDAP、邀请码、邮件）与上方「企业团队版」工作区是独立入口。',
+            defaultValue: '组织管理后台（成员、LDAP、邀请码、邮件）与上方「1ONE Code 企业版」工作区是独立入口。',
           })}
         >
           <Button size='small' type='outline' onClick={() => void openAdminConsole()}>
@@ -225,7 +229,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
       {isDesktop && activeEdition === 'enterprise' && !hasJoinedEnterprise ? (
         <Tooltip
           content={t('settings.edition.desktopLoginHint', {
-            defaultValue: '桌面端企业团队版需在浏览器登录；加入企业后工作区与个人版相同结构。',
+            defaultValue: '桌面端1ONE Code 企业版需在浏览器登录；加入企业后工作区与个人版相同结构。',
           })}
         >
           <Button size='small' type='text' onClick={() => void openEnterpriseLoginInBrowser()}>

@@ -254,7 +254,7 @@ const JsonImportModal: React.FC<JsonImportModalProps> = ({ visible, server, onCa
         height: 420 - 80,
       }} // 与“添加模型”弹窗保持统一尺寸 / Keep same size as Add Model modal
     >
-      <div className='space-y-12px'>
+      <div className='settings-modal-surface space-y-12px p-16px'>
         <div>
           <div className='mb-2 text-sm text-t-secondary'>{t('settings.mcpImportPlaceholder')}</div>
           <div className='relative'>
@@ -337,7 +337,7 @@ const JsonImportModal: React.FC<JsonImportModalProps> = ({ visible, server, onCa
 
           {/* JSON 格式错误提示 */}
           {!validation.isValid && jsonInput.trim() && (
-            <div className='mt-2 text-sm text-red-600'>
+            <div className='settings-error-note mt-2 text-sm'>
               {validation.errorMessage || t('settings.mcpJsonFormatError') || 'JSON format error'}
             </div>
           )}

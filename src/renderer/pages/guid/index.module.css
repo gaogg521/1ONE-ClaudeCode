@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap');
+
 .guidLayout {
   --assistant-surface-bg: color-mix(in srgb, var(--bg-2) 65%, transparent);
   --assistant-surface-bg-hover: color-mix(in srgb, var(--bg-2) 85%, transparent);
@@ -122,6 +124,14 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
+}
+
+.heroTitleArt {
+  font-family: 'Ma Shan Zheng', 'STKaiti', 'KaiTi', '楷体', 'FangSong', cursive;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  line-height: 1.45;
+  color: var(--color-text-0);
 }
 
 .heroTitleInlineIcon {

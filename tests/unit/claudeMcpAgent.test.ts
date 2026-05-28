@@ -1,12 +1,15 @@
 /**
  * @license
- * Copyright 2025 1ONE ClaudeCode (1one-claudecode.com)
+ * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
  */
 
 import { describe, expect, it } from 'vitest';
 import type { IMcpServer } from '../../src/common/config/storage';
-import { buildClaudeStdioJsonConfig } from '../../src/process/services/mcpServices/agents/ClaudeMcpAgent';
+import {
+  buildClaudeStdioJsonConfig,
+  normalizeClaudeStdioTransport,
+} from '../../src/process/services/mcpServices/agents/ClaudeMcpAgent';
 
 describe('ClaudeMcpAgent helpers', () => {
   it('builds stdio MCP JSON config including env vars', () => {
@@ -36,5 +39,19 @@ describe('ClaudeMcpAgent helpers', () => {
         ONE_IMG_MODEL: 'gpt-image-1',
       },
     });
+  });
+
+  it('wraps legacy script-path commands for Claude stdio JSON', () => {
+    const scriptPath = 'D:/app/resources/bundled-agent-toolkit/win32-x64/node_modules/@colbymchenry/codegraph/dist/bin/codegraph.js';
+    const normalized = normalizeClaudeStdioTransport({
+      type: 'stdio',
+      command: scriptPath,
+      args: ['serve', '--mcp'],
+      env: {},
+    });
+
+    expect(normalized.command).not.toBe(scriptPath);
+    expect(normalized.args[0]).toBe(scriptPath);
+    expect(normalized.args.slice(1)).toEqual(['serve', '--mcp']);
   });
 });

@@ -14,6 +14,7 @@ import {
 import * as path from 'path';
 import i18n from '@process/services/i18n';
 import { workerTaskManager } from '../task/workerTaskManagerSingleton';
+import { scheduleApplicationRestart } from './devRestart';
 
 let tray: TrayInstance | null = null;
 let closeToTrayEnabled = false;
@@ -172,8 +173,8 @@ const buildTrayContextMenu = async (): Promise<Electron.Menu> => {
     label: i18n.t('common.tray.restart'),
     click: () => {
       isQuitting = true;
-      app.relaunch();
-      app.exit(0);
+      workerTaskManager.clear();
+      scheduleApplicationRestart();
     },
   });
   template.push({ type: 'separator' });
