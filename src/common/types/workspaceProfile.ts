@@ -19,6 +19,7 @@ export type WorkspaceUserProfile = {
   tenantName: string | null;
   joinedEnterprise: boolean;
   avatarUrl: string | null;
+  orgUnitPath: string | null;
   teams: WorkspaceTeamMembership[];
   updatedAt: number;
 };

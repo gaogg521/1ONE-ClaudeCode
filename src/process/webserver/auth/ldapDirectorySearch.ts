@@ -13,6 +13,7 @@ import {
   searchLdapDirectory,
   type LdapDirectoryEntry,
 } from '@process/webserver/auth/providers/LdapAuthProvider';
+import { updateUserOrgProfile } from '@process/services/user/userProfileService';
 
 export type { LdapDirectoryEntry };
 
@@ -39,6 +40,17 @@ async function ensureUserTenant(userId: string, tenantId: string | undefined): P
   }
 }
 
+async function syncLdapOrgProfile(userId: string, entry: LdapDirectoryEntry): Promise<void> {
+  if (!entry.orgUnitPath?.trim()) {
+    return;
+  }
+  await updateUserOrgProfile({
+    userId,
+    orgUnitPath: entry.orgUnitPath,
+    source: 'ldap',
+  });
+}
+
 export async function resolveLocalUserForLdapEntry(
   entry: LdapDirectoryEntry,
   options?: { tenantId?: string }
@@ -58,6 +70,7 @@ export async function resolveLocalUserForLdapEntry(
     const user = await UserRepository.findById(byExternal.user_id);
     if (user) {
       await ensureUserTenant(user.id, options?.tenantId);
+      await syncLdapOrgProfile(user.id, entry);
       return { userId: user.id, username: user.username, created: false };
     }
   }
@@ -66,6 +79,7 @@ export async function resolveLocalUserForLdapEntry(
   if (byName) {
     await AuthIdentityRepository.bind('ldap', externalId, byName.id);
     await ensureUserTenant(byName.id, options?.tenantId);
+    await syncLdapOrgProfile(byName.id, entry);
     return { userId: byName.id, username: byName.username, created: false };
   }
 
@@ -74,5 +88,6 @@ export async function resolveLocalUserForLdapEntry(
   const created = await UserRepository.createUserWithRole(username, passwordHash, 'member');
   await AuthIdentityRepository.bind('ldap', externalId, created.id);
   await ensureUserTenant(created.id, options?.tenantId);
+  await syncLdapOrgProfile(created.id, entry);
   return { userId: created.id, username: created.username, created: true };
 }

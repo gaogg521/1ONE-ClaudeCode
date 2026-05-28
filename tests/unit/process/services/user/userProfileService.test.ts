@@ -44,6 +44,7 @@ import {
   buildAvatarPublicPath,
   getWorkspaceUserProfile,
   updateUserAvatar,
+  updateUserOrgProfile,
 } from '@process/services/user/userProfileService';
 
 describe('userProfileService', () => {
@@ -72,6 +73,7 @@ describe('userProfileService', () => {
       role: 'member',
       tenant_id: 'tenant-1',
       avatar_path: '/tmp/config/user-avatars/user-1.png',
+      org_unit_path: '研发中心 / 平台组',
       updated_at: 999,
     });
 
@@ -83,6 +85,7 @@ describe('userProfileService', () => {
       tenantName: 'Acme Corp',
       joinedEnterprise: true,
       avatarUrl: '/api/auth/profile/avatar?ts=999',
+      orgUnitPath: '研发中心 / 平台组',
       teams: [{ teamId: 'team-1', teamName: 'Platform', role: 'member' }],
     });
   });
@@ -121,5 +124,15 @@ describe('userProfileService', () => {
         mimeType: 'application/pdf',
       })
     ).rejects.toThrow('Unsupported avatar format');
+  });
+
+  it('stores org unit path from SSO sync', async () => {
+    await updateUserOrgProfile({
+      userId: 'user-1',
+      orgUnitPath: '研发中心 / 平台组',
+      source: 'ldap',
+    });
+
+    expect(mockRun).toHaveBeenCalled();
   });
 });

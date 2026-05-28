@@ -270,6 +270,26 @@ export class OneCmdDatabase {
       return { success: false, error: error.message, data: false };
     }
   }
+
+  updateUserOrgProfile(
+    userId: string,
+    orgUnitPath: string,
+    source: string
+  ): IQueryResult<boolean> {
+    try {
+      const now = Date.now();
+      this.db
+        .prepare(
+          `UPDATE users
+           SET org_unit_path = ?, org_profile_source = ?, org_profile_synced_at = ?, updated_at = ?
+           WHERE id = ?`
+        )
+        .run(orgUnitPath, source, now, now, userId);
+      return { success: true, data: true };
+    } catch (error: any) {
+      return { success: false, error: error.message, data: false };
+    }
+  }
   /**
    * Expose the underlying SQLite driver for repositories that need raw SQL access.
    * Prefer using dedicated methods on OneCmdDatabase where possible.

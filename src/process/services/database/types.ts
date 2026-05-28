@@ -24,6 +24,9 @@ export interface IUser {
   email?: string;
   password_hash: string;
   avatar_path?: string;
+  org_unit_path?: string | null;
+  org_profile_source?: string | null;
+  org_profile_synced_at?: number | null;
   jwt_secret?: string | null;
   role: 'member' | 'org_admin' | 'system_admin' | 'user' | 'admin';
   created_at: number;

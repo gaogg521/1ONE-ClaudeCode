@@ -1821,6 +1821,23 @@ const migration_v45: IMigration = {
 };
 
 /**
+ * Migration v45 -> v46: Store SSO-synced organization unit path on users
+ */
+const migration_v46: IMigration = {
+  version: 46,
+  name: 'Add users.org_unit_path for SSO org profile',
+  up: (db) => {
+    db.exec('ALTER TABLE users ADD COLUMN org_unit_path TEXT');
+    db.exec('ALTER TABLE users ADD COLUMN org_profile_source TEXT');
+    db.exec('ALTER TABLE users ADD COLUMN org_profile_synced_at INTEGER');
+    console.log('[Migration v46] Added users org profile columns');
+  },
+  down: (db) => {
+    console.log('[Migration v46] Rolled back users org profile columns (columns retained)');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -1850,6 +1867,7 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v43,
   migration_v44,
   migration_v45,
+  migration_v46,
 ];
 
 /**

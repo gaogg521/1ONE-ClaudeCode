@@ -8,6 +8,7 @@ import ldap from 'ldapjs';
 import type { SearchEntryObject } from 'ldapjs';
 
 import { PASSWORD_MASK } from '@/common/config/constants';
+import { resolveLdapOrgUnitPath } from '@process/webserver/auth/orgProfile/ldapOrgProfile';
 
 export type LdapProviderConfig = {
   url: string;
@@ -31,6 +32,7 @@ export type LdapDirectoryEntry = {
   username: string;
   displayName?: string;
   mail?: string;
+  orgUnitPath?: string;
 };
 
 /** Minimal typing for ldapjs search callback result stream (no @types/ldapjs). */
@@ -244,6 +246,7 @@ function ldapEntryToDirectoryRow(
     username,
     displayName,
     mail: mail || undefined,
+    orgUnitPath: resolveLdapOrgUnitPath(dn, record) ?? undefined,
   };
 }
 
@@ -322,7 +325,7 @@ export async function searchLdapDirectory(
   const safe = escapeLdapFilterValue(q);
   const filter = `(&(|(objectClass=user)(objectClass=person)(objectClass=inetOrgPerson)(objectClass=organizationalPerson))(|(${loginAttr}=*${safe}*)(sAMAccountName=*${safe}*)(cn=*${safe}*)(displayName=*${safe}*)(sn=*${safe}*)(givenName=*${safe}*)(mail=*${safe}*)(userPrincipalName=*${safe}*)))`;
   const attrs = Array.from(
-    new Set(['dn', loginAttr, 'sAMAccountName', 'userPrincipalName', 'uid', 'cn', 'displayName', 'mail'])
+    new Set(['dn', loginAttr, 'sAMAccountName', 'userPrincipalName', 'uid', 'cn', 'displayName', 'mail', 'department', 'company'])
   );
 
   const bindPrincipal = resolveLdapBindPrincipal(config);
@@ -351,6 +354,7 @@ export async function authenticateWithLdap(
   externalId: string;
   isAdmin: boolean;
   userDn: string;
+  orgUnitPath: string | null;
   debug?: { memberOf?: string[] };
 }> {
     const loginAttr = resolveLoginAttribute(config);
@@ -360,7 +364,9 @@ export async function authenticateWithLdap(
     const rawFilter = (config.searchFilter || defaultFilter).trim();
     const safeUser = escapeLdapFilterValue(username.trim());
     const filter = rawFilter.replace(/\{\{\s*username\s*\}\}/gi, safeUser);
-    const attrs = Array.from(new Set(['dn', loginAttr, 'memberOf', ...(config.externalIdAttribute ? [config.externalIdAttribute] : [])]));
+    const attrs = Array.from(
+      new Set(['dn', loginAttr, 'memberOf', 'department', 'company', ...(config.externalIdAttribute ? [config.externalIdAttribute] : [])])
+    );
 
     // 1) service bind (optional) + search user dn
     const serviceClient = createClient(config);
@@ -396,6 +402,7 @@ export async function authenticateWithLdap(
         externalId,
         isAdmin,
         userDn,
+        orgUnitPath: resolveLdapOrgUnitPath(userDn, entryRecord),
         debug: { memberOf },
       };
     } finally {

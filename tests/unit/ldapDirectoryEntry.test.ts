@@ -27,6 +27,7 @@ describe('ldap directory entry mapping', () => {
     );
     expect(row.username).toBe('shufangzhao');
     expect(row.displayName).toBe('赵淑芳');
+    expect(row.orgUnitPath).toBe('users');
     expect(row.username).not.toContain('CN=');
   });
 

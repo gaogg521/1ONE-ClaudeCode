@@ -11,6 +11,8 @@ import { resolveEnterpriseContext } from '@process/webserver/auth/enterpriseCont
 import { getConfigPath } from '@process/utils/utils';
 import type { WorkspaceTeamMembership, WorkspaceUserProfile } from '@/common/types/workspaceProfile';
 
+export type OrgProfileSource = 'ldap' | 'feishu';
+
 const AVATAR_DIR_NAME = 'user-avatars';
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -60,6 +62,7 @@ export async function getWorkspaceUserProfile(userId: string): Promise<Workspace
         role: string;
         tenant_id: string;
         avatar_path: string | null;
+        org_unit_path: string | null;
         updated_at: number;
       }
     | undefined;
@@ -91,6 +94,7 @@ export async function getWorkspaceUserProfile(userId: string): Promise<Workspace
     tenantName: enterprise.tenantName,
     joinedEnterprise: enterprise.joined,
     avatarUrl,
+    orgUnitPath: row.org_unit_path?.trim() || null,
     teams,
     updatedAt: row.updated_at,
   };
@@ -150,4 +154,24 @@ export async function updateUserAvatar(input: {
     throw new Error('User not found');
   }
   return profile;
+}
+
+export async function updateUserOrgProfile(input: {
+  userId: string;
+  orgUnitPath: string | null;
+  source: OrgProfileSource;
+}): Promise<void> {
+  const trimmed = input.orgUnitPath?.trim();
+  if (!trimmed) {
+    return;
+  }
+  const db = await getDatabase();
+  const now = Date.now();
+  db.getDriver()
+    .prepare(
+      `UPDATE users
+       SET org_unit_path = ?, org_profile_source = ?, org_profile_synced_at = ?, updated_at = ?
+       WHERE id = ?`
+    )
+    .run(trimmed, input.source, now, now, input.userId);
 }

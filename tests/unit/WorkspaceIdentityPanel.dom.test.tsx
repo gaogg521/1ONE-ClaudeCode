@@ -53,6 +53,7 @@ vi.mock('@/renderer/hooks/enterprise/useWorkspaceUserProfile', () => ({
       tenantName: 'Acme Corp',
       joinedEnterprise: true,
       avatarUrl: null,
+      orgUnitPath: '研发中心 / 平台组',
       teams: [{ teamId: 'team-1', teamName: 'Platform', role: 'member' }],
       updatedAt: Date.now(),
     },
@@ -97,6 +98,7 @@ describe('WorkspaceIdentityPanel', () => {
     render(<WorkspaceIdentityPanel />);
     expect(screen.getByText('alice')).toBeTruthy();
     expect(screen.getByText('Acme Corp · 企业团队版')).toBeTruthy();
+    expect(screen.getByText('研发中心 / 平台组')).toBeTruthy();
   });
 
   it('renders compact mode with avatar trigger only', () => {

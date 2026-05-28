@@ -71,6 +71,7 @@ export function useWorkspaceUserProfile() {
       tenantName: ctx?.tenantName ?? null,
       joinedEnterprise: joined,
       avatarUrl: null,
+      orgUnitPath: null,
       teams: [],
       updatedAt: Date.now(),
     };

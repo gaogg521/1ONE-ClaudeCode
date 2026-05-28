@@ -248,6 +248,22 @@ export const UserRepository = {
     }
   },
 
+  async updateOrgProfile(
+    userId: string,
+    orgUnitPath: string,
+    source: 'ldap' | 'feishu'
+  ): Promise<void> {
+    const trimmed = orgUnitPath.trim();
+    if (!trimmed) {
+      return;
+    }
+    const db = await getDatabase();
+    const result = db.updateUserOrgProfile(userId, trimmed, source);
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to update org profile');
+    }
+  },
+
   async createUserWithRole(
     username: string,
     passwordHash: string,

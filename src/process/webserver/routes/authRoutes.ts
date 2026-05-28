@@ -31,6 +31,8 @@ import {
   type FeishuProviderConfig,
 } from '../auth/providers/FeishuAuthProvider';
 import { resolvePostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
+import { fetchFeishuOrgUnitPath } from '../auth/orgProfile/feishuOrgProfile';
+import { updateUserOrgProfile } from '@process/services/user/userProfileService';
 
 const FEISHU_QR_SDK_URL =
   'https://lf-package-cn.feishucdn.com/obj/feishu-static/lark/passport/qrcode/LarkSSOSDKWebQRCode-1.0.3.js';
@@ -341,6 +343,15 @@ export function registerAuthRoutes(app: Express): void {
       const sessionToken = await AuthService.generateToken(authUser);
 
       await UserRepository.updateLastLogin(user.id);
+      try {
+        const openId = typeof userInfo.open_id === 'string' ? userInfo.open_id.trim() : '';
+        if (openId) {
+          const orgUnitPath = await fetchFeishuOrgUnitPath({ appId, appSecret, openId });
+          await updateUserOrgProfile({ userId: user.id, orgUnitPath, source: 'feishu' });
+        }
+      } catch (syncError) {
+        console.warn('[AuthRoute] feishu org profile sync failed:', syncError);
+      }
       res.cookie(AUTH_CONFIG.COOKIE.NAME, sessionToken, {
         ...getCookieOptions(),
         maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,
@@ -470,6 +481,11 @@ export function registerAuthRoutes(app: Express): void {
       });
 
       await UserRepository.updateLastLogin(user.id);
+      await updateUserOrgProfile({
+        userId: user.id,
+        orgUnitPath: result.orgUnitPath,
+        source: 'ldap',
+      });
       res.cookie(AUTH_CONFIG.COOKIE.NAME, token, {
         ...getCookieOptions(),
         maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,

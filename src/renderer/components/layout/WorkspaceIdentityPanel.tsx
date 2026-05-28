@@ -86,6 +86,17 @@ const ProfileMenu: React.FC<{
         </Typography.Paragraph>
         <Tag size='small'>{resolveRoleLabel(profile.role, t)}</Tag>
       </div>
+      {profile.orgUnitPath ? (
+        <>
+          <Divider margin='8px' />
+          <div className={styles.teamBlock}>
+            <div className={styles.teamTitle}>
+              {t('settings.workspaceIdentity.orgUnit', { defaultValue: '组织架构' })}
+            </div>
+            <Typography.Paragraph className={styles.orgUnitText}>{profile.orgUnitPath}</Typography.Paragraph>
+          </div>
+        </>
+      ) : null}
       {profile.teams.length > 0 ? (
         <>
           <Divider margin='8px' />
@@ -269,6 +280,7 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
             <span className={styles.meta}>
               <span className={styles.name}>{profile.username}</span>
               <span className={styles.org}>{orgLine}</span>
+              {profile.orgUnitPath ? <span className={styles.dept}>{profile.orgUnitPath}</span> : null}
             </span>
           ) : null}
         </button>

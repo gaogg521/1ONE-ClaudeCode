@@ -2306,6 +2306,7 @@ export type I18nKey =
   | 'settings.workspaceIdentity.editionEnterprise'
   | 'settings.workspaceIdentity.logout'
   | 'settings.workspaceIdentity.openMenu'
+  | 'settings.workspaceIdentity.orgUnit'
   | 'settings.workspaceIdentity.personalView'
   | 'settings.workspaceIdentity.roleAdmin'
   | 'settings.workspaceIdentity.roleMember'

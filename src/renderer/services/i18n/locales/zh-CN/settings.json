@@ -583,7 +583,8 @@
     "avatarFailed": "头像更新失败",
     "editionEnterprise": "企业团队版",
     "personalView": "个人版视图",
-    "switchEnterpriseEdition": "切换到企业团队版"
+    "switchEnterpriseEdition": "切换到企业团队版",
+    "orgUnit": "组织架构"
   },
   "webui.managementModeTitle": "管理模式",
   "webui.managementModeDesc": "此处仅配置本机 WebUI（端口、admin 密码）。「企业团队版工作区」在标题栏切换；组织管理（LDAP、邀请码）在侧栏「管理后台」。",

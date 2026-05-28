@@ -583,7 +583,8 @@
     "avatarFailed": "Failed to update avatar",
     "editionEnterprise": "Enterprise",
     "personalView": "Personal view",
-    "switchEnterpriseEdition": "Switch to Enterprise"
+    "switchEnterpriseEdition": "Switch to Enterprise",
+    "orgUnit": "Organization"
   },
   "webui.managementModeTitle": "Management mode",
   "webui.managementModeDesc": "This page configures this machine's WebUI (enable, port, local admin, password). Edition switch (Personal/Enterprise workspace) is in the title bar; org admin is the Admin console in the sidebar.",
