@@ -149,7 +149,7 @@ const LoginPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (status === 'authenticated' && !enterpriseLoading) {
+    if (status === 'authenticated' && user && !enterpriseLoading) {
       navigateAfterLogin(user ?? undefined);
     }
   }, [enterpriseLoading, navigateAfterLogin, status, user]);

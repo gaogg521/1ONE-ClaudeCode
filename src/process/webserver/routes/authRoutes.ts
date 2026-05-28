@@ -481,11 +481,15 @@ export function registerAuthRoutes(app: Express): void {
       });
 
       await UserRepository.updateLastLogin(user.id);
-      await updateUserOrgProfile({
-        userId: user.id,
-        orgUnitPath: result.orgUnitPath,
-        source: 'ldap',
-      });
+      try {
+        await updateUserOrgProfile({
+          userId: user.id,
+          orgUnitPath: result.orgUnitPath,
+          source: 'ldap',
+        });
+      } catch (syncError) {
+        console.warn('[AuthRoute] ldap org profile sync failed:', syncError);
+      }
       res.cookie(AUTH_CONFIG.COOKIE.NAME, token, {
         ...getCookieOptions(),
         maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,

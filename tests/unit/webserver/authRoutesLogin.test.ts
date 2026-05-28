@@ -12,6 +12,7 @@ const {
   mockListProviders,
   mockGetByExternalId,
   mockAuthenticateWithLdap,
+  mockUpdateUserOrgProfile,
 } = vi.hoisted(() => ({
   mockFindByUsername: vi.fn(),
   mockFindById: vi.fn(),
@@ -22,6 +23,7 @@ const {
   mockListProviders: vi.fn(),
   mockGetByExternalId: vi.fn(),
   mockAuthenticateWithLdap: vi.fn(),
+  mockUpdateUserOrgProfile: vi.fn(),
 }));
 
 vi.mock('@process/webserver/auth/repository/UserRepository', () => ({
@@ -121,6 +123,10 @@ vi.mock('@process/webserver/auth/providers/LdapAuthProvider', () => ({
   authenticateWithLdap: mockAuthenticateWithLdap,
 }));
 
+vi.mock('@process/services/user/userProfileService', () => ({
+  updateUserOrgProfile: (...args: unknown[]) => mockUpdateUserOrgProfile(...args),
+}));
+
 function getLoginHandler(app: express.Express): RequestHandler {
   const layer = app.router.stack.find(
     (entry: { route?: { path?: string; stack?: Array<{ handle: RequestHandler }> } }) =>
@@ -154,6 +160,7 @@ function createResponseMock() {
 describe('registerAuthRoutes login endpoint', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUpdateUserOrgProfile.mockResolvedValue(undefined);
   });
 
   it('returns 401 after running the dedicated missing-user verification when the username does not exist', async () => {
@@ -343,6 +350,7 @@ describe('registerAuthRoutes login endpoint', () => {
       externalId: 'uid=alice,ou=users,dc=example,dc=com',
       isAdmin: true,
       userDn: 'uid=alice,ou=users,dc=example,dc=com',
+      orgUnitPath: 'Engineering / Platform',
     });
     mockGetByExternalId.mockResolvedValue({
       user_id: 'user-ldap-1',
@@ -385,6 +393,61 @@ describe('registerAuthRoutes login endpoint', () => {
       },
       token: 'ldap-token',
     });
+    expect(mockUpdateUserOrgProfile).toHaveBeenCalledWith({
+      userId: 'user-ldap-1',
+      orgUnitPath: 'Engineering / Platform',
+      source: 'ldap',
+    });
+  });
+
+  it('still returns LDAP login success when org profile sync fails', async () => {
+    mockGetProvider.mockResolvedValue({
+      provider: 'ldap',
+      enabled: true,
+      config: {
+        url: 'ldap://example.com',
+        baseDN: 'dc=example,dc=com',
+      },
+    });
+    mockAuthenticateWithLdap.mockResolvedValue({
+      externalId: 'uid=alice,ou=users,dc=example,dc=com',
+      isAdmin: false,
+      userDn: 'uid=alice,ou=users,dc=example,dc=com',
+      orgUnitPath: 'Engineering',
+    });
+    mockGetByExternalId.mockResolvedValue({
+      user_id: 'user-ldap-1',
+    });
+    mockFindById.mockResolvedValue({
+      id: 'user-ldap-1',
+      username: 'alice',
+      role: 'member',
+      tenant_id: 'tenant-acme',
+    });
+    mockGenerateToken.mockResolvedValue('ldap-token');
+    mockUpdateUserOrgProfile.mockRejectedValueOnce(new Error('no such column: org_unit_path'));
+
+    const { registerAuthRoutes } = await import('@process/webserver/routes/authRoutes');
+    const app = express();
+    registerAuthRoutes(app);
+
+    const handler = getRouteHandler(app, '/api/auth/ldap/login');
+    const req = {
+      body: {
+        username: 'alice',
+        password: 'correct-password',
+      },
+    } as express.Request;
+    const res = createResponseMock() as unknown as express.Response;
+
+    await handler(req, res, vi.fn());
+
+    expect((res as unknown as { json: ReturnType<typeof vi.fn> }).json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        token: 'ldap-token',
+      })
+    );
   });
 
   it('returns 401 when LDAP user is not found by directory filter', async () => {

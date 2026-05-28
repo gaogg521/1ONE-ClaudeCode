@@ -100,7 +100,7 @@ const LoginRoute: React.FC = () => {
   const location = useLocation();
   const { loading: enterpriseLoading } = useWebuiEnterpriseMode();
 
-  if (status === 'authenticated') {
+  if (status === 'authenticated' && user) {
     if (enterpriseLoading) {
       return <AppLoader />;
     }

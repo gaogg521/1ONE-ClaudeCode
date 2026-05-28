@@ -165,13 +165,17 @@ export async function updateUserOrgProfile(input: {
   if (!trimmed) {
     return;
   }
-  const db = await getDatabase();
-  const now = Date.now();
-  db.getDriver()
-    .prepare(
-      `UPDATE users
-       SET org_unit_path = ?, org_profile_source = ?, org_profile_synced_at = ?, updated_at = ?
-       WHERE id = ?`
-    )
-    .run(trimmed, input.source, now, now, input.userId);
+  try {
+    const db = await getDatabase();
+    const now = Date.now();
+    db.getDriver()
+      .prepare(
+        `UPDATE users
+         SET org_unit_path = ?, org_profile_source = ?, org_profile_synced_at = ?, updated_at = ?
+         WHERE id = ?`
+      )
+      .run(trimmed, input.source, now, now, input.userId);
+  } catch (error) {
+    console.warn('[UserProfileService] org profile sync skipped:', error);
+  }
 }

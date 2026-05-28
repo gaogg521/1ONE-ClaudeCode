@@ -220,7 +220,9 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
 
   const handleLogout = async () => {
     await auth.logout();
-    void navigate('/login');
+    if (!isDesktop) {
+      void navigate('/login');
+    }
   };
 
   const handleSwitchPersonal = () => {

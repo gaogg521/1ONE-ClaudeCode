@@ -8,6 +8,7 @@ import {
   clearCsrfSessionToken,
 } from '@process/webserver/middleware/csrfClient';
 import { CSRF_COOKIE_NAME } from '@process/webserver/config/constants';
+import { getWebuiApiBaseUrl } from '@/renderer/utils/webuiApiBase';
 
 type AuthStatus = 'checking' | 'authenticated' | 'unauthenticated';
 
@@ -113,6 +114,56 @@ async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> 
   return null;
 }
 
+async function loginViaWebui(path: string, body: Record<string, unknown>): Promise<LoginResult> {
+  const base = await getWebuiApiBaseUrl();
+  if (!base) {
+    return {
+      success: false,
+      message: 'WebUI is not running. Start WebUI in settings first.',
+      code: 'serverError',
+    };
+  }
+
+  const response = await fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify(withCsrfToken(body)),
+  });
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    return {
+      success: false,
+      message: 'WebUI API unavailable. Ensure WebUI is running and refresh the page.',
+      code: 'serverError',
+    };
+  }
+
+  const data = (await response.json()) as {
+    success: boolean;
+    message?: string;
+    user?: AuthUser;
+    token?: string;
+  };
+
+  captureCsrfTokenFromResponse(response);
+
+  if (!response.ok || !data.success || !data.user) {
+    let code: LoginErrorCode = 'unknown';
+    const message = data?.message ?? 'Login failed';
+    if (response.status === 401) code = 'invalidCredentials';
+    else if (response.status === 403) code = 'csrfError';
+    else if (response.status === 429) code = 'tooManyAttempts';
+    else if (response.status >= 500) code = 'serverError';
+    return { success: false, message, code };
+  }
+
+  return { success: true, user: data.user };
+}
+
 async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
   try {
     const [statusResult, enterpriseResult] = await Promise.all([
@@ -176,8 +227,12 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const login = useCallback(async ({ username, password, remember }: LoginParams): Promise<LoginResult> => {
     try {
       if (isDesktopRuntime) {
-        setReady(true);
-        return { success: true };
+        const result = await loginViaWebui('/login', { username, password, remember });
+        if (!result.success) {
+          return result;
+        }
+        await refresh();
+        return result;
       }
 
       // Check CSRF token availability before login
@@ -285,18 +340,25 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         code: 'networkError',
       };
     }
-  }, []);
+  }, [refresh]);
 
   const loginWithLdap = useCallback(async ({ username, password }: LoginParams): Promise<LoginResult> => {
     try {
-      if (isDesktopRuntime) {
-        setReady(true);
-        return { success: true };
-      }
-
       const trimmedUsername = username.trim();
       if (!trimmedUsername || !password) {
         return { success: false, message: 'Username and password are required', code: 'unknown' };
+      }
+
+      if (isDesktopRuntime) {
+        const result = await loginViaWebui('/api/auth/ldap/login', {
+          username: trimmedUsername,
+          password,
+        });
+        if (!result.success) {
+          return result;
+        }
+        await refresh();
+        return result;
       }
 
       const response = await fetch('/api/auth/ldap/login', {
@@ -329,15 +391,30 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       console.error('LDAP login request failed:', error);
       return { success: false, message: 'Network error. Please try again.', code: 'networkError' };
     }
-  }, []);
+  }, [refresh]);
 
   const logout = useCallback(async () => {
     if (isDesktopRuntime) {
-      setUser(null);
-      setStatus('authenticated');
-      setReady(true);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+      try {
+        const base = await getWebuiApiBaseUrl();
+        if (base) {
+          await fetch(`${base}/logout`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify(withCsrfToken({})),
+          });
+        }
+      } catch (error) {
+        console.error('Desktop WebUI logout request failed:', error);
+      } finally {
+        clearAuthCache();
+        await refresh();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+        }
       }
       return;
     }

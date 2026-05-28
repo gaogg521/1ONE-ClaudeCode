@@ -135,4 +135,18 @@ describe('userProfileService', () => {
 
     expect(mockRun).toHaveBeenCalled();
   });
+
+  it('does not throw when org profile columns are missing', async () => {
+    mockRun.mockImplementationOnce(() => {
+      throw new Error('no such column: org_unit_path');
+    });
+
+    await expect(
+      updateUserOrgProfile({
+        userId: 'user-1',
+        orgUnitPath: '研发中心 / 平台组',
+        source: 'ldap',
+      })
+    ).resolves.toBeUndefined();
+  });
 });
