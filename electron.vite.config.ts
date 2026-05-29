@@ -5,6 +5,27 @@ import UnoCSS from 'unocss/vite';
 import unoConfig from './uno.config.ts';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 
+function createWebuiBuildId(): string {
+  return process.env.ONE_WEBUI_BUILD_ID || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function webuiBuildVersionPlugin(buildId: string) {
+  const builtAt = new Date().toISOString();
+  return {
+    name: 'vite-plugin-webui-build-version',
+    transformIndexHtml(html: string) {
+      return html.replaceAll('__ONE_WEBUI_BUILD_ID__', buildId);
+    },
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'webui-build.json',
+        source: `${JSON.stringify({ buildId, builtAt }, null, 2)}\n`,
+      });
+    },
+  };
+}
+
 // Icon Park transform plugin (replaces webpack icon-park-loader)
 function iconParkPlugin() {
   return {
@@ -46,6 +67,7 @@ const mainAliases = {
 export default defineConfig(({ mode }) => {
   const isDevelopment = mode === 'development';
   const enableSentrySourceMaps = !isDevelopment && !!process.env.SENTRY_AUTH_TOKEN;
+  const webuiBuildId = createWebuiBuildId();
 
   const sentryPluginOptions = {
     org: process.env.SENTRY_ORG,
@@ -166,6 +188,7 @@ export default defineConfig(({ mode }) => {
       plugins: [
         UnoCSS(unoConfig),
         iconParkPlugin(),
+        webuiBuildVersionPlugin(webuiBuildId),
         ...(enableSentrySourceMaps ? [sentryVitePlugin(sentryPluginOptions)] : []),
       ],
       build: {

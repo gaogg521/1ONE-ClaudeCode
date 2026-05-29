@@ -14,6 +14,37 @@
     <link rel="apple-touch-icon" href="./pwa/icon-180.png" />
     <title>1ONE Code</title>
     <script>
+      // Detect stale HTML/chunks before Vite's preload error handler has to recover.
+      (function () {
+        var buildId = '__ONE_WEBUI_BUILD_ID__';
+        window.__ONE_WEBUI_BUILD_ID = buildId;
+        if (!buildId || buildId.indexOf('__ONE_') === 0 || typeof fetch !== 'function') {
+          return;
+        }
+        try {
+          fetch('./webui-build.json?ts=' + Date.now(), { cache: 'no-store' })
+            .then(function (response) {
+              return response.ok ? response.json() : null;
+            })
+            .then(function (info) {
+              if (!info || !info.buildId || info.buildId === buildId) {
+                return;
+              }
+              var key = '__one_build_mismatch_recovery_at';
+              var last = Number(sessionStorage.getItem(key) || '0');
+              var now = Date.now();
+              if (now - last < 30000) {
+                return;
+              }
+              sessionStorage.setItem(key, String(now));
+              var url = new URL(window.location.href);
+              url.searchParams.set('__one_cache_bust', String(now));
+              window.location.replace(url.toString());
+            })
+            .catch(function () {});
+        } catch (e) {}
+      })();
+
       // Recover from stale Vite chunks/CSS after WebUI rebuilds.
       window.addEventListener('vite:preloadError', function (event) {
         event.preventDefault();
