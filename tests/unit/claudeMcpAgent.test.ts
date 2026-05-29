@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import type { IMcpServer } from '../../src/common/config/storage';
 import {
   buildClaudeStdioJsonConfig,
+  isClaudeMcpServerAlreadyInstalled,
   normalizeClaudeStdioTransport,
 } from '../../src/process/services/mcpServices/agents/ClaudeMcpAgent';
 
@@ -32,6 +33,7 @@ describe('ClaudeMcpAgent helpers', () => {
     };
 
     expect(JSON.parse(buildClaudeStdioJsonConfig(server))).toEqual({
+      type: 'stdio',
       command: 'node',
       args: ['/abs/builtin-mcp-image-gen.js'],
       env: {
@@ -39,6 +41,15 @@ describe('ClaudeMcpAgent helpers', () => {
         ONE_IMG_MODEL: 'gpt-image-1',
       },
     });
+  });
+
+  it('treats Claude CLI already-exists output as a benign install skip', () => {
+    const error = Object.assign(new Error('Command failed with exit code 1'), {
+      stdout: 'MCP server one-image-generation already exists in user config\n',
+      stderr: '',
+      code: 1,
+    });
+    expect(isClaudeMcpServerAlreadyInstalled(error)).toBe(true);
   });
 
   it('wraps legacy script-path commands for Claude stdio JSON', () => {

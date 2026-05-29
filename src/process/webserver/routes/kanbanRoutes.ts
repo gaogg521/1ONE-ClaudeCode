@@ -9,20 +9,43 @@ import { randomUUID } from 'node:crypto';
 import { getDatabase } from '@process/services/database/export';
 import { TokenMiddleware } from '../auth/middleware/TokenMiddleware';
 import { apiRateLimiter } from '../middleware/rateLimiter';
+import { isWebuiBuiltinAdministrator } from '../auth/enterpriseRoles';
 
 const DESKTOP_USER_ID = 'system_default_user';
 
+function isPrivilegedRequest(req: Request): boolean {
+  const user = req.user;
+  if (!user) return false;
+  if (
+    isWebuiBuiltinAdministrator({
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      tenant_id: user.tenant_id,
+    })
+  ) {
+    return true;
+  }
+  const role = user.role;
+  return role === 'system_admin' || role === 'org_admin' || role === 'admin';
+}
+
+function toKanbanMeRole(req: Request): 'admin' | 'user' {
+  return isPrivilegedRequest(req) ? 'admin' : 'user';
+}
+
 export function registerKanbanRoutes(app: Express): void {
   const auth = TokenMiddleware.validateToken({ responseType: 'json' });
-  const isPrivileged = (role: string | undefined): boolean => role === 'system_admin' || role === 'org_admin' || role === 'admin';
 
   // GET /api/kanban/tasks — admin 看全部，member 看自己创建或分配给自己的
   app.get('/api/kanban/tasks', apiRateLimiter, auth, async (req: Request, res: Response) => {
     try {
       const db = await getDatabase();
-      const { id: userId, role, tenant_id } = req.user!;
+      const { id: userId, tenant_id } = req.user!;
       const tenantId = tenant_id ?? 'default';
-      const result = isPrivileged(role) ? db.listPersonalTasks(tenantId) : db.listPersonalTasks(tenantId, userId);
+      const result = isPrivilegedRequest(req)
+        ? db.listPersonalTasks(tenantId)
+        : db.listPersonalTasks(tenantId, userId);
       res.json({ success: true, data: result.data ?? [] });
     } catch (err) {
       console.error('[KanbanRoute] list error:', err);
@@ -34,7 +57,8 @@ export function registerKanbanRoutes(app: Express): void {
   app.post('/api/kanban/tasks', apiRateLimiter, auth, async (req: Request, res: Response) => {
     try {
       const db = await getDatabase();
-      const { id: userId } = req.user!;
+      const { id: userId, tenant_id } = req.user!;
+      const tenantId = tenant_id ?? 'default';
       const { subject, status, active_form, session_name, assigned_to } = req.body;
       if (!subject?.trim()) {
         res.status(400).json({ success: false, message: '任务名称不能为空' });
@@ -66,15 +90,21 @@ export function registerKanbanRoutes(app: Express): void {
   app.patch('/api/kanban/tasks/:id', apiRateLimiter, auth, async (req: Request, res: Response) => {
     try {
       const db = await getDatabase();
-      const { id: userId, role } = req.user!;
+      const { id: userId } = req.user!;
       const taskId = String(req.params.id);
-      const existing = db.getPersonalTask(taskId);
+      const existing = db.getPersonalTask(taskId) as
+        | ({ user_id: string; assigned_to?: string | null })
+        | null;
       if (!existing) {
         res.status(404).json({ success: false, message: 'Task not found' });
         return;
       }
       // 非 admin 只能修改自己创建或分配给自己的任务
-      if (!isPrivileged(role) && existing.user_id !== userId && existing.assigned_to !== userId) {
+      if (
+        !isPrivilegedRequest(req) &&
+        existing.user_id !== userId &&
+        existing.assigned_to !== userId
+      ) {
         res.status(403).json({ success: false, message: 'Forbidden' });
         return;
       }
@@ -97,14 +127,20 @@ export function registerKanbanRoutes(app: Express): void {
   app.delete('/api/kanban/tasks/:id', apiRateLimiter, auth, async (req: Request, res: Response) => {
     try {
       const db = await getDatabase();
-      const { id: userId, role } = req.user!;
+      const { id: userId } = req.user!;
       const taskId = String(req.params.id);
-      const existing = db.getPersonalTask(taskId);
+      const existing = db.getPersonalTask(taskId) as
+        | ({ user_id: string; assigned_to?: string | null })
+        | null;
       if (!existing) {
         res.status(404).json({ success: false, message: 'Task not found' });
         return;
       }
-      if (!isPrivileged(role) && existing.user_id !== userId && existing.assigned_to !== userId) {
+      if (
+        !isPrivilegedRequest(req) &&
+        existing.user_id !== userId &&
+        existing.assigned_to !== userId
+      ) {
         res.status(403).json({ success: false, message: 'Forbidden' });
         return;
       }
@@ -133,6 +169,14 @@ export function registerKanbanRoutes(app: Express): void {
 
   // GET /api/kanban/me — 当前登录用户信息（含 role）
   app.get('/api/kanban/me', apiRateLimiter, auth, (req: Request, res: Response) => {
-    res.json({ success: true, data: req.user });
+    const user = req.user!;
+    res.json({
+      success: true,
+      data: {
+        id: user.id,
+        username: user.username,
+        role: toKanbanMeRole(req),
+      },
+    });
   });
 }

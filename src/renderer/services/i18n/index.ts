@@ -108,10 +108,9 @@ async function initLanguage(): Promise<void> {
     console.warn('Failed to read language from ConfigStorage, using local hint:', error);
   }
 
-  const resolved =
-    language ||
-    readLanguageHint() ||
-    normalizeLanguageCode(typeof navigator !== 'undefined' ? navigator.language : DEFAULT_LANGUAGE);
+  // Prefer stored settings; otherwise use app default (zh-CN), not navigator.language,
+  // so WebUI and desktop stay consistent for users who expect Chinese UI.
+  const resolved = language || readLanguageHint() || DEFAULT_LANGUAGE;
 
   try {
     await ensureAndSwitch(i18n, resolved, loadLocaleModules);

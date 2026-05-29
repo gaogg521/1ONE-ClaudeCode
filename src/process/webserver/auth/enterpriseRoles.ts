@@ -11,7 +11,12 @@ export {
   hasEnterpriseTenant,
   isEnterpriseAdminRole,
   isSystemAdminRole,
+  isWebuiBuiltinAdministrator,
   resolveEnterpriseAdminPath,
   resolveEnterpriseEditionPath,
   resolvePostLoginRedirectPath,
+  resolveEnterpriseTenantDisplayLabel,
+  resolveWebuiAdministratorRole,
+  DESKTOP_OPERATOR_USER_ID,
+  WEBUI_BUILTIN_ADMIN_USER_ID,
 } from '@/common/auth/enterpriseRoles';

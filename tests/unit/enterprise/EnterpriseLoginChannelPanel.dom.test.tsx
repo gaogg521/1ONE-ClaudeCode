@@ -49,6 +49,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+const refreshAuthMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({
   useAuth: () => ({
     status: authState.status,
@@ -56,6 +58,7 @@ vi.mock('@/renderer/hooks/context/AuthContext', () => ({
     login: loginMock,
     loginWithLdap: loginWithLdapMock,
     logout: logoutMock,
+    refresh: refreshAuthMock,
   }),
   isDesktopOperatorUser: (user: { id?: string } | null) => user?.id === 'desktop-local-admin',
 }));
@@ -166,15 +169,17 @@ describe('EnterpriseLoginChannelPanel', () => {
     );
   });
 
-  it('attempts OAuth for unavailable providers and relies on backend errors', async () => {
+  it('warns before starting OAuth for unavailable providers', async () => {
     render(<EnterpriseLoginChannelPanel />);
 
     await userEvent.click(screen.getByRole('button', { name: /钉钉/ }));
 
-    expect(startOAuthAuthorize).toHaveBeenCalledWith(
+    expect(startOAuthAuthorize).not.toHaveBeenCalledWith(
       expect.stringContaining('/api/auth/dingtalk/authorize')
     );
-    expect(Message.warning).not.toHaveBeenCalled();
+    expect(Message.warning).toHaveBeenCalledWith(
+      '您的企业尚未开通 钉钉 登录，请联系管理员或改用其他方式。'
+    );
   });
 
   it('submits LDAP login after selecting the LDAP channel', async () => {

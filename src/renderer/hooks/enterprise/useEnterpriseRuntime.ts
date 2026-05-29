@@ -21,7 +21,7 @@ import {
   canAccessEnterprisePlatform,
   canAccessEnterpriseRouteRole,
 } from '@/common/auth/enterpriseRoutes';
-import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
+import { isEnterpriseAdminRole, isSystemAdminRole } from '@/common/auth/enterpriseRoles';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 
 export type EnterpriseRuntimeStatus =
@@ -53,6 +53,8 @@ export const EnterpriseRuntimeProvider: React.FC<
   const isDesktop = isElectronDesktop();
 
   const effectiveRole = enterpriseMode.effectiveRole ?? auth.user?.role;
+  const canBypassJoinRequirement = isEnterpriseAdminRole(effectiveRole);
+  const isSystemAdmin = isSystemAdminRole(effectiveRole);
   const activeNavItem = useMemo(
     () => getEnterpriseNavItemByPath(pathname) ?? getEnterpriseNavItemByKey('home')!,
     [pathname]
@@ -63,7 +65,8 @@ export const EnterpriseRuntimeProvider: React.FC<
   );
 
   const joined = enterpriseMode.hasJoinedEnterprise;
-  const loading = auth.status === 'checking' || enterpriseMode.loading;
+  const loading =
+    enterpriseMode.loading || (auth.status === 'checking' && auth.user === null);
 
   const refresh = useCallback(async () => {
     await Promise.all([auth.refresh(), enterpriseMode.refreshEnterpriseContext()]);
@@ -76,10 +79,11 @@ export const EnterpriseRuntimeProvider: React.FC<
     if (!enterpriseMode.webuiApiBase && typeof window !== 'undefined' && window.electronAPI) {
       return normalizeEnterpriseApiError(new Error('WEBUI_NOT_RUNNING'));
     }
-    if (auth.status !== 'authenticated') {
+    const hasSession = auth.status === 'authenticated' || auth.user !== null;
+    if (!hasSession) {
       return { code: 'not_authenticated', message: '当前未登录企业后台。' };
     }
-    if (!joined && !isEnterpriseAdminRole(effectiveRole)) {
+    if (!joined && !canBypassJoinRequirement) {
       return { code: 'not_joined', message: '当前账号尚未加入企业，请先完成企业接入。' };
     }
     if (!canAccessEnterprisePlatform(activeNavItem.platformPolicy, isDesktop)) {
@@ -92,16 +96,26 @@ export const EnterpriseRuntimeProvider: React.FC<
       };
     }
     if (!canAccessEnterpriseRouteRole(activeNavItem.requiresRole, effectiveRole)) {
-      return { code: 'insufficient_role', message: '当前账号没有访问该管理模块的权限。' };
+      const needsSystemAdmin =
+        activeNavItem.requiresRole === 'system_admin' && !isSystemAdmin;
+      return {
+        code: 'insufficient_role',
+        message: needsSystemAdmin
+          ? '该页面仅系统管理员可访问。请在用户管理中将账号提升为系统管理员，或联系已有系统管理员。'
+          : '当前账号没有访问该管理模块的权限。',
+      };
     }
     return null;
   }, [
     activeNavItem.platformPolicy,
     activeNavItem.requiresRole,
     auth.status,
+    auth.user,
+    canBypassJoinRequirement,
     effectiveRole,
     enterpriseMode.webuiApiBase,
     isDesktop,
+    isSystemAdmin,
     joined,
     loading,
   ]);

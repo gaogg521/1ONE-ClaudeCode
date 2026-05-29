@@ -23,6 +23,6 @@ export async function openAdminConsole(options: OpenAdminConsoleOptions): Promis
     }
     return result;
   }
-  options.navigate('/enterprise');
+  options.navigate('/enterprise/auth');
   return 'navigated';
 }

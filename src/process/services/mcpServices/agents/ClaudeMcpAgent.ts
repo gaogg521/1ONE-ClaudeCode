@@ -68,7 +68,20 @@ export function buildClaudeStdioJsonConfig(server: IMcpServer): string {
   }
 
   const normalized = normalizeClaudeStdioTransport(server.transport);
-  return JSON.stringify(normalized);
+  return JSON.stringify({ type: 'stdio', ...normalized });
+}
+
+function getClaudeExecErrorText(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+  const extra = error as Error & { stdout?: string; stderr?: string };
+  return [error.message, extra.stdout ?? '', extra.stderr ?? ''].filter(Boolean).join('\n');
+}
+
+/** Claude CLI exits 1 when the server name is already registered in the target scope. */
+export function isClaudeMcpServerAlreadyInstalled(error: unknown): boolean {
+  return /already exists/i.test(getClaudeExecErrorText(error));
 }
 
 /**
@@ -212,7 +225,11 @@ export class ClaudeMcpAgent extends AbstractMcpAgent {
               );
               console.log(`[ClaudeMcpAgent] Added MCP server: ${server.name}`);
             } catch (error) {
-              console.warn(`Failed to add MCP ${server.name} to Claude Code:`, error);
+              if (isClaudeMcpServerAlreadyInstalled(error)) {
+                console.log(`[ClaudeMcpAgent] MCP server already registered: ${server.name}`);
+              } else {
+                console.warn(`Failed to add MCP ${server.name} to Claude Code:`, error);
+              }
               // 继续处理其他服务器，不要因为一个失败就停止
             }
           } else if (

@@ -20,12 +20,54 @@ export function isEnterpriseAdminRole(role: string | undefined): boolean {
   return role === 'system_admin' || role === 'org_admin' || role === 'admin';
 }
 
+export const WEBUI_BUILTIN_ADMIN_USER_ID = 'system_default_user';
+/** 桌面端占位身份（非 WebUI 登录会话），不得用于企业后台鉴权 */
+export const DESKTOP_OPERATOR_USER_ID = 'desktop-local-admin';
+
+export type WebuiPrincipal = {
+  id?: string;
+  username?: string;
+  role?: string;
+  tenant_id?: string;
+};
+
+/**
+ * 是否可访问企业「管理后台」（LDAP/邀请码/用户管理等）。
+ * 仅认 JWT/DB 中的管理员角色；不认用户名、不认桌面占位身份。
+ */
+export function isWebuiBuiltinAdministrator(principal: WebuiPrincipal | null | undefined): boolean {
+  if (!principal) return false;
+  if (principal.id === DESKTOP_OPERATOR_USER_ID) return false;
+  return isEnterpriseAdminRole(principal.role);
+}
+
+/** @deprecated 使用 isWebuiBuiltinAdministrator；保留别名避免大范围重命名 */
+export const canAccessEnterpriseAdminConsole = isWebuiBuiltinAdministrator;
+
+export function resolveWebuiAdministratorRole(
+  principal: WebuiPrincipal | null | undefined
+): string | undefined {
+  return principal?.role;
+}
+
 export function isSystemAdminRole(role: string | undefined): boolean {
   return role === 'system_admin';
 }
 
 export function hasEnterpriseTenant(tenantId: string | undefined): boolean {
   return Boolean(tenantId && tenantId.trim() !== '' && tenantId !== 'default');
+}
+
+/** 控制台展示名：未创建/加入企业前不要直接显示租户 id `default`。 */
+export function resolveEnterpriseTenantDisplayLabel(
+  tenantId: string | undefined,
+  tenantName: string | null | undefined
+): string {
+  const tid = (tenantId ?? 'default').trim() || 'default';
+  if (!hasEnterpriseTenant(tid)) {
+    return tenantName?.trim() || '单机实例';
+  }
+  return tenantName?.trim() || tid;
 }
 
 /**
@@ -50,14 +92,14 @@ export function resolvePostLoginRedirectPath(
   isDesktop = false
 ): string {
   const joined = hasEnterpriseTenant(tenantId);
-  const isAdmin = isEnterpriseAdminRole(role);
+  const isSystemAdmin = isSystemAdminRole(role);
   if (rawTarget === ENTERPRISE_JOIN_PATH || rawTarget.startsWith(`${ENTERPRISE_JOIN_PATH}/`)) {
     return joined ? ENTERPRISE_WORKSPACE_PATH : ENTERPRISE_JOIN_PATH;
   }
 
   const route = getEnterpriseRouteMetaByPath(rawTarget);
   if (route) {
-    if (!joined && !isAdmin) {
+    if (!joined && !isSystemAdmin) {
       return ENTERPRISE_JOIN_PATH;
     }
     if (!canAccessEnterpriseRoute(route, role, isDesktop)) {
@@ -67,7 +109,7 @@ export function resolvePostLoginRedirectPath(
   }
 
   if (rawTarget === ENTERPRISE_ADMIN_HOME_PATH || rawTarget.startsWith(`${ENTERPRISE_ADMIN_HOME_PATH}/`)) {
-    return joined || isAdmin ? ENTERPRISE_ADMIN_HOME_PATH : ENTERPRISE_JOIN_PATH;
+    return joined || isSystemAdmin ? ENTERPRISE_ADMIN_HOME_PATH : ENTERPRISE_JOIN_PATH;
   }
   return rawTarget;
 }

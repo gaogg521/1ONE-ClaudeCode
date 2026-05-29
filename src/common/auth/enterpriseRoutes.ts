@@ -6,6 +6,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { isEnterpriseAdminRole, isSystemAdminRole } from './enterpriseRoles';
+
 export type EnterpriseNavKey =
   | 'home'
   | 'users'
@@ -27,7 +29,7 @@ export type EnterpriseNavKey =
   | 'usage'
   | 'security';
 
-export type EnterpriseRouteRole = 'member' | 'admin';
+export type EnterpriseRouteRole = 'member' | 'admin' | 'system_admin';
 export type EnterprisePlatformPolicy = 'all' | 'desktop' | 'browser';
 
 export type EnterpriseRouteMeta = {
@@ -88,7 +90,7 @@ export const ENTERPRISE_ROUTE_META: EnterpriseRouteMeta[] = [
   {
     key: 'invites',
     path: ENTERPRISE_INVITES_PATH,
-    requiresRole: 'admin',
+    requiresRole: 'system_admin',
     platformPolicy: 'all',
   },
   {
@@ -182,10 +184,6 @@ export const ENTERPRISE_ROUTE_META: EnterpriseRouteMeta[] = [
   },
 ];
 
-function isEnterpriseAdminRole(role: string | undefined): boolean {
-  return role === 'system_admin' || role === 'org_admin' || role === 'admin';
-}
-
 function matchesPathPrefix(pathname: string, target: string): boolean {
   return pathname === target || pathname.startsWith(`${target}/`);
 }
@@ -194,7 +192,13 @@ export function canAccessEnterpriseRouteRole(
   requiredRole: EnterpriseRouteRole,
   role: string | undefined
 ): boolean {
-  return requiredRole === 'member' ? Boolean(role) : isEnterpriseAdminRole(role);
+  if (requiredRole === 'member') {
+    return Boolean(role);
+  }
+  if (requiredRole === 'system_admin') {
+    return isSystemAdminRole(role);
+  }
+  return isEnterpriseAdminRole(role);
 }
 
 export function canAccessEnterprisePlatform(

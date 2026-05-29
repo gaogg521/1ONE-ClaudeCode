@@ -52,6 +52,7 @@ if (win.electronAPI) {
   let reconnectTimer: number | null = null;
   let reconnectDelay = 500;
   let shouldReconnect = true; // Flag to control reconnection
+  let connectionGeneration = 0;
 
   const messageQueue: QueuedMessage[] = [];
 
@@ -87,6 +88,9 @@ if (win.electronAPI) {
     if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
       return;
     }
+
+    connectionGeneration += 1;
+    const activeGeneration = connectionGeneration;
 
     try {
       socket = new WebSocket(socketUrl);
@@ -129,28 +133,29 @@ if (win.electronAPI) {
         // 处理认证过期 - 停止重连并跳转到登录页
         // Handle auth expiration - stop reconnecting and redirect to login
         if (payload.name === 'auth-expired') {
+          // Ignore stale sockets (e.g. pre-login connection closed after successful login).
+          if (activeGeneration !== connectionGeneration || socket !== currentSocket) {
+            return;
+          }
+
           console.warn('[WebSocket] Authentication expired, stopping reconnection');
           shouldReconnect = false;
 
-          // 清除所有待执行的重连定时器
-          // Clear any pending reconnection timer
           if (reconnectTimer !== null) {
             window.clearTimeout(reconnectTimer);
             reconnectTimer = null;
           }
 
-          // 关闭 socket 并跳转到登录页
-          // Close the socket and redirect to login page
           socket?.close();
 
-          // 已在登录页则不再重定向，防止无限刷新循环
-          // Skip redirect if already on login page to prevent infinite reload loop
           if (window.location.pathname === '/login' || window.location.hash.includes('/login')) {
             return;
           }
 
-          // HashRouter: use #/login — pathname /login causes /login#/login
           setTimeout(() => {
+            if (activeGeneration !== connectionGeneration) {
+              return;
+            }
             window.location.replace(`${window.location.origin}/#/login`);
           }, 1000);
 
@@ -172,22 +177,26 @@ if (win.electronAPI) {
       // Detect auth failure from close code (server sends 1008 for token issues).
       // This acts as a fallback in case the auth-expired message was not received
       // (e.g., socket not yet ready for sending during initial handshake).
-      if (event.code === 1008 && !shouldReconnect) {
-        return; // Already handled by auth-expired message handler
-      }
       if (event.code === 1008) {
-        console.warn('[WebSocket] Connection rejected by server (policy violation), redirecting to login');
+        // Ignore stale sockets (e.g. the pre-login socket closed after a new post-login socket starts).
+        if (activeGeneration !== connectionGeneration) {
+          return;
+        }
+
         shouldReconnect = false;
         if (reconnectTimer !== null) {
           window.clearTimeout(reconnectTimer);
           reconnectTimer = null;
         }
-        // 已在登录页则不再重定向，防止无限刷新循环
-        // Skip redirect if already on login page to prevent infinite reload loop
+
         if (window.location.pathname === '/login' || window.location.hash.includes('/login')) {
           return;
         }
+
         setTimeout(() => {
+          if (activeGeneration !== connectionGeneration) {
+            return;
+          }
           window.location.replace(`${window.location.origin}/#/login`);
         }, 500);
         return;
@@ -245,6 +254,20 @@ if (win.electronAPI) {
   win.__websocketReconnect = () => {
     shouldReconnect = true;
     reconnectDelay = 500;
+    if (reconnectTimer !== null) {
+      window.clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (socket) {
+      const staleSocket = socket;
+      socket = null;
+      connectionGeneration += 1;
+      try {
+        staleSocket.close();
+      } catch {
+        // ignore
+      }
+    }
     connect();
   };
 }

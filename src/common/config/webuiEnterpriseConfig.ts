@@ -21,6 +21,10 @@ export type EnterpriseContextSnapshot = {
   role?: string;
   /** True when user may create a new enterprise (system_admin, not yet in a tenant). */
   canCreateEnterprise?: boolean;
+  /** Whether any user in this instance already has system_admin. */
+  hasSystemAdmin?: boolean;
+  /** True when signed-in org_admin may perform one-time bootstrap claim. */
+  canClaimSystemAdmin?: boolean;
 };
 
 export function normalizeWebuiManagementMode(value: unknown): WebuiManagementMode {

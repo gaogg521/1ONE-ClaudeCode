@@ -20,6 +20,18 @@ Standards and workflow for writing and running tests. Every feature must be test
 - Before claiming work is complete
 - Before committing code
 
+## WebUI verification (before “done”)
+
+If the change touches renderer UI, browser bridge (`src/common/adapter/browser.ts`), or WebUI static/auth routes:
+
+```bash
+npm run build:webui
+# or
+npm run restart:webui
+```
+
+LAN URLs (`http://<ip>:25809`) never pick up `src/` until `out/renderer` is rebuilt. `npm run restart` alone is insufficient.
+
 ## Framework
 
 **Vitest 4** — configured in `vitest.config.ts`.

@@ -19,6 +19,7 @@ import { authRateLimiter, authenticatedActionLimiter, apiRateLimiter } from '../
 import { verifyQRTokenDirect } from '@process/bridge/webuiQR';
 import { authenticateWithLdap, type LdapProviderConfig } from '../auth/providers/LdapAuthProvider';
 import { resolveEnterpriseContext } from '../auth/enterpriseContext';
+import { getInstanceGovernance } from '../auth/instanceGovernance';
 import {
   EnterpriseJoinError,
   joinEnterpriseWithInvite,
@@ -31,21 +32,43 @@ import {
   resolveFeishuExternalId,
   type FeishuProviderConfig,
 } from '../auth/providers/FeishuAuthProvider';
+import {
+  buildDingTalkAuthorizeUrl,
+  exchangeDingTalkCodeForUserAccessToken,
+  fetchDingTalkUserInfo,
+  resolveDingTalkExternalId,
+  type DingTalkProviderConfig,
+} from '../auth/providers/DingTalkAuthProvider';
+import {
+  buildWeComAuthorizeUrl,
+  fetchWeComCorpAccessToken,
+  fetchWeComUserIdByOAuthCode,
+  type WeComProviderConfig,
+} from '../auth/providers/WeComAuthProvider';
 import { resolvePostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
+import { readRequestOrigin, resolveOAuthCallbackUri } from '@/common/auth/oauthCallbackUri';
 import { fetchFeishuOrgUnitPath } from '../auth/orgProfile/feishuOrgProfile';
 import { updateUserOrgProfile } from '@process/services/user/userProfileService';
+import { registerBrowserWebuiLoginSession } from '../auth/registerBrowserWebuiLoginSession';
+import { revokeBrowserWebuiSession } from '../auth/browserSessionBridge';
+import { getOrgEditionSettings } from '../auth/orgEditionSettings';
+import {
+  cleanupOAuthLoginState,
+  consumeOAuthLoginState,
+  DEFAULT_POST_LOGIN_TARGET,
+  OAUTH_STATE_INVALID_MESSAGE,
+  issueOAuthLoginState,
+} from '../auth/oauthLoginState';
+import {
+  finalizeOAuthBrowserLogin,
+  respondOAuthProviderUnavailable,
+  sendOAuthAuthorizeRedirect,
+} from '../auth/oauthLoginHelpers';
+import { refreshUserAfterEnterpriseAutoJoin } from '../auth/enterpriseAutoJoin';
+import { resolveOrProvisionLdapUser, resolveOrProvisionSsoUser } from '../auth/ssoJitProvisioning';
 
 const FEISHU_QR_SDK_URL =
   'https://lf-package-cn.feishucdn.com/obj/feishu-static/lark/passport/qrcode/LarkSSOSDKWebQRCode-1.0.3.js';
-
-type FeishuStateEntry = {
-  expiresAt: number;
-  redirectTarget: string;
-};
-
-const DEFAULT_POST_LOGIN_TARGET = '/sessions';
-const feishuStateStore: Map<string, FeishuStateEntry> = new Map();
-const FEISHU_STATE_TTL_MS = 10 * 60 * 1000;
 
 function normalizePostLoginTarget(raw: unknown): string {
   if (typeof raw !== 'string') {
@@ -84,37 +107,6 @@ function buildAuthResponseUser(
     role: normalizeWebRole(roleOverride ?? user.role),
     tenant_id: user.tenant_id ?? 'default',
   };
-}
-
-function issueFeishuState(redirectTarget: string): string {
-  const state = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-  feishuStateStore.set(state, {
-    expiresAt: Date.now() + FEISHU_STATE_TTL_MS,
-    redirectTarget,
-  });
-  return state;
-}
-
-function consumeFeishuState(state: string): FeishuStateEntry | null {
-  const entry = feishuStateStore.get(state);
-  feishuStateStore.delete(state);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) return null;
-  return entry;
-}
-
-function fallbackFeishuStateEntry(): FeishuStateEntry {
-  return {
-    expiresAt: Date.now() + FEISHU_STATE_TTL_MS,
-    redirectTarget: DEFAULT_POST_LOGIN_TARGET,
-  };
-}
-
-function cleanupFeishuState(): void {
-  const now = Date.now();
-  for (const [k, entry] of feishuStateStore.entries()) {
-    if (now > entry.expiresAt) feishuStateStore.delete(k);
-  }
 }
 
 /**
@@ -227,6 +219,7 @@ export function registerAuthRoutes(app: Express): void {
       const feishuConfigured = Boolean(feishuRow?.hasConfig);
       const dingtalkConfigured = Boolean(dingtalkRow?.hasConfig);
       const wecomConfigured = Boolean(wecomRow?.hasConfig);
+      const editionSettings = await getOrgEditionSettings();
       const mode =
         ldapEnabled || feishuEnabled || dingtalkEnabled || wecomEnabled ? 'enterprise' : 'standalone';
       res.json({
@@ -241,6 +234,7 @@ export function registerAuthRoutes(app: Express): void {
           feishuConfigured,
           dingtalkConfigured,
           wecomConfigured,
+          editionSwitcherEnabled: editionSettings.editionSwitcherEnabled,
         },
       });
     } catch (error) {
@@ -260,35 +254,39 @@ export function registerAuthRoutes(app: Express): void {
    */
   app.get('/api/auth/feishu/authorize', apiRateLimiter, async (req: Request, res: Response) => {
     try {
-      cleanupFeishuState();
+      cleanupOAuthLoginState('feishu');
       const mode = String(req.query.mode ?? 'oauth');
 
       const providerRow = await AuthProviderRepository.getProvider('feishu');
       const cfg = (providerRow?.config ?? {}) as unknown as FeishuProviderConfig;
       const appId = cfg.appId || process.env.FEISHU_APP_ID || '';
-      const redirectUri = cfg.redirectUri || process.env.FEISHU_REDIRECT_URI || '';
+      const redirectUri = resolveOAuthCallbackUri(
+        String(cfg.redirectUri ?? process.env.FEISHU_REDIRECT_URI ?? ''),
+        '/api/auth/feishu/callback',
+        readRequestOrigin(req)
+      );
       const hasSecret = Boolean(String(cfg.appSecret ?? '').trim() || process.env.FEISHU_APP_SECRET);
       const hasMinimalConfig = Boolean(appId && redirectUri && hasSecret);
 
       if (!providerRow || !hasMinimalConfig) {
-        res.status(404).json({
-          success: false,
-          code: 'NOT_CONFIGURED',
-          message: 'Feishu login is not configured',
+        respondOAuthProviderUnavailable(res, {
+          providerLabel: 'Feishu',
+          configured: false,
+          enabled: Boolean(providerRow?.enabled),
         });
         return;
       }
       if (!providerRow.enabled) {
-        res.status(404).json({
-          success: false,
-          code: 'NOT_ENABLED',
-          message: 'Feishu login is configured but not enabled',
+        respondOAuthProviderUnavailable(res, {
+          providerLabel: 'Feishu',
+          configured: true,
+          enabled: false,
         });
         return;
       }
 
       const redirectTarget = normalizePostLoginTarget(req.query.redirect);
-      const state = issueFeishuState(redirectTarget);
+      const state = issueOAuthLoginState('feishu', redirectTarget);
       const goto = buildFeishuAuthorizeUrl({ appId, redirectUri, state });
 
       if (mode === 'qr') {
@@ -296,7 +294,7 @@ export function registerAuthRoutes(app: Express): void {
         return;
       }
 
-      res.redirect(goto);
+      sendOAuthAuthorizeRedirect(res, req, goto);
     } catch (error) {
       console.error('[AuthRoute] feishu authorize error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
@@ -315,17 +313,21 @@ export function registerAuthRoutes(app: Express): void {
         res.status(400).send('Missing code/state');
         return;
       }
-      const stateEntry = consumeFeishuState(state);
+      const stateEntry = consumeOAuthLoginState('feishu', state);
       if (!stateEntry) {
-        console.warn('[AuthRoute] feishu callback state missing/expired, fallback to default redirect');
+        res.status(400).send(OAUTH_STATE_INVALID_MESSAGE);
+        return;
       }
-      const effectiveStateEntry = stateEntry ?? fallbackFeishuStateEntry();
 
       const providerRow = await AuthProviderRepository.getProvider('feishu');
       const cfg = (providerRow?.config ?? {}) as unknown as FeishuProviderConfig;
       const appId = cfg.appId || process.env.FEISHU_APP_ID || '';
       const appSecret = cfg.appSecret || process.env.FEISHU_APP_SECRET || '';
-      const redirectUri = cfg.redirectUri || process.env.FEISHU_REDIRECT_URI || '';
+      const redirectUri = resolveOAuthCallbackUri(
+        String(cfg.redirectUri ?? process.env.FEISHU_REDIRECT_URI ?? ''),
+        '/api/auth/feishu/callback',
+        readRequestOrigin(req)
+      );
       if (!providerRow?.enabled) {
         res.status(404).send('Feishu login is not enabled');
         return;
@@ -344,42 +346,28 @@ export function registerAuthRoutes(app: Express): void {
         return;
       }
 
-      const identity = await AuthIdentityRepository.getByExternalId('feishu', externalId);
-      if (!identity) {
-        res.status(403).send('Account not bound. Please contact admin.');
-        return;
-      }
-      const user = await UserRepository.findById(identity.user_id);
-      if (!user) {
-        res.status(403).send('Bound user not found');
-        return;
-      }
-
-      const authUser = buildAuthResponseUser(user);
-      const sessionToken = await AuthService.generateToken(authUser);
-
-      await UserRepository.updateLastLogin(user.id);
+      let orgUnitPath: string | null = null;
       try {
         const openId = typeof userInfo.open_id === 'string' ? userInfo.open_id.trim() : '';
         if (openId) {
-          const orgUnitPath = await fetchFeishuOrgUnitPath({ appId, appSecret, openId });
-          await updateUserOrgProfile({ userId: user.id, orgUnitPath, source: 'feishu' });
+          orgUnitPath = await fetchFeishuOrgUnitPath({ appId, appSecret, openId });
         }
       } catch (syncError) {
         console.warn('[AuthRoute] feishu org profile sync failed:', syncError);
       }
-      res.cookie(AUTH_CONFIG.COOKIE.NAME, sessionToken, {
-        ...getCookieOptions(),
-        maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,
+
+      const displayName = String(userInfo.name ?? userInfo.en_name ?? '').trim();
+      const { user } = await resolveOrProvisionSsoUser('feishu', {
+        externalId,
+        preferredUsername: displayName || `feishu_${externalId.slice(0, 16)}`,
+        orgUnitPath,
+        orgSource: 'feishu',
       });
 
-      const target = resolvePostLoginRedirectPath(
-        effectiveStateEntry.redirectTarget,
-        authUser.role,
-        authUser.tenant_id,
-        false
-      );
-      res.redirect(`/#${target}`);
+      await finalizeOAuthBrowserLogin(req, res, {
+        user,
+        redirectTarget: stateEntry.redirectTarget,
+      });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.toLowerCase().includes('invalid_grant')) {
@@ -391,6 +379,221 @@ export function registerAuthRoutes(app: Express): void {
         return;
       }
       console.error('[AuthRoute] feishu callback error:', error);
+      res.status(500).send('Internal server error');
+    }
+  });
+
+  /**
+   * 钉钉授权入口
+   * GET /api/auth/dingtalk/authorize
+   */
+  app.get('/api/auth/dingtalk/authorize', apiRateLimiter, async (req: Request, res: Response) => {
+    try {
+      cleanupOAuthLoginState('dingtalk');
+      const providerRow = await AuthProviderRepository.getProvider('dingtalk');
+      const cfg = (providerRow?.config ?? {}) as unknown as DingTalkProviderConfig;
+      const appKey = String(cfg.appKey ?? '').trim();
+      const appSecret = String(cfg.appSecret ?? '').trim();
+      const redirectUri = resolveOAuthCallbackUri(
+        String(cfg.redirectUri ?? process.env.DINGTALK_REDIRECT_URI ?? ''),
+        '/api/auth/dingtalk/callback',
+        readRequestOrigin(req)
+      );
+      const hasMinimalConfig = Boolean(appKey && appSecret && redirectUri);
+
+      if (!providerRow || !hasMinimalConfig) {
+        respondOAuthProviderUnavailable(res, {
+          providerLabel: 'DingTalk',
+          configured: false,
+          enabled: Boolean(providerRow?.enabled),
+        });
+        return;
+      }
+      if (!providerRow.enabled) {
+        respondOAuthProviderUnavailable(res, {
+          providerLabel: 'DingTalk',
+          configured: true,
+          enabled: false,
+        });
+        return;
+      }
+
+      const redirectTarget = normalizePostLoginTarget(req.query.redirect);
+      const state = issueOAuthLoginState('dingtalk', redirectTarget);
+      const goto = buildDingTalkAuthorizeUrl({ appKey, redirectUri, state });
+      sendOAuthAuthorizeRedirect(res, req, goto);
+    } catch (error) {
+      console.error('[AuthRoute] dingtalk authorize error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  /**
+   * 钉钉回调
+   * GET /api/auth/dingtalk/callback?code=...&state=...
+   */
+  app.get('/api/auth/dingtalk/callback', apiRateLimiter, async (req: Request, res: Response) => {
+    try {
+      const code = String(req.query.code ?? '');
+      const state = String(req.query.state ?? '');
+      if (!code || !state) {
+        res.status(400).send('Missing code/state');
+        return;
+      }
+      const stateEntry = consumeOAuthLoginState('dingtalk', state);
+      if (!stateEntry) {
+        res.status(400).send(OAUTH_STATE_INVALID_MESSAGE);
+        return;
+      }
+
+      const providerRow = await AuthProviderRepository.getProvider('dingtalk');
+      const cfg = (providerRow?.config ?? {}) as unknown as DingTalkProviderConfig;
+      const appKey = String(cfg.appKey ?? '').trim();
+      const appSecret = String(cfg.appSecret ?? '').trim();
+      if (!providerRow?.enabled) {
+        res.status(404).send('DingTalk login is not enabled');
+        return;
+      }
+      if (!appKey || !appSecret) {
+        res.status(500).send('DingTalk provider not configured');
+        return;
+      }
+
+      const accessToken = await exchangeDingTalkCodeForUserAccessToken({ appKey, appSecret, code });
+      const userInfo = await fetchDingTalkUserInfo(accessToken);
+      const externalIdField = (cfg.externalIdField ?? 'unionId') as 'unionId' | 'openId';
+      const externalId = resolveDingTalkExternalId(userInfo, externalIdField);
+      if (!externalId) {
+        res.status(500).send('Failed to resolve DingTalk user identity');
+        return;
+      }
+
+      const nick = String(userInfo.nick ?? '').trim();
+      const mobile = String(userInfo.mobile ?? '').trim();
+      const { user } = await resolveOrProvisionSsoUser('dingtalk', {
+        externalId,
+        preferredUsername: nick || mobile || `dingtalk_${externalId.slice(0, 16)}`,
+      });
+
+      await finalizeOAuthBrowserLogin(req, res, {
+        user,
+        redirectTarget: stateEntry.redirectTarget,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('expired')) {
+        res.status(400).send('DingTalk auth code expired or invalid. Please retry login.');
+        return;
+      }
+      if (msg.toLowerCase().includes('timeout')) {
+        res.status(504).send('DingTalk login timeout. Please retry.');
+        return;
+      }
+      console.error('[AuthRoute] dingtalk callback error:', error);
+      res.status(500).send('Internal server error');
+    }
+  });
+
+  /**
+   * 企业微信授权入口
+   * GET /api/auth/wecom/authorize
+   */
+  app.get('/api/auth/wecom/authorize', apiRateLimiter, async (req: Request, res: Response) => {
+    try {
+      cleanupOAuthLoginState('wecom');
+      const providerRow = await AuthProviderRepository.getProvider('wecom');
+      const cfg = (providerRow?.config ?? {}) as unknown as WeComProviderConfig;
+      const corpId = String(cfg.corpId ?? '').trim();
+      const agentId = String(cfg.agentId ?? '').trim();
+      const secret = String(cfg.secret ?? '').trim();
+      const redirectUri = resolveOAuthCallbackUri(
+        String(cfg.redirectUri ?? process.env.WECOM_REDIRECT_URI ?? ''),
+        '/api/auth/wecom/callback',
+        readRequestOrigin(req)
+      );
+      const hasMinimalConfig = Boolean(corpId && agentId && secret && redirectUri);
+
+      if (!providerRow || !hasMinimalConfig) {
+        respondOAuthProviderUnavailable(res, {
+          providerLabel: 'WeCom',
+          configured: false,
+          enabled: Boolean(providerRow?.enabled),
+        });
+        return;
+      }
+      if (!providerRow.enabled) {
+        respondOAuthProviderUnavailable(res, {
+          providerLabel: 'WeCom',
+          configured: true,
+          enabled: false,
+        });
+        return;
+      }
+
+      const redirectTarget = normalizePostLoginTarget(req.query.redirect);
+      const state = issueOAuthLoginState('wecom', redirectTarget);
+      const goto = buildWeComAuthorizeUrl({ corpId, agentId, redirectUri, state });
+      sendOAuthAuthorizeRedirect(res, req, goto);
+    } catch (error) {
+      console.error('[AuthRoute] wecom authorize error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  /**
+   * 企业微信回调
+   * GET /api/auth/wecom/callback?code=...&state=...
+   */
+  app.get('/api/auth/wecom/callback', apiRateLimiter, async (req: Request, res: Response) => {
+    try {
+      const code = String(req.query.code ?? '');
+      const state = String(req.query.state ?? '');
+      if (!code || !state) {
+        res.status(400).send('Missing code/state');
+        return;
+      }
+      const stateEntry = consumeOAuthLoginState('wecom', state);
+      if (!stateEntry) {
+        res.status(400).send(OAUTH_STATE_INVALID_MESSAGE);
+        return;
+      }
+
+      const providerRow = await AuthProviderRepository.getProvider('wecom');
+      const cfg = (providerRow?.config ?? {}) as unknown as WeComProviderConfig;
+      const corpId = String(cfg.corpId ?? '').trim();
+      const secret = String(cfg.secret ?? '').trim();
+      if (!providerRow?.enabled) {
+        res.status(404).send('WeCom login is not enabled');
+        return;
+      }
+      if (!corpId || !secret) {
+        res.status(500).send('WeCom provider not configured');
+        return;
+      }
+
+      const accessToken = await fetchWeComCorpAccessToken(corpId, secret);
+      const externalId = await fetchWeComUserIdByOAuthCode(accessToken, code);
+
+      const { user } = await resolveOrProvisionSsoUser('wecom', {
+        externalId,
+        preferredUsername: `wecom_${externalId}`,
+      });
+
+      await finalizeOAuthBrowserLogin(req, res, {
+        user,
+        redirectTarget: stateEntry.redirectTarget,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('expired')) {
+        res.status(400).send('WeCom auth code expired or invalid. Please retry login.');
+        return;
+      }
+      if (msg.toLowerCase().includes('timeout')) {
+        res.status(504).send('WeCom login timeout. Please retry.');
+        return;
+      }
+      console.error('[AuthRoute] wecom callback error:', error);
       res.status(500).send('Internal server error');
     }
   });
@@ -428,23 +631,26 @@ export function registerAuthRoutes(app: Express): void {
         return;
       }
 
-      // Generate JWT token
-      const token = await AuthService.generateToken(user);
+      const joinedUser = await refreshUserAfterEnterpriseAutoJoin(user);
 
-      // Update last login
-      await UserRepository.updateLastLogin(user.id);
+      const token = await AuthService.generateToken({
+        id: joinedUser.id,
+        username: joinedUser.username,
+        role: joinedUser.role,
+      });
 
-      // Set secure cookie（远程模式下启用 secure 标志）
-      // Set secure cookie (enable secure flag in remote mode)
+      await UserRepository.updateLastLogin(joinedUser.id);
+
       res.cookie(AUTH_CONFIG.COOKIE.NAME, token, {
         ...getCookieOptions(),
         maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,
       });
+      registerBrowserWebuiLoginSession(req, joinedUser, token);
 
       res.json({
         success: true,
         message: 'Login successful',
-        user: buildAuthResponseUser(user),
+        user: buildAuthResponseUser(joinedUser),
         token,
       });
     } catch (error) {
@@ -461,7 +667,7 @@ export function registerAuthRoutes(app: Express): void {
    * LDAP 登录（域控账号）
    * POST /api/auth/ldap/login
    *
-   * 说明：按“预创建绑定”策略，仅允许已绑定到本地 user 的外部账号登录
+   * 说明：首次 LDAP 登录会自动 JIT 开通本地账号并绑定身份；重复登录走已绑定用户。
    */
   app.post('/api/auth/ldap/login', authRateLimiter, AuthMiddleware.validateLoginInput, async (req: Request, res: Response) => {
     try {
@@ -481,45 +687,39 @@ export function registerAuthRoutes(app: Express): void {
 
       const result = await authenticateWithLdap(username, password, cfg);
 
-      // 绑定检查：externalId -> userId
-      const identity = await AuthIdentityRepository.getByExternalId(provider, result.externalId);
-      if (!identity) {
-        res.status(403).json({ success: false, message: 'Account not bound. Please contact admin.' });
-        return;
-      }
+      const { user, isAdmin } = await resolveOrProvisionLdapUser(username, {
+        externalId: result.externalId,
+        isAdmin: result.isAdmin,
+        orgUnitPath: result.orgUnitPath,
+      });
 
-      const user = await UserRepository.findById(identity.user_id);
-      if (!user) {
-        res.status(403).json({ success: false, message: 'Bound user not found' });
-        return;
-      }
+      const joinedUser = await refreshUserAfterEnterpriseAutoJoin(user);
 
-      const effectiveRole = result.isAdmin ? 'system_admin' : normalizeWebRole(user.role);
+      const effectiveRole = isAdmin ? 'system_admin' : normalizeWebRole(joinedUser.role);
+      if (isAdmin && joinedUser.role !== 'system_admin') {
+        try {
+          await UserRepository.setRole(joinedUser.id, 'system_admin');
+        } catch (roleError) {
+          console.warn('[AuthRoute] failed to persist LDAP admin role:', roleError);
+        }
+      }
       const token = await AuthService.generateToken({
-        id: user.id,
-        username: user.username,
+        id: joinedUser.id,
+        username: joinedUser.username,
         role: effectiveRole,
       });
 
-      await UserRepository.updateLastLogin(user.id);
-      try {
-        await updateUserOrgProfile({
-          userId: user.id,
-          orgUnitPath: result.orgUnitPath,
-          source: 'ldap',
-        });
-      } catch (syncError) {
-        console.warn('[AuthRoute] ldap org profile sync failed:', syncError);
-      }
+      await UserRepository.updateLastLogin(joinedUser.id);
       res.cookie(AUTH_CONFIG.COOKIE.NAME, token, {
         ...getCookieOptions(),
         maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,
       });
+      registerBrowserWebuiLoginSession(req, joinedUser, token, effectiveRole);
 
       res.json({
         success: true,
         message: 'Login successful',
-        user: buildAuthResponseUser(user, effectiveRole),
+        user: buildAuthResponseUser(joinedUser, effectiveRole),
         token,
       });
     } catch (error: any) {
@@ -565,6 +765,7 @@ export function registerAuthRoutes(app: Express): void {
       const token = TokenUtils.extractFromRequest(req);
       if (token) {
         AuthService.blacklistToken(token);
+        revokeBrowserWebuiSession(token);
       }
 
       res.clearCookie(AUTH_CONFIG.COOKIE.NAME);
@@ -584,12 +785,15 @@ export function registerAuthRoutes(app: Express): void {
       const tenantId = req.user?.tenant_id;
       const data = await resolveEnterpriseContext(tenantId);
       const joined = data.joined;
+      const governance = await getInstanceGovernance(req.user?.role);
       res.json({
         success: true,
         data: {
           ...data,
           role: req.user?.role,
           canCreateEnterprise: !joined && req.user?.role === 'system_admin',
+          hasSystemAdmin: governance.hasSystemAdmin,
+          canClaimSystemAdmin: governance.canClaimSystemAdmin,
         },
       });
     }
@@ -877,6 +1081,10 @@ export function registerAuthRoutes(app: Express): void {
         ...getCookieOptions(),
         maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,
       });
+      const qrUser = await UserRepository.getSystemUser();
+      if (qrUser) {
+        registerBrowserWebuiLoginSession(req, qrUser, result.data.sessionToken, qrUser.role);
+      }
 
       res.json({
         success: true,

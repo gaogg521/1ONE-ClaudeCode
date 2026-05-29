@@ -19,10 +19,12 @@ These principles apply to every project session:
 # Development
 npm start                    # Dev mode (electron-vite dev), hot reload
 npm run restart              # Kill existing instance + clear lockfile + restart
+npm run restart:webui        # Build out/ + restart with --webui (use after renderer/WebUI changes)
 npm run webui:prod           # WebUI mode (browser access at localhost:25809)
 
 # Build
 npx electron-vite build      # Build all (main + renderer) to out/
+npm run build:webui          # Same as electron-vite build (alias)
 npm run dist:win             # Packaged installer for Windows
 
 # Test
@@ -33,6 +35,8 @@ npm run lint:fix             # Auto-fix lint issues
 ```
 
 **Important**: Always use `npm run restart` (not `npm start`) when an instance is already running — it handles the lockfile at `%APPDATA%\1OneClaudeCode-Dev\lockfile`.
+
+**WebUI / LAN browser testing**: Non-localhost URLs (e.g. `http://192.168.x.x:25809`) serve **built** assets from `out/renderer/`, not Vite HMR. After changing `src/renderer/**`, `src/common/adapter/browser.ts`, or WebUI auth/routes, agents **must** run `npm run build:webui` or `npm run restart:webui` before asking the user to verify in the browser. `npm run restart` alone does not rebuild `out/`.
 
 ## Architecture
 

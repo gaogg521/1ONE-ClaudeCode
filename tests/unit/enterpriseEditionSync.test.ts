@@ -9,7 +9,7 @@ import { mergeDesktopEnterpriseContext } from '@/common/auth/enterpriseEditionSy
 import { isEnterpriseAdminConsolePath } from '@/renderer/pages/enterprise/paths';
 
 describe('mergeDesktopEnterpriseContext', () => {
-  it('keeps local org_admin when browser session is a member', () => {
+  it('prefers browser session when present', () => {
     const merged = mergeDesktopEnterpriseContext(
       {
         joined: true,
@@ -24,8 +24,17 @@ describe('mergeDesktopEnterpriseContext', () => {
         role: 'member',
       }
     );
-    expect(merged.role).toBe('org_admin');
+    expect(merged.role).toBe('member');
     expect(merged.joined).toBe(true);
+  });
+
+  it('falls back to ipc when browser has no session', () => {
+    const merged = mergeDesktopEnterpriseContext(
+      { joined: false, tenantId: 'default', tenantName: null, role: 'org_admin' },
+      null
+    );
+    expect(merged.tenantId).toBe('default');
+    expect(merged.role).toBe('org_admin');
   });
 
   it('uses browser tenant when only browser joined', () => {

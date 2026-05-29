@@ -6,8 +6,13 @@
 
 import { captureCsrfTokenFromResponse, getCsrfToken, withCsrfHeader } from '@process/webserver/middleware/csrfClient';
 import { webui } from '@/common/adapter/ipcBridge';
+import {
+  ONE_WEBUI_CLIENT_DESKTOP,
+  ONE_WEBUI_CLIENT_HEADER,
+} from '@/common/config/webuiClientHeaders';
 import { normalizeEnterpriseApiError } from '@/renderer/utils/enterpriseApi/error';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { getDesktopWebuiBearerToken } from '@/renderer/utils/syncBrowserWebuiSession';
 
 /**
  * Base URL for WebUI HTTP APIs.
@@ -48,21 +53,17 @@ async function getDesktopWebuiAuthHeaders(headers?: HeadersInit): Promise<Header
     return headers;
   }
 
-  try {
-    const result = await webui.getDesktopSessionToken.invoke();
-    const token = result.success ? result.data?.token : undefined;
-    if (!token) {
-      return headers;
-    }
-
-    const mergedHeaders = new Headers(headers ?? {});
-    if (!mergedHeaders.has('Authorization')) {
-      mergedHeaders.set('Authorization', `Bearer ${token}`);
-    }
-    return Object.fromEntries(mergedHeaders.entries());
-  } catch {
-    return headers;
+  const merged = new Headers(headers ?? {});
+  if (!merged.has(ONE_WEBUI_CLIENT_HEADER)) {
+    merged.set(ONE_WEBUI_CLIENT_HEADER, ONE_WEBUI_CLIENT_DESKTOP);
   }
+
+  const bearer = getDesktopWebuiBearerToken();
+  if (bearer && !merged.has('Authorization')) {
+    merged.set('Authorization', `Bearer ${bearer}`);
+  }
+
+  return Object.fromEntries(merged.entries());
 }
 
 function withCsrfFormData(body: BodyInit | null | undefined): BodyInit | null | undefined {

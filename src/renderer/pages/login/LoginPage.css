@@ -30,6 +30,7 @@ body.login-page-active {
   padding: var(--login-side-padding);
   min-height: 100vh;
   overflow: hidden;
+  color-scheme: light;
   background:
     radial-gradient(circle at 12% 22%, rgba(120, 170, 255, 0.16), transparent 28%),
     radial-gradient(circle at 86% 16%, rgba(129, 140, 248, 0.14), transparent 24%),
@@ -356,6 +357,7 @@ body.login-page-active {
     0 20px 48px rgba(15, 23, 42, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.92);
   color: #1d2129;
+  color-scheme: light;
   animation: login-card-rise 0.48s ease-out;
   --color-text-1: #1d2129;
   --color-text-2: #4e5969;
@@ -364,6 +366,20 @@ body.login-page-active {
   --color-border-2: #dbe3f0;
   --color-border-3: #c9d4e6;
   --color-fill-2: #f5f8fc;
+}
+
+.login-page__back {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 2;
+  padding: 0 8px !important;
+  color: #64748b !important;
+}
+
+.login-page__back:hover {
+  color: #334155 !important;
+  background: #f1f5f9 !important;
 }
 
 .login-page__lang {
@@ -389,6 +405,7 @@ body.login-page-active {
 .login-page__card :global(.arco-input-password) {
   background-color: #f5f7fa !important;
   color: #1d2129 !important;
+  color-scheme: light !important;
   border-color: var(--login-input-border) !important;
   border-radius: 10px !important;
   min-height: 48px;
@@ -412,8 +429,12 @@ body.login-page-active {
 
 .login-page__card :global(input.arco-input),
 .login-page__card :global(.arco-input-password input) {
+  appearance: none;
   background-color: #f5f7fa !important;
+  background-image: none !important;
   color: #1d2129 !important;
+  caret-color: #1d2129 !important;
+  color-scheme: light !important;
   -webkit-text-fill-color: #1d2129 !important;
 }
 
@@ -424,8 +445,12 @@ body.login-page-active {
 .login-page__card :global(.arco-input-password input:-webkit-autofill:hover),
 .login-page__card :global(.arco-input-password input:-webkit-autofill:focus) {
   -webkit-text-fill-color: #1d2129 !important;
+  caret-color: #1d2129 !important;
   -webkit-box-shadow: 0 0 0 1000px #f5f7fa inset !important;
   box-shadow: 0 0 0 1000px #f5f7fa inset !important;
+  background-color: #f5f7fa !important;
+  background-image: none !important;
+  color-scheme: light !important;
   transition: background-color 9999s ease-out 0s;
 }
 
@@ -1075,6 +1100,59 @@ body.login-page-active {
   width: 100%;
   max-width: var(--login-panel-width);
   height: var(--login-panel-height);
+}
+
+/* Desktop app: compact in-window login (e.g. from avatar → WebUI admin login) */
+.login-page--desktop-app {
+  --login-panel-width: min(100%, 440px);
+  --login-panel-height: auto;
+  --login-side-padding: 20px;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 100%;
+  overflow-y: auto;
+}
+
+.login-page--desktop-app .login-page__hero {
+  display: none;
+}
+
+.login-page--desktop-app .login-page__panel {
+  width: 100%;
+  max-width: var(--login-panel-width);
+  padding: 0;
+}
+
+.login-page--desktop-app .login-page__card {
+  height: auto;
+  min-height: 0;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: 40px 32px 24px;
+}
+
+.login-page--desktop-app .login-page__card-head {
+  margin-bottom: 20px;
+  padding-top: 4px;
+}
+
+.login-page--desktop-app .login-page__card-shield {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 14px;
+}
+
+.login-page--desktop-app .login-page__card-title {
+  font-size: 22px !important;
+}
+
+.login-page--desktop-app .login-page__footer {
+  margin-top: 8px;
+  padding-top: 14px;
+}
+
+.login-page__channel-panel {
+  margin-bottom: 8px;
 }
 
 .login-page__sr-only {

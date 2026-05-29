@@ -209,6 +209,7 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
     const handler = getFeishuAuthorizeHandler(app);
     const req = {
       query: { mode: 'oauth' },
+      headers: {},
     } as express.Request;
     const res = createResponseMock() as unknown as express.Response;
 
@@ -239,7 +240,7 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
     expect(hasRoute(app, 'post', '/api/auth/enterprise-elevate/revoke')).toBe(false);
   });
 
-  it('returns 500 when the provider is enabled but the callback URL is missing', async () => {
+  it('returns NOT_CONFIGURED when redirect URI cannot be resolved', async () => {
     mockGetProvider.mockResolvedValue({
       provider: 'feishu',
       enabled: true,
@@ -258,15 +259,17 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
     const handler = getFeishuAuthorizeHandler(app);
     const req = {
       query: { mode: 'oauth' },
+      headers: {},
     } as express.Request;
     const res = createResponseMock() as unknown as express.Response;
 
     await handler(req, res, vi.fn());
 
-    expect((res as unknown as { status: ReturnType<typeof vi.fn> }).status).toHaveBeenCalledWith(500);
+    expect((res as unknown as { status: ReturnType<typeof vi.fn> }).status).toHaveBeenCalledWith(404);
     expect((res as unknown as { json: ReturnType<typeof vi.fn> }).json).toHaveBeenCalledWith({
       success: false,
-      message: 'Feishu provider not configured',
+      code: 'NOT_CONFIGURED',
+      message: 'Feishu login is not configured',
     });
     expect((res as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect).not.toHaveBeenCalled();
   });
@@ -312,6 +315,7 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
           mode: 'oauth',
           redirect: '/enterprise/auth',
         },
+        headers: {},
       } as express.Request,
       authorizeRes,
       vi.fn()
@@ -366,6 +370,7 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
           mode: 'oauth',
           redirect: '/enterprise',
         },
+        headers: {},
       } as express.Request,
       authorizeRes,
       vi.fn()
@@ -383,6 +388,7 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
           code: 'oauth-code',
           state,
         },
+        headers: {},
       } as express.Request,
       callbackRes,
       vi.fn()

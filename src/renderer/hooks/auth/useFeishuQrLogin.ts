@@ -47,7 +47,7 @@ export function useFeishuQrLogin(buildAuthorizePath: (mode: 'oauth' | 'qr') => s
   const handleFeishuOauth = useCallback(async (): Promise<OAuthAuthorizeResult> => {
     setInitError(null);
     const result = await startOAuthAuthorize(buildAuthorizePath('oauth'));
-    if (!result.ok) {
+    if (result.ok === false) {
       setInitError(result.message);
     }
     return result;

@@ -9,6 +9,7 @@ import { ensureCodegraphCliInstalled } from './codegraphCliInstall';
 import { getAgentToolkitConfig } from './config';
 import { syncAgentToolkitMcpToCliAgents } from './syncCliMcp';
 import { syncGlobalAgentToolkitSkills } from './syncGlobalSkills';
+import { prefetchAgentToolkitSkillsIndex } from './prefetchSkillsIndex';
 import { syncVendoredBuiltinSkills } from './syncVendoredSkills';
 
 let bootstrapped = false;
@@ -34,6 +35,8 @@ export async function bootstrapAgentToolkit(): Promise<void> {
   } catch (error) {
     console.warn('[agentToolkit] syncVendoredBuiltinSkills failed:', error);
   }
+
+  prefetchAgentToolkitSkillsIndex();
 
   void ensureCodegraphCliInstalled();
   void syncAgentToolkitMcpToCliAgents();

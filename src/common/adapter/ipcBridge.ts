@@ -833,6 +833,15 @@ export const webui = {
   getDesktopSessionToken: bridge.buildProvider<IBridgeResponse<{ token: string }>, void>(
     'webui.get-desktop-session-token'
   ),
+  syncBrowserWebuiSession: bridge.buildProvider<
+    IBridgeResponse<{
+      userId: string;
+      username: string;
+      role: string;
+      token: string;
+    }>,
+    void
+  >('webui.sync-browser-webui-session'),
   getEnterpriseContext: bridge.buildProvider<IBridgeResponse<IWebUIEnterpriseContext>, void>(
     'webui.get-enterprise-context'
   ),
@@ -876,6 +885,9 @@ export const webui = {
   // 状态变更事件 / Status changed event
   statusChanged: bridge.buildEmitter<{ running: boolean; port?: number; localUrl?: string; networkUrl?: string }>(
     'webui.status-changed'
+  ),
+  orgConfigChanged: bridge.buildEmitter<import('@/common/types/orgConfigEvents').OrgConfigChangedPayload>(
+    'webui.org-config-changed'
   ),
   // 密码重置结果事件（绕过 provider 返回值问题）/ Password reset result event (workaround for provider return value issue)
   resetPasswordResult: bridge.buildEmitter<{ success: boolean; newPassword?: string; msg?: string }>(

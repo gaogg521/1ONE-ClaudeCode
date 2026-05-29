@@ -106,6 +106,15 @@ const SendBox: React.FC<{
   const mobileUserFocusIntentUntilRef = useRef(0);
   const warmedConversationRef = useRef<string | undefined>(undefined);
   const warmupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountWarmupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerConversationWarmup = useCallback((cid: string) => {
+    if (warmedConversationRef.current === cid) {
+      return;
+    }
+    warmedConversationRef.current = cid;
+    ipcBridge.conversation.warmup.invoke({ conversation_id: cid }).catch(() => {});
+  }, []);
   const latestInputRef = useLatestRef(input);
   const setInputRef = useLatestRef(setInput);
   const messageList = useMessageList();
@@ -446,17 +455,16 @@ const SendBox: React.FC<{
     handlePasteFocus();
     setIsInputFocused(true);
 
-    // Pre-warm worker bootstrap after focus stays for 1s (debounce).
-    // Avoids triggering warmup for every conversation during rapid switching.
+    // Pre-warm worker bootstrap after focus stays briefly (debounce).
     const cid = conversationContext?.conversationId;
     if (cid && warmedConversationRef.current !== cid) {
       if (warmupTimerRef.current) clearTimeout(warmupTimerRef.current);
       warmupTimerRef.current = setTimeout(() => {
-        warmedConversationRef.current = cid;
-        ipcBridge.conversation.warmup.invoke({ conversation_id: cid }).catch(() => {});
-      }, 1000);
+        warmupTimerRef.current = null;
+        triggerConversationWarmup(cid);
+      }, 400);
     }
-  }, [handlePasteFocus, isMobile, conversationContext?.conversationId]);
+  }, [handlePasteFocus, isMobile, conversationContext?.conversationId, triggerConversationWarmup]);
   const handleInputBlur = useCallback(() => {
     if (warmupTimerRef.current) {
       clearTimeout(warmupTimerRef.current);
@@ -464,6 +472,30 @@ const SendBox: React.FC<{
     }
     setIsInputFocused(false);
   }, []);
+
+  // Pre-warm ACP/CLI bootstrap when the conversation view opens (not only after input focus).
+  useEffect(() => {
+    const cid = conversationContext?.conversationId;
+    if (!cid) {
+      return;
+    }
+
+    if (mountWarmupTimerRef.current) {
+      clearTimeout(mountWarmupTimerRef.current);
+    }
+
+    mountWarmupTimerRef.current = setTimeout(() => {
+      mountWarmupTimerRef.current = null;
+      triggerConversationWarmup(cid);
+    }, 300);
+
+    return () => {
+      if (mountWarmupTimerRef.current) {
+        clearTimeout(mountWarmupTimerRef.current);
+        mountWarmupTimerRef.current = null;
+      }
+    };
+  }, [conversationContext?.conversationId, triggerConversationWarmup]);
 
   useEffect(() => {
     historyDraftRef.current = null;

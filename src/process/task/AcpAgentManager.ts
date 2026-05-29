@@ -738,9 +738,15 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
           ...(data.hidden && { hidden: true }),
         };
         ipcBridge.acpConversation.responseStream.emit(userResponseMessage);
-      }
 
-      await this.initAgent(this.options);
+        // Surface "processing" in the UI while CLI bootstrap runs (initAgent can take several seconds).
+        ipcBridge.acpConversation.responseStream.emit({
+          type: 'start',
+          conversation_id: this.conversation_id,
+          msg_id: data.msg_id,
+          data: null,
+        });
+      }
 
       if (data.msg_id && data.content) {
         let contentToSend = data.content;
@@ -748,25 +754,25 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
           contentToSend = contentToSend.split(ONE_FILES_MARKER)[0].trimEnd();
         }
 
-        // 首条消息时注入预设规则和 skills
-        // Inject preset rules and skills on first message
-        //
-        // Symlinks 仅在临时工作空间创建；自定义工作空间跳过 symlink 以避免污染用户目录。
-        // Symlinks are only created for temp workspaces; custom workspaces skip symlinks.
-        // 因此自定义工作空间或不支持原生 skill 发现的 backend 都需要通过 prompt 注入 skills。
-        // So custom workspaces or backends without native skill discovery need prompt injection.
-        if (this.isFirstMessage) {
-          contentToSend = await applyAgentToolkitFirstMessage(
-            contentToSend,
-            {
-              presetContext: this.options.presetContext,
-              enabledSkills: this.options.enabledSkills,
-            },
-            {
-              backend: this.options.backend,
-              customWorkspace: this.options.customWorkspace,
-            }
-          );
+        // Run CLI bootstrap and first-message toolkit injection in parallel.
+        const initPromise = this.initAgent(this.options);
+        const toolkitPromise = this.isFirstMessage
+          ? applyAgentToolkitFirstMessage(
+              contentToSend,
+              {
+                presetContext: this.options.presetContext,
+                enabledSkills: this.options.enabledSkills,
+              },
+              {
+                backend: this.options.backend,
+                customWorkspace: this.options.customWorkspace,
+              }
+            )
+          : null;
+
+        await initPromise;
+        if (toolkitPromise) {
+          contentToSend = await toolkitPromise;
         }
 
         const result = await this.agent.sendMessage({
@@ -787,6 +793,8 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
         }
         return result;
       }
+
+      await this.initAgent(this.options);
       const agentSendStart = Date.now();
       const result = await this.agent.sendMessage(data);
       if (ACP_PERF_LOG)

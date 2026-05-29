@@ -19,7 +19,7 @@ import { resolveLocalUserForLdapEntry, searchLdapDirectoryForAdmin } from '../au
 import { testFeishuAppCredentials } from '../auth/providers/FeishuAuthProvider';
 import nodemailer from 'nodemailer';
 import { resolvedSmtpFromConfig } from '../auth/smtpConfig';
-import { isEnterpriseAdminRole } from '../auth/enterpriseRoles';
+import { isEnterpriseAdminRole, isSystemAdminRole, isWebuiBuiltinAdministrator } from '../auth/enterpriseRoles';
 import { DEFAULT_TENANT_ID, isEnterpriseTenantId } from '@/common/config/webuiEnterpriseConfig';
 import { getTeamPeerUserIds } from './resourceScope';
 import {
@@ -33,6 +33,17 @@ import {
   assertEnterpriseSsoEnableAllowed,
   isEnterpriseSsoProvider,
 } from '../auth/enterpriseSsoPolicy';
+import { isElectronDesktopRequest } from '../auth/browserSessionBridge';
+import { publishLoginChannelsChanged, publishOrgConfigChanged } from '../orgConfigBroadcast';
+import { testDingTalkAppCredentials } from '../auth/providers/DingTalkAuthProvider';
+import { testWeComAppCredentials } from '../auth/providers/WeComAuthProvider';
+import { getOrgEditionSettings, setOrgEditionSettings } from '../auth/orgEditionSettings';
+import { GOVERNANCE_AUDIT_ACTIONS, recordGovernanceAudit } from '../auth/auditLogService';
+import {
+  assertCanRevokeSystemAdmin,
+  claimSystemAdmin,
+  InstanceGovernanceError,
+} from '../auth/instanceGovernance';
 
 const PROTECTED_IDS = new Set(['system_default_user']);
 
@@ -55,7 +66,15 @@ const MASK_SECRET_KEYS: Record<ConfigurableAuthProvider, string[]> = {
 
 /** admin-only 中间件（与侧栏企业入口、二次验证资格一致，含旧版 `admin` 角色） */
 function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  if (!req.user || !isEnterpriseAdminRole(req.user.role)) {
+  if (
+    !req.user ||
+    !isWebuiBuiltinAdministrator({
+      id: req.user.id,
+      username: req.user.username,
+      role: req.user.role,
+      tenant_id: req.user.tenant_id,
+    })
+  ) {
     res.status(403).json({ success: false, message: 'Admin only' });
     return;
   }
@@ -66,6 +85,19 @@ function requireAdmin(req: Request, res: Response, next: NextFunction): void {
 function resolveAdminTenantId(req: Request): string {
   const tid = (req.user?.tenant_id ?? DEFAULT_TENANT_ID).trim() || DEFAULT_TENANT_ID;
   return isEnterpriseTenantId(tid) ? tid : DEFAULT_TENANT_ID;
+}
+
+/** 认证配置以浏览器 WebUI 为准；桌面端仅镜像读取，禁止写入。 */
+function rejectDesktopAuthConfigMutation(req: Request, res: Response, next: NextFunction): void {
+  if (isElectronDesktopRequest(req)) {
+    res.status(403).json({
+      success: false,
+      message: 'Auth configuration must be edited in browser WebUI',
+      code: 'DESKTOP_AUTH_READ_ONLY',
+    });
+    return;
+  }
+  next();
 }
 
 export function registerAdminRoutes(app: Express): void {
@@ -109,7 +141,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // PUT /api/admin/auth/providers/:provider — 更新提供方配置
-  app.put('/api/admin/auth/providers/:provider', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+  app.put('/api/admin/auth/providers/:provider', apiRateLimiter, auth, requireAdmin, rejectDesktopAuthConfigMutation, async (req, res) => {
     try {
       const provider = String(req.params.provider);
       if (!isConfigurableAuthProvider(provider)) {
@@ -126,12 +158,12 @@ export function registerAdminRoutes(app: Express): void {
           enabled,
           allowMultipleSso,
         });
-        if (!policy.ok) {
+        if (policy.ok === false) {
           res.status(409).json({
             success: false,
             code: 'SSO_PROVIDER_CONFLICT',
             message:
-              '已有其他企业登录方式处于启用状态。默认仅允许同时启用一种，以避免多套组织架构冲突。若确需启用多种，请确认后重试。',
+              '已有其他企业登录方式处于启用状态。默认建议同时仅启用一种用于登录；配置与测试不受此限制。若确需启用多种，请确认后重试。',
             data: { conflicts: policy.conflicts },
           });
           return;
@@ -146,6 +178,11 @@ export function registerAdminRoutes(app: Express): void {
         }
       }
       await AuthProviderRepository.setProvider(provider, enabled, next);
+
+      publishLoginChannelsChanged({
+        tenantId: resolveAdminTenantId(req),
+        provider,
+      });
 
       res.json({ success: true });
     } catch (err) {
@@ -278,6 +315,52 @@ export function registerAdminRoutes(app: Express): void {
     } catch (err) {
       console.error('[AdminRoute] feishu test error:', err);
       const message = err instanceof Error ? err.message : 'Feishu test failed';
+      res.status(400).json({ success: false, message });
+    }
+  });
+
+  // POST /api/admin/auth/providers/dingtalk/test — 钉钉 App 凭证测试
+  app.post('/api/admin/auth/providers/dingtalk/test', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+    try {
+      const bodyConfig =
+        req.body?.config && typeof req.body.config === 'object' ? (req.body.config as Record<string, unknown>) : {};
+      const existing = await AuthProviderRepository.getProvider('dingtalk');
+      const merged = { ...existing?.config, ...bodyConfig } as Record<string, unknown>;
+      for (const key of ['appSecret', 'clientSecret'] as const) {
+        if (merged[key] === '******') {
+          merged[key] = (existing?.config as Record<string, unknown>)?.[key] ?? '';
+        }
+      }
+      const appKey = typeof merged.appKey === 'string' ? merged.appKey : '';
+      const appSecret =
+        (typeof merged.appSecret === 'string' ? merged.appSecret : '') ||
+        (typeof merged.clientSecret === 'string' ? merged.clientSecret : '');
+      await testDingTalkAppCredentials(appKey, appSecret);
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[AdminRoute] dingtalk test error:', err);
+      const message = err instanceof Error ? err.message : 'DingTalk test failed';
+      res.status(400).json({ success: false, message });
+    }
+  });
+
+  // POST /api/admin/auth/providers/wecom/test — 企业微信 App 凭证测试
+  app.post('/api/admin/auth/providers/wecom/test', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+    try {
+      const bodyConfig =
+        req.body?.config && typeof req.body.config === 'object' ? (req.body.config as Record<string, unknown>) : {};
+      const existing = await AuthProviderRepository.getProvider('wecom');
+      const merged = { ...existing?.config, ...bodyConfig } as Record<string, unknown>;
+      if (merged.secret === '******') {
+        merged.secret = (existing?.config as { secret?: string })?.secret ?? '';
+      }
+      const corpId = typeof merged.corpId === 'string' ? merged.corpId : '';
+      const secret = typeof merged.secret === 'string' ? merged.secret : '';
+      await testWeComAppCredentials(corpId, secret);
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[AdminRoute] wecom test error:', err);
+      const message = err instanceof Error ? err.message : 'WeCom test failed';
       res.status(400).json({ success: false, message });
     }
   });
@@ -657,8 +740,6 @@ export function registerAdminRoutes(app: Express): void {
         res.status(403).json({ success: false, message: '不能修改系统用户' });
         return;
       }
-      // 类型安全的角色映射：前端可能传入 'admin'/'user'，映射为数据库实际存储的 'org_admin'/'member'
-      // Type-safe role mapping: frontend may send 'admin'/'user', map to actual DB values 'org_admin'/'member'
       type DbRole = 'member' | 'org_admin' | 'system_admin';
       const roleMap: Record<string, DbRole> = {
         admin: 'org_admin',
@@ -668,13 +749,57 @@ export function registerAdminRoutes(app: Express): void {
         system_admin: 'system_admin',
       };
       const mapped = roleMap[role];
+      if (mapped === 'system_admin' && !isSystemAdminRole(req.user!.role)) {
+        res.status(403).json({
+          success: false,
+          code: 'SYSTEM_ADMIN_REQUIRED',
+          message: '仅系统管理员可为其他用户开启 system_admin 权限',
+        });
+        return;
+      }
+      const target = await UserRepository.findById(id);
+      if (target && isSystemAdminRole(target.role) && mapped !== 'system_admin') {
+        await assertCanRevokeSystemAdmin(id);
+      }
+      const wasSystemAdmin = target ? isSystemAdminRole(target.role) : false;
       await UserRepository.setRole(id, mapped);
+      if (mapped === 'system_admin' && !wasSystemAdmin) {
+        void recordGovernanceAudit(req, GOVERNANCE_AUDIT_ACTIONS.grantSystemAdmin, id, target?.username);
+      } else if (wasSystemAdmin && mapped !== 'system_admin') {
+        void recordGovernanceAudit(req, GOVERNANCE_AUDIT_ACTIONS.revokeSystemAdmin, id, target?.username);
+      }
       res.json({ success: true });
     } catch (err) {
+      if (err instanceof InstanceGovernanceError) {
+        res.status(403).json({ success: false, code: err.code, message: err.message });
+        return;
+      }
       console.error('[AdminRoute] setRole error:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
+
+  // POST /api/admin/instance/claim-system-admin — one-time bootstrap when no system_admin exists
+  app.post(
+    '/api/admin/instance/claim-system-admin',
+    apiRateLimiter,
+    auth,
+    async (req: Request, res: Response) => {
+      try {
+        const actorId = req.user!.id;
+        await claimSystemAdmin(actorId, req.user!.role);
+        void recordGovernanceAudit(req, GOVERNANCE_AUDIT_ACTIONS.claimSystemAdmin, actorId, req.user!.username);
+        res.json({ success: true, data: { role: 'system_admin' } });
+      } catch (err) {
+        if (err instanceof InstanceGovernanceError) {
+          res.status(403).json({ success: false, code: err.code, message: err.message });
+          return;
+        }
+        console.error('[AdminRoute] claim-system-admin error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
 
   // PATCH /api/admin/users/:id/password — 重置密码（admin）
   app.patch('/api/admin/users/:id/password', apiRateLimiter, auth, requireAdmin, async (req, res) => {
@@ -730,7 +855,7 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // PUT /api/admin/system/admin-email — 设置管理员邮箱（浏览器可用）
-  app.put('/api/admin/system/admin-email', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+  app.put('/api/admin/system/admin-email', apiRateLimiter, auth, requireAdmin, rejectDesktopAuthConfigMutation, async (req, res) => {
     try {
       const email = String(req.body?.email ?? '').trim();
       if (!email) {
@@ -739,11 +864,50 @@ export function registerAdminRoutes(app: Express): void {
       }
 
       await WebuiService.setAdminEmail(email);
+      publishOrgConfigChanged({
+        scope: 'admin-email',
+        tenantId: resolveAdminTenantId(req),
+      });
       res.json({ success: true });
     } catch (err) {
       console.error('[AdminRoute] setAdminEmail error:', err);
       const message = err instanceof Error ? err.message : 'Internal server error';
       res.status(400).json({ success: false, message });
+    }
+  });
+
+  // GET /api/admin/org/edition-access — 企业团队版模式对成员的可见性
+  app.get('/api/admin/org/edition-access', apiRateLimiter, auth, requireAdmin, async (_req, res) => {
+    try {
+      const settings = await getOrgEditionSettings();
+      res.json({ success: true, data: settings });
+    } catch (err) {
+      console.error('[AdminRoute] getOrgEditionAccess error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // PUT /api/admin/org/edition-access — 启用/禁用成员使用企业团队版模式切换
+  app.put('/api/admin/org/edition-access', apiRateLimiter, auth, requireAdmin, rejectDesktopAuthConfigMutation, async (req, res) => {
+    try {
+      if (!isSystemAdminRole(req.user!.role)) {
+        res.status(403).json({
+          success: false,
+          code: 'SYSTEM_ADMIN_REQUIRED',
+          message: '仅系统管理员可修改企业团队版模式可见性',
+        });
+        return;
+      }
+      const editionSwitcherEnabled = Boolean(req.body?.editionSwitcherEnabled);
+      await setOrgEditionSettings({ editionSwitcherEnabled });
+      publishOrgConfigChanged({
+        tenantId: resolveAdminTenantId(req),
+        scope: 'edition-access',
+      });
+      res.json({ success: true, data: { editionSwitcherEnabled } });
+    } catch (err) {
+      console.error('[AdminRoute] setOrgEditionAccess error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
 

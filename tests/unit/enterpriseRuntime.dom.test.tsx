@@ -62,6 +62,25 @@ describe('EnterpriseRuntimeProvider', () => {
     expect(result.current.issue).toBeNull();
   });
 
+  it('does not block enterprise modules while auth revalidates an existing session', async () => {
+    useAuthMock.mockReturnValue({
+      status: 'checking',
+      user: {
+        id: 'user-1',
+        username: 'admin',
+        role: 'system_admin',
+      },
+      refresh: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useEnterpriseRuntime(), { wrapper: enterpriseRuntimeWrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.status).toBe('ready');
+    expect(result.current.issue).toBeNull();
+  });
+
   it('exposes only member-visible nav items for non-admin users', async () => {
     useAuthMock.mockReturnValue({
       status: 'authenticated',

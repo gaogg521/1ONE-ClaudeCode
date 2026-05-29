@@ -10,7 +10,7 @@ import {
   type WebuiManagementMode,
 } from '@/common/config/webuiEnterpriseConfig';
 import { ConfigStorage } from '@/common/config/storage';
-import { hasEnterpriseTenant, isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
+import { hasEnterpriseTenant } from '@/common/auth/enterpriseRoles';
 
 /** 加入企业或企业租户登录后，将工作区版本切到「企业版」。 */
 export async function persistEnterpriseWorkspaceEdition(): Promise<void> {
@@ -26,38 +26,17 @@ export function shouldUseEnterpriseWorkspaceEdition(
 }
 
 /**
- * 桌面端：合并本地 IPC 与浏览器 WebUI 会话。
- * 本地 admin 的组织管理员角色优先保留，避免浏览器用普通成员登录后「挤掉」管理入口。
+ * 桌面端：浏览器 WebUI 会话为唯一权威；无浏览器会话时回退本地 IPC 快照。
  */
 export function mergeDesktopEnterpriseContext(
   ipc: EnterpriseContextSnapshot,
   browser: EnterpriseContextSnapshot | null
 ): EnterpriseContextSnapshot {
-  const ipcJoined = ipc.joined === true;
-  const browserJoined = browser?.joined === true;
-  if (!ipcJoined && !browserJoined) {
-    return ipc;
+  if (browser) {
+    return {
+      ...browser,
+      canCreateEnterprise: browser.canCreateEnterprise ?? ipc.canCreateEnterprise,
+    };
   }
-
-  const joined = ipcJoined || browserJoined;
-  const preferBrowserTenant = browserJoined && !ipcJoined;
-  const tenantId = preferBrowserTenant ? (browser?.tenantId ?? ipc.tenantId) : ipc.tenantId;
-  const tenantName = preferBrowserTenant
-    ? (browser?.tenantName ?? ipc.tenantName)
-    : (ipc.tenantName ?? browser?.tenantName ?? null);
-
-  const ipcRole = ipc.role;
-  const browserRole = browser?.role;
-  let role = browserRole ?? ipcRole;
-  if (isEnterpriseAdminRole(ipcRole) && !isEnterpriseAdminRole(browserRole)) {
-    role = ipcRole;
-  }
-
-  return {
-    joined,
-    tenantId,
-    tenantName,
-    role,
-    canCreateEnterprise: ipc.canCreateEnterprise ?? browser?.canCreateEnterprise,
-  };
+  return ipc;
 }

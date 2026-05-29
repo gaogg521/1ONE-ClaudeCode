@@ -163,7 +163,7 @@ async function initializeDefaultAdmin(): Promise<{
 
     // 情况 3：初次启动，无任何用户 -> 新建 admin 账户
     // Case 3: fresh install with no users -> create admin user explicitly
-    await UserRepository.createUser(username, hashedPassword);
+    await UserRepository.createUserWithRole(username, hashedPassword, 'org_admin');
     initialAdminPassword = password; // 存储初始密码 / Store initial password
     return { username, password };
   } catch (error) {

@@ -459,6 +459,9 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         };
         sessionStorage.setItem(`acp_initial_message_${conversation.id}`, JSON.stringify(initialMessage));
 
+        // Start CLI bootstrap before navigation so the first reply feels faster.
+        void ipcBridge.conversation.warmup.invoke({ conversation_id: conversation.id });
+
         await navigate(`/conversation/${conversation.id}`);
       } catch (error: unknown) {
         console.error('Failed to create ACP conversation:', error);

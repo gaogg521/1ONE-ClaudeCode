@@ -17,8 +17,10 @@ type ServiceWorkerResponse = {
 };
 
 type ServiceWorkerModule = {
+  isHashedAsset: (pathname: string) => boolean;
+  networkOnly: (request: ServiceWorkerRequest) => Promise<ServiceWorkerResponse>;
+  networkFirstHtml: (request: ServiceWorkerRequest) => Promise<ServiceWorkerResponse>;
   shouldHandleRequest: (request: ServiceWorkerRequest) => boolean;
-  networkFirst: (request: ServiceWorkerRequest) => Promise<ServiceWorkerResponse>;
   staleWhileRevalidate: (request: ServiceWorkerRequest) => Promise<ServiceWorkerResponse>;
 };
 
@@ -40,6 +42,7 @@ function loadServiceWorker(fetchImpl: (request: ServiceWorkerRequest) => Promise
     caches: {
       delete: vi.fn(),
       keys: vi.fn().mockResolvedValue([]),
+      match,
       open: vi.fn().mockResolvedValue(cache),
     },
     fetch: fetchImpl,
@@ -53,7 +56,7 @@ function loadServiceWorker(fetchImpl: (request: ServiceWorkerRequest) => Promise
 
   const serviceWorkerSource =
     fs.readFileSync(path.resolve(__dirname, '../../public/sw.js'), 'utf8') +
-    '\n;globalThis.__sw_exports = { shouldHandleRequest, networkFirst, staleWhileRevalidate };';
+    '\n;globalThis.__sw_exports = { isHashedAsset, networkOnly, networkFirstHtml, shouldHandleRequest, staleWhileRevalidate };';
 
   vm.runInContext(serviceWorkerSource, context, { filename: 'public/sw.js' });
 
@@ -75,18 +78,38 @@ describe('webui service worker caching', () => {
     expect(serviceWorker.shouldHandleRequest(request)).toBe(false);
   });
 
-  it('does not cache failed navigation responses in networkFirst', async () => {
+  it('falls back to the offline shell when navigation network fetch fails', async () => {
     const request: ServiceWorkerRequest = {
       method: 'GET',
       mode: 'navigate',
       url: 'https://example.com/webui/index.html',
     };
-    const failedResponse = createResponse(500);
-    const { cache, serviceWorker } = loadServiceWorker(vi.fn().mockResolvedValue(failedResponse));
+    const offlineShell = createResponse(200);
+    const { cache, serviceWorker } = loadServiceWorker(vi.fn().mockRejectedValue(new Error('offline')));
+    cache.match.mockResolvedValue(offlineShell);
 
-    const response = await serviceWorker.networkFirst(request);
+    const response = await serviceWorker.networkFirstHtml(request);
 
-    expect(response.status).toBe(500);
+    expect(response).toBe(offlineShell);
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it('always fetches hashed Vite assets from the network without cache reuse', async () => {
+    const request: ServiceWorkerRequest = {
+      destination: 'script',
+      method: 'GET',
+      url: 'https://example.com/webui/assets/index-CI46OuNq.js',
+    };
+    const freshResponse = createResponse(200);
+    const fetchImpl = vi.fn().mockResolvedValue(freshResponse);
+    const { cache, serviceWorker } = loadServiceWorker(fetchImpl);
+
+    const response = await serviceWorker.networkOnly(request);
+
+    expect(serviceWorker.isHashedAsset('/webui/assets/index-CI46OuNq.js')).toBe(true);
+    expect(response).toBe(freshResponse);
+    expect(fetchImpl).toHaveBeenCalledWith(request, { cache: 'no-store' });
+    expect(cache.match).not.toHaveBeenCalled();
     expect(cache.put).not.toHaveBeenCalled();
   });
 

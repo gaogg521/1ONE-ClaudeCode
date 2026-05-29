@@ -13,6 +13,9 @@ const {
   mockGetByExternalId,
   mockAuthenticateWithLdap,
   mockUpdateUserOrgProfile,
+  mockResolveOrProvisionLdapUser,
+  mockRefreshUserAfterEnterpriseAutoJoin,
+  mockSetRole,
 } = vi.hoisted(() => ({
   mockFindByUsername: vi.fn(),
   mockFindById: vi.fn(),
@@ -24,6 +27,20 @@ const {
   mockGetByExternalId: vi.fn(),
   mockAuthenticateWithLdap: vi.fn(),
   mockUpdateUserOrgProfile: vi.fn(),
+  mockResolveOrProvisionLdapUser: vi.fn(),
+  mockRefreshUserAfterEnterpriseAutoJoin: vi.fn(async (user: { id: string }) => user),
+  mockSetRole: vi.fn(),
+}));
+
+vi.mock('@process/webserver/auth/ssoJitProvisioning', () => ({
+  resolveOrProvisionLdapUser: (...args: unknown[]) => mockResolveOrProvisionLdapUser(...args),
+  resolveOrProvisionSsoUser: vi.fn(),
+}));
+
+vi.mock('@process/webserver/auth/enterpriseAutoJoin', () => ({
+  refreshUserAfterEnterpriseAutoJoin: (...args: unknown[]) => mockRefreshUserAfterEnterpriseAutoJoin(...args),
+  ensureUserJoinedDefaultEnterprise: vi.fn(),
+  resolveDefaultEnterpriseTenantId: vi.fn(),
 }));
 
 vi.mock('@process/webserver/auth/repository/UserRepository', () => ({
@@ -45,6 +62,7 @@ vi.mock('@process/webserver/auth/repository/UserRepository', () => ({
     updateLastActiveAt: vi.fn(),
     countActiveUsers: vi.fn(),
     deleteUser: vi.fn(),
+    setRole: mockSetRole,
   },
 }));
 
@@ -127,6 +145,10 @@ vi.mock('@process/services/user/userProfileService', () => ({
   updateUserOrgProfile: (...args: unknown[]) => mockUpdateUserOrgProfile(...args),
 }));
 
+vi.mock('@process/webserver/auth/registerBrowserWebuiLoginSession', () => ({
+  registerBrowserWebuiLoginSession: vi.fn(),
+}));
+
 function getLoginHandler(app: express.Express): RequestHandler {
   const layer = app.router.stack.find(
     (entry: { route?: { path?: string; stack?: Array<{ handle: RequestHandler }> } }) =>
@@ -161,6 +183,8 @@ describe('registerAuthRoutes login endpoint', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUpdateUserOrgProfile.mockResolvedValue(undefined);
+    mockRefreshUserAfterEnterpriseAutoJoin.mockImplementation(async (user) => user);
+    mockSetRole.mockResolvedValue(undefined);
   });
 
   it('returns 401 after running the dedicated missing-user verification when the username does not exist', async () => {
@@ -234,6 +258,12 @@ describe('registerAuthRoutes login endpoint', () => {
     });
     mockConstantTimeVerify.mockResolvedValue(true);
     mockGenerateToken.mockResolvedValue('jwt-token');
+    mockRefreshUserAfterEnterpriseAutoJoin.mockResolvedValue({
+      id: 'user-1',
+      username: 'alice',
+      role: 'org_admin',
+      tenant_id: 'tenant-acme',
+    });
 
     const { registerAuthRoutes } = await import('@process/webserver/routes/authRoutes');
     const app = express();
@@ -245,11 +275,15 @@ describe('registerAuthRoutes login endpoint', () => {
         username: 'alice',
         password: 'correct-password',
       },
+      headers: {},
     } as express.Request;
     const res = createResponseMock() as unknown as express.Response;
 
     await handler(req, res, vi.fn());
 
+    expect(mockRefreshUserAfterEnterpriseAutoJoin).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'user-1', username: 'alice' })
+    );
     expect((res as unknown as { json: ReturnType<typeof vi.fn> }).json).toHaveBeenCalledWith({
       success: true,
       message: 'Login successful',
@@ -299,7 +333,7 @@ describe('registerAuthRoutes login endpoint', () => {
     );
   });
 
-  it('returns 403 when LDAP account is not bound to a local user', async () => {
+  it('JIT-provisions LDAP user on first successful login', async () => {
     mockGetProvider.mockResolvedValue({
       provider: 'ldap',
       enabled: true,
@@ -312,8 +346,19 @@ describe('registerAuthRoutes login endpoint', () => {
       externalId: 'uid=bob,ou=users,dc=example,dc=com',
       isAdmin: false,
       userDn: 'uid=bob,ou=users,dc=example,dc=com',
+      orgUnitPath: 'Engineering',
     });
-    mockGetByExternalId.mockResolvedValue(null);
+    mockResolveOrProvisionLdapUser.mockResolvedValue({
+      user: {
+        id: 'user-ldap-new',
+        username: 'bob',
+        role: 'member',
+        tenant_id: 'tenant_acme',
+      },
+      created: true,
+      isAdmin: false,
+    });
+    mockGenerateToken.mockResolvedValue('ldap-token');
 
     const { registerAuthRoutes } = await import('@process/webserver/routes/authRoutes');
     const app = express();
@@ -330,11 +375,13 @@ describe('registerAuthRoutes login endpoint', () => {
 
     await handler(req, res, vi.fn());
 
-    expect((res as unknown as { status: ReturnType<typeof vi.fn> }).status).toHaveBeenCalledWith(403);
-    expect((res as unknown as { json: ReturnType<typeof vi.fn> }).json).toHaveBeenCalledWith({
-      success: false,
-      message: 'Account not bound. Please contact admin.',
-    });
+    expect(mockResolveOrProvisionLdapUser).toHaveBeenCalled();
+    expect((res as unknown as { json: ReturnType<typeof vi.fn> }).json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        user: expect.objectContaining({ username: 'bob' }),
+      })
+    );
   });
 
   it('returns normalized enterprise identity metadata after successful LDAP login', async () => {
@@ -352,14 +399,15 @@ describe('registerAuthRoutes login endpoint', () => {
       userDn: 'uid=alice,ou=users,dc=example,dc=com',
       orgUnitPath: 'Engineering / Platform',
     });
-    mockGetByExternalId.mockResolvedValue({
-      user_id: 'user-ldap-1',
-    });
-    mockFindById.mockResolvedValue({
-      id: 'user-ldap-1',
-      username: 'alice',
-      role: 'member',
-      tenant_id: 'tenant-acme',
+    mockResolveOrProvisionLdapUser.mockResolvedValue({
+      user: {
+        id: 'user-ldap-1',
+        username: 'alice',
+        role: 'member',
+        tenant_id: 'tenant-acme',
+      },
+      created: false,
+      isAdmin: true,
     });
     mockGenerateToken.mockResolvedValue('ldap-token');
 
@@ -393,11 +441,12 @@ describe('registerAuthRoutes login endpoint', () => {
       },
       token: 'ldap-token',
     });
-    expect(mockUpdateUserOrgProfile).toHaveBeenCalledWith({
-      userId: 'user-ldap-1',
+    expect(mockResolveOrProvisionLdapUser).toHaveBeenCalledWith('alice', {
+      externalId: 'uid=alice,ou=users,dc=example,dc=com',
+      isAdmin: true,
       orgUnitPath: 'Engineering / Platform',
-      source: 'ldap',
     });
+    expect(mockSetRole).toHaveBeenCalledWith('user-ldap-1', 'system_admin');
   });
 
   it('still returns LDAP login success when org profile sync fails', async () => {
@@ -415,17 +464,17 @@ describe('registerAuthRoutes login endpoint', () => {
       userDn: 'uid=alice,ou=users,dc=example,dc=com',
       orgUnitPath: 'Engineering',
     });
-    mockGetByExternalId.mockResolvedValue({
-      user_id: 'user-ldap-1',
-    });
-    mockFindById.mockResolvedValue({
-      id: 'user-ldap-1',
-      username: 'alice',
-      role: 'member',
-      tenant_id: 'tenant-acme',
+    mockResolveOrProvisionLdapUser.mockResolvedValue({
+      user: {
+        id: 'user-ldap-1',
+        username: 'alice',
+        role: 'member',
+        tenant_id: 'tenant-acme',
+      },
+      created: false,
+      isAdmin: false,
     });
     mockGenerateToken.mockResolvedValue('ldap-token');
-    mockUpdateUserOrgProfile.mockRejectedValueOnce(new Error('no such column: org_unit_path'));
 
     const { registerAuthRoutes } = await import('@process/webserver/routes/authRoutes');
     const app = express();
@@ -550,6 +599,7 @@ describe('registerAuthRoutes /api/auth/login-ui', () => {
         feishuConfigured: true,
         dingtalkConfigured: false,
         wecomConfigured: false,
+        editionSwitcherEnabled: true,
       },
     });
   });
@@ -578,6 +628,7 @@ describe('registerAuthRoutes /api/auth/login-ui', () => {
         feishuConfigured: false,
         dingtalkConfigured: false,
         wecomConfigured: false,
+        editionSwitcherEnabled: true,
       },
     });
   });

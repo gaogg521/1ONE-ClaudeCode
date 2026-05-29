@@ -73,12 +73,12 @@ describe('WebuiEnterpriseModeProvider', () => {
     });
   });
 
-  it('shows admin nav for org admin before joining an enterprise', async () => {
+  it('hides admin nav for member accounts even when username is admin', async () => {
     useAuthMock.mockReturnValue({
       user: {
         id: 'web-admin',
         username: 'admin',
-        role: 'admin',
+        role: 'member',
         tenant_id: 'default',
       },
       refresh: vi.fn().mockResolvedValue(undefined),
@@ -89,7 +89,39 @@ describe('WebuiEnterpriseModeProvider', () => {
         joined: false,
         tenantId: 'default',
         tenantName: null,
-        role: 'admin',
+        role: 'member',
+        canCreateEnterprise: false,
+      },
+    });
+
+    const wrapper = ({ children }: React.PropsWithChildren) => (
+      <WebuiEnterpriseModeProvider>{children}</WebuiEnterpriseModeProvider>
+    );
+
+    const { result } = renderHook(() => useWebuiEnterpriseMode(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.showEnterpriseAdminNav).toBe(false);
+  });
+
+  it('shows admin nav for system_admin before joining an enterprise', async () => {
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'web-admin',
+        username: 'admin',
+        role: 'system_admin',
+        tenant_id: 'default',
+      },
+      refresh: vi.fn().mockResolvedValue(undefined),
+    });
+    getEnterpriseContextInvokeMock.mockResolvedValue({
+      success: true,
+      data: {
+        joined: false,
+        tenantId: 'default',
+        tenantName: null,
+        role: 'system_admin',
         canCreateEnterprise: true,
       },
     });
@@ -102,7 +134,6 @@ describe('WebuiEnterpriseModeProvider', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(result.current.hasJoinedEnterprise).toBe(false);
     expect(result.current.showEnterpriseAdminNav).toBe(true);
   });
 

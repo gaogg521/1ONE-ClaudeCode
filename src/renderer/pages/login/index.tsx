@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '@/renderer/services/i18n';
+import { getEnterpriseRouteMetaByPath } from '@/common/auth/enterpriseRoutes';
 import { resolvePostLoginRedirectPath, ENTERPRISE_JOIN_PATH } from '@/common/auth/enterpriseRoles';
 import {
   consumePostLoginRedirect,
@@ -50,6 +51,8 @@ const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const loginReturnTo = (location.state as { returnTo?: string } | null)?.returnTo;
+  const isDesktopApp = isElectronDesktop();
   const { status, login, loginWithLdap, user } = useAuth();
   const { loading: enterpriseLoading } = useWebuiEnterpriseMode();
   const providers = useLoginUiProviders();
@@ -74,6 +77,14 @@ const LoginPage: React.FC = () => {
     },
     [navigate, resolveLoginTarget]
   );
+
+  const handleBack = useCallback(() => {
+    const target =
+      loginReturnTo && loginReturnTo !== '/login' && !loginReturnTo.startsWith('/login?')
+        ? loginReturnTo
+        : '/sessions';
+    void navigate(target, { replace: true });
+  }, [loginReturnTo, navigate]);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -105,10 +116,18 @@ const LoginPage: React.FC = () => {
     [enterpriseLoginMode, postLoginTarget]
   );
   const isEnterpriseLogin =
-    isBrowserWebUi ||
-    providers.mode === 'enterprise' ||
-    enterpriseIntent ||
-    enterpriseLoginMode;
+    enterpriseLoginMode || enterpriseIntent || providers.mode === 'enterprise';
+  const useEnterpriseChannelPanel = isDesktopApp && isEnterpriseLogin;
+  const oauthRedirect = useMemo(() => {
+    const fromQuery = readRedirectFromSearch(location.search);
+    if (fromQuery) {
+      return fromQuery;
+    }
+    if (loginReturnTo && loginReturnTo !== '/login') {
+      return loginReturnTo;
+    }
+    return '/enterprise';
+  }, [location.search, loginReturnTo]);
   const showLoginMethods = isEnterpriseLogin;
   const showEnterpriseExtras = isBrowserWebUi && enterpriseIntent;
   const pageEdition =
@@ -250,19 +269,15 @@ const LoginPage: React.FC = () => {
           localStorage.removeItem(REMEMBERED_PASSWORD_KEY);
         }
 
-        const successText = t('login.success');
-        showMessage({ type: 'success', text: successText });
-
-        window.setTimeout(() => {
-          navigateAfterLogin(result.user);
-        }, 600);
+        showMessage({ type: 'success', text: t('login.success') });
+        navigateAfterLogin(result.user);
       } else {
         const errorText = (() => {
           switch (result.code) {
             case 'invalidCredentials':
               return activeMethod === 'ldap'
                 ? t('login.errors.invalidLdapCredentials', {
-                    defaultValue: '域控账户名或密码错误，或该账号尚未绑定本地用户。请改用本地账户登录，或联系管理员。',
+                    defaultValue: '域控账户名或密码错误。请检查账号密码，或联系管理员确认 LDAP 已启用。',
                   })
                 : t('login.errors.invalidCredentials');
             case 'tooManyAttempts':
@@ -328,7 +343,7 @@ const LoginPage: React.FC = () => {
   const runOAuthAuthorize = useCallback(
     async (path: string) => {
       const result = await startOAuthAuthorize(path);
-      if (!result.ok) {
+      if (result.ok === false) {
         showMessage({
           type: 'error',
           text: formatOAuthAuthorizeError(result.message, t, result.code),
@@ -368,7 +383,17 @@ const LoginPage: React.FC = () => {
     return <AppLoader />;
   }
 
-  if (isBrowserWebUi && enterpriseIntent && status === 'unauthenticated') {
+  const redirectRequiresSignIn =
+    Boolean(postLoginTarget) &&
+    getEnterpriseRouteMetaByPath(postLoginTarget)?.requiresRole !== 'member';
+  const redirectTargetsEnterpriseJoin =
+    postLoginTarget === ENTERPRISE_JOIN_PATH || postLoginTarget?.startsWith(`${ENTERPRISE_JOIN_PATH}/`);
+  if (
+    isBrowserWebUi &&
+    redirectTargetsEnterpriseJoin &&
+    status === 'unauthenticated' &&
+    !redirectRequiresSignIn
+  ) {
     return <Navigate to={ENTERPRISE_JOIN_PATH} replace />;
   }
 
@@ -417,8 +442,9 @@ const LoginPage: React.FC = () => {
 
   return (
     <div
-      className={`login-page login-page--${pageEdition}${isBrowserWebUi ? ' login-page--web' : ' login-page--desktop'}`}
+      className={`login-page login-page--${pageEdition}${isBrowserWebUi ? ' login-page--web' : ' login-page--desktop'}${isDesktopApp ? ' login-page--desktop-app' : ''}`}
     >
+      {!isDesktopApp ? (
       <LoginHeroPanel
         badge={heroBadge}
         title={heroTitle}
@@ -429,6 +455,7 @@ const LoginPage: React.FC = () => {
         illustrationAlt={illustrationAlt}
         edition={pageEdition}
       />
+      ) : null}
 
       <LoginFormCard
         t={t}
@@ -441,7 +468,7 @@ const LoginPage: React.FC = () => {
         showProvidersDisabledHint={
           isEnterpriseLogin && providers.anyProviderConfigured && !providers.anyProviderEnabled
         }
-        showEnterpriseRedirectHint={isBrowserWebUi}
+        showEnterpriseRedirectHint={isBrowserWebUi && isEnterpriseLogin}
         isEnterpriseLogin={isEnterpriseLogin}
         isBrowserWebUi={isBrowserWebUi}
         showLoginMethods={showLoginMethods}
@@ -459,11 +486,11 @@ const LoginPage: React.FC = () => {
         onRememberMeChange={setRememberMe}
         onSubmit={handleSubmit}
         loading={loading}
-        showFeishuLogin={isBrowserWebUi}
+        showFeishuLogin={isBrowserWebUi && isEnterpriseLogin}
         feishuLoginEnabled={providers.feishuEnabled}
-        showDingtalkLogin={isBrowserWebUi}
+        showDingtalkLogin={isBrowserWebUi && isEnterpriseLogin}
         dingtalkLoginEnabled={providers.dingtalkEnabled}
-        showWecomLogin={isBrowserWebUi}
+        showWecomLogin={isBrowserWebUi && isEnterpriseLogin}
         wecomLoginEnabled={providers.wecomEnabled}
         onFeishuOauth={handleFeishuOauthClick}
         onDingtalkOauth={handleDingtalkOauth}
@@ -475,8 +502,10 @@ const LoginPage: React.FC = () => {
         }}
         feishuQrError={initError}
         message={message}
-        onContinueAsGuest={() => void navigate('/sessions')}
-        onJoinEnterprise={() => void navigate('/enterprise/join')}
+        showBackButton={isDesktopApp}
+        onBack={handleBack}
+        useEnterpriseChannelPanel={useEnterpriseChannelPanel}
+        oauthRedirect={oauthRedirect}
       />
     </div>
   );

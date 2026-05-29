@@ -23,6 +23,7 @@ import {
 import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
 import { useEnterpriseRuntime } from '@/renderer/hooks/enterprise/useEnterpriseRuntime';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { resolveEnterpriseTenantDisplayLabel } from '@/common/auth/enterpriseRoles';
 import type { EnterpriseNavKey } from '@/renderer/pages/enterprise/enterpriseNav';
 import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
 import PageContentShell from '@/renderer/components/layout/PageContentShell';
@@ -129,7 +130,10 @@ const EnterpriseHome: React.FC = () => {
         repo: '当前角色暂无代码资产概览权限',
       };
 
-  const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId ?? '';
+  const tenantLabel = resolveEnterpriseTenantDisplayLabel(
+    enterpriseContext?.tenantId,
+    enterpriseContext?.tenantName
+  );
   const handleOpenModule = useCallback(
     (path: string) => {
       void navigate(path);

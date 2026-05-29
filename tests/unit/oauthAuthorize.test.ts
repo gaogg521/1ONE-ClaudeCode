@@ -69,7 +69,30 @@ describe('oauthAuthorize', () => {
     expect(formatOAuthAuthorizeError('Feishu login is not enabled', t)).toContain('启用');
   });
 
-  it('opens external redirect on desktop', async () => {
+  it('opens external redirect on desktop when authorize returns JSON goto', async () => {
+    vi.mocked(isElectronDesktop).mockReturnValue(true);
+    vi.mocked(getWebuiApiBaseUrl).mockResolvedValue('http://127.0.0.1:25809');
+    vi.mocked(fetchWebuiApi).mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: {
+        get: (key: string) => (key.toLowerCase() === 'content-type' ? 'application/json' : null),
+      },
+      json: async () => ({
+        success: true,
+        data: { goto: 'https://passport.feishu.cn/suite/passport/oauth/authorize?client_id=test' },
+      }),
+    } as Response);
+
+    const result = await startOAuthAuthorize('/api/auth/feishu/authorize?mode=oauth');
+
+    expect(result.ok).toBe(true);
+    expect(openExternalUrl).toHaveBeenCalledWith(
+      'https://passport.feishu.cn/suite/passport/oauth/authorize?client_id=test'
+    );
+  });
+
+  it('opens external redirect on desktop when Location header is exposed on 302', async () => {
     vi.mocked(isElectronDesktop).mockReturnValue(true);
     vi.mocked(getWebuiApiBaseUrl).mockResolvedValue('http://127.0.0.1:25809');
     vi.mocked(fetchWebuiApi).mockResolvedValue({
@@ -84,5 +107,30 @@ describe('oauthAuthorize', () => {
 
     expect(result.ok).toBe(true);
     expect(openExternalUrl).toHaveBeenCalledWith('https://passport.feishu.cn/oauth');
+  });
+
+  it('fails on desktop when 302 has no Location and no JSON goto', async () => {
+    vi.mocked(isElectronDesktop).mockReturnValue(true);
+    vi.mocked(getWebuiApiBaseUrl).mockResolvedValue('http://127.0.0.1:25809');
+    vi.mocked(fetchWebuiApi).mockResolvedValue({
+      status: 302,
+      ok: false,
+      headers: {
+        get: (key: string) => {
+          const name = key.toLowerCase();
+          if (name === 'content-type') return 'text/html';
+          if (name === 'location') return null;
+          return null;
+        },
+      },
+    } as Response);
+
+    const result = await startOAuthAuthorize('/api/auth/feishu/authorize?mode=oauth');
+
+    expect(result).toEqual({
+      ok: false,
+      message: 'OAuth authorization failed',
+      code: 'missing_redirect_url',
+    });
   });
 });

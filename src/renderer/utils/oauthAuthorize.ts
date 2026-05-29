@@ -47,6 +47,22 @@ export async function startOAuthAuthorize(path: string): Promise<OAuthAuthorizeR
 
   try {
     const response = await requestOAuthAuthorize(path);
+    const contentType = response.headers.get('content-type') ?? '';
+    const body = contentType.includes('application/json')
+      ? ((await response.json().catch((): null => null)) as (OAuthErrorBody & {
+          data?: { goto?: string };
+        }) | null)
+      : null;
+
+    const gotoUrl = typeof body?.data?.goto === 'string' ? body.data.goto.trim() : '';
+    if (response.ok && body?.success && gotoUrl) {
+      if (isElectronDesktop()) {
+        await openExternalUrl(gotoUrl);
+      } else {
+        window.location.href = gotoUrl;
+      }
+      return { ok: true };
+    }
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('Location');
@@ -60,25 +76,26 @@ export async function startOAuthAuthorize(path: string): Promise<OAuthAuthorizeR
       }
     }
 
-    const contentType = response.headers.get('content-type') ?? '';
-    const body = contentType.includes('application/json')
-      ? ((await response.json().catch((): null => null)) as OAuthErrorBody | null)
-      : null;
-
-    if (!response.ok) {
+    if (!response.ok || body?.success === false) {
+      const code =
+        typeof body?.code === 'string'
+          ? body.code
+          : isElectronDesktop() && response.status >= 300 && response.status < 400
+            ? 'missing_redirect_url'
+            : undefined;
       return {
         ok: false,
         message: readOAuthErrorMessage(body, response.status),
-        code: typeof body?.code === 'string' ? body.code : undefined,
+        code,
       };
     }
 
     if (isElectronDesktop()) {
-      const base = await getWebuiApiBaseUrl();
-      if (base) {
-        await openExternalUrl(`${base}${path}`);
-      }
-      return { ok: true };
+      return {
+        ok: false,
+        message: 'OAuth authorization failed',
+        code: 'missing_redirect_url',
+      };
     }
 
     window.location.href = path;
@@ -100,7 +117,19 @@ export function formatOAuthAuthorizeError(
   if (message === 'WEBUI_NOT_RUNNING' || message === 'webui_not_running' || code === 'webui_not_running') {
     return t('settings.webui.joinNeedWebuiRunning', { defaultValue: '请先启用 WebUI 服务' });
   }
-  if (code === 'NOT_CONFIGURED' || message === 'Feishu login is not configured') {
+  if (code === 'NOT_CONFIGURED' || message.endsWith('login is not configured')) {
+    if (message.startsWith('DingTalk')) {
+      return t('login.errors.dingtalkNotConfigured', {
+        defaultValue:
+          '钉钉 SSO 尚未在「管理后台 → 认证与邮件 → 钉钉」中配置。注意：设置里的钉钉频道机器人不是组织登录。',
+      });
+    }
+    if (message.startsWith('WeCom')) {
+      return t('login.errors.wecomNotConfigured', {
+        defaultValue:
+          '企业微信 SSO 尚未在「管理后台 → 认证与邮件 → 企业微信」中配置。',
+      });
+    }
     return t('login.errors.feishuNotConfigured', {
       defaultValue:
         '飞书 SSO 尚未在「管理后台 → 认证与邮件 → 飞书」中配置。注意：设置里的飞书频道机器人不是组织登录。',
@@ -108,9 +137,21 @@ export function formatOAuthAuthorizeError(
   }
   if (
     code === 'NOT_ENABLED' ||
-    message === 'Feishu login is configured but not enabled' ||
-    message === 'Feishu login is not enabled'
+    message.endsWith('login is configured but not enabled') ||
+    message.endsWith('login is not enabled')
   ) {
+    if (message.startsWith('DingTalk')) {
+      return t('login.errors.dingtalkConfiguredButDisabled', {
+        defaultValue:
+          '钉钉已在管理后台配置，但「启用」开关未打开。请前往 管理后台 → 认证与邮件 → 钉钉，打开启用并保存。',
+      });
+    }
+    if (message.startsWith('WeCom')) {
+      return t('login.errors.wecomConfiguredButDisabled', {
+        defaultValue:
+          '企业微信已在管理后台配置，但「启用」开关未打开。请前往 管理后台 → 认证与邮件 → 企业微信，打开启用并保存。',
+      });
+    }
     return t('login.errors.feishuConfiguredButDisabled', {
       defaultValue:
         '飞书已在管理后台配置，但「启用」开关未打开，或与 LDAP/其他 SSO 冲突。请前往 管理后台 → 认证与邮件 → 飞书，打开启用并保存。',

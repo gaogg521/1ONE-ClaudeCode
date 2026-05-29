@@ -17,6 +17,7 @@ import { useLoginUiProviders } from '@/renderer/hooks/auth/useLoginUiProviders';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { formatOAuthAuthorizeError, startOAuthAuthorize } from '@/renderer/utils/oauthAuthorize';
+import { getWebuiDesktopSession } from '@/renderer/utils/webuiDesktopSession';
 import styles from './EnterpriseLoginChannelPanel.module.css';
 
 type LoginChannel = 'local' | 'ldap' | 'feishu' | 'dingtalk' | 'wecom';
@@ -39,15 +40,31 @@ function resolveChannelStatus(
   if (channel === 'local') {
     return 'ready';
   }
-  if (providers.loading || providers.error !== 'none') {
-    return 'ready';
+  if (providers.loading) {
+    return 'pending';
   }
-  if (channel === 'ldap') {
-    if (providers.ldapEnabled || providers.ldapConfigured) return 'ready';
+  if (providers.error !== 'none') {
     return 'not_configured';
   }
-  if (channel === 'feishu' || channel === 'dingtalk' || channel === 'wecom') {
-    return 'ready';
+  if (channel === 'ldap') {
+    if (providers.ldapEnabled) return 'ready';
+    if (providers.ldapConfigured) return 'disabled';
+    return 'not_configured';
+  }
+  if (channel === 'feishu') {
+    if (providers.feishuEnabled) return 'ready';
+    if (providers.feishuConfigured) return 'disabled';
+    return 'not_configured';
+  }
+  if (channel === 'dingtalk') {
+    if (providers.dingtalkEnabled) return 'ready';
+    if (providers.dingtalkConfigured) return 'disabled';
+    return 'not_configured';
+  }
+  if (channel === 'wecom') {
+    if (providers.wecomEnabled) return 'ready';
+    if (providers.wecomConfigured) return 'disabled';
+    return 'not_configured';
   }
   return 'not_configured';
 }
@@ -63,12 +80,17 @@ function isOAuthChannel(channel: LoginChannel): channel is OAuthChannel {
 type EnterpriseLoginChannelPanelProps = {
   /** When true, omit outer card chrome (parent provides section layout). */
   embedded?: boolean;
+  /** OAuth callback redirect query; defaults to enterprise join path. */
+  oauthRedirect?: string;
 };
 
-const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = ({ embedded = false }) => {
+const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = ({
+  embedded = false,
+  oauthRedirect = ENTERPRISE_JOIN_PATH,
+}) => {
   const { t } = useTranslation();
   const isDesktop = isElectronDesktop();
-  const { status, user, login, loginWithLdap, logout } = useAuth();
+  const { status, user, login, loginWithLdap, logout, refresh } = useAuth();
   const { hasJoinedEnterprise } = useWebuiEnterpriseMode();
   const providers = useLoginUiProviders();
 
@@ -119,17 +141,23 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
     []
   );
 
-  const buildFeishuAuthorizePath = useCallback((mode: 'oauth' | 'qr') => {
-    const params = new URLSearchParams({ mode });
-    params.set('redirect', ENTERPRISE_JOIN_PATH);
-    return `/api/auth/feishu/authorize?${params.toString()}`;
-  }, []);
+  const buildFeishuAuthorizePath = useCallback(
+    (mode: 'oauth' | 'qr') => {
+      const params = new URLSearchParams({ mode });
+      params.set('redirect', oauthRedirect);
+      return `/api/auth/feishu/authorize?${params.toString()}`;
+    },
+    [oauthRedirect]
+  );
 
-  const buildOAuthAuthorizePath = useCallback((provider: OAuthChannel) => {
-    const params = new URLSearchParams({ mode: 'oauth' });
-    params.set('redirect', ENTERPRISE_JOIN_PATH);
-    return `/api/auth/${provider}/authorize?${params.toString()}`;
-  }, []);
+  const buildOAuthAuthorizePath = useCallback(
+    (provider: OAuthChannel) => {
+      const params = new URLSearchParams({ mode: 'oauth' });
+      params.set('redirect', oauthRedirect);
+      return `/api/auth/${provider}/authorize?${params.toString()}`;
+    },
+    [oauthRedirect]
+  );
 
   const channelStatus = useMemo(
     () => ({
@@ -159,16 +187,40 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
     [channelLabel, t]
   );
 
+  const pollDesktopOAuthSession = useCallback(() => {
+    if (!isDesktop) {
+      return;
+    }
+    const startedAt = Date.now();
+    const maxMs = 120_000;
+    const tick = () => {
+      void refresh().then(() => {
+        if (getWebuiDesktopSession()?.token) {
+          window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+          return;
+        }
+        if (Date.now() - startedAt < maxMs) {
+          window.setTimeout(tick, 1500);
+        }
+      });
+    };
+    window.setTimeout(tick, 1500);
+  }, [isDesktop, refresh]);
+
   const startOAuth = useCallback(
     async (provider: OAuthChannel) => {
       const path =
         provider === 'feishu' ? buildFeishuAuthorizePath('oauth') : buildOAuthAuthorizePath(provider);
       const result = await startOAuthAuthorize(path);
-      if (!result.ok) {
+      if (result.ok === false) {
         Message.error(formatOAuthAuthorizeError(result.message, t, result.code));
+        return;
+      }
+      if (isDesktop) {
+        pollDesktopOAuthSession();
       }
     },
-    [buildFeishuAuthorizePath, buildOAuthAuthorizePath, t]
+    [buildFeishuAuthorizePath, buildOAuthAuthorizePath, isDesktop, pollDesktopOAuthSession, t]
   );
 
   const handlePasswordLogin = useCallback(
@@ -191,6 +243,7 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
             : await login({ username: trimmedUsername, password });
         if (result.success) {
           Message.success(t('login.success', { defaultValue: '登录成功！' }));
+          await refresh();
         } else {
           const text =
             result.code === 'invalidCredentials'
@@ -204,7 +257,7 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
         setSubmitting(false);
       }
     },
-    [login, loginWithLdap, password, passwordChannel, t, username]
+    [login, loginWithLdap, password, passwordChannel, refresh, t, username]
   );
 
   const showLocalSessionHint = status === 'authenticated' && user != null && !hasJoinedEnterprise;
@@ -226,12 +279,16 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
 
   const handleChannelClick = useCallback(
     (item: ChannelMeta) => {
+      const currentStatus = channelStatus[item.id];
       if (isOAuthChannel(item.id)) {
+        if (currentStatus !== 'ready') {
+          showChannelUnavailableMessage(item);
+          return;
+        }
         void startOAuth(item.id);
         return;
       }
 
-      const currentStatus = channelStatus[item.id];
       if (isPasswordChannel(item.id)) {
         if (currentStatus === 'ready') {
           setPasswordChannel(item.id);

@@ -5,6 +5,7 @@
  */
 
 import { isElectronDesktop } from '@renderer/utils/platform';
+import { clearWebuiServiceWorkerCaches } from '@/renderer/services/webuiCacheReset';
 
 const SERVICE_WORKER_URL = './sw.js';
 const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
@@ -33,7 +34,12 @@ export async function registerPwa(): Promise<ServiceWorkerRegistration | undefin
   }
 
   try {
-    return await navigator.serviceWorker.register(SERVICE_WORKER_URL, { scope: './' });
+    await clearWebuiServiceWorkerCaches();
+    const registration = await navigator.serviceWorker.register(SERVICE_WORKER_URL, { scope: './' });
+    if (typeof registration.update === 'function') {
+      void registration.update();
+    }
+    return registration;
   } catch (error) {
     console.warn('[PWA] Failed to register service worker:', error);
     return undefined;

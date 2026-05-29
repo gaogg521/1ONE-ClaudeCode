@@ -56,9 +56,11 @@ import './services/i18n';
 import { registerPwa } from './services/registerPwa';
 
 // Components and utilities
+import AppLoader from './components/layout/AppLoader';
 import Router from './components/layout/Router';
 import { useAuth } from './hooks/context/AuthContext';
 import { WebuiEnterpriseModeProvider } from './hooks/webui/WebuiEnterpriseModeProvider';
+import { OrgConfigSyncListener } from './hooks/webui/OrgConfigSyncListener';
 import HOC from './utils/ui/HOC';
 
 // Patch Korean locale with missing properties from English locale
@@ -97,9 +99,14 @@ const AppProviders: React.FC<PropsWithChildren> = ({ children }) =>
       WebuiEnterpriseModeProvider,
       null,
       React.createElement(
-        ThemeProvider,
+        React.Fragment,
         null,
-        React.createElement(PreviewProvider, null, React.createElement(ConversationTabsProvider, null, children))
+        React.createElement(OrgConfigSyncListener, null),
+        React.createElement(
+          ThemeProvider,
+          null,
+          React.createElement(PreviewProvider, null, React.createElement(ConversationTabsProvider, null, children))
+        )
       )
     )
   );
@@ -108,7 +115,7 @@ const Config: React.FC<PropsWithChildren> = ({ children }) => {
   const {
     i18n: { language },
   } = useTranslation();
-  const arcoLocale = arcoLocales[language] ?? enUS;
+  const arcoLocale = arcoLocales[language] ?? zhCN;
 
   return React.createElement(ConfigProvider, { theme: { primaryColor: '#4E5969' }, locale: arcoLocale }, children);
 };
@@ -117,7 +124,7 @@ const Main = () => {
   const { ready } = useAuth();
 
   if (!ready) {
-    return null;
+    return <AppLoader />;
   }
 
   return <Router />;

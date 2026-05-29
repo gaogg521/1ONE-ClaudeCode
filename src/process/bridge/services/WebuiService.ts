@@ -13,6 +13,11 @@ import { UserRepository } from '@process/webserver/auth/repository/UserRepositor
 import { AUTH_CONFIG, SERVER_CONFIG } from '@process/webserver/config/constants';
 import { resolveEnterpriseContext } from '@process/webserver/auth/enterpriseContext';
 import type { EnterpriseContextSnapshot } from '@/common/config/webuiEnterpriseConfig';
+import {
+  getLatestBrowserWebuiSession,
+  type BrowserSessionSnapshot,
+} from '@process/webserver/auth/browserSessionBridge';
+import { session } from 'electron';
 
 /**
  * WebUI 服务层 - 封装所有 WebUI 相关的业务逻辑
@@ -353,21 +358,71 @@ export class WebuiService {
   static async getEnterpriseContext(): Promise<EnterpriseContextSnapshot> {
     const adminUser = await this.getAdminUser();
     const ctx = await resolveEnterpriseContext(adminUser.tenant_id);
+    const { getInstanceGovernance } = await import('@process/webserver/auth/instanceGovernance');
+    const governance = await getInstanceGovernance(adminUser.role);
     return {
       ...ctx,
       role: adminUser.role,
       canCreateEnterprise: !ctx.joined && adminUser.role === 'system_admin',
+      hasSystemAdmin: governance.hasSystemAdmin,
+      canClaimSystemAdmin: governance.canClaimSystemAdmin,
     };
   }
 
   static async getDesktopSessionToken(): Promise<{ token: string }> {
-    const adminUser = await this.getAdminUser();
-    const token = await AuthService.generateToken({
-      id: adminUser.id,
-      username: adminUser.username,
-      role: adminUser.role,
-    });
-    return { token };
+    const synced = await WebuiService.syncBrowserWebuiSession();
+    if (synced?.token) {
+      return { token: synced.token };
+    }
+    throw new Error('No browser WebUI session available for desktop sync');
+  }
+
+  /**
+   * Pick up the latest browser WebUI login for this instance (IPC-only; not exposed over HTTP).
+   */
+  static async syncBrowserWebuiSession(): Promise<BrowserSessionSnapshot | null> {
+    const bridged = getLatestBrowserWebuiSession();
+    if (bridged) {
+      const verified = await AuthService.verifyToken(bridged.token);
+      if (verified) {
+        return bridged;
+      }
+    }
+
+    const { getWebServerInstance } = await import('@process/bridge/webuiBridge');
+    const instance = getWebServerInstance();
+    if (!instance?.port) {
+      return null;
+    }
+
+    const url = `http://127.0.0.1:${instance.port}`;
+    try {
+      const cookies = await session.defaultSession.cookies.get({
+        url,
+        name: AUTH_CONFIG.COOKIE.NAME,
+      });
+      const cookieToken = cookies[0]?.value;
+      if (!cookieToken) {
+        return null;
+      }
+      const decoded = await AuthService.verifyToken(cookieToken);
+      if (!decoded) {
+        return null;
+      }
+      const user = await UserRepository.findById(decoded.userId);
+      if (!user) {
+        return null;
+      }
+      return {
+        userId: user.id,
+        username: user.username,
+        role: user.role ?? 'member',
+        token: cookieToken,
+        updatedAt: Date.now(),
+      };
+    } catch {
+      return null;
+    }
   }
 
   static async previewEnterpriseInvite(code: string) {

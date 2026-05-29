@@ -16,6 +16,7 @@
   "showPassword": "Show password",
   "hidePassword": "Hide password",
   "languageToggle": "Change language",
+  "back": "Back",
   "footerPrimary": "Transform your command-line AI",
   "footerSecondary": "Modern & Efficient",
   "standalone": {
@@ -82,7 +83,7 @@
   "errors": {
     "empty": "Please enter username and password",
     "invalidCredentials": "Invalid username or password",
-    "invalidLdapCredentials": "Invalid domain credentials, or the account is not bound to a local user. Try local account login or contact your admin.",
+    "invalidLdapCredentials": "Invalid domain credentials. Check your username and password, or contact your admin to verify LDAP is enabled.",
     "tooManyAttempts": "Too many attempts, please try again later",
     "networkError": "Connection failed, please try again",
     "serverError": "Server error, please try again later",
@@ -92,6 +93,10 @@
     "feishuNotEnabled": "Feishu sign-in is not enabled yet. Ask your org admin to enable it.",
     "feishuNotConfigured": "Feishu SSO is not configured under Admin console → Authentication → Feishu. Note: the Feishu channel bot in Settings is not org sign-in.",
     "feishuConfiguredButDisabled": "Feishu is configured but the Enable switch is off, or it conflicts with LDAP/other SSO. Open Admin console → Authentication → Feishu, enable it, and save.",
+    "dingtalkNotConfigured": "DingTalk SSO is not configured under Admin console → Authentication → DingTalk. Note: the DingTalk channel bot in Settings is not org sign-in.",
+    "dingtalkConfiguredButDisabled": "DingTalk is configured but the Enable switch is off. Open Admin console → Authentication → DingTalk, enable it, and save.",
+    "wecomNotConfigured": "WeCom SSO is not configured under Admin console → Authentication → WeCom.",
+    "wecomConfiguredButDisabled": "WeCom is configured but the Enable switch is off. Open Admin console → Authentication → WeCom, enable it, and save.",
     "oauthNotAvailable": "This sign-in method is not available yet. Try another method or contact your admin.",
     "unknown": "Sign-in failed, please try again"
   }

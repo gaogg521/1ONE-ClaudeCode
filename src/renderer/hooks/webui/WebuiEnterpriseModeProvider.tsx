@@ -26,11 +26,17 @@ import {
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
 import { fetchWebuiApi, getWebuiApiBaseUrl } from '@/renderer/utils/webuiApiBase';
+import { syncBrowserWebuiSessionToDesktop } from '@/renderer/utils/syncBrowserWebuiSession';
 import {
   createEnterprise,
   joinEnterpriseWithCode,
 } from '@/renderer/utils/enterpriseJoinApi';
-import { isEnterpriseAdminRole, resolveEnterpriseEditionPath } from '@/common/auth/enterpriseRoles';
+import { adminApi } from '@/renderer/utils/kanbanApi';
+import {
+  isEnterpriseAdminRole,
+  isSystemAdminRole,
+  resolveEnterpriseEditionPath,
+} from '@/common/auth/enterpriseRoles';
 import {
   mergeDesktopEnterpriseContext,
   persistEnterpriseWorkspaceEdition,
@@ -46,8 +52,12 @@ export type WebuiEnterpriseModeValue = {
   effectiveRole: string | undefined;
   managementMode: WebuiManagementMode;
   enterpriseContext: EnterpriseContextSnapshot | null;
-  /** 侧栏 / 标题栏「管理后台」入口：组织管理员（含未加入企业的本地超管） */
+  /** 侧栏 / 标题栏「管理后台」入口：系统管理员或未加入企业的组织管理员 */
   showEnterpriseAdminNav: boolean;
+  /** 组织是否允许非系统管理员切换「企业团队版」模式（默认关闭） */
+  editionSwitcherEnabled: boolean;
+  /** 当前用户是否可在标题栏切换到企业团队版 */
+  canUseEnterpriseEditionSwitcher: boolean;
   webuiApiBase: string | null;
   setManagementMode: (mode: WebuiManagementMode) => Promise<void>;
   refreshEnterpriseContext: () => Promise<void>;
@@ -55,6 +65,9 @@ export type WebuiEnterpriseModeValue = {
   /** Opens WebUI login with post-login redirect to /enterprise (LDAP / Feishu / invite flow). */
   openEnterpriseLoginInBrowser: () => Promise<'opened' | 'webui_not_running' | 'failed'>;
   canCreateEnterprise: boolean;
+  hasSystemAdmin: boolean;
+  canClaimSystemAdmin: boolean;
+  claimSystemAdmin: () => Promise<void>;
   joinWithInviteCode: (code: string) => Promise<EnterpriseJoinResult>;
   createEnterpriseOrganization: (name: string) => Promise<void>;
 };
@@ -63,11 +76,32 @@ const WebuiEnterpriseModeContext = createContext<WebuiEnterpriseModeValue | null
 
 export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const { user, refresh: refreshAuth } = useAuth();
+  const userRef = useRef(user);
+  userRef.current = user;
   const isDesktop = isElectronDesktop();
   const [loading, setLoading] = useState(true);
+  const bootstrapGenerationRef = useRef(0);
   const [managementMode, setManagementModeState] = useState<WebuiManagementMode>(DEFAULT_WEBUI_MANAGEMENT_MODE);
   const [enterpriseContext, setEnterpriseContext] = useState<EnterpriseContextSnapshot | null>(null);
   const [webuiApiBase, setWebuiApiBase] = useState<string | null>(null);
+  const [editionSwitcherEnabled, setEditionSwitcherEnabled] = useState(false);
+
+  const loadEditionSwitcherFlag = useCallback(async () => {
+    try {
+      const res = await fetchWebuiApi('/api/auth/login-ui');
+      const body = (await res.json().catch((): null => null)) as {
+        success?: boolean;
+        data?: { editionSwitcherEnabled?: boolean };
+      };
+      if (res.ok && body?.success) {
+        setEditionSwitcherEnabled(Boolean(body.data?.editionSwitcherEnabled));
+        return;
+      }
+    } catch {
+      // ignore
+    }
+    setEditionSwitcherEnabled(false);
+  }, []);
 
   const loadPrefs = useCallback(async () => {
     const stored = await ConfigStorage.get(WEBUI_MANAGEMENT_MODE_KEY).catch((): undefined => undefined);
@@ -115,7 +149,8 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
       return;
     }
 
-    if (!user) {
+    const currentUser = userRef.current;
+    if (!currentUser) {
       setEnterpriseContext(null);
       return;
     }
@@ -134,28 +169,54 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
       // ignore
     }
 
-    const tenantId = user.tenant_id ?? 'default';
+    const tenantId = currentUser.tenant_id ?? 'default';
     setEnterpriseContext({
       joined: isEnterpriseTenantId(tenantId),
       tenantId,
       tenantName: null,
-      role: user.role,
+      role: currentUser.role,
     });
-  }, [fetchBrowserEnterpriseContext, isDesktop, user]);
+  }, [fetchBrowserEnterpriseContext, isDesktop]);
 
   useEffect(() => {
-    let cancelled = false;
+    const generation = ++bootstrapGenerationRef.current;
     const run = async () => {
       setLoading(true);
-      await loadPrefs();
-      await refreshEnterpriseContext();
-      if (!cancelled) setLoading(false);
+      try {
+        await loadPrefs();
+        await loadEditionSwitcherFlag();
+        await refreshEnterpriseContext();
+      } finally {
+        if (bootstrapGenerationRef.current === generation) {
+          setLoading(false);
+        }
+      }
     };
     void run();
-    return () => {
-      cancelled = true;
+  }, [loadEditionSwitcherFlag, loadPrefs, refreshEnterpriseContext]);
+
+  const prevUserIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const uid = user?.id;
+    if (!uid || uid === prevUserIdRef.current) {
+      return;
+    }
+    const isIdentityChange = prevUserIdRef.current !== undefined;
+    prevUserIdRef.current = uid;
+    if (isIdentityChange) {
+      void refreshEnterpriseContext();
+    }
+  }, [refreshEnterpriseContext, user?.id]);
+
+  useEffect(() => {
+    const onRefresh = () => {
+      void loadEditionSwitcherFlag();
     };
-  }, [loadPrefs, refreshEnterpriseContext]);
+    window.addEventListener('one-webui-config-refresh', onRefresh);
+    return () => {
+      window.removeEventListener('one-webui-config-refresh', onRefresh);
+    };
+  }, [loadEditionSwitcherFlag]);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -163,7 +224,9 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
     const scheduleRefresh = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        void refreshEnterpriseContext();
+        void syncBrowserWebuiSessionToDesktop()
+          .then(() => refreshAuth())
+          .then(() => refreshEnterpriseContext());
       }, 400);
     };
     window.addEventListener('focus', scheduleRefresh);
@@ -175,12 +238,12 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
       document.removeEventListener('visibilitychange', scheduleRefresh);
       window.removeEventListener('one-enterprise-context-refresh', scheduleRefresh);
     };
-  }, [isDesktop, refreshEnterpriseContext]);
+  }, [isDesktop, refreshAuth, refreshEnterpriseContext]);
 
   const hasJoinedEnterprise = enterpriseContext?.joined === true;
   const effectiveRole = isDesktop
-    ? enterpriseContext?.role ?? user?.role
-    : user?.role ?? enterpriseContext?.role;
+    ? (enterpriseContext?.role ?? user?.role)
+    : (user?.role ?? enterpriseContext?.role);
 
   const authEditionSyncedRef = useRef(false);
   const prevWebUserIdRef = useRef<string | undefined>(undefined);
@@ -250,13 +313,24 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   }, [hasJoinedEnterprise, openUrlInBrowser]);
 
   const openEnterpriseAdminInBrowser = useCallback(async (): Promise<'opened' | 'webui_not_running' | 'failed'> => {
-    setPostLoginRedirect('/enterprise');
-    return openUrlInBrowser('/enterprise');
+    setPostLoginRedirect('/enterprise/auth');
+    return openUrlInBrowser('/enterprise/auth');
   }, [openUrlInBrowser]);
 
   const showEnterpriseAdminNav = isEnterpriseAdminRole(effectiveRole);
+  const canUseEnterpriseEditionSwitcher =
+    editionSwitcherEnabled || isSystemAdminRole(effectiveRole);
 
   const canCreateEnterprise = enterpriseContext?.canCreateEnterprise === true;
+  const hasSystemAdmin = enterpriseContext?.hasSystemAdmin === true;
+  const canClaimSystemAdmin = enterpriseContext?.canClaimSystemAdmin === true;
+
+  const claimSystemAdminRole = useCallback(async () => {
+    await adminApi.claimSystemAdmin();
+    await refreshAuth();
+    await refreshEnterpriseContext();
+    window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+  }, [refreshAuth, refreshEnterpriseContext]);
 
   const joinWithInviteCode = useCallback(
     async (code: string) => {
@@ -289,18 +363,28 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
       managementMode,
       enterpriseContext,
       showEnterpriseAdminNav,
+      editionSwitcherEnabled,
+      canUseEnterpriseEditionSwitcher,
       webuiApiBase,
       setManagementMode,
       refreshEnterpriseContext,
       openEnterpriseAdminInBrowser,
       openEnterpriseLoginInBrowser,
       canCreateEnterprise,
+      hasSystemAdmin,
+      canClaimSystemAdmin,
+      claimSystemAdmin: claimSystemAdminRole,
       joinWithInviteCode,
       createEnterpriseOrganization,
     }),
     [
+      canClaimSystemAdmin,
       canCreateEnterprise,
+      canUseEnterpriseEditionSwitcher,
+      claimSystemAdminRole,
       createEnterpriseOrganization,
+      hasSystemAdmin,
+      editionSwitcherEnabled,
       effectiveRole,
       enterpriseContext,
       hasJoinedEnterprise,

@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { DEFAULT_TENANT_ID, isEnterpriseTenantId } from '@/common/config/webuiEnterpriseConfig';
 import { AuthService } from '@process/webserver/auth/service/AuthService';
 import { AuthIdentityRepository } from '@process/webserver/auth/repository/AuthIdentityRepository';
 import { UserRepository } from '@process/webserver/auth/repository/UserRepository';
+import { assignEnterpriseOnDirectoryImport } from '@process/webserver/auth/enterpriseAutoJoin';
 import {
   type LdapProviderConfig,
   searchLdapDirectory,
@@ -23,21 +23,6 @@ export async function searchLdapDirectoryForAdmin(
   limit?: number
 ): Promise<LdapDirectoryEntry[]> {
   return searchLdapDirectory(config, query, limit);
-}
-
-/**
- * Ensure a local user exists for an LDAP directory entry (bind by DN), then return user id.
- */
-async function ensureUserTenant(userId: string, tenantId: string | undefined): Promise<void> {
-  const tid = (tenantId ?? '').trim();
-  if (!isEnterpriseTenantId(tid)) return;
-  const user = await UserRepository.findById(userId);
-  if (!user) return;
-  const current = (user.tenant_id ?? DEFAULT_TENANT_ID).trim() || DEFAULT_TENANT_ID;
-  if (current === tid) return;
-  if (current === DEFAULT_TENANT_ID) {
-    await UserRepository.updateTenantId(userId, tid);
-  }
 }
 
 async function syncLdapOrgProfile(userId: string, entry: LdapDirectoryEntry): Promise<void> {
@@ -69,7 +54,7 @@ export async function resolveLocalUserForLdapEntry(
   if (byExternal) {
     const user = await UserRepository.findById(byExternal.user_id);
     if (user) {
-      await ensureUserTenant(user.id, options?.tenantId);
+      await assignEnterpriseOnDirectoryImport(user.id, options?.tenantId);
       await syncLdapOrgProfile(user.id, entry);
       return { userId: user.id, username: user.username, created: false };
     }
@@ -78,7 +63,7 @@ export async function resolveLocalUserForLdapEntry(
   const byName = await UserRepository.findByUsername(username);
   if (byName) {
     await AuthIdentityRepository.bind('ldap', externalId, byName.id);
-    await ensureUserTenant(byName.id, options?.tenantId);
+    await assignEnterpriseOnDirectoryImport(byName.id, options?.tenantId);
     await syncLdapOrgProfile(byName.id, entry);
     return { userId: byName.id, username: byName.username, created: false };
   }
@@ -87,7 +72,7 @@ export async function resolveLocalUserForLdapEntry(
   const passwordHash = await AuthService.hashPassword(password);
   const created = await UserRepository.createUserWithRole(username, passwordHash, 'member');
   await AuthIdentityRepository.bind('ldap', externalId, created.id);
-  await ensureUserTenant(created.id, options?.tenantId);
+  await assignEnterpriseOnDirectoryImport(created.id, options?.tenantId);
   await syncLdapOrgProfile(created.id, entry);
   return { userId: created.id, username: created.username, created: true };
 }

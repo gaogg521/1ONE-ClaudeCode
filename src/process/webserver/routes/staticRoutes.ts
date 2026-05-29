@@ -134,6 +134,9 @@ function registerProductionStaticRoutes(expressApp: Express, staticRoot: string,
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
+      if (typeof req.query['__one_cache_bust'] === 'string') {
+        res.setHeader('Clear-Site-Data', '"cache"');
+      }
 
       const token = TokenMiddleware.extractToken(req);
       if (token && !(await TokenMiddleware.isTokenValid(token))) {
@@ -154,8 +157,29 @@ function registerProductionStaticRoutes(expressApp: Express, staticRoot: string,
   // SPA sub-routes (React Router)
   expressApp.get(/^\/(?!api|static|assets)(?!.*\.[a-zA-Z0-9]+$).*/, pageRateLimiter, serveApplication);
 
-  // Static assets
-  expressApp.use(express.static(staticRoot));
+  const assetsDir = path.join(staticRoot, 'assets');
+  if (fs.existsSync(assetsDir)) {
+    expressApp.use(
+      '/assets',
+      express.static(assetsDir, {
+        immutable: true,
+        maxAge: '365d',
+        fallthrough: false,
+      })
+    );
+  }
+
+  expressApp.use(
+    express.static(staticRoot, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html') || filePath.endsWith(`${path.sep}sw.js`) || filePath.endsWith('/sw.js')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        }
+      },
+    })
+  );
 
   const staticDir = path.join(staticRoot, 'static');
   if (fs.existsSync(staticDir) && fs.statSync(staticDir).isDirectory()) {

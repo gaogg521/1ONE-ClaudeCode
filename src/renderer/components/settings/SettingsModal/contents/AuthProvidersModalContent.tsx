@@ -8,9 +8,15 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Card, Divider, Form, Input, Message, Modal, Radio, Space, Switch, Tabs, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { fetchWebuiApiJson, type WebuiApiJsonError } from '@/renderer/utils/webuiApiBase';
+import { fetchWebuiApiJson, getWebuiApiBaseUrl, type WebuiApiJsonError } from '@/renderer/utils/webuiApiBase';
 import { buildLdapUrl, LDAP_DEFAULT_PORT, parseLdapUrl } from '@/renderer/utils/ldapProviderFormUtils';
 import { resolveDisplayedFeishuRedirectUri } from '@/renderer/utils/feishuProviderDisplay';
+import { getDesktopAdminBearerToken } from '@/renderer/utils/webuiDesktopSession';
+import { dispatchWebuiConfigRefresh } from '@/renderer/utils/webuiConfigSync';
+import { syncBrowserWebuiSessionToDesktop } from '@/renderer/utils/syncBrowserWebuiSession';
+import { isElectronDesktop } from '@/renderer/utils/platform';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { isWebuiBuiltinAdministrator } from '@/common/auth/enterpriseRoles';
 import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
 import { PASSWORD_MASK } from '@/common/config/constants';
 
@@ -117,6 +123,11 @@ function formatAuthProviderError(error: unknown, t: TFunction): string {
   }
   const err = error as WebuiApiJsonError;
   const msg = err.message ?? '';
+  if (err.code === 'DESKTOP_AUTH_READ_ONLY') {
+    return t('settings.authProviders.desktopReadOnly', {
+      defaultValue: '桌面端仅展示浏览器 WebUI 中的认证配置，请在浏览器打开企业团队版管理后台修改。',
+    });
+  }
   if (/system admin only/i.test(msg)) {
     return t('settings.authProviders.errorPermissionOutdated', {
       defaultValue: '权限校验未通过（多为应用未重启）。请重启应用/WebUI 后重试；组织管理员应可保存。',
@@ -157,6 +168,13 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
   defaultActiveTab,
 }) => {
   const { t } = useTranslation();
+  const { user, status: authStatus } = useAuth();
+  const isDesktop = isElectronDesktop();
+  const desktopReadOnly = isDesktop;
+  const [configLoadError, setConfigLoadError] = useState<string | null>(null);
+  const [webuiApiOrigin, setWebuiApiOrigin] = useState(
+    typeof window !== 'undefined' ? window.location.origin : ''
+  );
   const enabledProviders = useMemo(
     () => DEFAULT_VISIBLE_PROVIDERS.filter((provider) => visibleProviders.includes(provider)),
     [visibleProviders]
@@ -167,6 +185,8 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
   const [loading, setLoading] = useState(false);
   const [testingLdap, setTestingLdap] = useState(false);
   const [testingFeishu, setTestingFeishu] = useState(false);
+  const [testingDingtalk, setTestingDingtalk] = useState(false);
+  const [testingWecom, setTestingWecom] = useState(false);
   const [testingSmtp, setTestingSmtp] = useState(false);
   const saveBusyRef = useRef(false);
 
@@ -226,13 +246,19 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
   const [savingAdminEmail, setSavingAdminEmail] = useState(false);
 
   const feishuCallbackUrl = useMemo(
-    () =>
-      resolveDisplayedFeishuRedirectUri(
-        feishuConfig.redirectUri,
-        typeof window !== 'undefined' ? window.location.origin : ''
-      ),
-    [feishuConfig.redirectUri]
+    () => resolveDisplayedFeishuRedirectUri(feishuConfig.redirectUri, webuiApiOrigin),
+    [feishuConfig.redirectUri, webuiApiOrigin]
   );
+
+  const desktopNeedsAdminLogin =
+    isDesktop &&
+    authStatus === 'authenticated' &&
+    !getDesktopAdminBearerToken() &&
+    !isWebuiBuiltinAdministrator({
+      id: user?.id,
+      username: user?.username,
+      role: user?.role,
+    });
 
   const ldapPreviewUrl = useMemo(
     () => buildLdapUrl({ host: ldapConfig.host, port: ldapConfig.port, useTls: ldapConfig.useTls }),
@@ -302,18 +328,54 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
     setAdminEmail(String(data.email ?? ''));
   }, []);
 
-  useEffect(() => {
+  const reloadAll = useCallback(async () => {
     setLoading(true);
+    setConfigLoadError(null);
+    if (isDesktop) {
+      await syncBrowserWebuiSessionToDesktop();
+    }
     const tasks: Array<Promise<unknown>> = enabledProviders.map((provider) => loadProvider(provider));
     if (enabledProviders.includes('smtp')) {
       tasks.push(loadAdminEmail());
     }
-    Promise.all(tasks)
-      .catch((error) => {
-        Message.error(formatAuthProviderError(error, t));
-      })
-      .finally(() => setLoading(false));
-  }, [enabledProviders, loadAdminEmail, loadProvider, t]);
+    try {
+      await Promise.all(tasks);
+    } catch (error) {
+      const message = formatAuthProviderError(error, t);
+      setConfigLoadError(message);
+      Message.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [enabledProviders, isDesktop, loadAdminEmail, loadProvider, t]);
+
+  useEffect(() => {
+    void getWebuiApiBaseUrl().then((base) => {
+      if (base) {
+        setWebuiApiOrigin(base.replace(/\/+$/, ''));
+      } else if (typeof window !== 'undefined') {
+        setWebuiApiOrigin(window.location.origin);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    void reloadAll();
+  }, [reloadAll]);
+
+  useEffect(() => {
+    const onRefresh = () => {
+      void reloadAll();
+    };
+    window.addEventListener('focus', onRefresh);
+    window.addEventListener('one-enterprise-context-refresh', onRefresh);
+    window.addEventListener('one-webui-config-refresh', onRefresh);
+    return () => {
+      window.removeEventListener('focus', onRefresh);
+      window.removeEventListener('one-enterprise-context-refresh', onRefresh);
+      window.removeEventListener('one-webui-config-refresh', onRefresh);
+    };
+  }, [reloadAll]);
 
   const persistProvider = useCallback(
     async (provider: ProviderId, allowMultipleSso = false) => {
@@ -396,6 +458,14 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
 
   const save = useCallback(
     async (provider: ProviderId) => {
+      if (desktopReadOnly) {
+        Message.warning(
+          t('settings.authProviders.desktopReadOnly', {
+            defaultValue: '桌面端仅展示浏览器 WebUI 中的认证配置，请在浏览器打开企业团队版管理后台修改。',
+          })
+        );
+        return;
+      }
       if (saveBusyRef.current) {
         return;
       }
@@ -409,6 +479,7 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
         await persistProvider(provider);
         Message.success(t('settings.authProviders.saveOk', { defaultValue: '已保存' }));
         await loadProvider(provider);
+        dispatchWebuiConfigRefresh();
       } catch (error) {
         const err = error as WebuiApiJsonError;
         if (err.code === 'SSO_PROVIDER_CONFLICT' && SSO_PROVIDER_IDS.has(provider)) {
@@ -429,6 +500,7 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
                 await persistProvider(provider, true);
                 Message.success(t('settings.authProviders.saveOk', { defaultValue: '已保存' }));
                 await loadProvider(provider);
+                dispatchWebuiConfigRefresh();
               } catch (retryError) {
                 Message.error(formatAuthProviderError(retryError, t));
               } finally {
@@ -445,7 +517,7 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
         saveBusyRef.current = false;
       }
     },
-    [ldapConfig.host, loadProvider, persistProvider, t]
+    [desktopReadOnly, ldapConfig.host, loadProvider, persistProvider, t]
   );
 
   const testLdap = useCallback(async () => {
@@ -482,6 +554,54 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
     }
   }, [feishuConfig, t]);
 
+  const testDingtalk = useCallback(async () => {
+    if (!dingtalkConfig.appKey.trim()) {
+      Message.warning(t('settings.authProviders.dingtalkAppKeyRequired', { defaultValue: '请填写 AppKey' }));
+      return;
+    }
+    setTestingDingtalk(true);
+    try {
+      await apiFetch(`/api/admin/auth/providers/dingtalk/test`, {
+        method: 'POST',
+        body: JSON.stringify({
+          config: {
+            ...dingtalkConfig,
+            appSecret: dingtalkConfig.appSecret.trim() || (dingtalkSecretMasked ? '******' : ''),
+          },
+        }),
+      });
+      Message.success(t('settings.authProviders.testSuccess', { defaultValue: '连接成功' }));
+    } catch (error) {
+      Message.error(formatAuthProviderError(error, t));
+    } finally {
+      setTestingDingtalk(false);
+    }
+  }, [dingtalkConfig, dingtalkSecretMasked, t]);
+
+  const testWecom = useCallback(async () => {
+    if (!wecomConfig.corpId.trim()) {
+      Message.warning(t('settings.authProviders.wecomCorpIdRequired', { defaultValue: '请填写企业 ID（CorpId）' }));
+      return;
+    }
+    setTestingWecom(true);
+    try {
+      await apiFetch(`/api/admin/auth/providers/wecom/test`, {
+        method: 'POST',
+        body: JSON.stringify({
+          config: {
+            ...wecomConfig,
+            secret: wecomConfig.secret.trim() || (wecomSecretMasked ? '******' : ''),
+          },
+        }),
+      });
+      Message.success(t('settings.authProviders.testSuccess', { defaultValue: '连接成功' }));
+    } catch (error) {
+      Message.error(formatAuthProviderError(error, t));
+    } finally {
+      setTestingWecom(false);
+    }
+  }, [wecomConfig, wecomSecretMasked, t]);
+
   const testSmtp = useCallback(async () => {
     setTestingSmtp(true);
     try {
@@ -508,6 +628,14 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
   }, [smtpConfig, t]);
 
   const saveAdminEmail = useCallback(async () => {
+    if (desktopReadOnly) {
+      Message.warning(
+        t('settings.authProviders.desktopReadOnly', {
+          defaultValue: '桌面端仅展示浏览器 WebUI 中的认证配置，请在浏览器打开企业团队版管理后台修改。',
+        })
+      );
+      return;
+    }
     setSavingAdminEmail(true);
     try {
       await apiFetch('/api/admin/system/admin-email', {
@@ -521,20 +649,44 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
     } finally {
       setSavingAdminEmail(false);
     }
-  }, [adminEmail, loadAdminEmail, t]);
+  }, [adminEmail, desktopReadOnly, loadAdminEmail, t]);
 
-  const oauthLoginPendingAlert = (
+  const oauthChannelHint = (
     <Alert
       className='mb-12px'
       type='info'
-      content={t('settings.authProviders.oauthLoginPending', {
-        defaultValue: '配置保存后可在登录页显示入口；OAuth 登录回调流程仍在接入中，启用前请确认已在对应开放平台配置回调地址。',
+      content={t('settings.authProviders.oauthChannelHint', {
+        defaultValue:
+          '「测试连接」仅验证开放平台 App 凭证；保存后全组织在线客户端会实时同步登录入口。请在对应平台配置 Redirect URI 后再启用 OAuth 登录。',
       })}
     />
   );
 
   return (
     <>
+      {isDesktop ? (
+        <Alert
+          type='info'
+          className='mb-12px'
+          content={t('settings.authProviders.desktopMirrorHint', {
+            defaultValue:
+              '认证配置以浏览器 WebUI 为准（同一数据库）。在浏览器登录并保存后，桌面端会自动同步展示；此处为只读镜像，不能写回服务器。',
+          })}
+        />
+      ) : null}
+      {desktopNeedsAdminLogin || configLoadError ? (
+        <Alert
+          type='warning'
+          className='mb-12px'
+          content={
+            configLoadError ??
+            t('settings.authProviders.desktopBrowserLoginHint', {
+              defaultValue:
+                '请先在浏览器 WebUI 使用企业管理员账号登录；登录后回到桌面端会自动同步，无需二次登录。',
+            })
+          }
+        />
+      ) : null}
       <Alert
         type='info'
         className='mb-12px'
@@ -742,9 +894,11 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
             })}
           </Typography.Paragraph>
           <div className='flex justify-end gap-8px flex-wrap'>
+            {!desktopReadOnly ? (
             <Button type='primary' loading={loading} onClick={() => void save('ldap')}>
               {t('common.save', { defaultValue: '保存' })}
             </Button>
+            ) : null}
             <Button loading={testingLdap} onClick={() => void testLdap()} disabled={loading}>
               {t('settings.authProviders.testConnection', { defaultValue: '测试连接' })}
             </Button>
@@ -820,9 +974,11 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
             })}
           </Typography.Paragraph>
           <div className='flex justify-end gap-8px flex-wrap'>
+            {!desktopReadOnly ? (
             <Button type='primary' loading={loading} onClick={() => void save('feishu')}>
               {t('common.save', { defaultValue: '保存' })}
             </Button>
+            ) : null}
             <Button loading={testingFeishu} onClick={() => void testFeishu()} disabled={loading}>
               {t('settings.authProviders.testConnection', { defaultValue: '测试连接' })}
             </Button>
@@ -834,7 +990,7 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
       {visibleProviderSet.has('dingtalk') ? (
         <Tabs.TabPane key='dingtalk' title={t('settings.authProviders.tabDingTalk', { defaultValue: '钉钉' })}>
         <Card bordered className='mt-12px'>
-          {oauthLoginPendingAlert}
+          {oauthChannelHint}
           <div className='flex items-center justify-between mb-12px flex-wrap gap-8px'>
             <span className='text-13px text-t-secondary'>
               {t('settings.authProviders.dingtalkHint', {
@@ -871,8 +1027,13 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
             </Form.Item>
           </Form>
           <div className='flex justify-end gap-8px flex-wrap mt-16px'>
+            {!desktopReadOnly ? (
             <Button type='primary' loading={loading} onClick={() => void save('dingtalk')}>
               {t('common.save', { defaultValue: '保存' })}
+            </Button>
+            ) : null}
+            <Button loading={testingDingtalk} onClick={() => void testDingtalk()} disabled={loading}>
+              {t('settings.authProviders.testConnection', { defaultValue: '测试连接' })}
             </Button>
           </div>
         </Card>
@@ -882,7 +1043,7 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
       {visibleProviderSet.has('wecom') ? (
         <Tabs.TabPane key='wecom' title={t('settings.authProviders.tabWeCom', { defaultValue: '企业微信' })}>
         <Card bordered className='mt-12px'>
-          {oauthLoginPendingAlert}
+          {oauthChannelHint}
           <div className='flex items-center justify-between mb-12px flex-wrap gap-8px'>
             <span className='text-13px text-t-secondary'>
               {t('settings.authProviders.wecomHint', {
@@ -919,8 +1080,13 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
             </Form.Item>
           </Form>
           <div className='flex justify-end gap-8px flex-wrap mt-16px'>
+            {!desktopReadOnly ? (
             <Button type='primary' loading={loading} onClick={() => void save('wecom')}>
               {t('common.save', { defaultValue: '保存' })}
+            </Button>
+            ) : null}
+            <Button loading={testingWecom} onClick={() => void testWecom()} disabled={loading}>
+              {t('settings.authProviders.testConnection', { defaultValue: '测试连接' })}
             </Button>
           </div>
         </Card>
@@ -953,9 +1119,11 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
               />
             </Form.Item>
             <div className='flex justify-end mb-12px'>
-              <Button loading={savingAdminEmail} onClick={() => void saveAdminEmail()} disabled={loading}>
-                {t('settings.webui.setAdminEmail', { defaultValue: '设置管理员邮箱' })}
-              </Button>
+              {!desktopReadOnly ? (
+                <Button loading={savingAdminEmail} onClick={() => void saveAdminEmail()} disabled={loading}>
+                  {t('settings.webui.setAdminEmail', { defaultValue: '设置管理员邮箱' })}
+                </Button>
+              ) : null}
             </div>
             <Form.Item label={t('settings.authProviders.smtpHost', { defaultValue: 'SMTP 主机' })} required>
               <Input value={smtpConfig.host} onChange={(v) => setSmtpConfig((s) => ({ ...s, host: v }))} placeholder='smtp.example.com' />
@@ -993,9 +1161,11 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
             </Form.Item>
           </Form>
           <div className='flex justify-end gap-8px flex-wrap mt-16px'>
+            {!desktopReadOnly ? (
             <Button type='primary' loading={loading} onClick={() => void save('smtp')}>
               {t('common.save', { defaultValue: '保存' })}
             </Button>
+            ) : null}
             <Button loading={testingSmtp} onClick={() => void testSmtp()} disabled={loading}>
               {t('settings.authProviders.smtpTestSend', { defaultValue: '测试发信' })}
             </Button>

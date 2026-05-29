@@ -14,6 +14,26 @@ afterEach(() => {
 
 describe('registerPwa', () => {
   it('registers the service worker in browser mode on localhost', async () => {
+    const update = vi.fn();
+    const registration = { scope: './', update } as unknown as ServiceWorkerRegistration;
+    const register = vi.fn().mockResolvedValue(registration);
+
+    Object.defineProperty(window, 'electronAPI', {
+      configurable: true,
+      value: undefined,
+      writable: true,
+    });
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { register },
+    });
+
+    await expect(registerPwa()).resolves.toBe(registration);
+    expect(register).toHaveBeenCalledWith('./sw.js', { scope: './' });
+    expect(update).toHaveBeenCalled();
+  });
+
+  it('still returns the registration when update is unavailable', async () => {
     const registration = { scope: './' } as ServiceWorkerRegistration;
     const register = vi.fn().mockResolvedValue(registration);
 

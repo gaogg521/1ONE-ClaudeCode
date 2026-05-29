@@ -469,6 +469,17 @@ export class OneCmdDatabase {
     }
   }
 
+  countUsersByRole(role: string): IQueryResult<number> {
+    try {
+      const stmt = this.db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ?');
+      const row = stmt.get(role) as { count: number };
+      return { success: true, data: row.count };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, error: message, data: 0 };
+    }
+  }
+
   /**
    * Check if any users exist in the database
    * 检查数据库中是否存在用户

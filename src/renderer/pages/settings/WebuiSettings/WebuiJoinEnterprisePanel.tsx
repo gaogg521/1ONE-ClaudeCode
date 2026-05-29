@@ -9,7 +9,10 @@ import { useNavigate } from 'react-router-dom';
 import { Alert, Button, Form, Input, Message, Tabs, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import type { EnterpriseInvitePreview } from '@/common/types/enterpriseJoin';
 import { previewEnterpriseInvite } from '@/renderer/utils/enterpriseJoinApi';
+import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 
 type WebuiJoinEnterprisePanelProps = {
@@ -20,22 +23,26 @@ const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ emb
   const { t } = useTranslation();
   const navigate = useNavigate();
   const isDesktop = isElectronDesktop();
+  const { user } = useAuth();
   const {
     loading,
     hasJoinedEnterprise,
     canCreateEnterprise,
+    effectiveRole,
     joinWithInviteCode,
     createEnterpriseOrganization,
     webuiApiBase,
   } = useWebuiEnterpriseMode();
 
   const [inviteCode, setInviteCode] = useState('');
-  const [previewName, setPreviewName] = useState<string | null>(null);
+  const [invitePreview, setInvitePreview] = useState<EnterpriseInvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [joinLoading, setJoinLoading] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'join' | 'create'>('join');
+  const showCreateEnterpriseTab =
+    !embedded && canCreateEnterprise && isEnterpriseAdminRole(effectiveRole ?? user?.role);
 
   const mapJoinError = useCallback(
     (err: unknown): string => {
@@ -63,10 +70,10 @@ const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ emb
       return;
     }
     setPreviewLoading(true);
-    setPreviewName(null);
+    setInvitePreview(null);
     try {
       const data = await previewEnterpriseInvite(code);
-      setPreviewName(data.tenantName);
+      setInvitePreview(data);
     } catch (e) {
       Message.error(mapJoinError(e));
     } finally {
@@ -91,7 +98,7 @@ const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ emb
         })
       );
       setInviteCode('');
-      setPreviewName(null);
+      setInvitePreview(null);
       void navigate('/sessions');
     } catch (e) {
       Message.error(mapJoinError(e));
@@ -163,6 +170,7 @@ const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ emb
           })}
         />
       ) : null}
+      {showCreateEnterpriseTab ? (
       <Tabs activeTab={activeTab} onChange={(k) => setActiveTab(k as 'join' | 'create')}>
         <Tabs.TabPane
           key='join'
@@ -177,30 +185,55 @@ const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ emb
                 placeholder={t('settings.webui.inviteCodePlaceholder', {
                   defaultValue: '例如 ABCD-EF12',
                 })}
-                onChange={setInviteCode}
+                onChange={(value) => {
+                  setInviteCode(value);
+                  setInvitePreview(null);
+                }}
               />
             </Form.Item>
-            {previewName ? (
+            {invitePreview ? (
               <Alert
                 type='success'
                 className='mb-8px'
-                content={t('settings.webui.invitePreview', {
-                  tenant: previewName,
-                  defaultValue: '将加入：{{tenant}}',
-                })}
+                content={
+                  <div className='flex flex-col gap-4px'>
+                    <div>
+                      {t('settings.webui.invitePreviewTenant', {
+                        tenant: invitePreview.tenantName,
+                        defaultValue: '目标企业：{{tenant}}',
+                      })}
+                    </div>
+                    <div className='text-12px opacity-80'>
+                      {t('settings.webui.invitePreviewTenantId', {
+                        tenantId: invitePreview.tenantId,
+                        defaultValue: '组织 ID：{{tenantId}}',
+                      })}
+                    </div>
+                    <div className='text-12px opacity-80'>
+                      {t('settings.webui.invitePreviewConfirmHint', {
+                        defaultValue: '确认信息无误后，点击下方「加入企业」。',
+                      })}
+                    </div>
+                  </div>
+                }
               />
             ) : null}
             <div className='flex gap-8px flex-wrap'>
               <Button loading={previewLoading} onClick={() => void handlePreview()}>
                 {t('settings.webui.invitePreviewBtn', { defaultValue: '验证邀请码' })}
               </Button>
-              <Button type='primary' loading={joinLoading} onClick={() => void handleJoin()}>
+              <Button
+                type='primary'
+                loading={joinLoading}
+                disabled={!invitePreview}
+                onClick={() => void handleJoin()}
+              >
                 {t('settings.webui.joinConfirmBtn', { defaultValue: '加入企业' })}
               </Button>
             </div>
           </Form>
         </Tabs.TabPane>
-        {canCreateEnterprise ? (
+        {showCreateEnterpriseTab ? (
           <Tabs.TabPane
             key='create'
             title={t('settings.webui.joinTabCreate', { defaultValue: '创建企业' })}
@@ -224,6 +257,62 @@ const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ emb
           </Tabs.TabPane>
         ) : null}
       </Tabs>
+      ) : (
+        <Form layout='vertical' className='mt-8px'>
+          <Form.Item label={t('settings.webui.inviteCodeLabel', { defaultValue: '企业邀请码' })}>
+            <Input
+              value={inviteCode}
+              placeholder={t('settings.webui.inviteCodePlaceholder', {
+                defaultValue: '例如 ABCD-EF12',
+              })}
+              onChange={(value) => {
+                setInviteCode(value);
+                setInvitePreview(null);
+              }}
+            />
+          </Form.Item>
+          {invitePreview ? (
+            <Alert
+              type='success'
+              className='mb-8px'
+              content={
+                <div className='flex flex-col gap-4px'>
+                  <div>
+                    {t('settings.webui.invitePreviewTenant', {
+                      tenant: invitePreview.tenantName,
+                      defaultValue: '目标企业：{{tenant}}',
+                    })}
+                  </div>
+                  <div className='text-12px opacity-80'>
+                    {t('settings.webui.invitePreviewTenantId', {
+                      tenantId: invitePreview.tenantId,
+                      defaultValue: '组织 ID：{{tenantId}}',
+                    })}
+                  </div>
+                  <div className='text-12px opacity-80'>
+                    {t('settings.webui.invitePreviewConfirmHint', {
+                      defaultValue: '确认信息无误后，点击下方「加入企业」。',
+                    })}
+                  </div>
+                </div>
+              }
+            />
+          ) : null}
+          <div className='flex gap-8px flex-wrap'>
+            <Button loading={previewLoading} onClick={() => void handlePreview()}>
+              {t('settings.webui.invitePreviewBtn', { defaultValue: '验证邀请码' })}
+            </Button>
+            <Button
+              type='primary'
+              loading={joinLoading}
+              disabled={!invitePreview}
+              onClick={() => void handleJoin()}
+            >
+              {t('settings.webui.joinConfirmBtn', { defaultValue: '加入企业' })}
+            </Button>
+          </div>
+        </Form>
+      )}
     </div>
   );
 };

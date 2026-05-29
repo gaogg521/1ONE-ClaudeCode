@@ -283,4 +283,13 @@ export const UserRepository = {
     const db = await getDatabase();
     db.deleteUser(userId);
   },
+
+  async countByRole(role: 'member' | 'org_admin' | 'system_admin'): Promise<number> {
+    const db = await getDatabase();
+    const result = db.countUsersByRole(role);
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to count users by role');
+    }
+    return result.data ?? 0;
+  },
 };

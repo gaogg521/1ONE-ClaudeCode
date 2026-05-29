@@ -59,6 +59,24 @@ export function initWebuiBridge(): void {
     }, 'Get desktop session token');
   });
 
+  webui.syncBrowserWebuiSession.provider(async () => {
+    return WebuiService.handleAsync(async () => {
+      const data = await WebuiService.syncBrowserWebuiSession();
+      if (!data) {
+        return { success: true, data: undefined };
+      }
+      return {
+        success: true,
+        data: {
+          userId: data.userId,
+          username: data.username,
+          role: data.role,
+          token: data.token,
+        },
+      };
+    }, 'Sync browser WebUI session');
+  });
+
   webui.getEnterpriseContext.provider(async () => {
     return WebuiService.handleAsync(async () => {
       const data = await WebuiService.getEnterpriseContext();

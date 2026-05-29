@@ -4,9 +4,10 @@
  */
 import React, { useState, useCallback, useEffect } from 'react';
 import {
+  Alert,
   Button,
-  Table,
   Modal,
+  Table,
   Form,
   Input,
   Message,
@@ -15,9 +16,13 @@ import {
   Popconfirm,
   Select,
   Spin,
+  Switch,
 } from '@arco-design/web-react';
 import { Add, DeleteFour, Refresh, Key, Link, CloseSmall } from '@icon-park/react';
-import { adminApi, kanbanApi, type AdminUser, type AuthProviderId, type KanbanRole } from '@/renderer/utils/kanbanApi';
+import { useTranslation } from 'react-i18next';
+import { isSystemAdminRole } from '@/common/auth/enterpriseRoles';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { adminApi, kanbanApi, type AdminUser, type AuthProviderId, type KanbanRole, type UserDbRole } from '@/renderer/utils/kanbanApi';
 import { listMemberDashboard, type MemberDashboardRecord } from '@/renderer/utils/enterpriseApi/modules';
 
 const ROLE_TAG: Record<KanbanRole, { color: string; label: string }> = {
@@ -36,15 +41,36 @@ function isKanbanAdminRole(role: string | undefined): boolean {
   return role === 'admin' || role === 'system_admin' || role === 'org_admin';
 }
 
-function toKanbanRoleForUi(role: string | undefined): KanbanRole {
-  return isKanbanAdminRole(role) ? 'admin' : 'user';
+function isSystemAdminUser(role: string | undefined): boolean {
+  return role === 'system_admin';
+}
+
+function isOrgAdminUser(role: string | undefined): boolean {
+  return role === 'org_admin' || role === 'admin' || role === 'system_admin';
+}
+
+function resolveRoleLabel(role: string | undefined, t: (key: string, options?: { defaultValue?: string }) => string): string {
+  if (isSystemAdminUser(role)) {
+    return t('settings.users.roleSystemAdmin', { defaultValue: '系统管理员' });
+  }
+  if (isOrgAdminUser(role)) {
+    return t('settings.users.roleOrgAdmin', { defaultValue: '组织管理员' });
+  }
+  return t('settings.users.roleMember', { defaultValue: '成员' });
+}
+
+function toKanbanRoleForSelect(role: string | undefined): KanbanRole {
+  if (role === 'org_admin' || role === 'admin') {
+    return 'admin';
+  }
+  return 'user';
 }
 
 function memberDashboardToAdminUser(record: MemberDashboardRecord): AdminUser {
   return {
     id: record.id,
     username: record.username,
-    role: toKanbanRoleForUi(record.role),
+    role: record.role,
     created_at: 0,
     last_login: record.last_login > 0 ? record.last_login : null,
   };
@@ -56,6 +82,9 @@ type UsersPageProps = {
 };
 
 const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
+  const { t } = useTranslation();
+  const { user: authUser } = useAuth();
+  const canGrantSystemAdmin = isSystemAdminRole(authUser?.role);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [peerRecords, setPeerRecords] = useState<MemberDashboardRecord[]>([]);
   const [me, setMe] = useState<{ role: KanbanRole }>({ role: 'user' });
@@ -126,12 +155,50 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
 
   const handleSetRole = async (id: string, role: KanbanRole) => {
     try {
-      await adminApi.setRole(id, role);
-      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role } : u)));
-      Message.success('角色已更新');
+      const dbRole: UserDbRole = role === 'admin' ? 'org_admin' : 'member';
+      await adminApi.setRole(id, dbRole);
+      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role: dbRole } : u)));
+      Message.success(t('settings.users.roleUpdated', { defaultValue: '角色已更新' }));
     } catch (err: unknown) {
-      Message.error(err instanceof Error ? err.message : '更新失败');
+      Message.error(err instanceof Error ? err.message : t('settings.users.updateFailed', { defaultValue: '更新失败' }));
     }
+  };
+
+  const handleSetSystemAdmin = (id: string, enabled: boolean) => {
+    const run = async () => {
+      try {
+        const nextRole: UserDbRole = enabled ? 'system_admin' : 'member';
+        await adminApi.setRole(id, nextRole);
+        setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role: nextRole } : u)));
+        Message.success(t('settings.users.roleUpdated', { defaultValue: '角色已更新' }));
+      } catch (err: unknown) {
+        const code = (err as Error & { code?: string })?.code;
+        if (code === 'LAST_SYSTEM_ADMIN') {
+          Message.error(
+            t('settings.users.lastSystemAdmin', {
+              defaultValue: '不能关闭最后一名系统管理员，请先指定其他系统管理员。',
+            })
+          );
+          return;
+        }
+        Message.error(err instanceof Error ? err.message : t('settings.users.updateFailed', { defaultValue: '更新失败' }));
+      }
+    };
+
+    if (enabled) {
+      Modal.confirm({
+        title: t('settings.users.systemAdminConfirmTitle', { defaultValue: '确认开启系统管理员？' }),
+        content: t('settings.users.systemAdminConfirmDesc', {
+          defaultValue:
+            '请企业团队版成员慎重选择该权限：一旦开启，该用户将具备企业管理员后台权限（认证与邮件、组织设置、系统级用户授权等）。',
+        }),
+        okText: t('common.confirm', { defaultValue: '确认' }),
+        cancelText: t('common.cancel', { defaultValue: '取消' }),
+        onOk: run,
+      });
+      return;
+    }
+    void run();
   };
 
   const handleDelete = async (id: string) => {
@@ -241,13 +308,28 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
   const columns = [
     { title: '用户名', dataIndex: 'username', key: 'username' },
     {
-      title: '角色',
+      title: t('settings.users.columnRole', { defaultValue: '角色' }),
       dataIndex: 'role',
       key: 'role',
       render: (_: unknown, record: AdminUser) => {
-        const kr = toKanbanRoleForUi(String(record.role));
-        const cfg = ROLE_TAG[kr];
-        return <Tag color={cfg.color}>{cfg.label}</Tag>;
+        const role = String(record.role);
+        const color = isSystemAdminUser(role) ? 'purple' : isOrgAdminUser(role) ? 'arcoblue' : 'gray';
+        return <Tag color={color}>{resolveRoleLabel(role, t)}</Tag>;
+      },
+    },
+    {
+      title: t('settings.users.columnSystemAdmin', { defaultValue: '系统管理员' }),
+      key: 'system_admin',
+      render: (_: unknown, record: AdminUser) => {
+        const role = String(record.role);
+        return (
+          <Switch
+            size='small'
+            checked={isSystemAdminUser(role)}
+            disabled={Boolean(record.protected) || !canGrantSystemAdmin}
+            onChange={(v) => handleSetSystemAdmin(record.id, v)}
+          />
+        );
       },
     },
     {
@@ -278,7 +360,7 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
         <Space size='mini'>
           <Select
             size='mini'
-            value={toKanbanRoleForUi(String(record.role))}
+            value={toKanbanRoleForSelect(String(record.role))}
             onChange={(v) => void handleSetRole(record.id, v as KanbanRole)}
             style={{ width: 80 }}
             disabled={Boolean(record.protected)}
@@ -350,7 +432,7 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
       dataIndex: 'role',
       key: 'role',
       render: (_: unknown, record: AdminUser) => {
-        const kr = toKanbanRoleForUi(String(record.role));
+        const kr = toKanbanRoleForSelect(String(record.role));
         const cfg = ROLE_TAG[kr];
         return <Tag color={cfg.color}>{cfg.label}</Tag>;
       },
@@ -429,14 +511,25 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
           {enterpriseAccess === 'full' ? <Tag color='arcoblue' size='small'>Admin</Tag> : <Tag size='small'>成员视图</Tag>}
         </div>
         <Space>
-          <Button size='small' icon={<Refresh theme='outline' />} onClick={() => void loadData()}>刷新</Button>
+          <Button size='small' icon={<Refresh theme='outline' />} onClick={() => void loadData()}>{t('common.refresh', { defaultValue: '刷新' })}</Button>
           {enterpriseAccess === 'full' ? (
             <Button type='primary' size='small' icon={<Add theme='outline' />} onClick={() => setCreateVisible(true)}>
-              创建用户
+              {t('settings.users.createUser', { defaultValue: '创建用户' })}
             </Button>
           ) : null}
         </Space>
       </div>
+
+      {enterpriseAccess === 'full' ? (
+        <Alert
+          type='warning'
+          className='mb-12px'
+          content={t('settings.users.systemAdminPolicyHint', {
+            defaultValue:
+              '「系统管理员」默认关闭。开启后该用户可进入企业团队版管理后台；请慎重授权。组织管理员（Admin）可管理成员，但不具备系统管理员后台入口。',
+          })}
+        />
+      ) : null}
 
       <Table
         columns={visibleColumns}

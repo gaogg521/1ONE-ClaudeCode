@@ -57,6 +57,15 @@ See [docs/tech/architecture.md](docs/tech/architecture.md) for details.
 - **Where memory lives**：Claude Code 的自动记忆在 `~/.claude/projects/{project}/memory/*.md`；项目指令在 `.claude/CLAUDE.md`（优先）或仓库根 `CLAUDE.md`。
 - **Project routing file**：每个项目都应有一个 `.claude/CLAUDE.md`，专门维护“关键文档入口表（路径 + 何时阅读）”。
 
+## WebUI build (agents)
+
+Browser WebUI over **LAN IP** (not `localhost`) serves prebuilt files from `out/renderer/`, not Vite HMR. After changing `src/renderer/**`, `src/common/adapter/browser.ts`, or `src/process/webserver/**` routes that affect the UI:
+
+1. Run **`npm run build:webui`** or **`npm run restart:webui`** (build + `--webui` dev).
+2. Tell the user to **Ctrl+F5** the browser.
+
+Do **not** ask the user to verify WebUI fixes after only `npm run restart` — that does not rebuild `out/`.
+
 ## Testing
 
 **Framework**: Vitest 4 (`vitest.config.ts`). Run `bun run test` before every commit. Coverage target ≥ 80%.

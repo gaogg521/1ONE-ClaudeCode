@@ -24,11 +24,15 @@ import {
   useEnterpriseRuntime,
 } from '@/renderer/hooks/enterprise/useEnterpriseRuntime';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
-import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
+import {
+  isWebuiBuiltinAdministrator,
+  resolveEnterpriseTenantDisplayLabel,
+} from '@/common/auth/enterpriseRoles';
 import { ENTERPRISE_JOIN_PATH } from '@/renderer/pages/enterprise/paths';
 import { EnterpriseGateProvider } from '@/renderer/pages/settings/enterpriseGateContext';
 import { getEnterpriseNavItemByPath } from '@/renderer/pages/enterprise/enterpriseNav';
 import EnterpriseNavSidebar from '@/renderer/pages/enterprise/components/EnterpriseNavSidebar';
+import EnterpriseRouteErrorBoundary from '@/renderer/pages/enterprise/components/EnterpriseRouteErrorBoundary';
 import '@/renderer/styles/enterprise-theme.css';
 import styles from '@/renderer/pages/enterprise/EnterpriseLayout.module.css';
 
@@ -36,9 +40,13 @@ const EnterpriseLayoutContent: React.FC = () => {
   const { t } = useTranslation();
   const { status: authStatus } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { enterpriseContext } = useWebuiEnterpriseMode();
   const runtime = useEnterpriseRuntime();
-  const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId ?? '';
+  const tenantLabel = resolveEnterpriseTenantDisplayLabel(
+    enterpriseContext?.tenantId,
+    enterpriseContext?.tenantName
+  );
 
   const handleNavClick = useCallback(
     (path: string) => {
@@ -61,20 +69,45 @@ const EnterpriseLayoutContent: React.FC = () => {
 
   const renderGuard = (): React.ReactNode => {
     if (runtime.status === 'ready') {
-      return <Outlet />;
+      return (
+        <EnterpriseRouteErrorBoundary>
+          <Outlet />
+        </EnterpriseRouteErrorBoundary>
+      );
+    }
+    if (runtime.status === 'loading') {
+      return (
+        <div className='flex justify-center items-center py-48px'>
+          <Spin />
+        </div>
+      );
     }
     return (
       <Card className={styles.guardCard} bordered={false}>
         <Space direction='vertical' size={16} className='w-full'>
-          <Typography.Title heading={5} className='mb-0'>
-            {runtime.activeNavItem.labelDefault}
+          <Typography.Title heading={5} className='mb-0' style={{ color: 'var(--ep-text-primary)' }}>
+            {t(runtime.activeNavItem.labelKey, { defaultValue: runtime.activeNavItem.labelDefault })}
           </Typography.Title>
-          <Typography.Paragraph type='secondary' className='mb-0'>
-            {runtime.issue?.message}
+          <Typography.Paragraph className='mb-0' style={{ color: 'var(--ep-text-secondary)' }}>
+            {runtime.issue?.message ??
+              t('settings.enterpriseConsole.routeUnavailable', { defaultValue: '当前无法打开此页面。' })}
           </Typography.Paragraph>
           {runtime.status === 'not_joined' ? (
             <Button type='primary' onClick={() => void navigate(ENTERPRISE_JOIN_PATH)}>
               {t('settings.enterpriseConsole.goJoinEnterprise', { defaultValue: '前往加入企业' })}
+            </Button>
+          ) : null}
+          {runtime.status === 'insufficient_role' ? (
+            <Button type='primary' onClick={() => void navigate('/enterprise')}>
+              {t('settings.enterpriseConsole.backToConsoleHome', { defaultValue: '返回控制台概览' })}
+            </Button>
+          ) : null}
+          {runtime.status === 'not_authenticated' ? (
+            <Button
+              type='primary'
+              onClick={() => void navigate(`/login?redirect=${encodeURIComponent(location.pathname)}`)}
+            >
+              {t('settings.enterpriseConsole.goSignIn', { defaultValue: '前往登录' })}
             </Button>
           ) : null}
         </Space>
@@ -84,7 +117,10 @@ const EnterpriseLayoutContent: React.FC = () => {
 
   // 所有企业成员均可进入控制台，后端 API 按 scope 过滤数据权限
   return (
-    <div className='app-shell flex flex-col size-full min-h-0 bg-1' data-enterprise-theme='true'>
+    <div
+      className='app-shell flex flex-col size-full h-full min-h-screen bg-1'
+      data-enterprise-theme='true'
+    >
       <Titlebar workspaceAvailable={false} />
       {authStatus !== 'authenticated' ? (
         <div className='px-16px pt-8px shrink-0'>
@@ -139,11 +175,20 @@ const EnterpriseLayoutContent: React.FC = () => {
 
 const EnterpriseLayout: React.FC = () => {
   const location = useLocation();
-  const { loading: enterpriseModeLoading, hasJoinedEnterprise, effectiveRole } = useWebuiEnterpriseMode();
+  const { user } = useAuth();
+  const {
+    loading: enterpriseModeLoading,
+    hasJoinedEnterprise,
+    effectiveRole,
+    enterpriseContext,
+  } = useWebuiEnterpriseMode();
 
   if (enterpriseModeLoading) {
     return (
-      <div className='app-shell flex flex-col size-full min-h-0' data-enterprise-theme='true'>
+      <div
+        className='app-shell flex flex-col size-full h-full min-h-screen'
+        data-enterprise-theme='true'
+      >
         <Titlebar workspaceAvailable={false} />
         <div className='flex justify-center items-center flex-1 py-40px'>
           <Spin />
@@ -152,7 +197,14 @@ const EnterpriseLayout: React.FC = () => {
     );
   }
 
-  if (!hasJoinedEnterprise && !isEnterpriseAdminRole(effectiveRole)) {
+  const resolvedAdminRole = effectiveRole ?? user?.role;
+  const canEnterConsole = isWebuiBuiltinAdministrator({
+    id: user?.id,
+    username: user?.username,
+    role: resolvedAdminRole,
+    tenant_id: enterpriseContext?.tenantId ?? user?.tenant_id,
+  });
+  if (!hasJoinedEnterprise && !canEnterConsole) {
     return <Navigate to={ENTERPRISE_JOIN_PATH} replace />;
   }
 

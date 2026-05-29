@@ -15,16 +15,180 @@ import ChannelLarkLogo from '@/renderer/assets/channel-logos/lark.svg';
 import ChannelSlackLogo from '@/renderer/assets/channel-logos/slack.svg';
 import ChannelTelegramLogo from '@/renderer/assets/channel-logos/telegram.svg';
 import ChannelWeixinLogo from '@/renderer/assets/channel-logos/weixin.svg';
-import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
-import { Button, Collapse, Form, Input, Message, Switch, Tabs, Tooltip } from '@arco-design/web-react';
+import { isElectronDesktop } from '@/renderer/utils/platform';
+import { Button, Collapse, Form, Input, Message, Modal, Switch, Tabs, Tag, Tooltip } from '@arco-design/web-react';
 import { Communication, Copy, Earth, EditTwo, Refresh } from '@icon-park/react';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsViewMode } from '../settingsViewContext';
 import WebuiJoinEnterprisePanel from '@/renderer/pages/settings/WebuiSettings/WebuiJoinEnterprisePanel';
 import WebuiStandaloneBanner from '@/renderer/pages/settings/WebuiSettings/WebuiStandaloneBanner';
+import { isSystemAdminRole } from '@/common/auth/enterpriseRoles';
+import { fetchWebuiApi } from '@/renderer/utils/webuiApiBase';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
-import EditionModeSwitcher from '@/renderer/components/layout/EditionModeSwitcher';
+function resolveWebuiRoleLabel(
+  role: string,
+  t: (key: string, opts?: Record<string, unknown>) => string
+): string {
+  if (role === 'system_admin') {
+    return t('settings.users.roleSystemAdmin', { defaultValue: '系统管理员' });
+  }
+  if (role === 'org_admin' || role === 'admin') {
+    return t('settings.users.roleOrgAdmin', { defaultValue: '组织管理员' });
+  }
+  return t('settings.workspaceIdentity.roleMember', { defaultValue: '成员' });
+}
+
+const WebuiLoginRoleSection: React.FC<{ webuiRunning: boolean }> = ({ webuiRunning }) => {
+  const { t } = useTranslation();
+  const {
+    effectiveRole,
+    showEnterpriseAdminNav,
+    openEnterpriseAdminInBrowser,
+    canClaimSystemAdmin,
+    claimSystemAdmin,
+  } = useWebuiEnterpriseMode();
+  const [fetchedRole, setFetchedRole] = useState<string | undefined>();
+  const [roleLoading, setRoleLoading] = useState(false);
+  const [claimLoading, setClaimLoading] = useState(false);
+
+  useEffect(() => {
+    if (!webuiRunning) {
+      setFetchedRole(undefined);
+      return;
+    }
+    let cancelled = false;
+    setRoleLoading(true);
+    void (async () => {
+      try {
+        const res = await fetchWebuiApi('/api/auth/user');
+        const body = (await res.json().catch((): null => null)) as {
+          user?: { role?: string };
+          data?: { role?: string };
+        };
+        const role = body?.user?.role ?? body?.data?.role;
+        if (!cancelled) {
+          setFetchedRole(typeof role === 'string' ? role : undefined);
+        }
+      } catch {
+        if (!cancelled) {
+          setFetchedRole(undefined);
+        }
+      } finally {
+        if (!cancelled) {
+          setRoleLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [webuiRunning]);
+
+  if (!webuiRunning) {
+    return null;
+  }
+
+  const role = effectiveRole ?? fetchedRole;
+  const roleLabel = role
+    ? resolveWebuiRoleLabel(role, t)
+    : t('settings.webui.roleNotLoggedIn', { defaultValue: '未在 WebUI 登录（仅本地实例账号）' });
+
+  const handleClaimSystemAdmin = () => {
+    Modal.confirm({
+      title: t('settings.webui.claimSystemAdminTitle', { defaultValue: '认领系统管理员？' }),
+      content: t('settings.webui.claimSystemAdminDesc', {
+        defaultValue:
+          '本实例尚无系统管理员。认领后您可配置认证与邮件、邀请码，并可为他人开启/关闭系统管理员。此操作每个实例仅能在「尚无系统管理员」时执行一次。',
+      }),
+      okText: t('common.confirm', { defaultValue: '确认' }),
+      cancelText: t('common.cancel', { defaultValue: '取消' }),
+      onOk: async () => {
+        setClaimLoading(true);
+        try {
+          await claimSystemAdmin();
+          Modal.confirm({
+            title: t('settings.webui.postClaimTitle', { defaultValue: '已认领系统管理员' }),
+            content: (
+              <div className='text-13px text-t-secondary leading-relaxed space-y-8px'>
+                <p className='m-0'>
+                  {t('settings.webui.postClaimBody', {
+                    defaultValue: '建议按顺序完成实例治理配置：',
+                  })}
+                </p>
+                <ol className='m-0 pl-18px'>
+                  <li>{t('settings.webui.postClaimStepAuth', { defaultValue: '认证与邮件：配置 LDAP / 飞书 / SMTP' })}</li>
+                  <li>{t('settings.webui.postClaimStepInvites', { defaultValue: '邀请码：生成企业邀请码供成员加入' })}</li>
+                  <li>{t('settings.webui.postClaimStepEdition', { defaultValue: '安全与审计：按需开放「企业团队版」切换' })}</li>
+                </ol>
+              </div>
+            ),
+            okText: t('settings.webui.postClaimOpenAuth', { defaultValue: '打开认证与邮件' }),
+            cancelText: t('settings.webui.postClaimLater', { defaultValue: '稍后再说' }),
+            onOk: () => {
+              void openEnterpriseAdminInBrowser();
+            },
+          });
+        } catch (err) {
+          Message.error(err instanceof Error ? err.message : t('common.error', { defaultValue: '操作失败' }));
+        } finally {
+          setClaimLoading(false);
+        }
+      },
+    });
+  };
+
+  return (
+    <>
+      <div className='flex items-center justify-between gap-12px py-12px border-t border-line'>
+        <span className='text-14px text-t-secondary shrink-0'>
+          {t('settings.webui.webuiAccountRole', { defaultValue: 'WebUI 账号权限' })}:
+        </span>
+        <Tag size='small' color={isSystemAdminRole(role) ? 'green' : undefined}>
+          {roleLoading ? t('common.loading') : roleLabel}
+        </Tag>
+      </div>
+      <div className='rd-10px border border-line bg-fill-1 px-10px py-8px text-12px text-t-secondary leading-relaxed space-y-8px mb-8px'>
+        {role && isSystemAdminRole(role) ? (
+          <>
+            <p className='m-0'>
+              {t('settings.webui.systemAdminActiveHint', {
+                defaultValue:
+                  '您已是系统管理员。可在管理后台为用户开启/关闭「系统管理员」；至少保留一名系统管理员。',
+              })}
+            </p>
+            <p className='m-0'>
+              {t('settings.webui.systemAdminGrantHint', {
+                defaultValue:
+                  '授予他人：企业团队版管理后台 → 用户管理 →「系统管理员」开关。',
+              })}
+            </p>
+          </>
+        ) : (
+          <p className='m-0'>
+            {t('settings.webui.systemAdminViewHint', {
+              defaultValue: canClaimSystemAdmin
+                ? '本实例尚无系统管理员。请用本页账号在浏览器登录后，点击下方「认领系统管理员」（组织管理员可认领一次）。'
+                : role
+                  ? '系统管理员须由已有系统管理员在「用户管理」中授予，不能自行提权。'
+                  : '请用本页「账号 / 初始密码」在浏览器打开访问地址并登录，以查看与认领权限。',
+            })}
+          </p>
+        )}
+        {canClaimSystemAdmin ? (
+          <Button size='mini' type='primary' loading={claimLoading} onClick={handleClaimSystemAdmin}>
+            {t('settings.webui.claimSystemAdmin', { defaultValue: '认领系统管理员' })}
+          </Button>
+        ) : null}
+        {showEnterpriseAdminNav ? (
+          <Button size='mini' type='outline' onClick={() => void openEnterpriseAdminInBrowser()}>
+            {t('settings.webui.openEnterpriseAdmin', { defaultValue: '在浏览器打开管理后台' })}
+          </Button>
+        ) : null}
+      </div>
+    </>
+  );
+};
 
 /**
  * 偏好设置行组件
@@ -693,13 +857,6 @@ const WebuiModalContent: React.FC = () => {
   const webuiPanel = (
     <AionScrollArea className='flex-1 min-h-0 pb-16px' disableOverflow={isPageMode}>
       <div className='space-y-12px px-[12px] md:px-[28px]'>
-        <EditionModeSwitcher variant='bar' />
-        <p className='m-0 text-12px text-t-tertiary leading-relaxed'>
-          {t('settings.webui.editionSwitcherHint', {
-            defaultValue:
-              '上方切换的是「个人版 / 1ONE Code 企业版工作区」，不是管理后台。组织治理请用侧栏「管理后台」或本页下方「打开管理后台」。',
-          })}
-        </p>
         {/* 标题 / Title */}
         <h2 className='text-20px font-500 text-t-primary m-0'>WebUI</h2>
 
@@ -795,6 +952,7 @@ const WebuiModalContent: React.FC = () => {
         {/* 登录信息卡片 / Login Info Card */}
         <div className='px-[12px] md:px-[28px] py-14px bg-2 rd-16px'>
           <div className='text-14px font-500 mb-8px text-t-primary'>{t('settings.webui.loginInfo')}</div>
+          <WebuiLoginRoleSection webuiRunning={status?.running === true} />
 
           {/* 账号 / Account */}
           <div className='flex items-center justify-between gap-12px py-12px'>
@@ -930,29 +1088,6 @@ const WebuiModalContent: React.FC = () => {
         {!enterpriseModeLoading && hasJoinedEnterprise && !isPageMode ? <WebuiStandaloneBanner /> : null}
         {!enterpriseModeLoading && !hasJoinedEnterprise ? (
           <div className='mt-16px flex flex-col gap-12px'>
-            {isDesktop ? (
-              <div className='p-16px rd-12px border border-border-2 bg-2'>
-                <div className='text-14px font-600 text-t-primary mb-4px'>
-                  {t('settings.webui.enterpriseLoginTitle', { defaultValue: '企业登录（LDAP / 飞书）' })}
-                </div>
-                <p className='m-0 text-12px text-t-secondary leading-relaxed mb-12px'>
-                  {t('settings.webui.enterpriseLoginDesktopHint', {
-                    defaultValue:
-                      '桌面端不显示域控/飞书登录页。请先启用 WebUI，再在浏览器打开登录地址；管理员在「企业控制台 → 认证与邮件」启用 LDAP/飞书。',
-                  })}
-                </p>
-                <Button
-                  type='primary'
-                  onClick={() => {
-                    const webuiPort = status?.port ?? port;
-                    void openExternalUrl(`http://127.0.0.1:${webuiPort}/#/login`);
-                  }}
-                  disabled={!status?.running}
-                >
-                  {t('settings.webui.openWebuiLogin', { defaultValue: '在浏览器打开 WebUI 登录页' })}
-                </Button>
-              </div>
-            ) : null}
             <Collapse
               bordered={false}
               defaultActiveKey={['enterprise']}

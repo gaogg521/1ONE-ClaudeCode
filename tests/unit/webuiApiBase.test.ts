@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const isElectronDesktopMock = vi.hoisted(() => vi.fn(() => true));
-const desktopSessionTokenInvokeMock = vi.hoisted(() => vi.fn());
+const syncInvokeMock = vi.hoisted(() => vi.fn());
 const captureCsrfTokenFromResponseMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/renderer/utils/platform', () => ({
@@ -17,12 +17,18 @@ vi.mock('@/renderer/utils/platform', () => ({
 vi.mock('@/common/adapter/ipcBridge', () => ({
   webui: {
     getStatus: { invoke: vi.fn() },
-    getDesktopSessionToken: { invoke: desktopSessionTokenInvokeMock },
+    syncBrowserWebuiSession: { invoke: syncInvokeMock },
   },
+}));
+
+vi.mock('@/renderer/utils/syncBrowserWebuiSession', () => ({
+  getDesktopWebuiBearerToken: vi.fn(() => 'browser-synced-token'),
 }));
 
 vi.mock('@process/webserver/middleware/csrfClient', () => ({
   captureCsrfTokenFromResponse: captureCsrfTokenFromResponseMock,
+  getCsrfToken: vi.fn(() => null),
+  withCsrfHeader: (headers: HeadersInit | undefined) => headers,
 }));
 
 import { fetchWebuiApi } from '@/renderer/utils/webuiApiBase';
@@ -33,10 +39,10 @@ describe('webuiApiBase', () => {
     isElectronDesktopMock.mockReturnValue(true);
     vi.stubGlobal('window', {
       electronAPI: {
-      webuiGetStatus: vi.fn().mockResolvedValue({
-        success: true,
-        data: { running: true, port: 25809 },
-      }),
+        webuiGetStatus: vi.fn().mockResolvedValue({
+          success: true,
+          data: { running: true, port: 25809 },
+        }),
       },
     });
     vi.stubGlobal(
@@ -50,12 +56,7 @@ describe('webuiApiBase', () => {
     );
   });
 
-  it('attaches desktop webui bearer token for electron requests', async () => {
-    desktopSessionTokenInvokeMock.mockResolvedValue({
-      success: true,
-      data: { token: 'desktop-session-token' },
-    });
-
+  it('attaches browser-synced bearer and desktop client header for electron requests', async () => {
     await fetchWebuiApi('/api/admin/skills');
 
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -64,7 +65,8 @@ describe('webuiApiBase', () => {
 
     expect(url).toBe('http://127.0.0.1:25809/api/admin/skills');
     expect((init as RequestInit | undefined)?.credentials).toBe('include');
-    expect(headers.get('authorization')).toBe('Bearer desktop-session-token');
+    expect(headers.get('authorization')).toBe('Bearer browser-synced-token');
+    expect(headers.get('x-one-client')).toBe('electron-desktop');
     expect(captureCsrfTokenFromResponseMock).toHaveBeenCalledTimes(1);
   });
 });

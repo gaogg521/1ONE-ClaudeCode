@@ -1852,6 +1852,30 @@ const migration_v46: IMigration = {
 };
 
 /**
+ * Migration v46 -> v47: Builtin instance account is org_admin; system_admin via explicit claim
+ */
+const migration_v47: IMigration = {
+  version: 47,
+  name: 'Instance operator org_admin; system_admin by claim only',
+  up: (db) => {
+    db.exec(`
+      UPDATE users
+      SET role = 'org_admin'
+      WHERE id = 'system_default_user' AND role IN ('system_admin', 'admin')
+    `);
+    console.log('[Migration v47] system_default_user is org_admin until system_admin is claimed');
+  },
+  down: (db) => {
+    db.exec(`
+      UPDATE users
+      SET role = 'system_admin'
+      WHERE id = 'system_default_user'
+    `);
+    console.log('[Migration v47] Rolled back: restored system_default_user as system_admin');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -1882,6 +1906,7 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v44,
   migration_v45,
   migration_v46,
+  migration_v47,
 ];
 
 /**

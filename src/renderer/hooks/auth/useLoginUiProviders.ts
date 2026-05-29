@@ -16,6 +16,7 @@ export type LoginUiProviderFlags = {
   feishuConfigured: boolean;
   dingtalkConfigured: boolean;
   wecomConfigured: boolean;
+  editionSwitcherEnabled?: boolean;
 };
 
 export type LoginUiMode = 'standalone' | 'enterprise';
@@ -38,6 +39,7 @@ const EMPTY_FLAGS: LoginUiProviderFlags = {
   feishuConfigured: false,
   dingtalkConfigured: false,
   wecomConfigured: false,
+  editionSwitcherEnabled: false,
 };
 
 export function useLoginUiProviders(): LoginUiProvidersState {
@@ -61,7 +63,7 @@ export function useLoginUiProviders(): LoginUiProvidersState {
         const body = (await res.json()) as {
           success?: boolean;
           code?: string;
-          data?: Partial<LoginUiProviderFlags>;
+          data?: Partial<LoginUiProviderFlags> & { mode?: LoginUiMode };
         };
 
         if (cancelled) {
@@ -95,6 +97,7 @@ export function useLoginUiProviders(): LoginUiProvidersState {
           feishuConfigured: Boolean(data.feishuConfigured),
           dingtalkConfigured: Boolean(data.dingtalkConfigured),
           wecomConfigured: Boolean(data.wecomConfigured),
+          editionSwitcherEnabled: Boolean(data.editionSwitcherEnabled),
         });
       } catch (loadError) {
         if (!cancelled) {
@@ -125,9 +128,11 @@ export function useLoginUiProviders(): LoginUiProvidersState {
     };
     window.addEventListener('focus', handleRefresh);
     window.addEventListener('one-enterprise-context-refresh', handleRefresh);
+    window.addEventListener('one-webui-config-refresh', handleRefresh);
     return () => {
       window.removeEventListener('focus', handleRefresh);
       window.removeEventListener('one-enterprise-context-refresh', handleRefresh);
+      window.removeEventListener('one-webui-config-refresh', handleRefresh);
     };
   }, [refresh]);
 

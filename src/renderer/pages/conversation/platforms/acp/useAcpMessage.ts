@@ -157,7 +157,8 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
           hasContentInTurnRef.current = false;
           setRunning(true);
           runningRef.current = true;
-          // Don't reset aiProcessing here - let content arrival handle it
+          setAiProcessing(true);
+          aiProcessingRef.current = true;
           break;
         case 'finish':
           {
@@ -365,8 +366,12 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
       const isRunning = res.status === 'running';
       setRunning(isRunning);
       runningRef.current = isRunning;
-      setAiProcessing(isRunning);
-      aiProcessingRef.current = isRunning;
+      // Keep an in-flight send indicator if the user already sent before hydration finished.
+      setAiProcessing((prev) => {
+        const next = prev || isRunning;
+        aiProcessingRef.current = next;
+        return next;
+      });
       setHasHydratedRunningState(true);
 
       // Restore persisted context usage data

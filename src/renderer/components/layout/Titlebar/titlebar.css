@@ -96,6 +96,24 @@
   align-items: center;
 }
 
+/* Edition switcher in titlebar — Arco radio defaults are light-theme only */
+.app-titlebar .arco-radio-group-button {
+  background: var(--color-fill-2);
+  border-color: var(--color-border-2);
+}
+.app-titlebar .arco-radio-button {
+  color: var(--color-text-2) !important;
+  background: transparent !important;
+}
+.app-titlebar .arco-radio-button.arco-radio-checked {
+  color: var(--color-text-1) !important;
+  background: var(--color-bg-2) !important;
+}
+.app-titlebar .arco-radio-button:not(.arco-radio-checked):hover {
+  color: var(--color-text-1) !important;
+  background: var(--color-fill-3) !important;
+}
+
 .app-titlebar__toolbar {
   display: flex;
   align-items: center;

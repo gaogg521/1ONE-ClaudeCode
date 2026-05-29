@@ -7,6 +7,7 @@ const loginMock = vi.hoisted(() => vi.fn());
 const loginWithLdapMock = vi.hoisted(() => vi.fn());
 const fetchMock = vi.hoisted(() => vi.fn());
 const locationSearchMock = vi.hoisted(() => ({ current: '' }));
+const locationStateMock = vi.hoisted(() => ({ current: null as { returnTo?: string } | null }));
 const readRedirectFromSearchMock = vi.hoisted(() => vi.fn(() => null));
 const isDesktopMock = vi.hoisted(() => ({ current: false }));
 const loginUiProvidersMock = vi.hoisted(() => ({
@@ -31,6 +32,10 @@ vi.mock('@renderer/assets/logos/brand/app.png', () => ({
   default: 'login-logo.png',
 }));
 
+vi.mock('@/renderer/assets/channel-logos/lark.svg', () => ({ default: 'feishu.svg' }));
+vi.mock('@/renderer/assets/channel-logos/dingtalk.svg', () => ({ default: 'dingtalk.svg' }));
+vi.mock('@/renderer/assets/channel-logos/wecom.svg', () => ({ default: 'wecom.svg' }));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (_key: string, options?: { defaultValue?: string; provider?: string }) => {
@@ -51,7 +56,7 @@ vi.mock('@/renderer/services/i18n', () => ({
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
-  useLocation: () => ({ search: locationSearchMock.current }),
+  useLocation: () => ({ search: locationSearchMock.current, state: locationStateMock.current }),
   Navigate: ({ to }: { to: string }) => <div data-testid='navigate' data-to={to} />,
 }));
 
@@ -97,10 +102,16 @@ vi.mock('@icon-park/react', () => ({
   DataServer: () => <span />,
   HardDisk: () => <span />,
   Key: () => <span />,
+  Left: () => <span />,
   Lock: () => <span />,
   Send: () => <span />,
   Shield: () => <span />,
   User: () => <span />,
+}));
+
+vi.mock('@/renderer/utils/oauthAuthorize', () => ({
+  startOAuthAuthorize: vi.fn().mockResolvedValue({ ok: true }),
+  formatOAuthAuthorizeError: (message: string) => message,
 }));
 
 vi.mock('@arco-design/web-react', () => {
@@ -207,9 +218,11 @@ vi.mock('@arco-design/web-react', () => {
       error: vi.fn(),
       info: vi.fn(),
       success: vi.fn(),
+      warning: vi.fn(),
     },
     Radio,
     Select,
+    Spin: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
     Typography: {
       Paragraph: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
       Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
@@ -243,28 +256,7 @@ describe('LoginPage', () => {
     };
   });
 
-  it('shows rich WebUI login form on standalone web access', async () => {
-    render(<LoginPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('登录您的账户')).toBeInTheDocument();
-    });
-
-    expect(screen.getByText('WebUI 远程访问')).toBeInTheDocument();
-    expect(screen.getByText('管理您的会话与任务')).toBeInTheDocument();
-    expect(screen.getByText('登录方式')).toBeInTheDocument();
-    expect(screen.getByText('使用飞书登录')).toBeInTheDocument();
-    expect(screen.getByText('使用钉钉登录')).toBeInTheDocument();
-    expect(screen.getByText('使用企业微信登录')).toBeInTheDocument();
-    expect(
-      screen.getByText('登录成功后将进入 1ONE Code 企业版。您也可在登录后使用邀请码加入组织。')
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '继续以访客身份使用' })).not.toBeInTheDocument();
-  });
-
-  it('shows the redesigned hero panel on desktop login as well', async () => {
-    isDesktopMock.current = true;
-
+  it('shows standalone WebUI login form without enterprise SSO on standalone web access', async () => {
     render(<LoginPage />);
 
     await waitFor(() => {
@@ -272,7 +264,58 @@ describe('LoginPage', () => {
     });
 
     expect(screen.getByText('WebUI 远程访问')).toBeInTheDocument();
+    expect(screen.getByText('用户名与密码见「设置 → 远程连接 → WebUI」')).toBeInTheDocument();
     expect(screen.queryByText('登录方式')).not.toBeInTheDocument();
+    expect(screen.queryByText('使用飞书登录')).not.toBeInTheDocument();
+    expect(screen.queryByText('使用钉钉登录')).not.toBeInTheDocument();
+    expect(screen.queryByText('使用企业微信登录')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('登录成功后将进入 1ONE Code 企业版。您也可在登录后使用邀请码加入组织。')
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '继续以访客身份使用' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '登录 / 加入团队' })).not.toBeInTheDocument();
+  });
+
+  it('shows SSO channel tiles on desktop enterprise login', async () => {
+    isDesktopMock.current = true;
+    loginUiProvidersMock.current = {
+      ...loginUiProvidersMock.current,
+      mode: 'enterprise',
+      feishuEnabled: true,
+      feishuConfigured: true,
+      dingtalkEnabled: true,
+      dingtalkConfigured: true,
+      wecomEnabled: true,
+      wecomConfigured: true,
+      anyProviderEnabled: true,
+      anyProviderConfigured: true,
+    };
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('飞书')).toBeInTheDocument();
+      expect(screen.getByText('钉钉')).toBeInTheDocument();
+      expect(screen.getByText('企业微信')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('登录方式')).not.toBeInTheDocument();
+  });
+
+  it('shows compact desktop login with back navigation', async () => {
+    isDesktopMock.current = true;
+    locationStateMock.current = { returnTo: '/sessions' };
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('登录 WebUI')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('WebUI 远程访问')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
+    expect(navigateMock).toHaveBeenCalledWith('/sessions', { replace: true });
   });
 
   it('shows enterprise login methods when enterprise mode is enabled', async () => {
@@ -333,6 +376,20 @@ describe('LoginPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('navigate')).toHaveAttribute('data-to', '/enterprise/join');
     });
+  });
+
+  it('shows enterprise login page for explicit enterprise redirect intent', async () => {
+    locationSearchMock.current = '?redirect=%2Fenterprise';
+    readRedirectFromSearchMock.mockReturnValue('/enterprise');
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('登录您的账户')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('navigate')).not.toBeInTheDocument();
+    expect(screen.getByText('登录方式')).toBeInTheDocument();
   });
 
   it('shows login method section for enterprise mode even without LDAP configured', async () => {

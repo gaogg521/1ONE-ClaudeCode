@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import { HashRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import AppLoader from '@renderer/components/layout/AppLoader';
+import PersonalBrowserAuthLayout from '@/renderer/components/layout/PersonalBrowserAuthLayout';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { resolvePostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
@@ -77,14 +78,14 @@ const withRouteFallback = (Component: React.LazyExoticComponent<React.ComponentT
 );
 
 const EnterpriseAuthLayout: React.FC = () => {
-  const { status } = useAuth();
+  const { status, user, ready } = useAuth();
   const location = useLocation();
 
-  if (status === 'checking') {
+  if (!ready || (status === 'checking' && !user)) {
     return <AppLoader />;
   }
 
-  if (status !== 'authenticated') {
+  if (status !== 'authenticated' && !user) {
     const returnPath = `${location.pathname}${location.search}`;
     if (returnPath && returnPath !== '/login') {
       setPostLoginRedirect(returnPath);
@@ -123,7 +124,8 @@ const PanelRoute: React.FC = () => {
     <HashRouter>
       <Routes>
         <Route path='/login' element={<LoginRoute />} />
-        <Route element={withRouteFallback(PersonalShell)}>
+        <Route element={<PersonalBrowserAuthLayout />}>
+          <Route element={withRouteFallback(PersonalShell)}>
           <Route index element={<Navigate to='/guid' replace />} />
           <Route path='/sessions' element={withRouteFallback(SessionsPage)} />
           <Route path='/workspace' element={withRouteFallback(WorkspacePage)} />
@@ -203,6 +205,7 @@ const PanelRoute: React.FC = () => {
           <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
           <Route path='/scheduled/:jobId' element={withRouteFallback(TaskDetailPage)} />
           <Route path='/enterprise/join' element={withRouteFallback(EnterpriseJoinLayout)} />
+          </Route>
         </Route>
 
         <Route element={<EnterpriseAuthLayout />}>

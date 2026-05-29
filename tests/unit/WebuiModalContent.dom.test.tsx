@@ -81,10 +81,19 @@ vi.mock('@/renderer/components/base/AionScrollArea', () => ({
   default: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
 
+const fetchWebuiApiMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/renderer/utils/webuiApiBase', () => ({
+  fetchWebuiApi: (...args: unknown[]) => fetchWebuiApiMock(...args),
+}));
+
 vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
   useWebuiEnterpriseMode: () => ({
     loading: false,
     hasJoinedEnterprise: true,
+    effectiveRole: undefined,
+    showEnterpriseAdminNav: false,
+    openEnterpriseAdminInBrowser: vi.fn(),
   }),
 }));
 
@@ -210,6 +219,7 @@ vi.mock('@arco-design/web-react', () => {
       success: vi.fn(),
     },
     Switch: ({ checked }: { checked?: boolean }) => <input type='checkbox' checked={checked} readOnly />,
+    Tag: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
     Tabs,
     Tooltip: ({ content, children }: React.PropsWithChildren<{ content?: React.ReactNode }>) => (
       <div data-tooltip={String(content ?? '')}>{children}</div>
@@ -242,6 +252,10 @@ describe('WebuiModalContent', () => {
       },
     });
     setAdminEmailInvokeMock.mockResolvedValue({ success: true });
+    fetchWebuiApiMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ user: { role: 'member' } }),
+    });
   });
 
   it('shows the current admin email and saves it through the existing bridge action', async () => {

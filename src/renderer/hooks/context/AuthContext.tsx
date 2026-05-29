@@ -9,6 +9,26 @@ import {
 } from '@process/webserver/middleware/csrfClient';
 import { CSRF_COOKIE_NAME } from '@process/webserver/config/constants';
 import { getWebuiApiBaseUrl, fetchWebuiApi } from '@/renderer/utils/webuiApiBase';
+import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
+import {
+  getWebuiDesktopSession,
+  setWebuiDesktopSession,
+  type WebuiDesktopSession,
+} from '@/renderer/utils/webuiDesktopSession';
+import {
+  ONE_WEBUI_CLIENT_DESKTOP,
+  ONE_WEBUI_CLIENT_HEADER,
+} from '@/common/config/webuiClientHeaders';
+import { dispatchWebuiConfigRefresh } from '@/renderer/utils/webuiConfigSync';
+import { syncBrowserWebuiSessionToDesktop } from '@/renderer/utils/syncBrowserWebuiSession';
+import {
+  DEFAULT_WEBUI_MANAGEMENT_MODE,
+  WEBUI_MANAGEMENT_MODE_KEY,
+  normalizeWebuiManagementMode,
+} from '@/common/config/webuiEnterpriseConfig';
+import { ConfigStorage } from '@/common/config/storage';
+
+export { DESKTOP_OPERATOR_USER_ID };
 
 type AuthStatus = 'checking' | 'authenticated' | 'unauthenticated';
 
@@ -120,6 +140,14 @@ async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> 
   return null;
 }
 
+function authUserFromDesktopSession(session: WebuiDesktopSession): AuthUser {
+  return {
+    id: session.userId,
+    username: session.username,
+    role: (session.role as AuthUser['role']) ?? 'member',
+  };
+}
+
 async function loginViaWebui(path: string, body: Record<string, unknown>): Promise<LoginResult> {
   const base = await getWebuiApiBaseUrl();
   if (!base) {
@@ -130,11 +158,16 @@ async function loginViaWebui(path: string, body: Record<string, unknown>): Promi
     };
   }
 
+  const loginHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (isDesktopRuntime) {
+    loginHeaders[ONE_WEBUI_CLIENT_HEADER] = ONE_WEBUI_CLIENT_DESKTOP;
+  }
+
   const response = await fetch(`${base}${path}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: loginHeaders,
     credentials: 'include',
     body: JSON.stringify(withCsrfToken(body)),
   });
@@ -169,10 +202,22 @@ async function loginViaWebui(path: string, body: Record<string, unknown>): Promi
     return { success: false, message, code };
   }
 
+  if (data.user) {
+    if (data.token) {
+      setWebuiDesktopSession({
+        userId: data.user.id,
+        username: data.user.username,
+        role: data.user.role ?? 'member',
+        token: data.token,
+      });
+    } else {
+      console.warn('[Auth] WebUI login succeeded without JWT token; desktop session may not persist across refresh');
+    }
+  }
+  dispatchWebuiConfigRefresh();
+
   return { success: true, user: data.user };
 }
-
-const DESKTOP_OPERATOR_USER_ID = 'desktop-local-admin';
 
 async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
   try {
@@ -180,6 +225,8 @@ async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
     if (!statusResult.success || !statusResult.data) {
       return null;
     }
+
+    await syncBrowserWebuiSessionToDesktop();
 
     try {
       const response = await fetchWebuiApi('/api/auth/user');
@@ -189,11 +236,31 @@ async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
           user?: AuthUser;
         };
         if (data.success && data.user) {
+          const session = getWebuiDesktopSession();
+          if (session?.token) {
+            setWebuiDesktopSession({
+              userId: data.user.id,
+              username: data.user.username,
+              role: data.user.role ?? session.role ?? 'member',
+              token: session.token,
+            });
+          }
           return data.user;
         }
       }
     } catch {
-      // WebUI not running or no HTTP session yet — fall back to desktop operator identity.
+      // WebUI not running or no browser session yet
+    }
+
+    const session = getWebuiDesktopSession();
+    if (session?.token) {
+      return authUserFromDesktopSession(session);
+    }
+
+    const storedMode = await ConfigStorage.get(WEBUI_MANAGEMENT_MODE_KEY).catch((): undefined => undefined);
+    const managementMode = normalizeWebuiManagementMode(storedMode ?? DEFAULT_WEBUI_MANAGEMENT_MODE);
+    if (managementMode === 'enterprise') {
+      return null;
     }
 
     const enterpriseResult = await webui.getEnterpriseContext.invoke();
@@ -202,7 +269,7 @@ async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
       id: DESKTOP_OPERATOR_USER_ID,
       username: statusResult.data.adminUsername || 'admin',
       tenant_id: enterpriseContext?.tenantId,
-      role: (enterpriseContext?.role as AuthUser['role']) ?? 'system_admin',
+      role: (enterpriseContext?.role as AuthUser['role']) ?? 'member',
     };
   } catch (error) {
     console.error('Failed to fetch desktop current user:', error);
@@ -219,6 +286,10 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [status, setStatus] = useState<AuthStatus>('checking');
   const [ready, setReady] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const readyRef = useRef(ready);
+  readyRef.current = ready;
+  const userRef = useRef(user);
+  userRef.current = user;
 
   const refresh = useCallback(async () => {
     if (isDesktopRuntime) {
@@ -226,13 +297,21 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       setStatus(currentUser ? 'authenticated' : 'unauthenticated');
       setUser(currentUser);
       setReady(true);
+      dispatchWebuiConfigRefresh();
+      if (currentUser) {
+        window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+      }
       return;
     }
 
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setStatus('checking');
+    // Keep the current session visible during background revalidation (e.g. enterprise console).
+    const backgroundRefresh = readyRef.current && userRef.current !== null;
+    if (!backgroundRefresh) {
+      setStatus('checking');
+    }
 
     const currentUser = await fetchCurrentUser(controller.signal);
     if (currentUser) {
@@ -263,6 +342,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           setUser(result.user);
           setStatus('authenticated');
           setReady(true);
+          dispatchWebuiConfigRefresh();
+          window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
         } else {
           await refresh();
         }
@@ -303,6 +384,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         message?: string;
         code?: string;
         user?: AuthUser;
+        token?: string;
       };
 
       captureCsrfTokenFromResponse(response);
@@ -348,6 +430,16 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       setUser(data.user);
       setStatus('authenticated');
       setReady(true);
+      if (data.token) {
+        setWebuiDesktopSession({
+          userId: data.user.id,
+          username: data.user.username,
+          role: data.user.role ?? 'member',
+          token: data.token,
+        });
+      }
+      dispatchWebuiConfigRefresh();
+      window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
 
       // Re-enable WebSocket reconnection after successful login (WebUI mode only)
       if (typeof window !== 'undefined' && (window as any).__websocketReconnect) {
@@ -398,6 +490,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           setUser(result.user);
           setStatus('authenticated');
           setReady(true);
+          dispatchWebuiConfigRefresh();
+          window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
         } else {
           await refresh();
         }
@@ -432,6 +526,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       setUser(data.user);
       setStatus('authenticated');
       setReady(true);
+      dispatchWebuiConfigRefresh();
+      window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
       if (typeof window !== 'undefined' && (window as any).__websocketReconnect) {
         (window as any).__websocketReconnect();
       }
@@ -446,6 +542,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     const forceSignOut = options?.force === true;
 
     const finishLogout = (currentUser: AuthUser | null) => {
+      setWebuiDesktopSession(null);
       clearAuthCache();
       if (forceSignOut) {
         setUser(null);

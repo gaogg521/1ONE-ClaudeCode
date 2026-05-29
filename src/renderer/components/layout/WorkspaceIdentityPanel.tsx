@@ -9,9 +9,8 @@ import { Avatar, Divider, Dropdown, Menu, Message, Tag, Typography } from '@arco
 import { Logout, Peoples } from '@icon-park/react';
 import classNames from 'classnames';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { WebuiManagementMode } from '@/common/config/webuiEnterpriseConfig';
-import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import type { WorkspaceUserProfile } from '@/common/types/workspaceProfile';
 import { ANONYMOUS_WORKSPACE_USER_ID } from '@/common/types/workspaceProfile';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
@@ -28,8 +27,11 @@ type WorkspaceIdentityPanelProps = {
 };
 
 function resolveRoleLabel(role: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
-  if (role === 'org_admin' || role === 'system_admin' || role === 'admin') {
-    return t('settings.workspaceIdentity.roleAdmin', { defaultValue: '管理员' });
+  if (role === 'system_admin') {
+    return t('settings.users.roleSystemAdmin', { defaultValue: '系统管理员' });
+  }
+  if (role === 'org_admin' || role === 'admin') {
+    return t('settings.users.roleOrgAdmin', { defaultValue: '组织管理员' });
   }
   return t('settings.workspaceIdentity.roleMember', { defaultValue: '成员' });
 }
@@ -56,8 +58,18 @@ const GuestProfileMenu: React.FC<{
 }> = ({ onJoinEnterprise, onAdminLogin }) => {
   const { t } = useTranslation();
 
+  const handleMenuItem = (key: string) => {
+    if (key === 'join') {
+      onJoinEnterprise();
+      return;
+    }
+    if (key === 'admin-login') {
+      onAdminLogin();
+    }
+  };
+
   return (
-    <Menu className={styles.menu}>
+    <Menu className={styles.menu} onClickMenuItem={handleMenuItem}>
       <div className={styles.menuHeader}>
         <Typography.Text bold>
           {t('settings.workspaceIdentity.guestTitle', { defaultValue: '访客模式' })}
@@ -68,11 +80,11 @@ const GuestProfileMenu: React.FC<{
           })}
         </Typography.Paragraph>
       </div>
-      <Divider margin='8px' />
-      <Menu.Item key='join' onClick={onJoinEnterprise}>
+      <Divider style={{ margin: '8px 0' }} />
+      <Menu.Item key='join'>
         {t('settings.workspaceIdentity.guestJoinEnterprise', { defaultValue: '登录 / 加入团队' })}
       </Menu.Item>
-      <Menu.Item key='admin-login' onClick={onAdminLogin}>
+      <Menu.Item key='admin-login'>
         {t('settings.workspaceIdentity.guestAdminLogin', { defaultValue: 'WebUI 管理员登录' })}
       </Menu.Item>
     </Menu>
@@ -89,6 +101,7 @@ const ProfileMenu: React.FC<{
   onOpenAdmin: () => void;
   showAdmin: boolean;
   canUploadAvatar: boolean;
+  displayRole?: string;
 }> = ({
   profile,
   managementMode,
@@ -99,12 +112,35 @@ const ProfileMenu: React.FC<{
   onOpenAdmin,
   showAdmin,
   canUploadAvatar,
+  displayRole,
 }) => {
   const { t } = useTranslation();
   const isEnterpriseView = managementMode === 'enterprise';
 
+  const handleMenuItem = (key: string) => {
+    if (key === 'avatar') {
+      onPickAvatar();
+      return;
+    }
+    if (key === 'personal') {
+      onSwitchPersonal();
+      return;
+    }
+    if (key === 'enterprise' || key === 'join') {
+      onSwitchEnterprise();
+      return;
+    }
+    if (key === 'admin') {
+      void onOpenAdmin();
+      return;
+    }
+    if (key === 'logout') {
+      onLogout();
+    }
+  };
+
   return (
-    <Menu className={styles.menu}>
+    <Menu className={styles.menu} onClickMenuItem={handleMenuItem}>
       <div className={styles.menuHeader}>
         <Typography.Text bold>{profile.username}</Typography.Text>
         {profile.email ? (
@@ -115,11 +151,11 @@ const ProfileMenu: React.FC<{
         <Typography.Paragraph type='secondary' className={styles.menuSub}>
           {buildOrgLine(profile, managementMode, t)}
         </Typography.Paragraph>
-        <Tag size='small'>{resolveRoleLabel(profile.role, t)}</Tag>
+        <Tag size='small'>{resolveRoleLabel(displayRole ?? profile.role, t)}</Tag>
       </div>
       {profile.orgUnitPath ? (
         <>
-          <Divider margin='8px' />
+          <Divider style={{ margin: '8px 0' }} />
           <div className={styles.teamBlock}>
             <div className={styles.teamTitle}>
               {t('settings.workspaceIdentity.orgUnit', { defaultValue: '组织架构' })}
@@ -130,7 +166,7 @@ const ProfileMenu: React.FC<{
       ) : null}
       {profile.teams.length > 0 ? (
         <>
-          <Divider margin='8px' />
+          <Divider style={{ margin: '8px 0' }} />
           <div className={styles.teamBlock}>
             <div className={styles.teamTitle}>
               <Peoples theme='outline' size={14} />
@@ -145,33 +181,33 @@ const ProfileMenu: React.FC<{
           </div>
         </>
       ) : null}
-      <Divider margin='8px' />
+      <Divider style={{ margin: '8px 0' }} />
       {canUploadAvatar ? (
-        <Menu.Item key='avatar' onClick={onPickAvatar}>
+        <Menu.Item key='avatar'>
           {t('settings.workspaceIdentity.changeAvatar', { defaultValue: '更换头像' })}
         </Menu.Item>
       ) : null}
       {profile.joinedEnterprise ? (
         isEnterpriseView ? (
-          <Menu.Item key='personal' onClick={onSwitchPersonal}>
+          <Menu.Item key='personal'>
             {t('settings.workspaceIdentity.switchPersonal', { defaultValue: '切换到个人版' })}
           </Menu.Item>
         ) : (
-          <Menu.Item key='enterprise' onClick={onSwitchEnterprise}>
+          <Menu.Item key='enterprise'>
             {t('settings.workspaceIdentity.switchEnterpriseEdition', { defaultValue: '切换到1ONE Code 企业版' })}
           </Menu.Item>
         )
       ) : (
-        <Menu.Item key='join' onClick={onSwitchEnterprise}>
+        <Menu.Item key='join'>
           {t('settings.workspaceIdentity.switchEnterprise', { defaultValue: '加入 / 切换企业' })}
         </Menu.Item>
       )}
       {showAdmin ? (
-        <Menu.Item key='admin' onClick={onOpenAdmin}>
-          {t('settings.edition.openAdminConsole', { defaultValue: '管理后台' })}
+        <Menu.Item key='admin'>
+          {t('settings.edition.enterpriseAdminConsole', { defaultValue: '企业团队版管理后台' })}
         </Menu.Item>
       ) : null}
-      <Menu.Item key='logout' onClick={onLogout}>
+      <Menu.Item key='logout'>
         <span className={styles.logoutItem}>
           <Logout theme='outline' size={14} />
           {t('settings.workspaceIdentity.logout', { defaultValue: '退出登录' })}
@@ -184,6 +220,7 @@ const ProfileMenu: React.FC<{
 const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact = false, surface = 'pill' }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const layout = useLayoutContext();
   const auth = useAuth();
   const enterpriseMode = useWebuiEnterpriseMode();
@@ -191,9 +228,7 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isDesktop = isElectronDesktop();
 
-  const showAdmin = isEnterpriseAdminRole(
-    enterpriseMode.effectiveRole ?? auth.user?.role
-  ) && enterpriseMode.showEnterpriseAdminNav;
+  const showAdmin = enterpriseMode.showEnterpriseAdminNav;
 
   const avatarSrc = avatarDisplayUrl ?? undefined;
 
@@ -250,11 +285,17 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
   const isGuest = profile.userId === ANONYMOUS_WORKSPACE_USER_ID;
 
   const handleGuestJoin = () => {
-    void navigate('/enterprise/join');
+    void enterpriseMode.setManagementMode('enterprise').then(() => {
+      void navigate('/enterprise/join');
+    });
   };
 
   const handleGuestAdminLogin = () => {
-    void navigate('/login');
+    const returnTo =
+      location.pathname.startsWith('/login') || location.pathname.startsWith('/enterprise/join')
+        ? '/sessions'
+        : `${location.pathname}${location.search}`;
+    void navigate('/login', { state: { returnTo } });
   };
 
   const handleLogout = async () => {
@@ -276,7 +317,9 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
       switchEdition('enterprise');
       return;
     }
-    void navigate('/enterprise/join');
+    void enterpriseMode.setManagementMode('enterprise').then(() => {
+      void navigate('/enterprise/join');
+    });
   };
 
   const handleOpenAdmin = async () => {
@@ -312,6 +355,7 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
       onOpenAdmin={() => void handleOpenAdmin()}
       showAdmin={showAdmin}
       canUploadAvatar={canUploadAvatar}
+      displayRole={enterpriseMode.effectiveRole}
     />
   );
 

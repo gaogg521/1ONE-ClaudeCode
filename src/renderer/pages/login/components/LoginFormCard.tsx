@@ -7,8 +7,9 @@ import {
   Select,
   Typography,
 } from '@arco-design/web-react';
-import { Lock, Send, Shield, User } from '@icon-park/react';
+import { Left, Lock, Send, Shield, User } from '@icon-park/react';
 import loginLogo from '@renderer/assets/logos/brand/app.png';
+import EnterpriseLoginChannelPanel from '@/renderer/pages/enterprise/components/EnterpriseLoginChannelPanel';
 import LoginMethodSwitcher from './LoginMethodSwitcher';
 
 type SupportedLanguage = {
@@ -63,8 +64,11 @@ type LoginFormCardProps = {
   onToggleFeishuQr: () => void;
   feishuQrError: string | null;
   message: MessageState | null;
-  onContinueAsGuest: () => void;
-  onJoinEnterprise: () => void;
+  showBackButton?: boolean;
+  onBack?: () => void;
+  /** Desktop in-app: tile grid (飞书/钉钉/企微/LDAP/本地) instead of tab + text OAuth buttons. */
+  useEnterpriseChannelPanel?: boolean;
+  oauthRedirect?: string;
 };
 
 const LoginFormCard: React.FC<LoginFormCardProps> = ({
@@ -107,15 +111,29 @@ const LoginFormCard: React.FC<LoginFormCardProps> = ({
   onToggleFeishuQr,
   feishuQrError,
   message,
-  onContinueAsGuest,
-  onJoinEnterprise,
+  showBackButton = false,
+  onBack,
+  useEnterpriseChannelPanel = false,
+  oauthRedirect,
 }) => {
   const [inviteExpanded, setInviteExpanded] = useState(false);
-  const showOAuthSection = showFeishuLogin || showDingtalkLogin || showWecomLogin;
+  const showOAuthSection = !useEnterpriseChannelPanel && (showFeishuLogin || showDingtalkLogin || showWecomLogin);
+  const showPasswordForm = !useEnterpriseChannelPanel;
 
   return (
     <section className='login-page__panel'>
       <div className={`login-page__card${isEnterpriseLogin ? ' login-page__card--rich' : ''}`}>
+        {showBackButton && onBack ? (
+          <Button
+            type='text'
+            size='small'
+            className='login-page__back'
+            icon={<Left theme='outline' size={16} />}
+            onClick={onBack}
+          >
+            {t('login.back', { defaultValue: '返回' })}
+          </Button>
+        ) : null}
         <div className='login-page__lang'>
           <Select
             value={language}
@@ -183,7 +201,13 @@ const LoginFormCard: React.FC<LoginFormCardProps> = ({
           </Typography.Paragraph>
         ) : null}
 
-        {showLoginMethods ? (
+        {useEnterpriseChannelPanel ? (
+          <div className='login-page__channel-panel'>
+            <EnterpriseLoginChannelPanel embedded oauthRedirect={oauthRedirect} />
+          </div>
+        ) : null}
+
+        {showPasswordForm && showLoginMethods ? (
           <LoginMethodSwitcher
             value={formMethod}
             onChange={onFormMethodChange}
@@ -194,6 +218,7 @@ const LoginFormCard: React.FC<LoginFormCardProps> = ({
           />
         ) : null}
 
+        {showPasswordForm ? (
         <form className='login-page__form' onSubmit={onSubmit}>
           <div className='login-page__form-item'>
             <Typography.Text className='login-page__label'>
@@ -357,19 +382,6 @@ const LoginFormCard: React.FC<LoginFormCardProps> = ({
             </div>
           ) : null}
         </form>
-
-        {isBrowserWebUi && !isEnterpriseLogin ? (
-          <div className='login-page__secondary-actions'>
-            <Button type='text' long htmlType='button' onClick={onContinueAsGuest}>
-              {t('login.continueAsGuest', { defaultValue: '继续以访客身份使用' })}
-            </Button>
-            <span className='login-page__secondary-divider' aria-hidden='true'>
-              ·
-            </span>
-            <Button type='text' long htmlType='button' onClick={onJoinEnterprise}>
-              {t('login.joinEnterprise', { defaultValue: '登录 / 加入团队' })}
-            </Button>
-          </div>
         ) : null}
 
         <div className='login-page__footer'>

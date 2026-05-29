@@ -10,6 +10,7 @@ import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
 
 export type { IKanbanTask, IKanbanUser };
 export type KanbanRole = 'user' | 'admin';
+export type UserDbRole = 'member' | 'org_admin' | 'system_admin';
 export type KanbanMe = { id: string; username: string; role: KanbanRole };
 
 const isElectron = (): boolean => typeof window !== 'undefined' && !!window.electronAPI;
@@ -91,7 +92,7 @@ export const kanbanApi = {
 export type AdminUser = {
   id: string;
   username: string;
-  role: KanbanRole;
+  role: UserDbRole | KanbanRole | string;
   created_at: number;
   last_login?: number | null;
   identities?: Array<{ provider: 'ldap' | 'feishu' | 'dingtalk' | 'wecom'; external_id: string }>;
@@ -111,10 +112,13 @@ export const adminApi = {
       ? ipcBridge.adminUsers.create.invoke({ username, password, role })
       : apiFetch<AdminUser>('/api/admin/users', { method: 'POST', body: JSON.stringify({ username, password, role }) }),
 
-  setRole: (id: string, role: KanbanRole) =>
-    isElectron()
-      ? ipcBridge.adminUsers.setRole.invoke({ id, role })
-      : apiFetch('/api/admin/users/' + id + '/role', { method: 'PATCH', body: JSON.stringify({ role }) }),
+  setRole: (id: string, role: KanbanRole | UserDbRole) => {
+    const desktopRole =
+      role === 'admin' || role === 'system_admin' || role === 'org_admin' ? 'admin' : 'user';
+    return isElectron()
+      ? ipcBridge.adminUsers.setRole.invoke({ id, role: desktopRole })
+      : apiFetch('/api/admin/users/' + id + '/role', { method: 'PATCH', body: JSON.stringify({ role }) });
+  },
 
   sendResetPasswordCode: () =>
     isElectron()
@@ -142,4 +146,10 @@ export const adminApi = {
 
   unbindIdentity: (provider: AuthProviderId, userId: string) =>
     apiFetch('/api/admin/auth/identities', { method: 'DELETE', body: JSON.stringify({ provider, userId }) }),
+
+  claimSystemAdmin: () =>
+    apiFetch<{ role: string }>('/api/admin/instance/claim-system-admin', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
 };
