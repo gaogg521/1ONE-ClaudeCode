@@ -557,6 +557,7 @@
     "switchTitle": "Workspace edition",
     "personal": "Personal",
     "enterprise": "1ONE Code Enterprise",
+    "enterpriseAdminConsole": "1ONE Code Enterprise Admin",
     "personalSub": "Personal identity · local use",
     "enterpriseSubJoined": "Company identity · same workspace",
     "enterpriseSubInvite": "Sign in or invite code",

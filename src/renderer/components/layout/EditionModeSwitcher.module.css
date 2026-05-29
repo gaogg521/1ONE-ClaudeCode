@@ -5,6 +5,37 @@
 .barTitle { font-size: 13px; font-weight: 600; color: var(--color-text-1); white-space: nowrap; }
 .radioSub { display: block; font-size: 11px; font-weight: 400; color: var(--color-text-3); margin-top: 2px; }
 .compact { display: flex; align-items: center; gap: 4px; margin-right: 8px; }
+.compact :global(.arco-radio-group-button) {
+  background: var(--color-fill-2);
+  border-color: var(--color-border-2);
+}
+.compact :global(.arco-radio-button) {
+  color: var(--color-text-2) !important;
+  background: transparent !important;
+}
+.compact :global(.arco-radio-button::before) {
+  background: transparent !important;
+}
+.compact :global(.arco-radio-button.arco-radio-checked) {
+  color: var(--color-text-1) !important;
+  background: var(--color-bg-2) !important;
+}
+.compact :global(.arco-radio-button:not(.arco-radio-checked):hover) {
+  color: var(--color-text-1) !important;
+  background: var(--color-fill-3) !important;
+}
+.bar :global(.arco-radio-group-button) {
+  background: var(--color-fill-2);
+  border-color: var(--color-border-2);
+}
+.bar :global(.arco-radio-button) {
+  color: var(--color-text-2) !important;
+  background: transparent !important;
+}
+.bar :global(.arco-radio-button.arco-radio-checked) {
+  color: var(--color-text-1) !important;
+  background: var(--color-bg-2) !important;
+}
 .helpBtn { display: inline-flex; align-items: center; justify-content: center; padding: 2px; border: none; background: transparent; color: var(--color-text-3); cursor: pointer; border-radius: 4px; }
 .helpBtn:hover { color: var(--color-text-1); background: var(--color-fill-3); }
 .helpPopover { max-width: 320px; }

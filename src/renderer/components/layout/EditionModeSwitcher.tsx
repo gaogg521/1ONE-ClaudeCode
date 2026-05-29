@@ -42,36 +42,6 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
   /** 版本切换只看 managementMode，与 /enterprise 管理后台路由无关 */
   const activeEdition: WebuiManagementMode = managementMode;
 
-  const switchEdition = useCallback(
-    (next: WebuiManagementMode) => {
-      void setManagementMode(next).then(async () => {
-        if (next === 'enterprise') {
-          if (isDesktop && !hasJoinedEnterprise) {
-            void navigate('/enterprise/join');
-            return;
-          }
-          if (status !== 'authenticated') {
-            void navigate('/enterprise/join');
-            return;
-          }
-          // 切换到企业版，同样瞬间回到日常开发聊天主台
-          // Switch to enterprise, also instantly navigate back to normal developer workspace
-          void navigate('/sessions');
-          return;
-        }
-        void navigate('/sessions');
-      });
-    },
-    [
-      hasJoinedEnterprise,
-      isDesktop,
-      navigate,
-      openEnterpriseLoginInBrowser,
-      setManagementMode,
-      status,
-    ]
-  );
-
   const openAdminConsole = useCallback(async () => {
     const result = await openAdminConsoleRoute({
       navigate: (path) => {
@@ -83,6 +53,39 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
       void navigate('/settings/webui');
     }
   }, [navigate, openEnterpriseAdminInBrowser]);
+
+  const switchEdition = useCallback(
+    (next: WebuiManagementMode) => {
+      if (next === 'enterprise' && showEnterpriseAdminNav && !hasJoinedEnterprise) {
+        void openAdminConsole();
+        return;
+      }
+      void setManagementMode(next).then(async () => {
+        if (next === 'enterprise') {
+          if (isDesktop && !hasJoinedEnterprise) {
+            void navigate('/enterprise/join');
+            return;
+          }
+          if (status !== 'authenticated') {
+            void navigate('/enterprise/join');
+            return;
+          }
+          void navigate('/sessions');
+          return;
+        }
+        void navigate('/sessions');
+      });
+    },
+    [
+      hasJoinedEnterprise,
+      isDesktop,
+      navigate,
+      openAdminConsole,
+      setManagementMode,
+      showEnterpriseAdminNav,
+      status,
+    ]
+  );
 
   if (loading) {
     return null;
@@ -121,7 +124,10 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
 
   const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId;
   const personalLabel = t('settings.edition.personal', { defaultValue: '个人版' });
-  const enterpriseLabel = t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' });
+  const enterpriseAdminTab = showEnterpriseAdminNav && !hasJoinedEnterprise;
+  const enterpriseLabel = enterpriseAdminTab
+    ? t('settings.edition.enterpriseAdminConsole', { defaultValue: '1ONE Code 企业版管理后台' })
+    : t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' });
   const helpContent = (
     <div className={styles.helpPopover}>
       <p className={styles.helpTitle}>{t('settings.edition.helpTitle', { defaultValue: '个人版 / 1ONE Code 企业版 / 管理后台 区别' })}</p>
@@ -156,7 +162,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
           <Radio value='standalone'>{personalLabel}</Radio>
           <Radio value='enterprise'>{enterpriseLabel}</Radio>
         </Radio.Group>
-        {showEnterpriseAdminNav ? (
+        {!enterpriseAdminTab && showEnterpriseAdminNav ? (
           <Button size='mini' type='text' onClick={() => void openAdminConsole()}>
             {t('settings.edition.openAdminConsole', { defaultValue: '管理后台' })}
           </Button>
@@ -215,7 +221,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
           </Tag>
         )}
       </div>
-      {showEnterpriseAdminNav ? (
+      {!enterpriseAdminTab && showEnterpriseAdminNav ? (
         <Tooltip
           content={t('settings.edition.adminConsoleHint', {
             defaultValue: '组织管理后台（成员、LDAP、邀请码、邮件）与上方「1ONE Code 企业版」工作区是独立入口。',

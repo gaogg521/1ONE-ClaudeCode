@@ -2,7 +2,7 @@
   "platform": "win32",
   "arch": "x64",
   "version": "aionrs 0.1.7",
-  "generatedAt": "2026-05-28T07:49:03.050Z",
+  "generatedAt": "2026-05-28T14:19:05.344Z",
   "sourceType": "bundled-local",
   "source": {
     "path": "resources\\bundled-aionrs\\win32-x64\\aionrs.exe"

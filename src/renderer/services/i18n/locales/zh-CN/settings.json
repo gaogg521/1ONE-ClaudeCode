@@ -557,6 +557,7 @@
     "switchTitle": "工作区版本",
     "personal": "个人版",
     "enterprise": "1ONE Code 企业版",
+    "enterpriseAdminConsole": "1ONE Code 企业版管理后台",
     "personalSub": "个人身份 · 本机场景",
     "enterpriseSubJoined": "企业身份 · 同一工作台",
     "enterpriseSubInvite": "需登录或邀请码加入",
