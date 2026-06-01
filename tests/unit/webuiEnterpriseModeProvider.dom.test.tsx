@@ -7,6 +7,8 @@ const configGetMock = vi.hoisted(() => vi.fn());
 const configSetMock = vi.hoisted(() => vi.fn());
 const getEnterpriseContextInvokeMock = vi.hoisted(() => vi.fn());
 const getWebuiApiBaseUrlMock = vi.hoisted(() => vi.fn());
+const openExternalUrlMock = vi.hoisted(() => vi.fn());
+const syncBrowserWebuiSessionToDesktopMock = vi.hoisted(() => vi.fn().mockResolvedValue(null));
 
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({
   useAuth: () => useAuthMock(),
@@ -29,12 +31,16 @@ vi.mock('@/common/adapter/ipcBridge', () => ({
 
 vi.mock('@/renderer/utils/platform', () => ({
   isElectronDesktop: () => true,
-  openExternalUrl: vi.fn(),
+  openExternalUrl: (...args: unknown[]) => openExternalUrlMock(...args),
 }));
 
 vi.mock('@/renderer/utils/webuiApiBase', () => ({
   fetchWebuiApi: vi.fn(),
   getWebuiApiBaseUrl: (...args: unknown[]) => getWebuiApiBaseUrlMock(...args),
+}));
+
+vi.mock('@/renderer/utils/syncBrowserWebuiSession', () => ({
+  syncBrowserWebuiSessionToDesktop: (...args: unknown[]) => syncBrowserWebuiSessionToDesktopMock(...args),
 }));
 
 vi.mock('@/renderer/utils/enterpriseJoinApi', () => ({
@@ -148,5 +154,50 @@ describe('WebuiEnterpriseModeProvider', () => {
 
     expect(result.current.effectiveRole).toBe('org_admin');
     expect(result.current.showEnterpriseAdminNav).toBe(true);
+  });
+
+  it('refreshes enterprise context on custom events without revalidating auth again', async () => {
+    const refreshMock = vi.fn().mockResolvedValue(undefined);
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'desktop-user',
+        username: 'local-member',
+        role: 'member',
+      },
+      refresh: refreshMock,
+    });
+
+    const wrapper = ({ children }: React.PropsWithChildren) => (
+      <WebuiEnterpriseModeProvider>{children}</WebuiEnterpriseModeProvider>
+    );
+
+    const { result } = renderHook(() => useWebuiEnterpriseMode(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const initialCalls = getEnterpriseContextInvokeMock.mock.calls.length;
+    window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+
+    await waitFor(() =>
+      expect(getEnterpriseContextInvokeMock.mock.calls.length).toBeGreaterThan(initialCalls)
+    );
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  it('opens admin console through the login route in browser', async () => {
+    getWebuiApiBaseUrlMock.mockResolvedValue('http://127.0.0.1:25809');
+
+    const wrapper = ({ children }: React.PropsWithChildren) => (
+      <WebuiEnterpriseModeProvider>{children}</WebuiEnterpriseModeProvider>
+    );
+
+    const { result } = renderHook(() => useWebuiEnterpriseMode(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await expect(result.current.openEnterpriseAdminInBrowser()).resolves.toBe('opened');
+    expect(openExternalUrlMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:25809/#/login?redirect=%2Fenterprise%2Fauth&mode=enterprise'
+    );
   });
 });

@@ -221,7 +221,7 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   useEffect(() => {
     if (!isDesktop) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const scheduleRefresh = () => {
+    const scheduleFullRefresh = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         void syncBrowserWebuiSessionToDesktop()
@@ -229,14 +229,17 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
           .then(() => refreshEnterpriseContext());
       }, 400);
     };
-    window.addEventListener('focus', scheduleRefresh);
-    document.addEventListener('visibilitychange', scheduleRefresh);
-    window.addEventListener('one-enterprise-context-refresh', scheduleRefresh);
+    const handleEnterpriseContextRefresh = () => {
+      void refreshEnterpriseContext();
+    };
+    window.addEventListener('focus', scheduleFullRefresh);
+    document.addEventListener('visibilitychange', scheduleFullRefresh);
+    window.addEventListener('one-enterprise-context-refresh', handleEnterpriseContextRefresh);
     return () => {
       if (timer) clearTimeout(timer);
-      window.removeEventListener('focus', scheduleRefresh);
-      document.removeEventListener('visibilitychange', scheduleRefresh);
-      window.removeEventListener('one-enterprise-context-refresh', scheduleRefresh);
+      window.removeEventListener('focus', scheduleFullRefresh);
+      document.removeEventListener('visibilitychange', scheduleFullRefresh);
+      window.removeEventListener('one-enterprise-context-refresh', handleEnterpriseContextRefresh);
     };
   }, [isDesktop, refreshAuth, refreshEnterpriseContext]);
 
@@ -314,7 +317,7 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
 
   const openEnterpriseAdminInBrowser = useCallback(async (): Promise<'opened' | 'webui_not_running' | 'failed'> => {
     setPostLoginRedirect('/enterprise/auth');
-    return openUrlInBrowser('/enterprise/auth');
+    return openUrlInBrowser('/login?redirect=%2Fenterprise%2Fauth&mode=enterprise');
   }, [openUrlInBrowser]);
 
   const showEnterpriseAdminNav = isEnterpriseAdminRole(effectiveRole);

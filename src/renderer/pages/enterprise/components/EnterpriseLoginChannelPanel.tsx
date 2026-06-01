@@ -12,7 +12,7 @@ import { ENTERPRISE_JOIN_PATH } from '@/common/auth/enterpriseRoles';
 import ChannelDingTalkLogo from '@/renderer/assets/channel-logos/dingtalk.svg';
 import ChannelFeishuLogo from '@/renderer/assets/channel-logos/lark.svg';
 import ChannelWecomLogo from '@/renderer/assets/channel-logos/wecom.svg';
-import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { isDesktopOperatorUser, useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useLoginUiProviders } from '@/renderer/hooks/auth/useLoginUiProviders';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { isElectronDesktop } from '@/renderer/utils/platform';
@@ -261,6 +261,16 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
   );
 
   const showLocalSessionHint = status === 'authenticated' && user != null && !hasJoinedEnterprise;
+  const usingDesktopOperatorIdentity = isDesktopOperatorUser(user);
+  const localSessionHintText = usingDesktopOperatorIdentity
+    ? t('settings.authProviders.desktopBrowserLoginHint', {
+        defaultValue: '请先在浏览器 WebUI 登录（管理员配置认证；成员加入团队）。登录后桌面端会自动同步，无需二次登录。',
+      })
+    : t('settings.enterpriseConsole.loginChannels.localSessionHint', {
+        defaultValue:
+          '当前以本地账户 {{username}} 登录，尚未加入组织。请使用下方组织登录方式，或切换账号后再试。',
+        username: user?.username ?? '',
+      });
 
   const handleSwitchAccount = useCallback(async () => {
     setSwitchingAccount(true);
@@ -359,20 +369,18 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
       {showLocalSessionHint ? (
         <div className={styles.localSessionBar}>
           <Typography.Paragraph className={styles.localSessionText}>
-            {t('settings.enterpriseConsole.loginChannels.localSessionHint', {
-              defaultValue:
-                '当前以本地账户 {{username}} 登录，尚未加入组织。请使用下方组织登录方式，或切换账号后再试。',
-              username: user.username,
-            })}
+            {localSessionHintText}
           </Typography.Paragraph>
-          <Button
-            size='mini'
-            type='outline'
-            loading={switchingAccount}
-            onClick={() => void handleSwitchAccount()}
-          >
-            {t('settings.enterpriseConsole.loginChannels.switchAccount', { defaultValue: '切换账号' })}
-          </Button>
+          {!usingDesktopOperatorIdentity ? (
+            <Button
+              size='mini'
+              type='outline'
+              loading={switchingAccount}
+              onClick={() => void handleSwitchAccount()}
+            >
+              {t('settings.enterpriseConsole.loginChannels.switchAccount', { defaultValue: '切换账号' })}
+            </Button>
+          ) : null}
         </div>
       ) : null}
 

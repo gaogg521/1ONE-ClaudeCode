@@ -214,4 +214,17 @@ describe('EnterpriseLoginChannelPanel', () => {
     expect(screen.getByText(/尚未加入组织/)).toBeInTheDocument();
     expect(screen.queryByText(/可直接在下方使用邀请码加入企业/)).not.toBeInTheDocument();
   });
+
+  it('explains that desktop local operator still needs browser WebUI login', async () => {
+    authState.status = 'authenticated';
+    authState.user = { id: 'desktop-local-admin', username: 'admin', tenant_id: 'default' };
+    render(<EnterpriseLoginChannelPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('飞书')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/请先在浏览器 WebUI 登录/)).toBeInTheDocument();
+    expect(screen.queryByText(/当前以本地账户 admin 登录/)).not.toBeInTheDocument();
+  });
 });

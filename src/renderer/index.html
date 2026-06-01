@@ -105,6 +105,12 @@
       try {
         var t = localStorage.getItem('__1one_theme');
         var cs = localStorage.getItem('__1one_colorScheme');
+        var hash = window.location.hash || '';
+        var useLightAuthShell =
+          hash === '#/enterprise/auth' ||
+          hash.indexOf('#/enterprise/auth?') === 0 ||
+          hash === '#/login' ||
+          hash.indexOf('#/login?') === 0;
         if (t) document.body.setAttribute('arco-theme', t);
         var BG_MAP = {
           'default':        '#0e0e0e',
@@ -114,7 +120,9 @@
           '1one-aurora':    '#070515',
           '1one-moonlight': '#f0f4fb',
         };
-        if (cs && BG_MAP[cs]) {
+        if (useLightAuthShell) {
+          document.body.style.background = '#f3f7ff';
+        } else if (cs && BG_MAP[cs]) {
           document.body.style.background = BG_MAP[cs];
         } else if (t === 'dark' || !t) {
           document.body.style.background = '#0e0e0e';
