@@ -810,11 +810,11 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
             <Typography.Paragraph type='secondary' className='text-12px mb-12px mt-4px'>
               {t('settings.authProviders.ldapBindSectionHint', {
                 defaultValue:
-                  'Base DN 仅决定搜索范围；目录查询必须先绑定服务账号。请填写绑定 DN（推荐）或绑定账号 + 密码，否则测试连接、LDAP 搜人会失败。',
+                  'Base DN 仅决定搜索范围；Windows AD 通常优先填写绑定账号（如 sAMAccountName、DOMAIN\\\\user 或 user@domain）。仅在目录明确要求时再填写完整绑定 DN，否则测试连接、LDAP 搜人会失败。',
               })}
             </Typography.Paragraph>
             <Form.Item
-              label={t('settings.authProviders.ldapBindDn', { defaultValue: '绑定 DN（Bind DN）' })}
+              label={t('settings.authProviders.ldapBindDn', { defaultValue: '绑定 DN（可选，仅特殊目录使用）' })}
               required={Boolean(ldapConfig.bindPassword.trim()) && !ldapConfig.bindAccount.trim()}
             >
               <Input
@@ -825,7 +825,7 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
               />
             </Form.Item>
             <Form.Item
-              label={t('settings.authProviders.ldapBindAccount', { defaultValue: 'LDAP 绑定账号（可选）' })}
+              label={t('settings.authProviders.ldapBindAccount', { defaultValue: '绑定账号（推荐，AD 常用）' })}
               required={Boolean(ldapConfig.bindPassword.trim()) && !ldapConfig.bindDN.trim()}
             >
               <Input
@@ -863,7 +863,8 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
             </Form.Item>
             <Typography.Paragraph type='secondary' className='text-12px mb-12px -mt-8px'>
               {t('settings.authProviders.ldapBindPasswordHint', {
-                defaultValue: '绑定 DN 与绑定账号至少填一项，并填写对应密码。仅填 Base DN 无法通过 AD 认证搜索。',
+                defaultValue:
+                  '绑定 DN 与绑定账号二选一即可，并填写对应密码；Windows AD 通常优先使用绑定账号。仅填 Base DN 无法通过 AD 认证搜索。',
               })}
             </Typography.Paragraph>
 

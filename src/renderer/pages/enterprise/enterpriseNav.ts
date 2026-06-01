@@ -30,14 +30,15 @@ const NAV_LABELS: Record<
   Pick<EnterpriseNavItem, 'labelKey' | 'labelDefault' | 'comingSoon'>
 > = {
   home: { labelKey: 'settings.enterpriseConsole.navHome', labelDefault: '概览' },
+  settings: { labelKey: 'settings.enterpriseConsole.navSettings', labelDefault: '企业设置' },
   users: { labelKey: 'settings.enterpriseConsole.navUsers', labelDefault: '用户管理' },
   teams: { labelKey: 'settings.enterpriseConsole.navTeams', labelDefault: '团队与组织' },
   auth: { labelKey: 'settings.enterpriseConsole.navAuth', labelDefault: '企业认证' },
   invites: { labelKey: 'settings.enterpriseConsole.navInvites', labelDefault: '邀请码' },
-  cteam: { labelKey: 'admin.cteam.nav', labelDefault: 'CTeam 敏捷协同' },
+  cteam: { labelKey: 'admin.cteam.nav', labelDefault: 'Issues 规划看板' },
   rag: { labelKey: 'settings.enterpriseConsole.navRagConfig', labelDefault: '团队知识库' },
   mcp: { labelKey: 'settings.enterpriseConsole.navMcpConfig', labelDefault: '团队 MCP 工具' },
-  skills: { labelKey: 'settings.enterpriseConsole.navSkills', labelDefault: '团队 Skills' },
+  skills: { labelKey: 'settings.enterpriseConsole.navSkills', labelDefault: '团队 Skills 后台' },
   'pipeline-editor': { labelKey: 'admin.pipeline.navEditor', labelDefault: '流水线编排器' },
   milestones: { labelKey: 'admin.milestones.nav', labelDefault: '版本规划' },
   cpack: { labelKey: 'admin.cpack.nav', labelDefault: '制品仓库' },
@@ -45,7 +46,7 @@ const NAV_LABELS: Record<
   cmeas: { labelKey: 'admin.cmeas.nav', labelDefault: '效能洞察' },
   ctest: { labelKey: 'admin.ctest.nav', labelDefault: '测试管理' },
   cflow: { labelKey: 'admin.cflow.nav', labelDefault: '价值流' },
-  cagent: { labelKey: 'admin.cagent.nav', labelDefault: 'CAgent 智能助手' },
+  cagent: { labelKey: 'admin.cagent.nav', labelDefault: 'Agent 助手' },
   usage: { labelKey: 'settings.enterpriseConsole.navUsage', labelDefault: '使用统计' },
   security: { labelKey: 'settings.enterpriseConsole.navSecurity', labelDefault: '安全与审计' },
 };

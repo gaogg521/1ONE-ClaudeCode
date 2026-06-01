@@ -708,7 +708,7 @@ export function registerApiRoutes(app: Express): void {
    * 通用 API 端点 - Generic API endpoint
    * GET /api
    */
-  app.use('/api', apiRateLimiter, validateApiAccess, (_req: Request, res: Response) => {
+  app.get('/api', apiRateLimiter, validateApiAccess, (_req: Request, res: Response) => {
     res.json({ message: 'API endpoint - bridge integration working' });
   });
 }

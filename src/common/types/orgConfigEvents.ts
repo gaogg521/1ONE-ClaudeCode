@@ -11,7 +11,7 @@ import type { LoginChannelProvider } from '@/common/types/loginChannels';
 export const WEBUI_ORG_CONFIG_CHANGED_EVENT = 'webui.org-config-changed';
 
 /** Instance-wide login / SSO / mail settings (all channels). */
-export type OrgConfigScope = 'login-channels' | 'admin-email' | 'edition-access';
+export type OrgConfigScope = 'login-channels' | 'admin-email' | 'edition-access' | 'enterprise-profile';
 
 /** @deprecated Use login-channels */
 export type LegacyOrgConfigScope = 'auth-providers';

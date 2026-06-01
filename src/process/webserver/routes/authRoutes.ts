@@ -370,12 +370,21 @@ export function registerAuthRoutes(app: Express): void {
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      const normalized = msg.trim();
       if (msg.toLowerCase().includes('invalid_grant')) {
         res.status(400).send('Feishu auth code expired or invalid. Please retry login.');
         return;
       }
       if (msg.toLowerCase().includes('timeout')) {
         res.status(504).send('Feishu login timeout. Please retry.');
+        return;
+      }
+      if (
+        normalized.startsWith('Feishu token exchange failed:') ||
+        normalized.startsWith('Feishu user_info failed:')
+      ) {
+        const detail = normalized.replace(/^Feishu (token exchange|user_info) failed:\s*/u, '').trim();
+        res.status(400).send(`Feishu login failed: ${detail || 'upstream request failed'}`);
         return;
       }
       console.error('[AuthRoute] feishu callback error:', error);
@@ -481,6 +490,15 @@ export function registerAuthRoutes(app: Express): void {
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      const normalized = msg.trim();
+      if (
+        normalized.startsWith('DingTalk token exchange failed:') ||
+        normalized.startsWith('DingTalk user info failed:')
+      ) {
+        const detail = normalized.replace(/^DingTalk (token exchange|user info) failed:\s*/u, '').trim();
+        res.status(400).send(`DingTalk login failed: ${detail || 'upstream request failed'}`);
+        return;
+      }
       if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('expired')) {
         res.status(400).send('DingTalk auth code expired or invalid. Please retry login.');
         return;
@@ -585,6 +603,15 @@ export function registerAuthRoutes(app: Express): void {
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      const normalized = msg.trim();
+      if (
+        normalized.startsWith('WeCom token request failed:') ||
+        normalized.startsWith('WeCom user info failed:')
+      ) {
+        const detail = normalized.replace(/^WeCom (token request|user info) failed:\s*/u, '').trim();
+        res.status(400).send(`WeCom login failed: ${detail || 'upstream request failed'}`);
+        return;
+      }
       if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('expired')) {
         res.status(400).send('WeCom auth code expired or invalid. Please retry login.');
         return;

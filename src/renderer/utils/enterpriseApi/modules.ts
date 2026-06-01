@@ -136,6 +136,13 @@ export type TeamRecord = {
   updated_at: number;
 };
 
+export type EnterpriseProfileRecord = {
+  id: string;
+  name: string;
+  created_at: number;
+  updated_at: number;
+};
+
 export type TeamMemberRecord = {
   user_id: string;
   username: string;
@@ -346,6 +353,14 @@ export async function listTeams(): Promise<TeamRecord[]> {
   return enterpriseGet<TeamRecord[]>('/api/admin/teams');
 }
 
+export async function getEnterpriseProfile(): Promise<EnterpriseProfileRecord> {
+  return enterpriseGet<EnterpriseProfileRecord>('/api/admin/enterprise');
+}
+
+export async function updateEnterpriseProfile(payload: { name: string }): Promise<void> {
+  await enterpriseMutate('/api/admin/enterprise', 'PATCH', payload);
+}
+
 export type MemberDashboardRecord = {
   id: string;
   username: string;
@@ -458,6 +473,10 @@ export async function listRequirementComments(requirementId: string): Promise<Re
 
 export async function createTeam(payload: Record<string, unknown>): Promise<void> {
   await enterpriseMutate('/api/admin/teams', 'POST', payload);
+}
+
+export async function updateTeam(teamId: string, payload: Record<string, unknown>): Promise<void> {
+  await enterpriseMutate(`/api/admin/teams/${encodeURIComponent(teamId)}`, 'PATCH', payload);
 }
 
 export async function listTeamMembers(teamId: string): Promise<TeamMemberRecord[]> {

@@ -170,12 +170,14 @@ function ldapAttributesToRecord(entry: unknown): Record<string, unknown> {
     attributes?: Array<{ type?: string; values?: string[]; vals?: string[] }>;
   };
   const legacy = e.pojo ?? e.object;
-  if (legacy && typeof legacy === 'object' && Object.keys(legacy).length > 0) {
-    return legacy;
-  }
-
-  const record: Record<string, unknown> = {};
-  const attrs = e.attributes;
+  const record: Record<string, unknown> =
+    legacy && typeof legacy === 'object' && Object.keys(legacy).length > 0 ? { ...legacy } : {};
+  const attrs =
+    e.attributes ??
+    ((e.object as { attributes?: Array<{ type?: string; values?: string[]; vals?: string[] }> } | undefined)
+      ?.attributes ??
+      (e.pojo as { attributes?: Array<{ type?: string; values?: string[]; vals?: string[] }> } | undefined)
+        ?.attributes);
   if (!Array.isArray(attrs)) return record;
 
   for (const attr of attrs) {
@@ -212,6 +214,11 @@ function pickAttr(record: Record<string, unknown>, key: string): string {
     if (s) return s;
   }
   return '';
+}
+
+function isInvalidCredentialError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /invalidcredentials|invalid credentials/i.test(message);
 }
 
 function ldapEntryToDirectoryRow(
@@ -393,7 +400,17 @@ export async function authenticateWithLdap(
       // 2) verify password by binding as user
       const userClient = createClient(config);
       try {
-        await bindAsync(userClient, userDn, password);
+        try {
+          await bindAsync(userClient, userDn, password);
+        } catch (error) {
+          const userPrincipalName = pickAttr(entryRecord, 'userPrincipalName');
+          const loginPrincipal = pickAttr(entryRecord, loginAttr);
+          const fallbackPrincipal = userPrincipalName || loginPrincipal;
+          if (!isInvalidCredentialError(error) || !fallbackPrincipal || fallbackPrincipal === userDn) {
+            throw error;
+          }
+          await bindAsync(userClient, fallbackPrincipal, password);
+        }
       } finally {
         unbindSafe(userClient);
       }

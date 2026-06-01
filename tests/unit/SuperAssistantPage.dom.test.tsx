@@ -1,8 +1,9 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const editionFeaturesMock = vi.hoisted(() => vi.fn());
+const webuiEnterpriseModeMock = vi.hoisted(() => vi.fn());
 const authMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 const listRequirementsTreeMock = vi.hoisted(() => vi.fn());
@@ -71,6 +72,10 @@ vi.mock('@/common', () => ({
 
 vi.mock('@/renderer/hooks/webui/useEditionFeatures', () => ({
   useEditionFeatures: () => editionFeaturesMock(),
+}));
+
+vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
+  useWebuiEnterpriseMode: () => webuiEnterpriseModeMock(),
 }));
 
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({
@@ -317,6 +322,9 @@ describe('SuperAssistantPage (refactored command center)', () => {
       tenantLabel: '欢乐互娱有限公司',
       showEnterpriseAdminNav: true,
     });
+    webuiEnterpriseModeMock.mockReturnValue({
+      openEnterpriseAdminInBrowser: vi.fn(),
+    });
     authMock.mockReturnValue({
       user: { id: 'user-1', role: 'org_admin' },
     });
@@ -324,14 +332,14 @@ describe('SuperAssistantPage (refactored command center)', () => {
 
   it('renders refactored single-page command center', async () => {
     render(<SuperAssistantPage />);
-    expect(screen.getByText('超级助手 / 企业 Agent 工作台')).toBeInTheDocument();
-    expect(screen.getByText('任务指挥中心')).toBeInTheDocument();
-    expect(screen.getByText('实时执行面板')).toBeInTheDocument();
-    expect(screen.getByText('能力沉淀与运行时')).toBeInTheDocument();
-    expect(await screen.findByText('共享 Issue 看板')).toBeInTheDocument();
+    expect(screen.getByText('Agent 助手 / Issue 工作台')).toBeInTheDocument();
+    expect(screen.getByText('工作台')).toBeInTheDocument();
+    expect(await screen.findByText('当前 Issue 工作台')).toBeInTheDocument();
+    expect(screen.getByText('最近运行 / 执行反馈')).toBeInTheDocument();
   });
 
   it('assigns issue to agent from command panel', async () => {
+    locationMock.search = '?tab=issues';
     render(<SuperAssistantPage />);
     fireEvent.click(await screen.findByRole('button', { name: '开发 Agent' }));
     await waitFor(() => {
@@ -346,6 +354,7 @@ describe('SuperAssistantPage (refactored command center)', () => {
   });
 
   it('marks and clears blocker for assigned issue', async () => {
+    locationMock.search = '?tab=issues';
     render(<SuperAssistantPage />);
     fireEvent.click(await screen.findByRole('button', { name: '开发 Agent' }));
     fireEvent.click(await screen.findByRole('button', { name: '标记阻塞' }));
@@ -369,6 +378,7 @@ describe('SuperAssistantPage (refactored command center)', () => {
   });
 
   it('moves issue to completed', async () => {
+    locationMock.search = '?tab=issues';
     render(<SuperAssistantPage />);
     fireEvent.click(await screen.findByRole('button', { name: '标记完成' }));
     await waitFor(() => {
@@ -377,6 +387,7 @@ describe('SuperAssistantPage (refactored command center)', () => {
   });
 
   it('opens shared session and ensures team session first', async () => {
+    locationMock.search = '?tab=issues';
     render(<SuperAssistantPage />);
     fireEvent.click((await screen.findAllByText('修复团队上下文深链'))[0]!);
     fireEvent.click(await screen.findByRole('button', { name: '共享会话' }));
@@ -387,6 +398,7 @@ describe('SuperAssistantPage (refactored command center)', () => {
   });
 
   it('shows runtime failure feedback in live execution panel', async () => {
+    locationMock.search = '?tab=runtimes';
     render(<SuperAssistantPage />);
     expect(await screen.findByText('Alpha Team')).toBeInTheDocument();
     teamRuntimeState.agentStatusListener?.({
@@ -409,6 +421,9 @@ describe('SuperAssistantPage (refactored command center)', () => {
     useTeamListMock.mockReturnValue({ teams: [], mutate: vi.fn(), removeTeam: vi.fn() });
     render(<SuperAssistantPage />);
     expect((await screen.findAllByText('暂无共享 Issue')).length).toBeGreaterThan(0);
-    expect(screen.getByText('还没有团队')).toBeInTheDocument();
+    cleanup();
+    locationMock.search = '?tab=runtimes';
+    render(<SuperAssistantPage />);
+    expect(await screen.findByText('还没有团队')).toBeInTheDocument();
   });
 });

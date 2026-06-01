@@ -33,6 +33,9 @@ import { EnterpriseGateProvider } from '@/renderer/pages/settings/enterpriseGate
 import { getEnterpriseNavItemByPath } from '@/renderer/pages/enterprise/enterpriseNav';
 import EnterpriseNavSidebar from '@/renderer/pages/enterprise/components/EnterpriseNavSidebar';
 import EnterpriseRouteErrorBoundary from '@/renderer/pages/enterprise/components/EnterpriseRouteErrorBoundary';
+import DesktopEnterprisePlaceholder from '@/renderer/pages/enterprise/components/DesktopEnterprisePlaceholder';
+import { ENTERPRISE_HOME_PATH } from '@/common/auth/enterpriseRoutes';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import '@/renderer/styles/enterprise-theme.css';
 import styles from '@/renderer/pages/enterprise/EnterpriseLayout.module.css';
 
@@ -181,7 +184,29 @@ const EnterpriseLayout: React.FC = () => {
     hasJoinedEnterprise,
     effectiveRole,
     enterpriseContext,
+    webuiApiBase,
+    openEnterpriseAdminInBrowser,
   } = useWebuiEnterpriseMode();
+  const isDesktop = isElectronDesktop();
+
+  if (!enterpriseModeLoading && isDesktop && location.pathname === ENTERPRISE_HOME_PATH) {
+    const tenantLabel = resolveEnterpriseTenantDisplayLabel(
+      enterpriseContext?.tenantId,
+      enterpriseContext?.tenantName
+    );
+    const enterpriseBrowserUrl = webuiApiBase
+      ? `${webuiApiBase}/#/login?redirect=%2Fenterprise%2Fauth&mode=enterprise`
+      : '';
+
+    return (
+      <DesktopEnterprisePlaceholder
+        tenantLabel={tenantLabel}
+        webuiApiBase={webuiApiBase}
+        enterpriseBrowserUrl={enterpriseBrowserUrl}
+        openEnterpriseAdminInBrowser={openEnterpriseAdminInBrowser}
+      />
+    );
+  }
 
   if (enterpriseModeLoading) {
     return (

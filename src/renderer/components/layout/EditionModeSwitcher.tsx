@@ -97,10 +97,22 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
   // 已加入企业：不显示切换器，直接展示企业身份标识 + 管理后台入口
   if (hasJoinedEnterprise) {
     const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId;
+    const isEnterpriseGuest = status !== 'authenticated';
+    const enterpriseTagLabel = isEnterpriseGuest
+      ? t('settings.edition.enterpriseInstanceTag', {
+          defaultValue: '企业实例 · {{tenant}}',
+          tenant: tenantLabel ?? t('settings.edition.joined', { defaultValue: '已接入企业' }),
+        })
+      : (tenantLabel ?? t('settings.edition.joined', { defaultValue: '已加入企业' }));
     if (variant === 'compact') {
       return (
         <div className={styles.compact}>
-          <Tag size='small' color='arcoblue'>{tenantLabel || t('settings.edition.joined', { defaultValue: '已加入企业' })}</Tag>
+          <Tag size='small' color='arcoblue'>{enterpriseTagLabel}</Tag>
+          {isEnterpriseGuest ? (
+            <Button size='mini' type='text' onClick={() => void openEnterpriseLoginInBrowser()}>
+              {t('settings.edition.enterpriseLoginAction', { defaultValue: '登录企业账号' })}
+            </Button>
+          ) : null}
           {showEnterpriseAdminNav ? (
             <Button size='mini' type='text' onClick={() => void openAdminConsole()}>
               {enterpriseAdminConsoleLabel}
@@ -113,8 +125,13 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
       <div className={styles.bar}>
         <div className={styles.barTop}>
           <div className={styles.barLeft}>
-            <Tag color='arcoblue'>{tenantLabel || t('settings.edition.joined', { defaultValue: '已加入企业' })}</Tag>
+            <Tag color='arcoblue'>{enterpriseTagLabel}</Tag>
           </div>
+          {isEnterpriseGuest ? (
+            <Button size='small' type='text' onClick={() => void openEnterpriseLoginInBrowser()}>
+              {t('settings.edition.enterpriseLoginAction', { defaultValue: '登录企业账号' })}
+            </Button>
+          ) : null}
           {showEnterpriseAdminNav ? (
             <Button size='small' type='outline' onClick={() => void openAdminConsole()}>
               {enterpriseAdminConsoleLabel}

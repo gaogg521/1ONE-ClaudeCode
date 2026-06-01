@@ -10,6 +10,11 @@ const {
   mockExchangeFeishuCodeForUserAccessToken,
   mockFetchFeishuUserInfo,
   mockResolveFeishuExternalId,
+  mockExchangeDingTalkCodeForUserAccessToken,
+  mockFetchDingTalkUserInfo,
+  mockResolveDingTalkExternalId,
+  mockFetchWeComCorpAccessToken,
+  mockFetchWeComUserIdByOAuthCode,
   mockHasUsers,
   mockCountUsers,
   mockValidateLoginInput,
@@ -24,6 +29,11 @@ const {
   mockExchangeFeishuCodeForUserAccessToken: vi.fn(),
   mockFetchFeishuUserInfo: vi.fn(),
   mockResolveFeishuExternalId: vi.fn(),
+  mockExchangeDingTalkCodeForUserAccessToken: vi.fn(),
+  mockFetchDingTalkUserInfo: vi.fn(),
+  mockResolveDingTalkExternalId: vi.fn(),
+  mockFetchWeComCorpAccessToken: vi.fn(),
+  mockFetchWeComUserIdByOAuthCode: vi.fn(),
   mockHasUsers: vi.fn(),
   mockCountUsers: vi.fn(),
   mockValidateLoginInput: vi.fn((_req: express.Request, _res: express.Response, next: express.NextFunction) => next()),
@@ -98,6 +108,34 @@ vi.mock('@process/webserver/auth/providers/FeishuAuthProvider', () => ({
   exchangeFeishuCodeForUserAccessToken: mockExchangeFeishuCodeForUserAccessToken,
   fetchFeishuUserInfo: mockFetchFeishuUserInfo,
   resolveFeishuExternalId: mockResolveFeishuExternalId,
+}));
+
+vi.mock('@process/webserver/auth/providers/DingTalkAuthProvider', () => ({
+  buildDingTalkAuthorizeUrl: vi.fn(({ appKey, redirectUri, state }) => {
+    const url = new URL('https://login.dingtalk.com/oauth2/auth');
+    url.searchParams.set('client_id', appKey);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('state', state);
+    return url.toString();
+  }),
+  exchangeDingTalkCodeForUserAccessToken: mockExchangeDingTalkCodeForUserAccessToken,
+  fetchDingTalkUserInfo: mockFetchDingTalkUserInfo,
+  resolveDingTalkExternalId: mockResolveDingTalkExternalId,
+}));
+
+vi.mock('@process/webserver/auth/providers/WeComAuthProvider', () => ({
+  buildWeComAuthorizeUrl: vi.fn(({ corpId, agentId, redirectUri, state }) => {
+    const url = new URL('https://open.weixin.qq.com/connect/oauth2/authorize');
+    url.searchParams.set('appid', corpId);
+    url.searchParams.set('agentid', agentId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('state', state);
+    return `${url.toString()}#wechat_redirect`;
+  }),
+  fetchWeComCorpAccessToken: mockFetchWeComCorpAccessToken,
+  fetchWeComUserIdByOAuthCode: mockFetchWeComUserIdByOAuthCode,
 }));
 
 vi.mock('@process/webserver/auth/middleware/AuthMiddleware', () => ({
@@ -397,6 +435,180 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
     expect((callbackRes as unknown as { status: ReturnType<typeof vi.fn> }).status).toHaveBeenCalledWith(504);
     expect((callbackRes as unknown as { send: ReturnType<typeof vi.fn> }).send).toHaveBeenCalledWith(
       'Feishu login timeout. Please retry.'
+    );
+  });
+
+  it('returns upstream Feishu callback errors instead of generic internal server error', async () => {
+    mockGetProvider.mockResolvedValue({
+      provider: 'feishu',
+      enabled: true,
+      updated_at: '2026-05-25T08:00:00.000Z',
+      config: {
+        appId: 'cli_a90abd387f395bca',
+        appSecret: 'secret',
+        redirectUri: 'http://192.168.11.159:25809/api/auth/feishu/callback',
+        externalIdField: 'union_id',
+      },
+    });
+    mockExchangeFeishuCodeForUserAccessToken.mockRejectedValue(
+      new Error('Feishu token exchange failed: redirect_uri not matched')
+    );
+
+    const { registerAuthRoutes } = await import('@process/webserver/routes/authRoutes');
+    const app = express();
+    registerAuthRoutes(app);
+
+    const authorizeHandler = getRouteHandler(app, '/api/auth/feishu/authorize');
+    const authorizeRes = createResponseMock() as unknown as express.Response;
+
+    await authorizeHandler(
+      {
+        query: {
+          mode: 'oauth',
+          redirect: '/enterprise/auth',
+        },
+        headers: {},
+      } as express.Request,
+      authorizeRes,
+      vi.fn()
+    );
+
+    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock.calls[0][0] as string;
+    const state = new URL(authorizeLocation).searchParams.get('state');
+
+    const callbackHandler = getRouteHandler(app, '/api/auth/feishu/callback');
+    const callbackRes = createResponseMock() as unknown as express.Response;
+
+    await callbackHandler(
+      {
+        query: {
+          code: 'oauth-code',
+          state,
+        },
+        headers: {},
+      } as express.Request,
+      callbackRes,
+      vi.fn()
+    );
+
+    expect((callbackRes as unknown as { status: ReturnType<typeof vi.fn> }).status).toHaveBeenCalledWith(400);
+    expect((callbackRes as unknown as { send: ReturnType<typeof vi.fn> }).send).toHaveBeenCalledWith(
+      'Feishu login failed: redirect_uri not matched'
+    );
+  });
+
+  it('returns upstream DingTalk callback errors instead of generic internal server error', async () => {
+    mockGetProvider.mockResolvedValue({
+      provider: 'dingtalk',
+      enabled: true,
+      updated_at: '2026-05-25T08:00:00.000Z',
+      config: {
+        appKey: 'ding_app_key',
+        appSecret: 'ding_secret',
+        redirectUri: 'http://192.168.11.159:25809/api/auth/dingtalk/callback',
+      },
+    });
+    mockExchangeDingTalkCodeForUserAccessToken.mockRejectedValue(
+      new Error('DingTalk token exchange failed: invalid client credential')
+    );
+
+    const { registerAuthRoutes } = await import('@process/webserver/routes/authRoutes');
+    const app = express();
+    registerAuthRoutes(app);
+
+    const authorizeHandler = getRouteHandler(app, '/api/auth/dingtalk/authorize');
+    const authorizeRes = createResponseMock() as unknown as express.Response;
+
+    await authorizeHandler(
+      {
+        query: {
+          mode: 'oauth',
+          redirect: '/enterprise/auth',
+        },
+        headers: {},
+      } as express.Request,
+      authorizeRes,
+      vi.fn()
+    );
+
+    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock.calls[0][0] as string;
+    const state = new URL(authorizeLocation).searchParams.get('state');
+
+    const callbackHandler = getRouteHandler(app, '/api/auth/dingtalk/callback');
+    const callbackRes = createResponseMock() as unknown as express.Response;
+
+    await callbackHandler(
+      {
+        query: {
+          code: 'oauth-code',
+          state,
+        },
+        headers: {},
+      } as express.Request,
+      callbackRes,
+      vi.fn()
+    );
+
+    expect((callbackRes as unknown as { status: ReturnType<typeof vi.fn> }).status).toHaveBeenCalledWith(400);
+    expect((callbackRes as unknown as { send: ReturnType<typeof vi.fn> }).send).toHaveBeenCalledWith(
+      'DingTalk login failed: invalid client credential'
+    );
+  });
+
+  it('returns upstream WeCom callback errors instead of generic internal server error', async () => {
+    mockGetProvider.mockResolvedValue({
+      provider: 'wecom',
+      enabled: true,
+      updated_at: '2026-05-25T08:00:00.000Z',
+      config: {
+        corpId: 'wxcorp',
+        agentId: '1000001',
+        secret: 'wecom_secret',
+        redirectUri: 'http://192.168.11.159:25809/api/auth/wecom/callback',
+      },
+    });
+    mockFetchWeComCorpAccessToken.mockRejectedValue(new Error('WeCom token request failed: invalid corpid'));
+
+    const { registerAuthRoutes } = await import('@process/webserver/routes/authRoutes');
+    const app = express();
+    registerAuthRoutes(app);
+
+    const authorizeHandler = getRouteHandler(app, '/api/auth/wecom/authorize');
+    const authorizeRes = createResponseMock() as unknown as express.Response;
+
+    await authorizeHandler(
+      {
+        query: {
+          mode: 'oauth',
+          redirect: '/enterprise/auth',
+        },
+        headers: {},
+      } as express.Request,
+      authorizeRes,
+      vi.fn()
+    );
+
+    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock.calls[0][0] as string;
+    const state = new URL(authorizeLocation).searchParams.get('state');
+
+    const callbackHandler = getRouteHandler(app, '/api/auth/wecom/callback');
+    const callbackRes = createResponseMock() as unknown as express.Response;
+
+    await callbackHandler(
+      {
+        query: {
+          code: 'oauth-code',
+          state,
+        },
+        headers: {},
+      } as express.Request,
+      callbackRes,
+      vi.fn()
+    );
+
+    expect((callbackRes as unknown as { status: ReturnType<typeof vi.fn> }).status).toHaveBeenCalledWith(400);
+    expect((callbackRes as unknown as { send: ReturnType<typeof vi.fn> }).send).toHaveBeenCalledWith(
+      'WeCom login failed: invalid corpid'
     );
   });
 });

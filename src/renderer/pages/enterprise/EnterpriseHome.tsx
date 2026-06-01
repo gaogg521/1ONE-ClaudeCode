@@ -65,6 +65,7 @@ const CAPABILITY_SUMMARY: Partial<Record<EnterpriseNavKey, string>> = {
 
 const CARD_ICONS: Record<EnterpriseNavKey, React.ReactNode> = {
   home: <Globe theme='outline' size={18} />,
+  settings: <Lock theme='outline' size={18} />,
   users: <EveryUser theme='outline' size={18} />,
   teams: <Peoples theme='outline' size={18} />,
   auth: <Mail theme='outline' size={18} />,
@@ -173,11 +174,17 @@ const EnterpriseHome: React.FC = () => {
               })}
             </Typography.Paragraph>
             <div className='mt-12px flex items-center gap-8px flex-wrap'>
+              <Button size='small' onClick={() => handleOpenModule('/issues')}>
+                {t('nav.issues', { defaultValue: 'Issues' })}
+              </Button>
               <Button size='small' onClick={() => handleOpenModule('/sessions')}>
                 {t('nav.sessions', { defaultValue: 'Sessions' })}
               </Button>
               <Button size='small' onClick={() => handleOpenModule('/super-assistant')}>
-                {t('nav.superAssistant', { defaultValue: '超级助手' })}
+                {t('nav.agentAssistant', { defaultValue: 'Agent 助手' })}
+              </Button>
+              <Button size='small' onClick={() => handleOpenModule('/skills')}>
+                {t('nav.skills', { defaultValue: 'Skills' })}
               </Button>
               <Button size='small' onClick={() => handleOpenModule('/workspace')}>
                 {t('nav.workspace', { defaultValue: 'Workspace' })}

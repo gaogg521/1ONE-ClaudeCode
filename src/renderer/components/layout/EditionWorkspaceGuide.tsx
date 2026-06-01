@@ -31,7 +31,7 @@ const EditionWorkspaceGuide: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, status } = useAuth();
   const {
     loading,
     managementMode,
@@ -41,6 +41,7 @@ const EditionWorkspaceGuide: React.FC = () => {
     effectiveRole,
     setManagementMode,
     openEnterpriseAdminInBrowser,
+    openEnterpriseLoginInBrowser,
   } = useWebuiEnterpriseMode();
 
   const joinedWhilePersonal = managementMode === 'standalone' && hasJoinedEnterprise;
@@ -85,6 +86,26 @@ const EditionWorkspaceGuide: React.FC = () => {
         action: (
           <Button size='mini' type='text' onClick={switchToEnterpriseEdition}>
             {t('settings.edition.guideSwitchEnterprise', { defaultValue: '切换到1ONE Code 企业版' })}
+          </Button>
+        ),
+      };
+    }
+    if (managementMode === 'enterprise' && hasJoinedEnterprise && status !== 'authenticated') {
+      return {
+        type: 'warning' as const,
+        line: t('settings.edition.guideEnterpriseGuestLine', {
+          defaultValue: '当前实例已接入 {{tenant}}，但你尚未登录企业账号。',
+          tenant: tenantLabel,
+        }),
+        action: (
+          <Button
+            size='mini'
+            type='text'
+            onClick={() => {
+              void openEnterpriseLoginInBrowser();
+            }}
+          >
+            {t('settings.edition.guideGoEnterpriseLogin', { defaultValue: '登录企业账号' })}
           </Button>
         ),
       };
@@ -135,8 +156,10 @@ const EditionWorkspaceGuide: React.FC = () => {
     hasJoinedEnterprise,
     isAdmin,
     managementMode,
+    openEnterpriseLoginInBrowser,
     openAdminConsoleHandler,
     showEnterpriseAdminNav,
+    status,
     switchToEnterpriseEdition,
     t,
     tenantLabel,

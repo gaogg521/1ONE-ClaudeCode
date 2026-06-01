@@ -87,6 +87,15 @@ function resolveAdminTenantId(req: Request): string {
   return isEnterpriseTenantId(tid) ? tid : DEFAULT_TENANT_ID;
 }
 
+function requireEnterpriseTenant(req: Request, res: Response): string | null {
+  const tenantId = resolveAdminTenantId(req);
+  if (!isEnterpriseTenantId(tenantId)) {
+    res.status(400).json({ success: false, message: 'Join or create an enterprise first' });
+    return null;
+  }
+  return tenantId;
+}
+
 /** 认证配置以浏览器 WebUI 为准；桌面端仅镜像读取，禁止写入。 */
 function rejectDesktopAuthConfigMutation(req: Request, res: Response, next: NextFunction): void {
   if (isElectronDesktopRequest(req)) {
@@ -547,6 +556,53 @@ export function registerAdminRoutes(app: Express): void {
     }
   });
 
+  // PATCH /api/admin/teams/:id — update team profile
+  app.patch('/api/admin/teams/:id', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+    try {
+      const tenantId = resolveAdminTenantId(req);
+      const teamId = String(req.params.id);
+      const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+      const workspace = typeof req.body?.workspace === 'string' ? req.body.workspace.trim() : '';
+      const workspaceMode =
+        typeof req.body?.workspace_mode === 'string' ? req.body.workspace_mode.trim() : '';
+
+      const updates: string[] = [];
+      const values: Array<string | number> = [];
+      if (name) {
+        updates.push('name = ?');
+        values.push(name);
+      }
+      if (workspace) {
+        updates.push('workspace = ?');
+        values.push(workspace);
+      }
+      if (workspaceMode) {
+        updates.push('workspace_mode = ?');
+        values.push(workspaceMode);
+      }
+      if (updates.length === 0) {
+        res.status(400).json({ success: false, message: 'no fields to update' });
+        return;
+      }
+
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const now = Date.now();
+      updates.push('updated_at = ?');
+      values.push(now, tenantId, teamId);
+      driver
+        .prepare(
+          `UPDATE teams SET ${updates.join(', ')}
+           WHERE tenant_id = ? AND id = ?`
+        )
+        .run(...values);
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[AdminRoute] updateTeam error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
   // GET /api/admin/teams/:id/members — list members
   app.get('/api/admin/teams/:id/members', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
@@ -949,6 +1005,70 @@ export function registerAdminRoutes(app: Express): void {
           return;
         }
         console.error('[AdminRoute] enterprise setup error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
+
+  // GET /api/admin/enterprise — current tenant profile
+  app.get('/api/admin/enterprise', apiRateLimiter, auth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const tenantId = requireEnterpriseTenant(req, res);
+      if (!tenantId) {
+        return;
+      }
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const row = driver
+        .prepare('SELECT id, name, created_at, updated_at FROM tenants WHERE id = ?')
+        .get(tenantId) as
+        | {
+            id: string;
+            name: string;
+            created_at: number;
+            updated_at: number;
+          }
+        | undefined;
+      if (!row) {
+        res.status(404).json({ success: false, message: 'Enterprise not found' });
+        return;
+      }
+      res.json({ success: true, data: row });
+    } catch (err) {
+      console.error('[AdminRoute] get enterprise profile error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // PATCH /api/admin/enterprise — update current tenant profile
+  app.patch(
+    '/api/admin/enterprise',
+    apiRateLimiter,
+    auth,
+    requireAdmin,
+    rejectDesktopAuthConfigMutation,
+    async (req: Request, res: Response) => {
+      try {
+        const tenantId = requireEnterpriseTenant(req, res);
+        if (!tenantId) {
+          return;
+        }
+        const name = String(req.body?.name ?? '').trim();
+        if (!name) {
+          res.status(400).json({ success: false, message: 'name required' });
+          return;
+        }
+        const db = await getDatabase();
+        const driver = db.getDriver();
+        const now = Date.now();
+        driver.prepare('UPDATE tenants SET name = ?, updated_at = ? WHERE id = ?').run(name, now, tenantId);
+        publishOrgConfigChanged({
+          tenantId,
+          scope: 'enterprise-profile',
+        });
+        res.json({ success: true });
+      } catch (err) {
+        console.error('[AdminRoute] update enterprise profile error:', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }

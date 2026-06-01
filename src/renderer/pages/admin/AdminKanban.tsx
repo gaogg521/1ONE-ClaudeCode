@@ -132,11 +132,7 @@ function buildIssueScopedWorkspacePath(
 }
 
 function buildSuperAssistantIssuePath(issueId: string): string {
-  const params = new URLSearchParams({
-    tab: 'issues',
-    issueId,
-  });
-  return `/super-assistant?${params.toString()}`;
+  return `/issues/${encodeURIComponent(issueId)}`;
 }
 
 function buildCurrentTeamPath(

@@ -138,14 +138,18 @@ describe('EnterpriseHome', () => {
   it('provides quick links back to the shared workspace shell', () => {
     render(<EnterpriseHome />);
 
+    fireEvent.click(screen.getByText('Issues'));
     fireEvent.click(screen.getByText('Sessions'));
-    fireEvent.click(screen.getByText('超级助手'));
+    fireEvent.click(screen.getByText('Agent 助手'));
+    fireEvent.click(screen.getByText('Skills'));
     fireEvent.click(screen.getByText('Workspace'));
     fireEvent.click(screen.getByText('Tasks'));
 
-    expect(navigateMock).toHaveBeenNthCalledWith(1, '/sessions');
-    expect(navigateMock).toHaveBeenNthCalledWith(2, '/super-assistant');
-    expect(navigateMock).toHaveBeenNthCalledWith(3, '/workspace');
-    expect(navigateMock).toHaveBeenNthCalledWith(4, '/tasks');
+    expect(navigateMock).toHaveBeenNthCalledWith(1, '/issues');
+    expect(navigateMock).toHaveBeenNthCalledWith(2, '/sessions');
+    expect(navigateMock).toHaveBeenNthCalledWith(3, '/super-assistant');
+    expect(navigateMock).toHaveBeenNthCalledWith(4, '/skills');
+    expect(navigateMock).toHaveBeenNthCalledWith(5, '/workspace');
+    expect(navigateMock).toHaveBeenNthCalledWith(6, '/tasks');
   });
 });

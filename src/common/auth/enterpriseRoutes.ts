@@ -10,6 +10,7 @@ import { isEnterpriseAdminRole, isSystemAdminRole } from './enterpriseRoles';
 
 export type EnterpriseNavKey =
   | 'home'
+  | 'settings'
   | 'users'
   | 'teams'
   | 'auth'
@@ -42,6 +43,7 @@ export type EnterpriseRouteMeta = {
 };
 
 export const ENTERPRISE_HOME_PATH = '/enterprise';
+export const ENTERPRISE_SETTINGS_PATH = '/enterprise/settings';
 export const ENTERPRISE_USERS_PATH = '/enterprise/users';
 export const ENTERPRISE_TEAMS_PATH = '/enterprise/teams';
 export const ENTERPRISE_AUTH_PATH = '/enterprise/auth';
@@ -67,6 +69,12 @@ export const ENTERPRISE_ROUTE_META: EnterpriseRouteMeta[] = [
     key: 'home',
     path: ENTERPRISE_HOME_PATH,
     requiresRole: 'member',
+    platformPolicy: 'all',
+  },
+  {
+    key: 'settings',
+    path: ENTERPRISE_SETTINGS_PATH,
+    requiresRole: 'admin',
     platformPolicy: 'all',
   },
   {

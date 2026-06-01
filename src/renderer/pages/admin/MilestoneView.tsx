@@ -167,8 +167,8 @@ const MilestoneView: React.FC = () => {
         onCancel={() => setDetailVisible(false)}
         footer={
           <Space>
-            <Button onClick={() => void navigate('/enterprise/cteam')}>
-              {t('common.milestones.openCteam', { defaultValue: '在 CTeam 绑定 Epic' })}
+            <Button onClick={() => void navigate('/issues')}>
+              {t('common.milestones.openCteam', { defaultValue: '在 Issues 中查看 Epic' })}
             </Button>
             <Button
               type='primary'
@@ -207,9 +207,9 @@ const MilestoneView: React.FC = () => {
                       type='text'
                       size='mini'
                       className='mt-6px px-0'
-                      onClick={() => void navigate(`/super-assistant?issueId=${encodeURIComponent(epic.id)}`)}
+                      onClick={() => void navigate(`/issues/${encodeURIComponent(epic.id)}`)}
                     >
-                      {t('common.milestones.openInSuperAssistant', { defaultValue: '在超级助手查看' })}
+                      {t('common.milestones.openInSuperAssistant', { defaultValue: '在 Issues 中查看' })}
                     </Button>
                   </Card>
                 ))}

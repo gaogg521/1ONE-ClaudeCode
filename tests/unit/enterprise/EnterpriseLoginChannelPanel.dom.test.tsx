@@ -211,7 +211,9 @@ describe('EnterpriseLoginChannelPanel', () => {
       expect(screen.getByText('飞书')).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/尚未加入组织/)).toBeInTheDocument();
+    expect(screen.getByText(/当前已登录本地 WebUI 账号 admin/)).toBeInTheDocument();
+    expect(screen.getByText(/尚未以企业成员身份登录/)).toBeInTheDocument();
+    expect(screen.queryByText(/当前以本地账户 admin 登录/)).not.toBeInTheDocument();
     expect(screen.queryByText(/可直接在下方使用邀请码加入企业/)).not.toBeInTheDocument();
   });
 

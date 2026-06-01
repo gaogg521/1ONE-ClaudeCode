@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Message, Result } from '@arco-design/web-react';
+import { Button, Card, Empty, Message, Result, Tag } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ipcBridge } from '@/common';
@@ -41,6 +41,8 @@ type NavigationTeamContext = {
   id: string;
   name: string;
 } | null;
+
+type SuperAssistantTab = 'overview' | 'issues' | 'skills' | 'runtimes' | 'settings';
 
 type SuperAssistantIssueTaskMetadata = {
   source: 'super-assistant-issue';
@@ -157,11 +159,22 @@ function parseIssueTaskMetadata(task: TeamTaskRecord): SuperAssistantIssueTaskMe
 
 function parseSuperAssistantSearch(search: string): {
   issueId: string | null;
+  tab: SuperAssistantTab;
 } {
   const params = new URLSearchParams(search);
   const issueId = params.get('issueId');
+  const rawTab = params.get('tab');
+  const tab: SuperAssistantTab =
+    rawTab === 'issues' ||
+    rawTab === 'skills' ||
+    rawTab === 'runtimes' ||
+    rawTab === 'settings' ||
+    rawTab === 'overview'
+      ? rawTab
+      : 'overview';
   return {
     issueId,
+    tab,
   };
 }
 
@@ -362,6 +375,7 @@ const SuperAssistantPage: React.FC = () => {
     ]
   );
   const routedState = useMemo(() => parseSuperAssistantSearch(location.search), [location.search]);
+  const currentTab = routedState.tab;
 
   useEffect(() => {
     if (routedState.issueId && superAssistantData.issueLookup[routedState.issueId]) {
@@ -383,6 +397,17 @@ const SuperAssistantPage: React.FC = () => {
   );
 
   const handleBreakdownIssue = () => navigate(buildKanbanPath(currentIssue, currentTeam));
+  const handleSwitchTab = useCallback(
+    (tab: SuperAssistantTab) => {
+      const params = new URLSearchParams(location.search);
+      params.set('tab', tab);
+      if (currentIssue?.id) {
+        params.set('issueId', currentIssue.id);
+      }
+      navigate(`/super-assistant?${params.toString()}`);
+    },
+    [currentIssue?.id, location.search, navigate]
+  );
   const handleOpenTeamFlow = async () => {
     if (!superAssistantData.primaryTeam) {
       navigate('/enterprise/teams');
@@ -419,7 +444,7 @@ const SuperAssistantPage: React.FC = () => {
     }
     navigate(buildTeamScopedPath('/sessions', undefined, undefined, currentIssue));
   };
-  const handleOpenEnterpriseKnowledge = () => navigate(showEnterpriseAdminNav ? '/enterprise/rag' : '/super-assistant?tab=skills');
+  const handleOpenEnterpriseKnowledge = () => navigate(showEnterpriseAdminNav ? '/enterprise/rag' : '/skills');
   const handleOpenEnterpriseModule = useCallback(() => {
     if (!showEnterpriseAdminNav) {
       void navigate('/enterprise');
@@ -433,13 +458,13 @@ const SuperAssistantPage: React.FC = () => {
     });
   }, [enterpriseMode.openEnterpriseAdminInBrowser, navigate, showEnterpriseAdminNav]);
   const handleOpenEnterpriseDelivery = async () => {
-    if (showEnterpriseAdminNav) {
-      navigate('/enterprise/cteam');
+    if (currentIssue?.id) {
+      navigate(`/issues/${encodeURIComponent(currentIssue.id)}`);
       return;
     }
-    await handleOpenTeamFlow();
+    navigate('/issues');
   };
-  const handleOpenSkillsHub = () => navigate('/settings/skills-hub');
+  const handleOpenSkillsHub = () => navigate('/skills');
   const handleOpenMcp = () => navigate('/mcp');
   const handleOpenAgentSettings = () => navigate('/settings/agent');
   const handleAssignIssue = async (
@@ -635,6 +660,39 @@ const SuperAssistantPage: React.FC = () => {
     navigate(buildTeamPath(currentIssueAssignment.teamId, currentIssue, currentIssueAssignment.slotId));
   };
 
+  const handleStartCurrentIssue = async () => {
+    if (!currentIssue) {
+      navigate('/issues');
+      return;
+    }
+    if (currentIssueAssignment) {
+      await handleOpenAssignedAgent();
+      return;
+    }
+    if (primaryLeadAgent) {
+      await handleAssignIssue(primaryLeadAgent.slotId, primaryLeadAgent.agentName, { navigateAfter: false });
+      handleSwitchTab('runtimes');
+      return;
+    }
+    await handleOpenTeamFlow();
+  };
+
+  const handleOpenCurrentIssueDetail = () => {
+    if (!currentIssue?.id) {
+      navigate('/issues');
+      return;
+    }
+    navigate(`/issues/${encodeURIComponent(currentIssue.id)}`);
+  };
+
+  const workspaceIssueList = useMemo(
+    () =>
+      superAssistantData.boardColumns
+        .flatMap((column) => column.items)
+        .toSorted((a, b) => Number(b.priority === 'urgent') - Number(a.priority === 'urgent')),
+    [superAssistantData.boardColumns]
+  );
+
   if (!hasJoinedEnterprise) {
     return (
       <Result
@@ -660,87 +718,232 @@ const SuperAssistantPage: React.FC = () => {
         openIssueCount={superAssistantData.openIssueCount}
         activeAgentCount={superAssistantData.activeAgentCount}
         skillCount={superAssistantData.skillCount}
-        onOpenKanban={handleBreakdownIssue}
-        onOpenTeamFlow={handleOpenTeamFlow}
-        onCreateSharedTask={handleOpenSharedTasks}
+        onStartCurrentIssue={() => void handleStartCurrentIssue()}
+        onOpenRecentRun={() => handleSwitchTab('runtimes')}
+        onOpenIssues={() => navigate('/issues')}
       />
       <div className='space-y-12px'>
-        <Card title={t('common.superAssistant.rebuild.commandCenterTitle', { defaultValue: '任务指挥中心' })}>
-          <div className='text-12px text-t-tertiary'>
-            {t('common.superAssistant.rebuild.commandCenterDesc', {
-              defaultValue:
-                '一个页面完成“分配任务 -> 观察进度 -> 处理阻塞 -> 标记完成”。无需在多个标签页之间来回切换。',
-            })}
+        <Card>
+          <div className='flex items-center gap-8px flex-wrap'>
+            {([
+              ['overview', t('common.superAssistant.tabs.workbench', { defaultValue: '工作台' })],
+              ['issues', t('common.superAssistant.tabs.dispatch', { defaultValue: '调度视图' })],
+              ['skills', t('common.superAssistant.tabs.skills', { defaultValue: 'Skills' })],
+              ['runtimes', t('common.superAssistant.tabs.runtimes', { defaultValue: '运行时' })],
+              ['settings', t('common.superAssistant.tabs.settings', { defaultValue: '设置' })],
+            ] as const).map(([tab, label]) => (
+              <Button
+                key={tab}
+                size='small'
+                type={currentTab === tab ? 'primary' : 'outline'}
+                onClick={() => handleSwitchTab(tab)}
+              >
+                {label}
+              </Button>
+            ))}
           </div>
         </Card>
-        <IssuesWorkbench
-          isAdmin={isAdmin}
-          loading={superAssistantData.loading}
-          boardColumns={superAssistantData.boardColumns}
-          issueBoardFeedbackById={issueBoardFeedbackById}
-          currentIssue={currentIssue}
-          assignableAgents={assignableAgents}
-          currentAssignmentAgentName={currentIssueAssignment?.agentName ?? null}
-          currentIssueActivityFeedback={currentIssueActivityFeedback}
-          onSelectIssue={setSelectedIssueId}
-          onBreakdownIssue={handleBreakdownIssue}
-          onAssignIssue={handleAssignIssue}
-          onMarkIssueBlocked={handleMarkIssueBlocked}
-          onClearIssueBlocked={handleClearIssueBlocked}
-          onUnassignIssue={handleUnassignIssue}
-          onMoveIssueToReview={handleMoveIssueToReview}
-          onMarkIssueDone={handleMarkIssueDone}
-          onOpenAssignedAgent={handleOpenAssignedAgent}
-          onOpenKanban={handleBreakdownIssue}
-          onOpenTeamFlow={handleOpenTeamFlow}
-          onOpenSharedTasks={handleOpenSharedTasks}
-          onOpenSharedSessions={handleOpenSharedSessions}
-          onOpenEnterpriseModule={handleOpenEnterpriseModule}
-          onOpenEnterpriseKnowledge={handleOpenEnterpriseKnowledge}
-          onOpenSkills={handleOpenSkillsHub}
-          onOpenMcp={handleOpenMcp}
-          collaborationContext={collaborationContext}
-          autopilotDefaults={autopilotDefaults}
-        />
-        <Card title={t('common.superAssistant.rebuild.liveExecutionTitle', { defaultValue: '实时执行面板' })}>
-          <div className='mb-10px text-12px text-t-tertiary'>
-            {t('common.superAssistant.rebuild.liveExecutionDesc', {
-              defaultValue: '智能体状态、人类操作、阻塞信息在同一时间线展示，便于快速决策。',
-            })}
-          </div>
-          <AgentsTab executionGroups={superAssistantData.agentExecutionGroups} />
-        </Card>
-        <Card title={t('common.superAssistant.rebuild.compoundTitle', { defaultValue: '能力沉淀与运行时' })}>
-          <div className='mb-10px text-12px text-t-tertiary'>
-            {t('common.superAssistant.rebuild.compoundDesc', {
-              defaultValue: '每次任务结果都应沉淀为技能；运行时与模型配置决定可持续执行能力。',
-            })}
-          </div>
-          <div className='grid gap-12px xl:grid-cols-2'>
-            <SkillsTab
-              skillCount={superAssistantData.skillCount}
-              skillNames={superAssistantData.skillNames}
-              enabledMcpCount={superAssistantData.enabledMcpCount}
-              mcpNames={superAssistantData.mcpNames}
-              onOpenSkillsHub={handleOpenSkillsHub}
-              onOpenMcp={handleOpenMcp}
-            />
-            <RuntimesTab
-              totalAgentCount={superAssistantData.totalAgentCount}
-              activeAgentCount={superAssistantData.activeAgentCount}
-              enabledMcpCount={superAssistantData.enabledMcpCount}
-              onOpenAgentSettings={handleOpenAgentSettings}
-              onOpenModelSettings={() => navigate('/settings/model')}
-            />
-          </div>
-        </Card>
-        <Card title={t('common.superAssistant.rebuild.systemConfigTitle', { defaultValue: '系统配置入口' })}>
-          <SettingsTab
+        {currentTab === 'overview' ? (
+          <>
+            <div className='grid gap-12px xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]'>
+              <Card title={t('common.superAssistant.workbenchTitle', { defaultValue: '当前 Issue 工作台' })}>
+                {currentIssue ? (
+                  <div className='space-y-12px'>
+                    <div>
+                      <div className='text-16px font-700 text-t-primary'>{currentIssue.subject}</div>
+                      {currentIssue.description ? (
+                        <div className='mt-6px text-12px text-t-tertiary'>{currentIssue.description}</div>
+                      ) : null}
+                    </div>
+                    <div className='flex items-center gap-8px flex-wrap'>
+                      <Tag color='arcoblue'>{currentIssue.status}</Tag>
+                      <Tag color='orange'>{currentIssue.priority}</Tag>
+                      {currentIssueAssignment?.agentName ? (
+                        <Tag color='green'>
+                          {t('common.superAssistant.assignedAgentHint', {
+                            defaultValue: '当前负责：{{agent}}',
+                            agent: currentIssueAssignment.agentName,
+                          })}
+                        </Tag>
+                      ) : (
+                        <Tag color='gray'>
+                          {t('common.superAssistant.unassigned', { defaultValue: '未分配' })}
+                        </Tag>
+                      )}
+                    </div>
+                    <div className='flex items-center gap-8px flex-wrap'>
+                      <Button type='primary' size='small' onClick={() => void handleStartCurrentIssue()}>
+                        {t('common.superAssistant.headerStartWork', { defaultValue: '开始处理当前 Issue' })}
+                      </Button>
+                      <Button size='small' type='outline' onClick={handleOpenCurrentIssueDetail}>
+                        {t('common.superAssistant.openIssueDetail', { defaultValue: '打开 Issue 详情' })}
+                      </Button>
+                      <Button size='small' onClick={handleBreakdownIssue}>
+                        {t('common.superAssistant.breakdownIssue', { defaultValue: '拆解当前 Issue' })}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Empty
+                    description={t('common.superAssistant.noIssues', { defaultValue: '暂无共享 Issue' })}
+                  />
+                )}
+              </Card>
+              <Card title={t('common.superAssistant.recentRunTitle', { defaultValue: '最近运行 / 执行反馈' })}>
+                {currentIssue ? (
+                  <div className='space-y-10px text-13px text-t-secondary'>
+                    <div>
+                      {t('common.superAssistant.currentIssueLabel', {
+                        defaultValue: '当前处理：{{subject}}',
+                        subject: currentIssue.subject,
+                      })}
+                    </div>
+                    <div>
+                      {t('common.superAssistant.recentRunAgent', {
+                        defaultValue: '执行 Agent：{{agent}}',
+                        agent: currentIssueActivityFeedback.assignedAgentName ?? '—',
+                      })}
+                    </div>
+                    <div>
+                      {t('common.superAssistant.recentRunStatus', {
+                        defaultValue: '当前状态：{{status}}',
+                        status: currentIssueActivityFeedback.assignedStatus ?? 'idle',
+                      })}
+                    </div>
+                    {currentIssueActivityFeedback.blockerMessage ? (
+                      <div className='text-12px text-red-500'>{currentIssueActivityFeedback.blockerMessage}</div>
+                    ) : null}
+                    <div className='flex items-center gap-8px flex-wrap pt-4px'>
+                      <Button size='small' type='outline' onClick={() => handleSwitchTab('runtimes')}>
+                        {t('common.superAssistant.headerRecentRun', { defaultValue: '查看最近运行' })}
+                      </Button>
+                      {currentIssueAssignment ? (
+                        <Button size='small' onClick={() => void handleOpenAssignedAgent()}>
+                          {t('common.superAssistant.openAssignedAgent', { defaultValue: '继续该 Agent 会话' })}
+                        </Button>
+                      ) : (
+                        <Button size='small' onClick={() => handleSwitchTab('issues')}>
+                          {t('common.superAssistant.goToDispatch', { defaultValue: '进入调度视图' })}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <Empty
+                    description={t('common.superAssistant.noIssues', { defaultValue: '暂无共享 Issue' })}
+                  />
+                )}
+              </Card>
+            </div>
+            <Card title={t('common.superAssistant.issueQueueTitle', { defaultValue: 'Issue 队列' })}>
+              {workspaceIssueList.length ? (
+                <div className='grid gap-10px md:grid-cols-2 xl:grid-cols-3'>
+                  {workspaceIssueList.slice(0, 6).map((issue) => (
+                    <div
+                      key={issue.id}
+                      className='cursor-pointer rd-10px border border-solid border-[var(--color-border-2)] p-12px transition-all hover:border-primary hover:bg-[var(--color-fill-2)]'
+                      onClick={() => {
+                        setSelectedIssueId(issue.id);
+                        handleSwitchTab('overview');
+                      }}
+                    >
+                      <div className='text-13px font-600 text-t-primary'>{issue.subject}</div>
+                      {issue.description ? (
+                        <div className='mt-6px text-12px text-t-tertiary line-clamp-2'>{issue.description}</div>
+                      ) : null}
+                      <div className='mt-8px flex items-center gap-6px flex-wrap'>
+                        <Tag size='small' color='arcoblue'>
+                          {issue.status}
+                        </Tag>
+                        <Tag size='small' color='orange'>
+                          {issue.priority}
+                        </Tag>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Empty description={t('common.superAssistant.noIssues', { defaultValue: '暂无共享 Issue' })} />
+              )}
+            </Card>
+          </>
+        ) : null}
+        {currentTab === 'issues' ? (
+          <IssuesWorkbench
             isAdmin={isAdmin}
-            onOpenEnterpriseConsole={() => navigate('/enterprise')}
-            onOpenWebuiSettings={() => navigate('/settings/webui')}
+            loading={superAssistantData.loading}
+            boardColumns={superAssistantData.boardColumns}
+            issueBoardFeedbackById={issueBoardFeedbackById}
+            currentIssue={currentIssue}
+            assignableAgents={assignableAgents}
+            currentAssignmentAgentName={currentIssueAssignment?.agentName ?? null}
+            currentIssueActivityFeedback={currentIssueActivityFeedback}
+            onSelectIssue={setSelectedIssueId}
+            onBreakdownIssue={handleBreakdownIssue}
+            onAssignIssue={handleAssignIssue}
+            onMarkIssueBlocked={handleMarkIssueBlocked}
+            onClearIssueBlocked={handleClearIssueBlocked}
+            onUnassignIssue={handleUnassignIssue}
+            onMoveIssueToReview={handleMoveIssueToReview}
+            onMarkIssueDone={handleMarkIssueDone}
+            onOpenAssignedAgent={handleOpenAssignedAgent}
+            onOpenKanban={handleBreakdownIssue}
+            onOpenTeamFlow={handleOpenTeamFlow}
+            onOpenSharedTasks={handleOpenSharedTasks}
+            onOpenSharedSessions={handleOpenSharedSessions}
+            onOpenEnterpriseModule={handleOpenEnterpriseModule}
+            onOpenEnterpriseKnowledge={handleOpenEnterpriseKnowledge}
+            onOpenSkills={handleOpenSkillsHub}
+            onOpenMcp={handleOpenMcp}
+            collaborationContext={collaborationContext}
+            autopilotDefaults={autopilotDefaults}
           />
-        </Card>
+        ) : null}
+        {currentTab === 'skills' ? (
+          <Card title={t('common.superAssistant.rebuild.compoundTitle', { defaultValue: '能力沉淀与运行时' })}>
+            <div className='mb-10px text-12px text-t-tertiary'>
+              {t('common.superAssistant.rebuild.compoundDesc', {
+                defaultValue: '把稳定流程沉淀成 Skills，把外部连接沉淀成 MCP，再复用到新的 Issue 处理中。',
+              })}
+            </div>
+            <div className='grid gap-12px xl:grid-cols-2'>
+              <SkillsTab
+                skillCount={superAssistantData.skillCount}
+                skillNames={superAssistantData.skillNames}
+                enabledMcpCount={superAssistantData.enabledMcpCount}
+                mcpNames={superAssistantData.mcpNames}
+                onOpenSkillsHub={handleOpenSkillsHub}
+                onOpenMcp={handleOpenMcp}
+              />
+              <RuntimesTab
+                totalAgentCount={superAssistantData.totalAgentCount}
+                activeAgentCount={superAssistantData.activeAgentCount}
+                enabledMcpCount={superAssistantData.enabledMcpCount}
+                onOpenAgentSettings={handleOpenAgentSettings}
+                onOpenModelSettings={() => navigate('/settings/model')}
+              />
+            </div>
+          </Card>
+        ) : null}
+        {currentTab === 'runtimes' ? (
+          <Card title={t('common.superAssistant.rebuild.liveExecutionTitle', { defaultValue: '实时执行面板' })}>
+            <div className='mb-10px text-12px text-t-tertiary'>
+              {t('common.superAssistant.rebuild.liveExecutionDesc', {
+                defaultValue: '这里聚合运行中的 Agent、执行状态和阻塞信号，便于从产品视角查看最近运行。',
+              })}
+            </div>
+            <AgentsTab executionGroups={superAssistantData.agentExecutionGroups} />
+          </Card>
+        ) : null}
+        {currentTab === 'settings' ? (
+          <Card title={t('common.superAssistant.rebuild.systemConfigTitle', { defaultValue: '系统配置入口' })}>
+            <SettingsTab
+              isAdmin={isAdmin}
+              onOpenEnterpriseConsole={() => navigate('/enterprise')}
+              onOpenWebuiSettings={() => navigate('/settings/webui')}
+            />
+          </Card>
+        ) : null}
       </div>
       <CreateSharedTaskModal
         visible={sharedTaskVisible}

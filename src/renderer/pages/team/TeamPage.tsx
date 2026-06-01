@@ -64,15 +64,14 @@ function buildSharedWorkspaceScopePath(path: '/sessions' | '/tasks', team: TTeam
 
 function buildIssueKanbanPath(team: TTeam, issueContext: TeamIssueContext): string {
   if (!issueContext.issueId || !issueContext.issueSubject) {
-    return '/enterprise/cteam';
+    return '/issues';
   }
   const params = new URLSearchParams({
     teamId: team.id,
     teamName: team.name,
-    issueId: issueContext.issueId,
     issueSubject: issueContext.issueSubject,
   });
-  return `/enterprise/cteam?${params.toString()}`;
+  return `/issues/${encodeURIComponent(issueContext.issueId)}?${params.toString()}`;
 }
 
 type Props = {

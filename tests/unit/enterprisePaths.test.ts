@@ -36,6 +36,7 @@ describe('enterprise paths', () => {
     expect(enterpriseNavKeyFromPath('/enterprise')).toBe('home');
     expect(enterpriseNavKeyFromPath(ENTERPRISE_HOME_PATH)).toBe('home');
     expect(enterpriseNavKeyFromPath('/enterprise/users')).toBe('users');
+    expect(enterpriseNavKeyFromPath('/enterprise/settings')).toBe('settings');
     expect(enterpriseNavKeyFromPath('/enterprise/auth')).toBe('auth');
     expect(enterpriseNavKeyFromPath('/enterprise/teams')).toBe('teams');
     expect(enterpriseNavKeyFromPath('/enterprise/invites')).toBe('invites');
@@ -59,6 +60,9 @@ describe('enterprise paths', () => {
 
     expect(getVisibleEnterpriseNavItems('org_admin', false).map((item) => item.key)).toContain(
       'teams'
+    );
+    expect(getVisibleEnterpriseNavItems('org_admin', false).map((item) => item.key)).toContain(
+      'settings'
     );
   });
 

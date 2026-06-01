@@ -914,6 +914,21 @@
     "pendingCancel": "取消",
     "pendingTimeRemaining": "剩餘時間：{{time}}"
   },
+  "enterpriseConsole": {
+    "navSettings": "企業設定",
+    "settingsDesc": "維護目前企業的基礎資訊。首版支援修改企業名稱，並查看企業識別碼與建立時間。",
+    "settingsEmpty": "目前尚未建立企業。",
+    "settingsLoadFailed": "載入企業設定失敗",
+    "settingsNameLabel": "企業名稱",
+    "settingsNamePlaceholder": "請輸入企業名稱",
+    "settingsNameRequired": "請輸入企業名稱",
+    "settingsIdLabel": "企業 ID",
+    "settingsCreatedAtLabel": "建立時間",
+    "settingsUpdatedAtLabel": "最近更新",
+    "settingsSaved": "企業設定已儲存",
+    "settingsSaveFailed": "儲存企業設定失敗",
+    "settingsReset": "重置"
+  },
   "authProviders": {
     "enterprisePageTitle": "認證與郵件",
     "enterprisePageDesc": "統一管理企業登入接入與組織郵件發信基礎設施，認證提供方與郵箱配置在同一層級維護。",

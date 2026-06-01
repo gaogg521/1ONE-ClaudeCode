@@ -9,6 +9,7 @@ import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
 import type { TTeam } from '@/common/types/teamTypes';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { openAdminConsole } from '@/renderer/utils/openAdminConsole';
@@ -113,9 +114,9 @@ function buildIssueKanbanPath(
   if (teamId && teamName) {
     params.set('teamName', teamName);
   }
-  params.set('issueId', issueId);
   params.set('issueSubject', issueSubject);
-  return `/enterprise/cteam?${params.toString()}`;
+  const query = params.toString();
+  return query ? `/issues/${encodeURIComponent(issueId)}?${query}` : `/issues/${encodeURIComponent(issueId)}`;
 }
 
 function buildTeamSessionPath(teamId: string, issueId?: string | null, issueSubject?: string | null): string {
@@ -297,6 +298,7 @@ async function fetchContentMatchMap(keyword: string): Promise<Map<string, string
 
 const SessionsPage: React.FC = () => {
   const { t } = useTranslation();
+  const auth = useAuth();
   const [convs, setConvs] = useState<TChatConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -580,11 +582,17 @@ const SessionsPage: React.FC = () => {
               })}
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-text-3)', lineHeight: 1.6 }}>
-              {t('common.workspace.hub.enterpriseDesc', {
-                defaultValue:
-                  '已加入 {{tenant}}。现在可以从主工作台直接进入企业协同与平台能力，不必先切到独立管理页。',
-                tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' }),
-              })}
+              {auth.status === 'authenticated'
+                ? t('common.workspace.hub.enterpriseDesc', {
+                    defaultValue:
+                      '已加入 {{tenant}}。现在可以从主工作台直接进入企业协同与平台能力，不必先切到独立管理页。',
+                    tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' }),
+                  })
+                : t('common.workspace.hub.enterpriseInstanceDesc', {
+                    defaultValue:
+                      '当前实例已接入 {{tenant}}。登录企业账号后，即可从主工作台直接进入企业协同与平台能力。',
+                    tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' }),
+                  })}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

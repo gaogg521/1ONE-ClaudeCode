@@ -4,6 +4,7 @@ import { Button, Card, Empty, Typography } from '@arco-design/web-react';
 import { Right, Setting } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useConversationHistoryContext } from '@/renderer/hooks/context/ConversationHistoryContext';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { getActivityTime } from '@/renderer/utils/chat/timeline';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import PageContentShell from '@/renderer/components/layout/PageContentShell';
@@ -71,6 +72,7 @@ function getConversationOpenPath(conversation: { id: string; extra?: unknown }):
 const WorkspacePage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const auth = useAuth();
   const { groupedHistory, conversations } = useConversationHistoryContext();
   const { hasJoinedEnterprise, showEnterpriseAdminNav, tenantLabel } = useEditionFeatures();
   const lastActiveTeamScope = useMemo(() => readLastActiveTeamScope(), []);
@@ -138,12 +140,12 @@ const WorkspacePage: React.FC = () => {
         {
           key: 'cteam',
           title: t('common.workspace.hub.enterpriseKanbanTitle', {
-            defaultValue: 'CTeam 敏捷协同',
+            defaultValue: 'Issues',
           }),
           description: t('common.workspace.hub.enterpriseKanbanDesc', {
-            defaultValue: '进入需求协同、任务拆解与跨角色推进看板。',
+            defaultValue: '进入统一的 Issue 工作台，查看状态、拆解结果与协作上下文。',
           }),
-          path: '/enterprise/cteam',
+          path: '/issues',
         },
         {
           key: 'shared-sessions',
@@ -168,12 +170,12 @@ const WorkspacePage: React.FC = () => {
         {
           key: 'cagent',
           title: t('common.workspace.hub.enterpriseAgentTitle', {
-            defaultValue: 'CAgent 智能助手',
+            defaultValue: 'Agent 助手',
           }),
           description: t('common.workspace.hub.enterpriseAgentDesc', {
-            defaultValue: '把企业知识、工具连接与交付流程串成受控 AI 工作台。',
+            defaultValue: '直接处理当前 Issue、查看运行结果，并在需要时进入协作调度。',
           }),
-          path: '/enterprise/cagent',
+          path: '/super-assistant?tab=workspace',
         },
         showEnterpriseAdminNav
           ? {
@@ -232,11 +234,17 @@ const WorkspacePage: React.FC = () => {
                 })}
               </div>
               <div className='text-12px text-t-tertiary mt-4px'>
-                {t('common.workspace.hub.enterpriseDesc', {
-                  defaultValue:
-                    '已加入 {{tenant}}。现在可以从主工作台直接进入企业协同与平台能力，不必先切到独立管理页。',
-                  tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' }),
-                })}
+                {auth.status === 'authenticated'
+                  ? t('common.workspace.hub.enterpriseDesc', {
+                      defaultValue:
+                        '已加入 {{tenant}}。现在可以从主工作台直接进入企业协同与平台能力，不必先切到独立管理页。',
+                      tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' }),
+                    })
+                  : t('common.workspace.hub.enterpriseInstanceDesc', {
+                      defaultValue:
+                        '当前实例已接入 {{tenant}}。登录企业账号后，即可从主工作台直接进入企业协同与平台能力。',
+                      tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '1ONE Code 企业版' }),
+                    })}
               </div>
             </div>
           </div>

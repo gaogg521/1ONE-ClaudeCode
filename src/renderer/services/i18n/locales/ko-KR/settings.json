@@ -914,6 +914,21 @@
     "pendingCancel": "취소",
     "pendingTimeRemaining": "남은 시간: {{time}}"
   },
+  "enterpriseConsole": {
+    "navSettings": "기업 설정",
+    "settingsDesc": "현재 기업의 기본 정보를 관리합니다. 첫 버전에서는 기업 이름 수정과 기업 ID / 생성 시간 조회를 지원합니다.",
+    "settingsEmpty": "아직 생성된 기업이 없습니다.",
+    "settingsLoadFailed": "기업 설정을 불러오지 못했습니다",
+    "settingsNameLabel": "기업 이름",
+    "settingsNamePlaceholder": "기업 이름을 입력하세요",
+    "settingsNameRequired": "기업 이름을 입력하세요",
+    "settingsIdLabel": "기업 ID",
+    "settingsCreatedAtLabel": "생성 시간",
+    "settingsUpdatedAtLabel": "최근 업데이트",
+    "settingsSaved": "기업 설정이 저장되었습니다",
+    "settingsSaveFailed": "기업 설정 저장에 실패했습니다",
+    "settingsReset": "재설정"
+  },
   "authProviders": {
     "enterprisePageTitle": "인증 및 메일",
     "enterprisePageDesc": "기업 로그인 연동과 조직 메일 발송 인프라를 한곳에서 관리하며, 이메일 설정도 인증 제공자와 같은 레벨에서 유지합니다.",

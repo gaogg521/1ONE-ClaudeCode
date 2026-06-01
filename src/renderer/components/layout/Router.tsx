@@ -33,6 +33,7 @@ const CFlowBoard = React.lazy(() => import('@renderer/pages/admin/CFlowBoard'));
 const EnterpriseJoinLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseJoinLayout'));
 const EnterpriseLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseLayout'));
 const EnterpriseHome = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseHome'));
+const EnterpriseSettings = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseSettings'));
 const EnterpriseUsagePage = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseUsagePage'));
 const EnterpriseSecurityPage = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseSecurityPage'));
 const PersonalShell = React.lazy(() => import('@renderer/components/layout/PersonalShell'));
@@ -57,6 +58,10 @@ const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/Schedul
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
 const TeamIndex = React.lazy(() => import('@renderer/pages/team'));
 const SuperAssistantPage = React.lazy(() => import('@renderer/pages/superAssistant'));
+const IssuesPage = React.lazy(() => import('@renderer/pages/issues'));
+const IssueDetailPage = React.lazy(() => import('@renderer/pages/issues/IssueDetailPage'));
+const SkillsPage = React.lazy(() => import('@renderer/pages/skills'));
+const SkillDetailPage = React.lazy(() => import('@renderer/pages/skills/SkillDetailPage'));
 const WorkspacePage = React.lazy(() => import('@renderer/pages/workspace'));
 const WorkspaceSettingsShell = React.lazy(() => import('@renderer/pages/workspace/WorkspaceSettings'));
 const WorkspaceProjectSettings = React.lazy(() => import('@renderer/pages/workspace/WorkspaceProjectSettings'));
@@ -80,9 +85,14 @@ const withRouteFallback = (Component: React.LazyExoticComponent<React.ComponentT
 const EnterpriseAuthLayout: React.FC = () => {
   const { status, user, ready } = useAuth();
   const location = useLocation();
+  const isDesktop = isElectronDesktop();
 
   if (!ready || (status === 'checking' && !user)) {
     return <AppLoader />;
+  }
+
+  if (isDesktop && location.pathname === '/enterprise') {
+    return <Outlet />;
   }
 
   if (status !== 'authenticated' && !user) {
@@ -90,7 +100,11 @@ const EnterpriseAuthLayout: React.FC = () => {
     if (returnPath && returnPath !== '/login') {
       setPostLoginRedirect(returnPath);
     }
-    return <Navigate to={`/login?redirect=${encodeURIComponent(returnPath || '/enterprise')}`} replace />;
+    const query = new URLSearchParams({
+      redirect: returnPath || '/enterprise',
+      mode: 'enterprise',
+    });
+    return <Navigate to={`/login?${query.toString()}`} replace />;
   }
 
   return <Outlet />;
@@ -180,8 +194,12 @@ const PanelRoute: React.FC = () => {
               </Suspense>
             }
           />
+          <Route path='/issues' element={withRouteFallback(IssuesPage)} />
+          <Route path='/issues/:issueId' element={withRouteFallback(IssueDetailPage)} />
           <Route path='/tasks' element={withRouteFallback(TasksPage)} />
           <Route path='/super-assistant' element={withRouteFallback(SuperAssistantPage)} />
+          <Route path='/skills' element={withRouteFallback(SkillsPage)} />
+          <Route path='/skills/:skillKey' element={withRouteFallback(SkillDetailPage)} />
           <Route path='/hooks' element={withRouteFallback(HooksPage)} />
           <Route path='/mcp' element={withRouteFallback(MCPPage)} />
           <Route path='/memory' element={withRouteFallback(MemoryPage)} />
@@ -211,6 +229,7 @@ const PanelRoute: React.FC = () => {
         <Route element={<EnterpriseAuthLayout />}>
           <Route path='/enterprise' element={withRouteFallback(EnterpriseLayout)}>
             <Route index element={withRouteFallback(EnterpriseHome)} />
+            <Route path='settings' element={withRouteFallback(EnterpriseSettings)} />
             <Route path='users' element={withRouteFallback(AdminUsers)} />
             <Route path='teams' element={withRouteFallback(AdminTeams)} />
             <Route path='auth' element={withRouteFallback(AdminAuth)} />
@@ -227,7 +246,7 @@ const PanelRoute: React.FC = () => {
             <Route path='cmeas' element={withRouteFallback(CMeasDashboard)} />
             <Route path='ctest' element={withRouteFallback(CTestManagement)} />
             <Route path='cflow' element={withRouteFallback(CFlowBoard)} />
-            <Route path='cagent' element={<Navigate to='/super-assistant?tab=overview' replace />} />
+            <Route path='cagent' element={<Navigate to='/super-assistant?tab=workspace' replace />} />
             <Route path='usage' element={withRouteFallback(EnterpriseUsagePage)} />
             <Route path='security' element={withRouteFallback(EnterpriseSecurityPage)} />
           </Route>

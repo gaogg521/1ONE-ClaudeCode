@@ -3,21 +3,61 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigateMock = vi.hoisted(() => vi.fn());
+const authState = vi.hoisted(() => ({
+  status: 'authenticated',
+  user: { id: 'user-1', username: 'alice', role: 'member' as const },
+}));
+const enterpriseModeState = vi.hoisted(() => ({
+  effectiveRole: 'member',
+  showEnterpriseAdminNav: false,
+  hasJoinedEnterprise: true,
+  managementMode: 'enterprise',
+  enterpriseContext: { tenantId: 'tenant-1', tenantName: 'Acme Corp' },
+  setManagementMode: vi.fn(),
+  openEnterpriseAdminInBrowser: vi.fn(),
+}));
+const profileState = vi.hoisted(() => ({
+  visible: true,
+  canUploadAvatar: true,
+  avatarDisplayUrl: null,
+  uploadAvatar: vi.fn(),
+  profile: {
+    userId: 'user-1',
+    username: 'alice',
+    email: null,
+    role: 'member',
+    tenantId: 'tenant-1',
+    tenantName: 'Acme Corp',
+    joinedEnterprise: true,
+    avatarUrl: null,
+    orgUnitPath: '研发中心 / 平台组',
+    teams: [{ teamId: 'team-1', teamName: 'Platform', role: 'member' }],
+    updatedAt: Date.now(),
+  },
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, options?: { defaultValue?: string }) => options?.defaultValue || _key,
+    t: (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) => {
+      const template = options?.defaultValue || _key;
+      return Object.entries(options ?? {}).reduce((acc, [key, value]) => {
+        if (key === 'defaultValue') {
+          return acc;
+        }
+        return acc.replaceAll(`{{${key}}}`, String(value));
+      }, template);
+    },
   }),
 }));
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
+  useLocation: () => ({ pathname: '/workspace', search: '', hash: '' }),
 }));
 
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({
   useAuth: () => ({
-    status: 'authenticated',
-    user: { id: 'user-1', username: 'alice', role: 'member' },
+    ...authState,
     logout: vi.fn(),
   }),
 }));
@@ -27,37 +67,11 @@ vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
 }));
 
 vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
-  useWebuiEnterpriseMode: () => ({
-    effectiveRole: 'member',
-    showEnterpriseAdminNav: false,
-    hasJoinedEnterprise: true,
-    managementMode: 'enterprise',
-    enterpriseContext: { tenantId: 'tenant-1', tenantName: 'Acme Corp' },
-    setManagementMode: vi.fn(),
-    openEnterpriseAdminInBrowser: vi.fn(),
-  }),
+  useWebuiEnterpriseMode: () => enterpriseModeState,
 }));
 
 vi.mock('@/renderer/hooks/enterprise/useWorkspaceUserProfile', () => ({
-  useWorkspaceUserProfile: () => ({
-    visible: true,
-    canUploadAvatar: true,
-    avatarDisplayUrl: null,
-    uploadAvatar: vi.fn(),
-    profile: {
-      userId: 'user-1',
-      username: 'alice',
-      email: null,
-      role: 'member',
-      tenantId: 'tenant-1',
-      tenantName: 'Acme Corp',
-      joinedEnterprise: true,
-      avatarUrl: null,
-      orgUnitPath: '研发中心 / 平台组',
-      teams: [{ teamId: 'team-1', teamName: 'Platform', role: 'member' }],
-      updatedAt: Date.now(),
-    },
-  }),
+  useWorkspaceUserProfile: () => profileState,
 }));
 
 vi.mock('@/renderer/utils/platform', () => ({
@@ -92,6 +106,29 @@ import WorkspaceIdentityPanel from '@/renderer/components/layout/WorkspaceIdenti
 describe('WorkspaceIdentityPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.status = 'authenticated';
+    authState.user = { id: 'user-1', username: 'alice', role: 'member' };
+    enterpriseModeState.effectiveRole = 'member';
+    enterpriseModeState.showEnterpriseAdminNav = false;
+    enterpriseModeState.hasJoinedEnterprise = true;
+    enterpriseModeState.managementMode = 'enterprise';
+    enterpriseModeState.enterpriseContext = { tenantId: 'tenant-1', tenantName: 'Acme Corp' };
+    profileState.visible = true;
+    profileState.canUploadAvatar = true;
+    profileState.avatarDisplayUrl = null;
+    profileState.profile = {
+      userId: 'user-1',
+      username: 'alice',
+      email: null,
+      role: 'member',
+      tenantId: 'tenant-1',
+      tenantName: 'Acme Corp',
+      joinedEnterprise: true,
+      avatarUrl: null,
+      orgUnitPath: '研发中心 / 平台组',
+      teams: [{ teamId: 'team-1', teamName: 'Platform', role: 'member' }],
+      updatedAt: Date.now(),
+    };
   });
 
   it('renders username and organization in titlebar trigger', () => {
@@ -106,5 +143,30 @@ describe('WorkspaceIdentityPanel', () => {
     expect(screen.queryByText('alice')).toBeNull();
     expect(screen.queryByText('Acme Corp')).toBeNull();
     expect(screen.getByLabelText('账户与组织')).toBeTruthy();
+  });
+
+  it('shows enterprise guest identity instead of plain guest when enterprise is connected', () => {
+    authState.status = 'unauthenticated';
+    authState.user = null;
+    enterpriseModeState.hasJoinedEnterprise = true;
+    enterpriseModeState.managementMode = 'enterprise';
+    enterpriseModeState.enterpriseContext = { tenantId: 'tenant-1', tenantName: 'Acme Corp' };
+    profileState.profile = {
+      userId: 'anonymous',
+      username: 'Guest',
+      email: null,
+      role: 'member',
+      tenantId: 'default',
+      tenantName: null,
+      joinedEnterprise: false,
+      avatarUrl: null,
+      orgUnitPath: null,
+      teams: [],
+      updatedAt: Date.now(),
+    };
+
+    render(<WorkspaceIdentityPanel />);
+    expect(screen.getByText('企业访客')).toBeTruthy();
+    expect(screen.getByText('Acme Corp · 未登录企业账号')).toBeTruthy();
   });
 });

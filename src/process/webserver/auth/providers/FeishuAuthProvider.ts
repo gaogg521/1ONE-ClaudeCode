@@ -92,7 +92,11 @@ export async function exchangeFeishuCodeForUserAccessToken(params: {
     if (obj.code !== 0) {
       throw new Error(`Feishu token exchange failed: ${obj.msg || 'unknown error'}`);
     }
-    const token = obj.data?.access_token;
+    const topLevelToken =
+      typeof data === 'object' && data && typeof (data as { access_token?: unknown }).access_token === 'string'
+        ? (data as { access_token: string }).access_token
+        : undefined;
+    const token = obj.data?.access_token ?? topLevelToken;
     if (typeof token !== 'string' || !token) {
       throw new Error('Feishu token exchange failed: missing access_token');
     }

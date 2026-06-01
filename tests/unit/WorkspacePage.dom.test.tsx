@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const navigateMock = vi.hoisted(() => vi.fn());
 const conversationHistoryMock = vi.hoisted(() => vi.fn());
 const editionFeaturesMock = vi.hoisted(() => vi.fn());
+const authMock = vi.hoisted(() => vi.fn());
 const readPinnedProjectsMock = vi.hoisted(() => vi.fn(() => []));
 
 vi.mock('react-i18next', () => ({
@@ -46,6 +47,10 @@ vi.mock('@/renderer/hooks/webui/useEditionFeatures', () => ({
   useEditionFeatures: () => editionFeaturesMock(),
 }));
 
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => authMock(),
+}));
+
 import WorkspacePage from '@/renderer/pages/workspace';
 
 describe('WorkspacePage', () => {
@@ -63,6 +68,10 @@ describe('WorkspacePage', () => {
       showEnterpriseAdminNav: false,
       tenantLabel: null,
     });
+    authMock.mockReturnValue({
+      status: 'authenticated',
+      user: { id: 'user-1', role: 'org_admin' },
+    });
   });
 
   it('shows enterprise collaboration shortcuts inside the main workspace after joining an enterprise', () => {
@@ -77,11 +86,11 @@ describe('WorkspacePage', () => {
     expect(screen.getByTestId('page-content-shell-content')).toBeInTheDocument();
     expect(screen.getByText('企业协同与平台能力')).toBeInTheDocument();
     expect(screen.getByText('企业能力总览')).toBeInTheDocument();
-    expect(screen.getByText('CTeam 敏捷协同')).toBeInTheDocument();
+    expect(screen.getByText('Issues')).toBeInTheDocument();
     expect(screen.getByText('共享会话')).toBeInTheDocument();
     expect(screen.getByText('共享任务')).toBeInTheDocument();
     expect(screen.getByText('CCI 流水线')).toBeInTheDocument();
-    expect(screen.getByText('CAgent 智能助手')).toBeInTheDocument();
+    expect(screen.getByText('Agent 助手')).toBeInTheDocument();
     expect(screen.getByText('组织管理后台')).toBeInTheDocument();
   });
 

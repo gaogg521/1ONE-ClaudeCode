@@ -21,6 +21,7 @@ import {
   type TeamMemberRecord,
   type TeamRecord,
   type TeamTaskRecord,
+  updateTeam,
   updateTeamMemberRole,
   updateTeamTask,
 } from '@/renderer/utils/enterpriseApi/modules';
@@ -47,6 +48,8 @@ const AdminTeams: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   const [selectedTeam, setSelectedTeam] = useState<TeamRow | null>(null);
+  const [editVisible, setEditVisible] = useState(false);
+  const [editForm, setEditForm] = useState({ id: '', name: '' });
   const [taskModalVisible, setTaskModalVisible] = useState(false);
   const [taskForm, setTaskForm] = useState({ subject: '', description: '', owner: '' });
 
@@ -114,6 +117,30 @@ const AdminTeams: React.FC = () => {
       setSaving(false);
     }
   }, [createForm, t, teamsState]);
+
+  const handleOpenEdit = useCallback((team: TeamRow) => {
+    setEditForm({ id: team.id, name: team.name });
+    setEditVisible(true);
+    setSelectedTeam(team);
+  }, []);
+
+  const handleEdit = useCallback(async () => {
+    if (!editForm.id || !editForm.name.trim()) {
+      Message.warning(t('admin.teams.validation.nameRequired', { defaultValue: '请填写团队名称' }));
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateTeam(editForm.id, { name: editForm.name.trim() });
+      Message.success(t('admin.teams.messages.updated', { defaultValue: '团队已更新' }));
+      setEditVisible(false);
+      await teamsState.reload();
+    } catch (e) {
+      Message.error(getEnterpriseActionError(e, t('admin.teams.messages.updateFailed', { defaultValue: '更新失败' })));
+    } finally {
+      setSaving(false);
+    }
+  }, [editForm.id, editForm.name, t, teamsState]);
 
   const handleCreateTeamTask = useCallback(async () => {
     if (!selectedTeam || !taskForm.subject.trim()) {
@@ -336,9 +363,14 @@ const AdminTeams: React.FC = () => {
                 {
                   title: t('admin.teams.table.actions', { defaultValue: '操作' }),
                   render: (_: unknown, r: TeamRow) => (
-                    <Button size='mini' onClick={() => setSelectedTeam(r)}>
-                      {t('admin.teams.button.manageMembers', { defaultValue: '管理成员' })}
-                    </Button>
+                    <Space size='mini'>
+                      <Button size='mini' onClick={() => setSelectedTeam(r)}>
+                        {t('admin.teams.button.manageMembers', { defaultValue: '管理成员' })}
+                      </Button>
+                      <Button size='mini' onClick={() => handleOpenEdit(r)}>
+                        {t('admin.teams.button.editTeam', { defaultValue: '编辑团队' })}
+                      </Button>
+                    </Space>
                   ),
                 },
               ]}
@@ -432,6 +464,22 @@ const AdminTeams: React.FC = () => {
               <Select.Option value='shared'>shared</Select.Option>
               <Select.Option value='isolated'>isolated</Select.Option>
             </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t('admin.teams.modal.editTeam', { defaultValue: '编辑团队' })}
+        visible={editVisible}
+        onCancel={() => setEditVisible(false)}
+        onOk={handleEdit}
+        confirmLoading={saving}
+        okText={t('admin.teams.button.saveChanges', { defaultValue: '保存修改' })}
+        cancelText={t('admin.teams.button.cancel', { defaultValue: '取消' })}
+      >
+        <Form layout='vertical'>
+          <Form.Item label={t('admin.teams.form.name', { defaultValue: '名称' })} required>
+            <Input value={editForm.name} onChange={(v) => setEditForm((s) => ({ ...s, name: v }))} />
           </Form.Item>
         </Form>
       </Modal>

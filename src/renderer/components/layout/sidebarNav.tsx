@@ -44,21 +44,36 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     icon: <Checklist theme='outline' size={18} />,
+    labelKey: 'nav.issues',
+    labelDefault: 'Issues',
+    path: '/issues',
+    paths: ['/enterprise/cteam', '/enterprise/kanban'],
+  },
+  {
+    icon: <Checklist theme='outline' size={18} />,
     labelKey: 'nav.tasks',
     labelDefault: 'Tasks',
     path: '/tasks',
   },
   {
-    icon: <People theme='outline' size={18} />,
-    labelKey: 'nav.enterpriseConsole',
-    labelDefault: 'Enterprise',
-    path: '/enterprise',
+    icon: <Robot theme='outline' size={18} />,
+    labelKey: 'nav.agentAssistant',
+    labelDefault: 'Agent 助手',
+    path: '/super-assistant',
+    paths: ['/enterprise/cagent'],
   },
   {
-    icon: <Robot theme='outline' size={18} />,
-    labelKey: 'nav.superAssistant',
-    labelDefault: '超级助手',
-    path: '/super-assistant',
+    icon: <Lightning theme='outline' size={18} />,
+    labelKey: 'nav.skills',
+    labelDefault: 'Skills',
+    path: '/skills',
+    paths: ['/settings/skills-hub', '/enterprise/skills'],
+  },
+  {
+    icon: <People theme='outline' size={18} />,
+    labelKey: 'nav.enterpriseConsole',
+    labelDefault: '企业后台',
+    path: '/enterprise',
   },
   {
     icon: <Lightning theme='outline' size={18} />,
@@ -95,7 +110,13 @@ const NAV_ITEMS: NavItem[] = [
 export function getSidebarNavItems(hasJoinedEnterprise: boolean, isEnterpriseEdition: boolean): NavItem[] {
   let items = NAV_ITEMS;
   if (!hasJoinedEnterprise) {
-    items = items.filter((x) => x.path !== '/enterprise' && x.path !== '/super-assistant');
+    items = items.filter(
+      (x) =>
+        x.path !== '/enterprise' &&
+        x.path !== '/super-assistant' &&
+        x.path !== '/issues' &&
+        x.path !== '/skills'
+    );
   }
   if (!isEnterpriseEdition) {
     items = items.filter((x) => !x.enterpriseOnly);
@@ -119,6 +140,8 @@ export function shouldShowSessionSidebarContent(pathname: string): boolean {
     '/hooks',
     '/mcp',
     '/memory',
+    '/issues',
+    '/skills',
     '/super-assistant',
     '/sessions',
     '/enterprise',

@@ -15,6 +15,14 @@ type OAuthErrorBody = {
   code?: string;
 };
 
+function withOAuthAuthorizeJsonFormat(path: string): string {
+  const separator = path.includes('?') ? '&' : '?';
+  if (/([?&])format=json(?:&|$)/.test(path)) {
+    return path;
+  }
+  return `${path}${separator}format=json`;
+}
+
 function readOAuthErrorMessage(body: OAuthErrorBody | null, status: number): string {
   const message = typeof body?.message === 'string' ? body.message.trim() : '';
   if (message) {
@@ -30,7 +38,7 @@ async function requestOAuthAuthorize(path: string): Promise<Response> {
   if (isElectronDesktop()) {
     return fetchWebuiApi(path, { method: 'GET', redirect: 'manual' });
   }
-  return fetch(path, { method: 'GET', credentials: 'include', redirect: 'manual' });
+  return fetch(withOAuthAuthorizeJsonFormat(path), { method: 'GET', credentials: 'include', redirect: 'manual' });
 }
 
 /**

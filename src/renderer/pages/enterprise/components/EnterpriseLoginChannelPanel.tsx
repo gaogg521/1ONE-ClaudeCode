@@ -262,15 +262,22 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
 
   const showLocalSessionHint = status === 'authenticated' && user != null && !hasJoinedEnterprise;
   const usingDesktopOperatorIdentity = isDesktopOperatorUser(user);
+  const usingLocalWebuiAccount = !usingDesktopOperatorIdentity && (user?.tenant_id ?? 'default') === 'default';
   const localSessionHintText = usingDesktopOperatorIdentity
     ? t('settings.authProviders.desktopBrowserLoginHint', {
         defaultValue: '请先在浏览器 WebUI 登录（管理员配置认证；成员加入团队）。登录后桌面端会自动同步，无需二次登录。',
       })
-    : t('settings.enterpriseConsole.loginChannels.localSessionHint', {
+    : usingLocalWebuiAccount
+      ? t('settings.enterpriseConsole.loginChannels.localWebuiSessionHint', {
+          defaultValue:
+            '当前已登录本地 WebUI 账号 {{username}}，但尚未以企业成员身份登录。请使用下方组织登录方式，或切换账号后再试。',
+          username: user?.username ?? '',
+        })
+      : t('settings.enterpriseConsole.loginChannels.localSessionHint', {
         defaultValue:
           '当前以本地账户 {{username}} 登录，尚未加入组织。请使用下方组织登录方式，或切换账号后再试。',
         username: user?.username ?? '',
-      });
+        });
 
   const handleSwitchAccount = useCallback(async () => {
     setSwitchingAccount(true);

@@ -8,9 +8,9 @@ type SuperAssistantHeaderProps = {
   openIssueCount: number;
   activeAgentCount: number;
   skillCount: number;
-  onOpenKanban: () => void;
-  onOpenTeamFlow: () => void;
-  onCreateSharedTask: () => void;
+  onStartCurrentIssue: () => void;
+  onOpenRecentRun: () => void;
+  onOpenIssues: () => void;
 };
 
 const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
@@ -19,9 +19,9 @@ const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
   openIssueCount,
   activeAgentCount,
   skillCount,
-  onOpenKanban,
-  onOpenTeamFlow,
-  onCreateSharedTask,
+  onStartCurrentIssue,
+  onOpenRecentRun,
+  onOpenIssues,
 }) => {
   const { t } = useTranslation();
 
@@ -30,7 +30,7 @@ const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
       <div className='min-w-0'>
         <div className='flex items-center gap-8px flex-wrap'>
           <div className='text-18px font-bold text-t-primary'>
-            {t('common.superAssistant.title', { defaultValue: '超级助手 / 企业 Agent 工作台' })}
+            {t('common.superAssistant.title', { defaultValue: 'Agent 助手 / Issue 工作台' })}
           </div>
           <Tag color='blue'>
             {isAdmin
@@ -41,7 +41,7 @@ const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
         <div className='mt-4px text-12px text-t-tertiary'>
           {t('common.superAssistant.subtitle', {
             defaultValue:
-              '把“分配任务 -> 执行进度 -> 结果沉淀”放在同一个页面，像管理同事一样管理智能体。',
+              '先从当前 Issue 发起分析或执行，再在需要时进入调度、运行时和团队协作。',
           })}
         </div>
         {tenantLabel ? (
@@ -75,14 +75,14 @@ const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
       </div>
 
       <div className='flex items-center gap-8px flex-wrap'>
-        <Button size='small' type='outline' onClick={onOpenKanban}>
-          {t('common.superAssistant.headerKanban', { defaultValue: '打开协作看板' })}
+        <Button size='small' type='primary' onClick={onStartCurrentIssue}>
+          {t('common.superAssistant.headerStartWork', { defaultValue: '开始处理当前 Issue' })}
         </Button>
-        <Button size='small' type='outline' onClick={onOpenTeamFlow}>
-          {t('common.superAssistant.headerTeamFlow', { defaultValue: '拉起 Team 协作' })}
+        <Button size='small' type='outline' onClick={onOpenRecentRun}>
+          {t('common.superAssistant.headerRecentRun', { defaultValue: '查看最近运行' })}
         </Button>
-        <Button size='small' type='primary' onClick={onCreateSharedTask}>
-          {t('common.superAssistant.headerCreateTask', { defaultValue: '创建共享任务' })}
+        <Button size='small' type='outline' onClick={onOpenIssues}>
+          {t('common.superAssistant.headerOpenIssues', { defaultValue: '进入 Issues' })}
         </Button>
       </div>
     </div>

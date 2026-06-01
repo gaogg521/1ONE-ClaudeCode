@@ -70,44 +70,64 @@ describe('apiRoutes helper functions', () => {
     vi.clearAllMocks();
   });
 
+  function createMockApp(): Express {
+    return {
+      use: vi.fn(),
+      post: vi.fn(),
+      get: vi.fn(),
+      patch: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+    } as unknown as Express;
+  }
+
   describe('decodeMulterFileName through sanitizeFileName', () => {
     it('handles non-ASCII filenames in upload (CJK characters)', async () => {
       const mockDb = {
-        getConversation: vi.fn().mockReturnValue({
-          success: true,
-          data: {
-            extra: { workspace: '/workspace' },
-          },
+        getDriver: vi.fn().mockReturnValue({
+          prepare: vi.fn().mockReturnValue({
+            get: vi.fn().mockReturnValue({
+              user_id: 'user-1',
+              team_id: null,
+              extra: JSON.stringify({ workspace: '/workspace' }),
+            }),
+          }),
         }),
       };
       vi.mocked(getDatabase).mockResolvedValue(mockDb as any);
 
       // This tests the path that would use sanitizeFileName
-      const result = await resolveUploadWorkspace('conv-123', undefined);
+      const result = await resolveUploadWorkspace('conv-123', undefined, {
+        id: 'user-1',
+        tenant_id: 'default',
+        role: 'member',
+      });
       expect(result).toBeDefined();
     });
   });
 
   describe('normalizeMountPath', () => {
     it('is used in extension route registration', () => {
-      const app = {
-        use: vi.fn(),
-        post: vi.fn(),
-        get: vi.fn(),
-      } as unknown as Express;
+      const app = createMockApp();
 
       // This triggers the registerApiRoutes which uses normalizeMountPath
       expect(() => registerApiRoutes(app)).not.toThrow();
     });
   });
 
+  describe('generic /api route registration', () => {
+    it('registers the generic API health endpoint on GET /api only', () => {
+      const app = createMockApp();
+
+      registerApiRoutes(app);
+
+      expect(app.get).toHaveBeenCalledWith('/api', expect.any(Function), expect.any(Function), expect.any(Function));
+    });
+  });
+
   describe('isPathInsideRoot', () => {
     it('prevents path traversal in extension routes', () => {
-      const app = {
-        use: vi.fn(),
-        post: vi.fn(),
-        get: vi.fn(),
-      } as unknown as Express;
+      const app = createMockApp();
 
       // This triggers code paths that use isPathInsideRoot
       expect(() => registerApiRoutes(app)).not.toThrow();
@@ -124,6 +144,9 @@ describe('apiRoutes - sanitizeFileName edge cases', () => {
         // Store the handlers for testing
       }),
       get: vi.fn(),
+      patch: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
     } as unknown as Express;
 
     registerApiRoutes(app);

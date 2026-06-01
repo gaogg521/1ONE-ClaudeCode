@@ -18,6 +18,39 @@ describe('oauthAuthorize', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(isElectronDesktop).mockReturnValue(false);
+    vi.stubGlobal('window', {
+      location: {
+        href: 'http://localhost/',
+      },
+    });
+  });
+
+  it('requests JSON authorize response in browser and follows returned goto URL', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: { get: (key: string) => (key.toLowerCase() === 'content-type' ? 'application/json' : null) },
+      json: async () => ({
+        success: true,
+        data: { goto: 'http://localhost/#/oauth-start' },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const result = await startOAuthAuthorize('/api/auth/feishu/authorize?mode=oauth&redirect=%2Fenterprise%2Fauth');
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/auth/feishu/authorize?mode=oauth&redirect=%2Fenterprise%2Fauth&format=json',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include',
+        redirect: 'manual',
+      })
+    );
+    expect(result).toEqual({ ok: true });
+    expect((globalThis.window as { location: { href: string } }).location.href).toBe(
+      'http://localhost/#/oauth-start'
+    );
   });
 
   it('returns backend message when authorize is rejected', async () => {

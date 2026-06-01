@@ -55,7 +55,9 @@ function buildOrgLine(
 const GuestProfileMenu: React.FC<{
   onJoinEnterprise: () => void;
   onAdminLogin: () => void;
-}> = ({ onJoinEnterprise, onAdminLogin }) => {
+  enterpriseConnected?: boolean;
+  tenantLabel?: string | null;
+}> = ({ onJoinEnterprise, onAdminLogin, enterpriseConnected = false, tenantLabel = null }) => {
   const { t } = useTranslation();
 
   const handleMenuItem = (key: string) => {
@@ -72,12 +74,19 @@ const GuestProfileMenu: React.FC<{
     <Menu className={styles.menu} onClickMenuItem={handleMenuItem}>
       <div className={styles.menuHeader}>
         <Typography.Text bold>
-          {t('settings.workspaceIdentity.guestTitle', { defaultValue: '访客模式' })}
+          {enterpriseConnected
+            ? t('settings.workspaceIdentity.enterpriseGuestTitle', { defaultValue: '企业访客' })
+            : t('settings.workspaceIdentity.guestTitle', { defaultValue: '访客模式' })}
         </Typography.Text>
         <Typography.Paragraph type='secondary' className={styles.menuSub}>
-          {t('settings.workspaceIdentity.guestDesc', {
-            defaultValue: '当前为单机个人版，可直接使用会话与工作区。加入团队后可使用企业协作能力。',
-          })}
+          {enterpriseConnected
+            ? t('settings.workspaceIdentity.enterpriseGuestDesc', {
+                defaultValue: '当前实例已接入 {{tenant}}，但此桌面会话尚未登录企业账号。请先登录或加入团队后再使用企业协作能力。',
+                tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业组织' }),
+              })
+            : t('settings.workspaceIdentity.guestDesc', {
+                defaultValue: '当前为单机个人版，可直接使用会话与工作区。加入团队后可使用企业协作能力。',
+              })}
         </Typography.Paragraph>
       </div>
       <Divider style={{ margin: '8px 0' }} />
@@ -283,6 +292,9 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
   };
 
   const isGuest = profile.userId === ANONYMOUS_WORKSPACE_USER_ID;
+  const enterpriseGuestTenantLabel =
+    enterpriseMode.enterpriseContext?.tenantName ?? enterpriseMode.enterpriseContext?.tenantId ?? null;
+  const isEnterpriseGuest = isGuest && enterpriseMode.hasJoinedEnterprise && Boolean(enterpriseGuestTenantLabel);
 
   const handleGuestJoin = () => {
     void enterpriseMode.setManagementMode('enterprise').then(() => {
@@ -335,15 +347,27 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
   };
 
   const orgLine = isGuest
-    ? t('settings.workspaceIdentity.guestEdition', { defaultValue: '个人版 · 未登录' })
+    ? isEnterpriseGuest
+      ? t('settings.workspaceIdentity.enterpriseGuestEdition', {
+          defaultValue: '{{tenant}} · 未登录企业账号',
+          tenant: enterpriseGuestTenantLabel,
+        })
+      : t('settings.workspaceIdentity.guestEdition', { defaultValue: '个人版 · 未登录' })
     : buildOrgLine(profile, enterpriseMode.managementMode, t);
 
   const displayName = isGuest
-    ? t('settings.workspaceIdentity.guestName', { defaultValue: '访客' })
+    ? isEnterpriseGuest
+      ? t('settings.workspaceIdentity.enterpriseGuestName', { defaultValue: '企业访客' })
+      : t('settings.workspaceIdentity.guestName', { defaultValue: '访客' })
     : profile.username;
 
   const droplist = isGuest ? (
-    <GuestProfileMenu onJoinEnterprise={handleGuestJoin} onAdminLogin={handleGuestAdminLogin} />
+    <GuestProfileMenu
+      onJoinEnterprise={handleGuestJoin}
+      onAdminLogin={handleGuestAdminLogin}
+      enterpriseConnected={isEnterpriseGuest}
+      tenantLabel={enterpriseGuestTenantLabel}
+    />
   ) : (
     <ProfileMenu
       profile={profile}

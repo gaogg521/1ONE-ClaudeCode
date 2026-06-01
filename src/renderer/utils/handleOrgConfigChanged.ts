@@ -26,7 +26,8 @@ export async function handleOrgConfigChanged(payload: OrgConfigChangedPayload): 
     payload.scope !== 'login-channels' &&
     payload.scope !== 'auth-providers' &&
     payload.scope !== 'admin-email' &&
-    payload.scope !== 'edition-access'
+    payload.scope !== 'edition-access' &&
+    payload.scope !== 'enterprise-profile'
   ) {
     return;
   }

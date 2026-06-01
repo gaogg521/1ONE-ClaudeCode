@@ -912,6 +912,21 @@
     "pendingCancel": "İptal",
     "pendingTimeRemaining": "Kalan süre: {{time}}"
   },
+  "enterpriseConsole": {
+    "navSettings": "Kurumsal ayarlar",
+    "settingsDesc": "Geçerli kuruluşun temel bilgilerini yönetin. İlk sürümde kuruluş adını düzenleyebilir, kuruluş kimliğini ve oluşturulma zamanını görebilirsiniz.",
+    "settingsEmpty": "Henüz bir kuruluş oluşturulmadı.",
+    "settingsLoadFailed": "Kurumsal ayarlar yüklenemedi",
+    "settingsNameLabel": "Kuruluş adı",
+    "settingsNamePlaceholder": "Kuruluş adını girin",
+    "settingsNameRequired": "Lütfen kuruluş adını girin",
+    "settingsIdLabel": "Kuruluş ID",
+    "settingsCreatedAtLabel": "Oluşturulma zamanı",
+    "settingsUpdatedAtLabel": "Son güncelleme",
+    "settingsSaved": "Kurumsal ayarlar kaydedildi",
+    "settingsSaveFailed": "Kurumsal ayarlar kaydedilemedi",
+    "settingsReset": "Sıfırla"
+  },
   "authProviders": {
     "enterprisePageTitle": "Kimlik doğrulama ve e-posta",
     "enterprisePageDesc": "Kurumsal oturum açma sağlayıcılarını ve organizasyon e-posta altyapısını tek yerde yönetin; e-posta yapılandırması da kimlik sağlayıcılarıyla aynı düzeyde yer alır.",

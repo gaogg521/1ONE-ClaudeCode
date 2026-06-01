@@ -914,6 +914,21 @@
     "pendingCancel": "キャンセル",
     "pendingTimeRemaining": "残り時間：{{time}}"
   },
+  "enterpriseConsole": {
+    "navSettings": "企業設定",
+    "settingsDesc": "現在の企業の基本情報を管理します。初期版では企業名の変更と企業 ID / 作成時刻の確認に対応します。",
+    "settingsEmpty": "まだ企業が作成されていません。",
+    "settingsLoadFailed": "企業設定の読み込みに失敗しました",
+    "settingsNameLabel": "企業名",
+    "settingsNamePlaceholder": "企業名を入力してください",
+    "settingsNameRequired": "企業名を入力してください",
+    "settingsIdLabel": "企業 ID",
+    "settingsCreatedAtLabel": "作成日時",
+    "settingsUpdatedAtLabel": "最終更新",
+    "settingsSaved": "企業設定を保存しました",
+    "settingsSaveFailed": "企業設定の保存に失敗しました",
+    "settingsReset": "リセット"
+  },
   "authProviders": {
     "enterprisePageTitle": "認証とメール",
     "enterprisePageDesc": "企業向けサインイン連携と組織メール送信基盤を 1 か所で管理し、メール設定も認証プロバイダーと同じ階層で扱います。",

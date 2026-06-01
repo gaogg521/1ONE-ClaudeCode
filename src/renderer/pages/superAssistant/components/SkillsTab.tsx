@@ -33,7 +33,7 @@ const SkillsTab: React.FC<SkillsTabProps> = ({
         {skillNames.length ? <div className='mt-8px text-12px text-t-secondary'>{skillNames.join(' · ')}</div> : null}
         <div className='mt-12px'>
           <Button size='small' type='primary' onClick={onOpenSkillsHub}>
-            {t('common.superAssistant.openSkillsHub', { defaultValue: '打开 Skills Hub' })}
+            {t('common.superAssistant.openSkillsHub', { defaultValue: '打开 Skills' })}
           </Button>
         </div>
       </Card>
