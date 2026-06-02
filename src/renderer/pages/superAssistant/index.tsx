@@ -3,6 +3,8 @@ import { Button, Card, Empty, Message, Result, Tag } from '@arco-design/web-reac
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ipcBridge } from '@/common';
+import type { ICronJob } from '@/common/adapter/ipcBridge';
+import type { TTeam } from '@/common/types/teamTypes';
 import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
@@ -20,8 +22,9 @@ import {
 import CreateSharedTaskModal from './components/CreateSharedTaskModal';
 import SuperAssistantHeader from './components/SuperAssistantHeader';
 import IssuesWorkbench from './components/IssuesWorkbench';
-import AgentsTab from './components/AgentsTab';
+import AgentsTab, { type AgentCardRef } from './components/AgentsTab';
 import CreateWorkspaceAgentModal from './components/CreateWorkspaceAgentModal';
+import ManageWorkspaceAgentModal, { type ManagedAgentRef } from './components/ManageWorkspaceAgentModal';
 import CreateTaskDialog from '@/renderer/pages/cron/ScheduledTasksPage/CreateTaskDialog';
 import { useTeamList } from '@/renderer/pages/team/hooks/useTeamList';
 import { useConversationAgents } from '@/renderer/pages/conversation/hooks/useConversationAgents';
@@ -40,6 +43,21 @@ import {
   buildIssueAssignmentPrompt,
   buildSuperAssistantAutopilotDefaults,
 } from './utils/autopilotDefaults';
+import type { TeamAgent } from '@/common/types/teamTypes';
+
+function resolveManagedAgent(teams: TTeam[], ref: AgentCardRef): ManagedAgentRef | null {
+  const teamAgent = teams.find((team) => team.id === ref.teamId)?.agents.find((agent) => agent.slotId === ref.slotId);
+  if (!teamAgent) {
+    return null;
+  }
+  return {
+    teamId: ref.teamId,
+    slotId: ref.slotId,
+    agentName: ref.agentName,
+    agentType: ref.agentType,
+    teamAgent,
+  };
+}
 
 type NavigationIssueContext = {
   id: string;
@@ -203,6 +221,9 @@ const SuperAssistantPage: React.FC = () => {
   const [sharedTaskVisible, setSharedTaskVisible] = useState(false);
   const [createAgentVisible, setCreateAgentVisible] = useState(false);
   const [agentAutomationVisible, setAgentAutomationVisible] = useState(false);
+  const [automationAgent, setAutomationAgent] = useState<ManagedAgentRef | null>(null);
+  const [editingCronJob, setEditingCronJob] = useState<ICronJob | undefined>(undefined);
+  const [managingAgent, setManagingAgent] = useState<ManagedAgentRef | null>(null);
   const { teams, mutate: mutateTeams } = useTeamList();
   const { cliAgents, presetAssistants } = useConversationAgents();
   const currentTeam = superAssistantData.primaryTeam
@@ -397,11 +418,11 @@ const SuperAssistantPage: React.FC = () => {
     }
     return team.agents.find((agent) => agent.slotId === team.leadAgentId) ?? team.agents[0] ?? null;
   }, [superAssistantData.primaryTeam]);
-  const autopilotDefaults = useMemo(
-    () =>
+  const buildAutopilotForTeamAgent = useCallback(
+    (teamId: string, agent: TeamAgent) =>
       buildSuperAssistantAutopilotDefaults({
-        teamId: superAssistantData.primaryTeam?.id,
-        leadAgent: primaryLeadAgent,
+        teamId,
+        agent,
         requirementId: currentIssue?.id,
         skillNames: superAssistantData.skillNames,
         mentionUserIds: superAssistantData.openAssigneeUserIds,
@@ -409,12 +430,84 @@ const SuperAssistantPage: React.FC = () => {
       }),
     [
       currentIssue?.id,
-      primaryLeadAgent,
       superAssistantData.openAssigneeUserIds,
-      superAssistantData.primaryTeam?.id,
       superAssistantData.skillNames,
     ]
   );
+
+  const autopilotDefaults = useMemo(
+    () =>
+      primaryLeadAgent && superAssistantData.primaryTeam?.id
+        ? buildAutopilotForTeamAgent(superAssistantData.primaryTeam.id, primaryLeadAgent)
+        : null,
+    [buildAutopilotForTeamAgent, primaryLeadAgent, superAssistantData.primaryTeam?.id]
+  );
+
+  const selectedAgentAutopilotDefaults = useMemo(() => {
+    if (!automationAgent) {
+      return autopilotDefaults;
+    }
+    return buildAutopilotForTeamAgent(automationAgent.teamId, automationAgent.teamAgent);
+  }, [automationAgent, autopilotDefaults, buildAutopilotForTeamAgent]);
+
+  const closeAgentAutomationDialog = useCallback(() => {
+    setAgentAutomationVisible(false);
+    setAutomationAgent(null);
+    setEditingCronJob(undefined);
+  }, []);
+
+  const openAgentAutomationDialog = useCallback((managed: ManagedAgentRef, job?: ICronJob) => {
+    setAutomationAgent(managed);
+    setEditingCronJob(job);
+    setAgentAutomationVisible(true);
+  }, []);
+
+  const handleManageAgent = useCallback(
+    (ref: AgentCardRef) => {
+      const managed = resolveManagedAgent(teams, ref);
+      if (!managed) {
+        Message.warning(t('common.superAssistant.agentNotFound', { defaultValue: '未找到该智能体' }));
+        return;
+      }
+      setManagingAgent(managed);
+    },
+    [t, teams]
+  );
+
+  const handleSaveAgentName = useCallback(
+    async (teamId: string, slotId: string, newName: string) => {
+      await ipcBridge.team.renameAgent.invoke({ teamId, slotId, newName });
+      await mutateTeams();
+    },
+    [mutateTeams]
+  );
+
+  const handleScheduleAgent = useCallback(
+    (ref: AgentCardRef) => {
+      const managed = resolveManagedAgent(teams, ref);
+      if (!managed) {
+        return;
+      }
+      openAgentAutomationDialog(managed);
+    },
+    [openAgentAutomationDialog, teams]
+  );
+
+  const handleRunAutomationJob = useCallback(
+    async (job: ICronJob) => {
+      try {
+        const result = await ipcBridge.cron.runNow.invoke({ jobId: job.id });
+        Message.success(t('cron.runNowSuccess', { defaultValue: '已触发执行' }));
+        if (result?.conversationId) {
+          navigate(`/conversation/${result.conversationId}`);
+        }
+      } catch (error) {
+        Message.error(String(error));
+      }
+    },
+    [navigate, t]
+  );
+
   const routedState = useMemo(() => parseSuperAssistantSearch(location.search), [location.search]);
   const currentTab = routedState.tab;
 
@@ -435,6 +528,45 @@ const SuperAssistantPage: React.FC = () => {
       }
     },
     []
+  );
+
+  const handleRunAgentNow = useCallback(
+    async (ref: AgentCardRef) => {
+      const managed = resolveManagedAgent(teams, ref);
+      if (!managed) {
+        return;
+      }
+      const ready = await ensureTeamSession(
+        managed.teamId,
+        t('common.superAssistant.agentRunNowFailed', { defaultValue: '启动智能体会话失败' })
+      );
+      if (!ready) {
+        return;
+      }
+      const issueContext = currentIssue ? { id: currentIssue.id, subject: currentIssue.subject } : null;
+      await ipcBridge.team.sendMessageToAgent.invoke({
+        teamId: managed.teamId,
+        slotId: managed.slotId,
+        content: t('common.superAssistant.agentRunNowPrompt', {
+          defaultValue:
+            '你是「{{agent}}」。请立即执行一轮团队 Issue 巡检：汇总未完成项、阻塞与建议下一步，输出 Markdown 摘要。',
+          agent: managed.agentName,
+        }),
+      });
+      Message.success(t('common.superAssistant.agentRunNowSuccess', { defaultValue: '已触发智能体执行' }));
+      navigate(buildTeamPath(managed.teamId, issueContext, managed.slotId));
+    },
+    [currentIssue, ensureTeamSession, navigate, t, teams]
+  );
+
+  const agentTabHandlers = useMemo(
+    () => ({
+      onCreateAgent: () => setCreateAgentVisible(true),
+      onManageAgent: handleManageAgent,
+      onRunAgentNow: (ref: AgentCardRef) => void handleRunAgentNow(ref),
+      onScheduleAgent: handleScheduleAgent,
+    }),
+    [handleManageAgent, handleRunAgentNow, handleScheduleAgent]
   );
 
   const handleBreakdownIssue = () => navigate(buildKanbanPath(currentIssue, currentTeam));
@@ -947,11 +1079,7 @@ const SuperAssistantPage: React.FC = () => {
           </>
         ) : null}
         {currentTab === 'agents' ? (
-          <AgentsTab
-            executionGroups={superAssistantData.agentExecutionGroups}
-            onCreateAgent={() => setCreateAgentVisible(true)}
-            onCreateAutomation={() => setAgentAutomationVisible(true)}
-          />
+          <AgentsTab executionGroups={superAssistantData.agentExecutionGroups} {...agentTabHandlers} />
         ) : null}
         {currentTab === 'issues' ? (
           <IssuesWorkbench
@@ -1019,11 +1147,11 @@ const SuperAssistantPage: React.FC = () => {
             </div>
             <AgentsTab
               executionGroups={superAssistantData.agentExecutionGroups}
+              {...agentTabHandlers}
               onCreateAgent={() => {
                 handleSwitchTab('agents');
                 setCreateAgentVisible(true);
               }}
-              onCreateAutomation={() => setAgentAutomationVisible(true)}
             />
           </Card>
         ) : null}
@@ -1044,20 +1172,44 @@ const SuperAssistantPage: React.FC = () => {
         onClose={() => setCreateAgentVisible(false)}
         onConfirm={handleCreateWorkspaceAgent}
       />
+      <ManageWorkspaceAgentModal
+        visible={Boolean(managingAgent)}
+        agent={managingAgent}
+        onClose={() => setManagingAgent(null)}
+        onSaveName={handleSaveAgentName}
+        onRunNow={handleRunAgentNow}
+        onAddAutomation={(managed) => {
+          setManagingAgent(null);
+          openAgentAutomationDialog(managed);
+        }}
+        onEditAutomation={(managed, job) => {
+          setManagingAgent(null);
+          openAgentAutomationDialog(managed, job);
+        }}
+        onRunAutomation={handleRunAutomationJob}
+      />
       <CreateTaskDialog
         visible={agentAutomationVisible}
-        onClose={() => setAgentAutomationVisible(false)}
-        conversationTitle={currentIssue?.subject ?? 'Agent 自动化'}
+        onClose={closeAgentAutomationDialog}
+        editJob={editingCronJob}
+        conversationTitle={automationAgent?.agentName ?? currentIssue?.subject ?? 'Agent 自动化'}
         initialName={
-          currentIssue
-            ? t('common.issues.automationDefaultName', {
-                defaultValue: 'Issue 自动跟进 · {{subject}}',
-                subject: currentIssue.subject,
+          editingCronJob?.name ??
+          (automationAgent
+            ? t('common.superAssistant.agentAutomationDefaultNameForAgent', {
+                defaultValue: '{{agent}} · 定时巡检',
+                agent: automationAgent.agentName,
               })
-            : t('common.superAssistant.agentAutomationDefaultName', { defaultValue: 'Agent 定时巡检' })
+            : currentIssue
+              ? t('common.issues.automationDefaultName', {
+                  defaultValue: 'Issue 自动跟进 · {{subject}}',
+                  subject: currentIssue.subject,
+                })
+              : t('common.superAssistant.agentAutomationDefaultName', { defaultValue: 'Agent 定时巡检' }))
         }
         initialPrompt={
-          currentIssue
+          editingCronJob?.target.payload.text ??
+          (currentIssue
             ? t('common.issues.automationDefaultPrompt', {
                 defaultValue:
                   '你是 Issue「{{subject}}」的值班 Agent。请检查当前进展、阻塞项与下一步行动，输出简洁 Markdown 摘要。',
@@ -1065,11 +1217,11 @@ const SuperAssistantPage: React.FC = () => {
               })
             : t('common.superAssistant.agentAutomationDefaultPrompt', {
                 defaultValue: '扫描团队未关闭 Issue 与阻塞项，输出摘要并 @ 相关负责人。',
-              })
+              }))
         }
         initialFrequency='weekdays'
-        initialAgentKey={autopilotDefaults?.initialAgentKey}
-        autopilotContext={autopilotDefaults?.autopilotContext}
+        initialAgentKey={selectedAgentAutopilotDefaults?.initialAgentKey}
+        autopilotContext={selectedAgentAutopilotDefaults?.autopilotContext}
       />
       <CreateSharedTaskModal
         visible={sharedTaskVisible}

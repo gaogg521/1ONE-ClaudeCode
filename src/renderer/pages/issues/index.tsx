@@ -19,6 +19,7 @@ import {
   type IssueListItem,
 } from './issueUtils';
 import CreateIssueModal from './components/CreateIssueModal';
+import { useIssueEnterpriseGate } from './useIssueEnterpriseGate';
 
 const TasksPage = React.lazy(() => import('@/renderer/pages/tasks'));
 
@@ -41,6 +42,7 @@ const IssuesPage: React.FC = () => {
   const location = useLocation();
   const auth = useAuth();
   const enterpriseMode = useWebuiEnterpriseMode();
+  const { ensureEnterpriseLogin } = useIssueEnterpriseGate();
   const { hasJoinedEnterprise, tenantLabel } = useEditionFeatures();
   const viewTab = useMemo(() => resolveIssuesViewTab(location.search), [location.search]);
   const [loading, setLoading] = useState(true);
@@ -151,7 +153,16 @@ const IssuesPage: React.FC = () => {
           ) : null}
         </div>
         <div className='flex items-center gap-8px flex-wrap'>
-          <Button size='small' type='primary' icon={<Plus theme='outline' size='14' />} onClick={() => setCreateVisible(true)}>
+          <Button
+            size='small'
+            type='primary'
+            icon={<Plus theme='outline' size='14' />}
+            onClick={() => {
+              if (ensureEnterpriseLogin('create')) {
+                setCreateVisible(true);
+              }
+            }}
+          >
             {t('common.issues.createButton', { defaultValue: '新建 Issue' })}
           </Button>
           <Button size='small' type='outline' onClick={() => navigate('/super-assistant')}>
@@ -277,7 +288,7 @@ const IssuesPage: React.FC = () => {
                   className='min-w-260px flex-shrink-0'
                   title={
                     <div className='flex items-center justify-between gap-8px'>
-                      <span>{formatStatusLabel(status)}</span>
+                      <span>{formatStatusLabel(status, t)}</span>
                       <Tag size='small' color='arcoblue'>
                         {items.length}
                       </Tag>
@@ -307,7 +318,7 @@ const IssuesPage: React.FC = () => {
                               {item.type}
                             </Tag>
                             <Tag size='small' color={priorityTagColor(item.priority)}>
-                              {formatPriorityLabel(item.priority)}
+                              {formatPriorityLabel(item.priority, t)}
                             </Tag>
                             {item.assigned_to ? (
                               <Tag size='small' color='blue'>

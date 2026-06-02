@@ -3,6 +3,7 @@ import { Button, Input, Message } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
 import { createRequirementComment } from '@/renderer/utils/enterpriseApi/modules';
+import { useIssueEnterpriseGate } from '../useIssueEnterpriseGate';
 
 type IssueCommentComposerProps = {
   issueId: string;
@@ -11,10 +12,14 @@ type IssueCommentComposerProps = {
 
 const IssueCommentComposer: React.FC<IssueCommentComposerProps> = ({ issueId, onPosted }) => {
   const { t } = useTranslation();
+  const { ensureEnterpriseLogin } = useIssueEnterpriseGate();
   const [body, setBody] = useState('');
   const [posting, setPosting] = useState(false);
 
   const handlePost = async () => {
+    if (!ensureEnterpriseLogin('comment')) {
+      return;
+    }
     const trimmed = body.trim();
     if (!trimmed) {
       Message.warning(t('common.issues.commentRequired', { defaultValue: '请输入评论内容' }));
@@ -27,7 +32,11 @@ const IssueCommentComposer: React.FC<IssueCommentComposerProps> = ({ issueId, on
       onPosted();
     } catch (error) {
       Message.error(
-        getEnterpriseActionError(error, t('common.issues.commentFailed', { defaultValue: '发表评论失败' }))
+        getEnterpriseActionError(error, t('common.issues.commentFailed', { defaultValue: '发表评论失败' }), {
+          not_authenticated: t('common.issues.loginRequiredToComment', {
+            defaultValue: '请先登录企业账号后再发表评论。',
+          }),
+        })
       );
     } finally {
       setPosting(false);

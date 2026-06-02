@@ -2,7 +2,36 @@ import type {
   RequirementPriority,
   RequirementRecord,
   RequirementStatus,
+  RequirementType,
 } from '@/renderer/utils/enterpriseApi/modules';
+
+type IssueLabelTranslator = (key: string, options?: { defaultValue?: string }) => string;
+
+const STATUS_ZH: Record<RequirementStatus, string> = {
+  backlog: '待规划',
+  planning: '规划中',
+  developing: '开发中',
+  testing: '评审中',
+  completed: '已完成',
+};
+
+const PRIORITY_ZH: Record<RequirementPriority, string> = {
+  low: '低',
+  medium: '中',
+  high: '高',
+  urgent: '紧急',
+};
+
+const TYPE_ZH: Record<RequirementType, string> = {
+  epic: '史诗',
+  feature: '特性',
+  story: '用户故事',
+  bug: '缺陷',
+  task: '任务',
+};
+
+export const ISSUE_CREATE_TYPES: RequirementType[] = ['story', 'task', 'bug', 'feature'];
+export const ISSUE_PRIORITIES: RequirementPriority[] = ['low', 'medium', 'high', 'urgent'];
 
 export type IssueListItem = RequirementRecord & {
   epicId: string | null;
@@ -73,18 +102,14 @@ export function countNestedChildren(node: RequirementRecord | null): number {
   return node.children.reduce((sum, child) => sum + 1 + countNestedChildren(child), 0);
 }
 
-export function formatPriorityLabel(priority: RequirementPriority): string {
-  switch (priority) {
-    case 'urgent':
-      return '紧急';
-    case 'high':
-      return '高';
-    case 'medium':
-      return '中';
-    case 'low':
-    default:
-      return '低';
-  }
+export function formatTypeLabel(type: RequirementType, t?: IssueLabelTranslator): string {
+  const fallback = TYPE_ZH[type] ?? type;
+  return t ? t(`common.issues.type.${type}`, { defaultValue: fallback }) : fallback;
+}
+
+export function formatPriorityLabel(priority: RequirementPriority, t?: IssueLabelTranslator): string {
+  const fallback = PRIORITY_ZH[priority] ?? priority;
+  return t ? t(`common.issues.priority.${priority}`, { defaultValue: fallback }) : fallback;
 }
 
 export function priorityTagColor(priority: RequirementPriority): string {
@@ -101,18 +126,7 @@ export function priorityTagColor(priority: RequirementPriority): string {
   }
 }
 
-export function formatStatusLabel(status: RequirementStatus): string {
-  switch (status) {
-    case 'planning':
-      return '规划中';
-    case 'developing':
-      return '开发中';
-    case 'testing':
-      return '评审中';
-    case 'completed':
-      return '已完成';
-    case 'backlog':
-    default:
-      return '待规划';
-  }
+export function formatStatusLabel(status: RequirementStatus, t?: IssueLabelTranslator): string {
+  const fallback = STATUS_ZH[status] ?? status;
+  return t ? t(`common.issues.status.${status}`, { defaultValue: fallback }) : fallback;
 }

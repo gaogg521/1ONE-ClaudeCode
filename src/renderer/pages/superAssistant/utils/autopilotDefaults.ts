@@ -49,24 +49,27 @@ export function buildIssueAssignmentPrompt(
 
 export function buildSuperAssistantAutopilotDefaults(input: {
   teamId?: string;
+  /** @deprecated prefer `agent` */
   leadAgent?: TeamAgent | null;
+  agent?: TeamAgent | null;
   requirementId?: string;
   skillNames?: string[];
   mentionUserIds?: string[];
   postBackToIssue?: boolean;
 }): SuperAssistantAutopilotDefaults | null {
-  if (!input.teamId || !input.leadAgent) {
+  const agent = input.agent ?? input.leadAgent ?? null;
+  if (!input.teamId || !agent) {
     return null;
   }
 
-  const initialAgentKey = resolveTeamAgentCronKey(input.leadAgent);
+  const initialAgentKey = resolveTeamAgentCronKey(agent);
 
   return {
     initialAgentKey,
     autopilotContext: {
       source: 'super_assistant',
       teamId: input.teamId,
-      agentSlotId: input.leadAgent.slotId,
+      agentSlotId: agent.slotId,
       requirementId: input.requirementId,
       postBackToIssue: input.postBackToIssue ?? Boolean(input.requirementId),
       mentionUserIds: input.mentionUserIds,

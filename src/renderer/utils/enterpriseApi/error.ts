@@ -53,6 +53,13 @@ export function normalizeEnterpriseApiError(
   }
 
   if (err.status === 403) {
+    if (/access denied.*login first/i.test(message)) {
+      return {
+        code: 'not_authenticated',
+        message: '请先登录企业账号后再继续操作。',
+        status: err.status,
+      };
+    }
     return {
       code: 'forbidden',
       message: message || '当前账号无权访问该模块。',

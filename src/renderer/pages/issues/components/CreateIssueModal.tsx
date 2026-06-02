@@ -9,6 +9,15 @@ import {
   type RequirementStatus,
   type RequirementType,
 } from '@/renderer/utils/enterpriseApi/modules';
+import {
+  formatPriorityLabel,
+  formatStatusLabel,
+  formatTypeLabel,
+  ISSUE_CREATE_TYPES,
+  ISSUE_PRIORITIES,
+  ISSUE_STATUS_ORDER,
+} from '../issueUtils';
+import { useIssueEnterpriseGate } from '../useIssueEnterpriseGate';
 
 const FormItem = Form.Item;
 const TextArea = Input.TextArea;
@@ -38,6 +47,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   onCreated,
 }) => {
   const { t } = useTranslation();
+  const { ensureEnterpriseLogin } = useIssueEnterpriseGate();
   const [form] = Form.useForm<CreateIssueFormValues>();
   const [saving, setSaving] = useState(false);
 
@@ -56,6 +66,9 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   }, [defaultType, form, parentId, visible]);
 
   const handleSubmit = async () => {
+    if (!ensureEnterpriseLogin('create')) {
+      return;
+    }
     try {
       const values = await form.validate();
       setSaving(true);
@@ -72,7 +85,14 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       onClose();
     } catch (error) {
       Message.error(
-        getEnterpriseActionError(error, t('common.issues.createFailed', { defaultValue: '创建 Issue 失败' }))
+        getEnterpriseActionError(error, t('common.issues.createFailed', { defaultValue: '创建 Issue 失败' }), {
+          not_authenticated: t('common.issues.loginRequiredToCreate', {
+            defaultValue: '请先登录企业账号后再创建 Issue。',
+          }),
+          forbidden: t('common.issues.loginRequiredToCreate', {
+            defaultValue: '请先登录企业账号后再创建 Issue。',
+          }),
+        })
       );
     } finally {
       setSaving(false);
@@ -100,10 +120,14 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           field='type'
           rules={[{ required: true }]}
         >
-          <Select>
-            {(['story', 'task', 'bug', 'feature'] as const).map((type) => (
+          <Select
+            renderFormat={(option) =>
+              formatTypeLabel((option?.value as RequirementType) ?? 'story', t)
+            }
+          >
+            {ISSUE_CREATE_TYPES.map((type) => (
               <Select.Option key={type} value={type}>
-                {type}
+                {formatTypeLabel(type, t)}
               </Select.Option>
             ))}
           </Select>
@@ -124,19 +148,27 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           />
         </FormItem>
         <FormItem label={t('common.issues.propertyStatus', { defaultValue: '状态' })} field='status'>
-          <Select>
-            {(['backlog', 'planning', 'developing', 'testing', 'completed'] as const).map((status) => (
+          <Select
+            renderFormat={(option) =>
+              formatStatusLabel((option?.value as RequirementStatus) ?? 'backlog', t)
+            }
+          >
+            {ISSUE_STATUS_ORDER.map((status) => (
               <Select.Option key={status} value={status}>
-                {status}
+                {formatStatusLabel(status, t)}
               </Select.Option>
             ))}
           </Select>
         </FormItem>
         <FormItem label={t('common.issues.propertyPriority', { defaultValue: '优先级' })} field='priority'>
-          <Select>
-            {(['low', 'medium', 'high', 'urgent'] as const).map((priority) => (
+          <Select
+            renderFormat={(option) =>
+              formatPriorityLabel((option?.value as RequirementPriority) ?? 'medium', t)
+            }
+          >
+            {ISSUE_PRIORITIES.map((priority) => (
               <Select.Option key={priority} value={priority}>
-                {priority}
+                {formatPriorityLabel(priority, t)}
               </Select.Option>
             ))}
           </Select>

@@ -52,7 +52,7 @@ export function buildIssueActivityItems(
       authorType: 'system',
       action: t('common.issues.activityUpdated', {
         defaultValue: '更新了 Issue（状态：{{status}}）',
-        status: formatStatusLabel(issue.status),
+        status: formatStatusLabel(issue.status, t),
       }),
       createdAt: issue.updated_at,
     });

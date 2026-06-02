@@ -1,13 +1,26 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Button, Card, Empty, Tag } from '@arco-design/web-react';
-import { Plus } from '@icon-park/react';
+import { Edit, PlayOne, Plus, Time } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
+import type { ICronJob } from '@/common/adapter/ipcBridge';
+import { useAllCronJobs } from '@/renderer/pages/cron/useCronJobs';
 import type { SuperAssistantAgentExecutionGroup } from '../hooks/useSuperAssistantData';
+import { listAgentCronJobs } from '../utils/agentAutomationUtils';
+
+export type AgentCardRef = {
+  teamId: string;
+  teamName: string;
+  slotId: string;
+  agentName: string;
+  agentType: string;
+};
 
 type AgentsTabProps = {
   executionGroups: SuperAssistantAgentExecutionGroup[];
   onCreateAgent?: () => void;
-  onCreateAutomation?: () => void;
+  onManageAgent?: (agent: AgentCardRef) => void;
+  onRunAgentNow?: (agent: AgentCardRef) => void;
+  onScheduleAgent?: (agent: AgentCardRef) => void;
 };
 
 function getStatusMeta(
@@ -32,8 +45,34 @@ function getStatusMeta(
   }
 }
 
-const AgentsTab: React.FC<AgentsTabProps> = ({ executionGroups, onCreateAgent, onCreateAutomation }) => {
+const AgentsTab: React.FC<AgentsTabProps> = ({
+  executionGroups,
+  onCreateAgent,
+  onManageAgent,
+  onRunAgentNow,
+  onScheduleAgent,
+}) => {
   const { t } = useTranslation();
+  const { jobs } = useAllCronJobs();
+
+  const automationCountByAgent = useMemo(() => {
+    const map = new Map<string, number>();
+    executionGroups.forEach((group) => {
+      group.agents.forEach((agent) => {
+        const key = `${group.teamId}:${agent.slotId}`;
+        map.set(key, listAgentCronJobs(jobs, group.teamId, agent.slotId).length);
+      });
+    });
+    return map;
+  }, [executionGroups, jobs]);
+
+  const toAgentRef = (group: SuperAssistantAgentExecutionGroup, agent: (typeof group.agents)[number]): AgentCardRef => ({
+    teamId: group.teamId,
+    teamName: group.teamName,
+    slotId: agent.slotId,
+    agentName: agent.agentName,
+    agentType: agent.agentType,
+  });
 
   return (
     <div className='space-y-12px'>
@@ -41,24 +80,17 @@ const AgentsTab: React.FC<AgentsTabProps> = ({ executionGroups, onCreateAgent, o
         <div className='text-12px text-t-tertiary'>
           {t('common.superAssistant.agentsExecutionDesc', {
             defaultValue:
-              '创建个人或团队 Agent，并为其配置定时自动化，让 Agent 像 7×24 员工一样持续跟进 Issues。',
+              '在每个智能体卡片上可直接编辑、立即执行或配置定时自动化，实现 7×24 持续跟进 Issues。',
           })}
         </div>
-        <div className='mt-12px flex flex-wrap gap-8px'>
+        <div className='mt-12px'>
           <Button type='primary' size='small' icon={<Plus theme='outline' size='14' />} onClick={() => onCreateAgent?.()}>
             {t('common.superAssistant.createAgentTitle', { defaultValue: '创建智能体' })}
-          </Button>
-          <Button size='small' type='outline' onClick={() => onCreateAutomation?.()}>
-            {t('common.superAssistant.agentAutomationCreate', { defaultValue: '新建自动化' })}
           </Button>
         </div>
       </Card>
       {executionGroups.length === 0 ? (
-        <Empty
-          description={t('common.superAssistant.noTeams', {
-            defaultValue: '还没有团队',
-          })}
-        />
+        <Empty description={t('common.superAssistant.noTeams', { defaultValue: '还没有团队' })} />
       ) : (
         <div className='space-y-12px'>
           {executionGroups.map((group) => (
@@ -83,6 +115,8 @@ const AgentsTab: React.FC<AgentsTabProps> = ({ executionGroups, onCreateAgent, o
               <div className='grid gap-12px md:grid-cols-2'>
                 {group.agents.map((agent) => {
                   const statusMeta = getStatusMeta(agent.status, t);
+                  const agentRef = toAgentRef(group, agent);
+                  const automationCount = automationCountByAgent.get(`${group.teamId}:${agent.slotId}`) ?? 0;
                   const focusText =
                     agent.status === 'failed'
                       ? agent.blockerMessage
@@ -101,7 +135,9 @@ const AgentsTab: React.FC<AgentsTabProps> = ({ executionGroups, onCreateAgent, o
                         : agent.status === 'completed'
                           ? t('common.superAssistant.agentCompletedIssue', {
                               defaultValue: '刚完成：{{subject}}',
-                              subject: agent.currentIssueSubject ?? t('common.superAssistant.noIssues', { defaultValue: '暂无共享 Issue' }),
+                              subject:
+                                agent.currentIssueSubject ??
+                                t('common.superAssistant.noIssues', { defaultValue: '暂无共享 Issue' }),
                             })
                           : agent.queuedIssueSubject
                             ? t('common.superAssistant.agentQueuedIssue', {
@@ -119,17 +155,50 @@ const AgentsTab: React.FC<AgentsTabProps> = ({ executionGroups, onCreateAgent, o
                       extra={<Tag color={statusMeta.color}>{statusMeta.label}</Tag>}
                     >
                       <div className='text-12px text-t-tertiary'>{focusText}</div>
+                      <div className='mt-8px flex flex-wrap gap-6px'>
+                        {automationCount > 0 ? (
+                          <Tag color='purple' size='small'>
+                            {t('common.superAssistant.agentAutomationCount', {
+                              defaultValue: '{{count}} 个自动化',
+                              count: automationCount,
+                            })}
+                          </Tag>
+                        ) : (
+                          <Tag color='gray' size='small'>
+                            {t('common.superAssistant.agentAutomationNone', { defaultValue: '未配置自动化' })}
+                          </Tag>
+                        )}
+                      </div>
                       <div className='mt-6px text-12px text-t-secondary'>
-                        {t('common.superAssistant.agentCapabilitySources', {
-                          defaultValue: '依赖能力',
-                        })}
+                        {t('common.superAssistant.agentCapabilitySources', { defaultValue: '依赖能力' })}
                       </div>
                       <div className='mt-6px flex flex-wrap gap-8px'>
                         {agent.dependencyNames.map((dependency) => (
-                          <Tag key={`${agent.slotId}-${dependency}`} color='blue'>
+                          <Tag key={`${agent.slotId}-${dependency}`} color='blue' size='small'>
                             {dependency}
                           </Tag>
                         ))}
+                      </div>
+                      <div className='mt-12px flex flex-wrap gap-8px'>
+                        <Button size='mini' icon={<Edit theme='outline' size='14' />} onClick={() => onManageAgent?.(agentRef)}>
+                          {t('common.superAssistant.agentEdit', { defaultValue: '编辑' })}
+                        </Button>
+                        <Button
+                          size='mini'
+                          type='primary'
+                          icon={<PlayOne theme='outline' size='14' />}
+                          onClick={() => onRunAgentNow?.(agentRef)}
+                        >
+                          {t('common.superAssistant.agentRunNow', { defaultValue: '立即执行' })}
+                        </Button>
+                        <Button
+                          size='mini'
+                          type='outline'
+                          icon={<Time theme='outline' size='14' />}
+                          onClick={() => onScheduleAgent?.(agentRef)}
+                        >
+                          {t('common.superAssistant.agentSchedule', { defaultValue: '定时自动化' })}
+                        </Button>
                       </div>
                     </Card>
                   );

@@ -20,6 +20,7 @@ import {
 } from '@/renderer/utils/enterpriseApi/modules';
 import { useTeamList } from '@/renderer/pages/team/hooks/useTeamList';
 import CreateIssueModal from './components/CreateIssueModal';
+import { useIssueEnterpriseGate } from './useIssueEnterpriseGate';
 import IssueActivityTimeline, { buildIssueActivityItems } from './components/IssueActivityTimeline';
 import IssueAutomationCard from './components/IssueAutomationCard';
 import IssueCommentComposer from './components/IssueCommentComposer';
@@ -39,6 +40,7 @@ const IssueDetailPage: React.FC = () => {
   const auth = useAuth();
   const { hasJoinedEnterprise } = useEditionFeatures();
   const { teams } = useTeamList();
+  const { ensureEnterpriseLogin } = useIssueEnterpriseGate();
   const [loading, setLoading] = useState(true);
   const [tree, setTree] = useState<RequirementRecord[]>([]);
   const [comments, setComments] = useState<RequirementCommentRecord[]>([]);
@@ -89,7 +91,7 @@ const IssueDetailPage: React.FC = () => {
   );
 
   const patchIssue = async (payload: Record<string, unknown>) => {
-    if (!currentIssue) {
+    if (!currentIssue || !ensureEnterpriseLogin('update')) {
       return;
     }
     setSavingField(true);
@@ -150,9 +152,9 @@ const IssueDetailPage: React.FC = () => {
                     <div className='text-24px font-700 text-t-primary break-words'>{currentIssue.subject}</div>
                     <div className='mt-10px flex flex-wrap gap-8px'>
                       <Tag color='gray'>{currentIssue.type}</Tag>
-                      <Tag color='arcoblue'>{formatStatusLabel(currentIssue.status)}</Tag>
+                      <Tag color='arcoblue'>{formatStatusLabel(currentIssue.status, t)}</Tag>
                       <Tag color={priorityTagColor(currentIssue.priority)}>
-                        {formatPriorityLabel(currentIssue.priority)}
+                        {formatPriorityLabel(currentIssue.priority, t)}
                       </Tag>
                     </div>
                     <Typography.Paragraph className='mt-16px mb-0 text-14px text-t-secondary whitespace-pre-wrap'>
@@ -177,7 +179,16 @@ const IssueDetailPage: React.FC = () => {
               <Card
                 title={t('common.issues.childrenTitle', { defaultValue: '子 Issue / 拆解结果' })}
                 extra={
-                  <Button size='mini' type='text' icon={<Plus theme='outline' size='14' />} onClick={() => setCreateChildVisible(true)}>
+                  <Button
+                    size='mini'
+                    type='text'
+                    icon={<Plus theme='outline' size='14' />}
+                    onClick={() => {
+                      if (ensureEnterpriseLogin('create')) {
+                        setCreateChildVisible(true);
+                      }
+                    }}
+                  >
                     {t('common.issues.addSubIssue', { defaultValue: '添加' })}
                   </Button>
                 }
@@ -196,7 +207,7 @@ const IssueDetailPage: React.FC = () => {
                             {child.type}
                           </Tag>
                           <Tag size='small' color='arcoblue'>
-                            {formatStatusLabel(child.status)}
+                            {formatStatusLabel(child.status, t)}
                           </Tag>
                         </div>
                         {child.description ? (
@@ -234,7 +245,7 @@ const IssueDetailPage: React.FC = () => {
                     >
                       {ISSUE_STATUS_ORDER.map((status) => (
                         <Select.Option key={status} value={status}>
-                          {formatStatusLabel(status)}
+                          {formatStatusLabel(status, t)}
                         </Select.Option>
                       ))}
                     </Select>
@@ -248,7 +259,7 @@ const IssueDetailPage: React.FC = () => {
                     >
                       {(['low', 'medium', 'high', 'urgent'] as const).map((priority) => (
                         <Select.Option key={priority} value={priority}>
-                          {formatPriorityLabel(priority)}
+                          {formatPriorityLabel(priority, t)}
                         </Select.Option>
                       ))}
                     </Select>
