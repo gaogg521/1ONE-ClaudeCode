@@ -24,6 +24,20 @@ describe('getSidebarNavItems', () => {
     expect(items.some((item) => item.path === '/skills')).toBe(true);
   });
 
+  it('hides standalone task board nav when enterprise is joined (merged into Issues)', () => {
+    const items = getSidebarNavItems(true, false);
+
+    expect(items.some((item) => item.path === '/tasks')).toBe(false);
+    const issues = items.find((item) => item.path === '/issues');
+    expect(issues?.paths).toContain('/tasks');
+  });
+
+  it('keeps standalone task board nav for personal edition', () => {
+    const items = getSidebarNavItems(false, false);
+
+    expect(items.some((item) => item.path === '/tasks')).toBe(true);
+  });
+
   it('keeps the issues entry hidden before joining an enterprise', () => {
     const items = getSidebarNavItems(false, false);
 

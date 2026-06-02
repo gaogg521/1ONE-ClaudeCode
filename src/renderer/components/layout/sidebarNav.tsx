@@ -44,16 +44,16 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     icon: <Checklist theme='outline' size={18} />,
-    labelKey: 'nav.issues',
-    labelDefault: 'Issues',
-    path: '/issues',
-    paths: ['/enterprise/cteam', '/enterprise/kanban'],
+    labelKey: 'nav.tasks',
+    labelDefault: '任务看板',
+    path: '/tasks',
   },
   {
     icon: <Checklist theme='outline' size={18} />,
-    labelKey: 'nav.tasks',
-    labelDefault: 'Tasks',
-    path: '/tasks',
+    labelKey: 'nav.issues',
+    labelDefault: 'Issues',
+    path: '/issues',
+    paths: ['/enterprise/cteam', '/enterprise/kanban', '/tasks'],
   },
   {
     icon: <Robot theme='outline' size={18} />,
@@ -117,6 +117,9 @@ export function getSidebarNavItems(hasJoinedEnterprise: boolean, isEnterpriseEdi
         x.path !== '/issues' &&
         x.path !== '/skills'
     );
+  } else {
+    // 企业版：需求看板与任务看板合并到 Issues，避免侧栏重复入口
+    items = items.filter((x) => x.path !== '/tasks');
   }
   if (!isEnterpriseEdition) {
     items = items.filter((x) => !x.enterpriseOnly);

@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Empty, Input, Result, Spin, Tag, Typography } from '@arco-design/web-react';
-import { EveryUser, Right, Search, Thunderbolt } from '@icon-park/react';
+import { EveryUser, Plus, Right, Search } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import AppLoader from '@/renderer/components/layout/AppLoader';
 import PageContentShell from '@/renderer/components/layout/PageContentShell';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import type { RequirementRecord, RequirementStatus } from '@/renderer/utils/enterpriseApi/modules';
 import { listRequirementsTree } from '@/renderer/utils/enterpriseApi/modules';
 import {
@@ -16,8 +18,16 @@ import {
   priorityTagColor,
   type IssueListItem,
 } from './issueUtils';
+import CreateIssueModal from './components/CreateIssueModal';
+
+const TasksPage = React.lazy(() => import('@/renderer/pages/tasks'));
 
 type IssueFilter = 'all' | 'open' | 'mine' | 'high';
+type IssuesViewTab = 'board' | 'tasks';
+
+function resolveIssuesViewTab(search: string): IssuesViewTab {
+  return new URLSearchParams(search).get('tab') === 'tasks' ? 'tasks' : 'board';
+}
 
 function pickStatusItems(items: IssueListItem[], status: RequirementStatus): IssueListItem[] {
   return items
@@ -28,12 +38,16 @@ function pickStatusItems(items: IssueListItem[], status: RequirementStatus): Iss
 const IssuesPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const auth = useAuth();
+  const enterpriseMode = useWebuiEnterpriseMode();
   const { hasJoinedEnterprise, tenantLabel } = useEditionFeatures();
+  const viewTab = useMemo(() => resolveIssuesViewTab(location.search), [location.search]);
   const [loading, setLoading] = useState(true);
   const [tree, setTree] = useState<RequirementRecord[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<IssueFilter>('open');
+  const [createVisible, setCreateVisible] = useState(false);
 
   useEffect(() => {
     let disposed = false;
@@ -124,7 +138,7 @@ const IssuesPage: React.FC = () => {
           <div className='mt-4px text-13px text-t-tertiary'>
             {t('common.issues.subtitle', {
               defaultValue:
-                '把需求、执行、评审和沉淀统一到同一个工作台。优先从 Issue 出发，再进入超级助手或团队协作。',
+                '产品需求与团队任务统一在此管理。选中 Issue 后，可在 Agent 助手中直接发起处理。',
             })}
           </div>
           {tenantLabel ? (
@@ -137,6 +151,9 @@ const IssuesPage: React.FC = () => {
           ) : null}
         </div>
         <div className='flex items-center gap-8px flex-wrap'>
+          <Button size='small' type='primary' icon={<Plus theme='outline' size='14' />} onClick={() => setCreateVisible(true)}>
+            {t('common.issues.createButton', { defaultValue: '新建 Issue' })}
+          </Button>
           <Button size='small' type='outline' onClick={() => navigate('/super-assistant')}>
             {t('common.issues.openAssistant', { defaultValue: '打开 Agent 助手' })}
           </Button>
@@ -146,6 +163,34 @@ const IssuesPage: React.FC = () => {
         </div>
       </div>
 
+      <Card className='mt-16px'>
+        <div className='flex items-center gap-8px flex-wrap'>
+          {([
+            ['board', t('common.issues.tabBoard', { defaultValue: '产品需求' })],
+            ['tasks', t('common.issues.tabTasks', { defaultValue: '团队任务' })],
+          ] as const).map(([tab, label]) => (
+            <Button
+              key={tab}
+              size='small'
+              type={viewTab === tab ? 'primary' : 'outline'}
+              onClick={() => navigate(tab === 'tasks' ? '/issues?tab=tasks' : '/issues')}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      </Card>
+
+      {viewTab === 'tasks' ? (
+        <div className='mt-16px'>
+          <Suspense fallback={<AppLoader />}>
+            <TasksPage />
+          </Suspense>
+        </div>
+      ) : null}
+
+      {viewTab === 'board' ? (
+        <>
       <div className='mt-16px grid gap-12px md:grid-cols-2 xl:grid-cols-4'>
         <Card>
           <div className='text-12px text-t-tertiary'>{t('common.issues.metricTotal', { defaultValue: '全部 Issues' })}</div>
@@ -202,8 +247,14 @@ const IssuesPage: React.FC = () => {
           className='mt-16px'
           type='warning'
           content={t('common.issues.enterpriseGuestHint', {
-            defaultValue: '当前实例已接入企业，但你尚未登录企业账号；筛选“分配给我”等视角可能不完整。',
+            defaultValue:
+              '当前实例已接入企业，但你尚未登录企业账号。登录后将显示你的姓名、组织架构，并启用「分配给我」等筛选。',
           })}
+          action={
+            <Button size='mini' type='text' onClick={() => void enterpriseMode.openEnterpriseLoginInBrowser()}>
+              {t('settings.edition.enterpriseLoginAction', { defaultValue: '登录企业账号' })}
+            </Button>
+          }
         />
       ) : null}
 
@@ -287,6 +338,13 @@ const IssuesPage: React.FC = () => {
           </div>
         )}
       </Spin>
+        </>
+      ) : null}
+      <CreateIssueModal
+        visible={createVisible}
+        onClose={() => setCreateVisible(false)}
+        onCreated={(id) => navigate(`/issues/${encodeURIComponent(id)}`)}
+      />
     </PageContentShell>
   );
 };

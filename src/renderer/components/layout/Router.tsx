@@ -196,7 +196,7 @@ const PanelRoute: React.FC = () => {
           />
           <Route path='/issues' element={withRouteFallback(IssuesPage)} />
           <Route path='/issues/:issueId' element={withRouteFallback(IssueDetailPage)} />
-          <Route path='/tasks' element={withRouteFallback(TasksPage)} />
+          <Route path='/tasks' element={<Navigate to='/issues?tab=tasks' replace />} />
           <Route path='/super-assistant' element={withRouteFallback(SuperAssistantPage)} />
           <Route path='/skills' element={withRouteFallback(SkillsPage)} />
           <Route path='/skills/:skillKey' element={withRouteFallback(SkillDetailPage)} />

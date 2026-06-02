@@ -21,6 +21,15 @@ import CreateSharedTaskModal from './components/CreateSharedTaskModal';
 import SuperAssistantHeader from './components/SuperAssistantHeader';
 import IssuesWorkbench from './components/IssuesWorkbench';
 import AgentsTab from './components/AgentsTab';
+import CreateWorkspaceAgentModal from './components/CreateWorkspaceAgentModal';
+import CreateTaskDialog from '@/renderer/pages/cron/ScheduledTasksPage/CreateTaskDialog';
+import { useTeamList } from '@/renderer/pages/team/hooks/useTeamList';
+import { useConversationAgents } from '@/renderer/pages/conversation/hooks/useConversationAgents';
+import {
+  agentFromKey,
+  resolveConversationType,
+  resolveTeamAgentType,
+} from '@/renderer/pages/team/components/agentSelectUtils';
 import SkillsTab from './components/SkillsTab';
 import RuntimesTab from './components/RuntimesTab';
 import SettingsTab from './components/SettingsTab';
@@ -42,7 +51,7 @@ type NavigationTeamContext = {
   name: string;
 } | null;
 
-type SuperAssistantTab = 'overview' | 'issues' | 'skills' | 'runtimes' | 'settings';
+type SuperAssistantTab = 'overview' | 'agents' | 'issues' | 'skills' | 'runtimes' | 'settings';
 
 type SuperAssistantIssueTaskMetadata = {
   source: 'super-assistant-issue';
@@ -165,6 +174,7 @@ function parseSuperAssistantSearch(search: string): {
   const issueId = params.get('issueId');
   const rawTab = params.get('tab');
   const tab: SuperAssistantTab =
+    rawTab === 'agents' ||
     rawTab === 'issues' ||
     rawTab === 'skills' ||
     rawTab === 'runtimes' ||
@@ -191,6 +201,10 @@ const SuperAssistantPage: React.FC = () => {
   const superAssistantData = useSuperAssistantData(hasJoinedEnterprise, isAdmin, issueAssignments);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [sharedTaskVisible, setSharedTaskVisible] = useState(false);
+  const [createAgentVisible, setCreateAgentVisible] = useState(false);
+  const [agentAutomationVisible, setAgentAutomationVisible] = useState(false);
+  const { teams, mutate: mutateTeams } = useTeamList();
+  const { cliAgents, presetAssistants } = useConversationAgents();
   const currentTeam = superAssistantData.primaryTeam
     ? {
         id: superAssistantData.primaryTeam.id,
@@ -349,6 +363,33 @@ const SuperAssistantPage: React.FC = () => {
       })),
     [superAssistantData.primaryTeam]
   );
+  const handleCreateWorkspaceAgent = useCallback(
+    async (payload: {
+      teamId: string;
+      agentName: string;
+      agentKey: string;
+    }) => {
+      const allAgents = [...cliAgents, ...presetAssistants];
+      const agent = agentFromKey(payload.agentKey, allAgents);
+      const backend = resolveTeamAgentType(agent, 'claude');
+      await ipcBridge.team.addAgent.invoke({
+        teamId: payload.teamId,
+        agent: {
+          conversationId: '',
+          role: 'teammate',
+          agentType: backend,
+          agentName: payload.agentName,
+          status: 'pending',
+          conversationType: resolveConversationType(backend),
+          cliPath: agent?.cliPath,
+          customAgentId: agent?.customAgentId,
+        },
+      });
+      await mutateTeams();
+    },
+    [cliAgents, mutateTeams, presetAssistants]
+  );
+
   const primaryLeadAgent = useMemo(() => {
     const team = superAssistantData.primaryTeam;
     if (!team) {
@@ -727,6 +768,7 @@ const SuperAssistantPage: React.FC = () => {
           <div className='flex items-center gap-8px flex-wrap'>
             {([
               ['overview', t('common.superAssistant.tabs.workbench', { defaultValue: '工作台' })],
+              ['agents', t('common.superAssistant.tabs.agents', { defaultValue: '智能体' })],
               ['issues', t('common.superAssistant.tabs.dispatch', { defaultValue: '调度视图' })],
               ['skills', t('common.superAssistant.tabs.skills', { defaultValue: 'Skills' })],
               ['runtimes', t('common.superAssistant.tabs.runtimes', { defaultValue: '运行时' })],
@@ -745,6 +787,36 @@ const SuperAssistantPage: React.FC = () => {
         </Card>
         {currentTab === 'overview' ? (
           <>
+            <Card>
+              <div className='text-14px font-600 text-t-primary'>
+                {t('common.superAssistant.howToUseTitle', { defaultValue: '如何使用 Agent 助手' })}
+              </div>
+              <ol className='mt-10px mb-0 pl-18px text-13px text-t-secondary space-y-6px'>
+                <li>
+                  {t('common.superAssistant.howToUseStep1', {
+                    defaultValue: '在 Issues 中打开或选中一个需求（Issue）。',
+                  })}
+                </li>
+                <li>
+                  {t('common.superAssistant.howToUseStep2', {
+                    defaultValue: '回到本页，在「Issue 队列」中点选 Issue，或点击「开始处理当前 Issue」。',
+                  })}
+                </li>
+                <li>
+                  {t('common.superAssistant.howToUseStep3', {
+                    defaultValue: '在「运行时」查看 Agent 执行进度；需要分派多个 Agent 时进入「调度视图」。',
+                  })}
+                </li>
+              </ol>
+              <div className='mt-12px flex items-center gap-8px flex-wrap'>
+                <Button size='small' type='primary' onClick={() => navigate('/issues')}>
+                  {t('common.superAssistant.howToUseOpenIssues', { defaultValue: '去 Issues 选择任务' })}
+                </Button>
+                <Button size='small' type='outline' onClick={() => handleSwitchTab('runtimes')}>
+                  {t('common.superAssistant.howToUseViewRuns', { defaultValue: '查看运行时' })}
+                </Button>
+              </div>
+            </Card>
             <div className='grid gap-12px xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]'>
               <Card title={t('common.superAssistant.workbenchTitle', { defaultValue: '当前 Issue 工作台' })}>
                 {currentIssue ? (
@@ -785,8 +857,14 @@ const SuperAssistantPage: React.FC = () => {
                   </div>
                 ) : (
                   <Empty
-                    description={t('common.superAssistant.noIssues', { defaultValue: '暂无共享 Issue' })}
-                  />
+                    description={t('common.superAssistant.noIssuesPickOne', {
+                      defaultValue: '请先在 Issues 中选择一个 Issue，再在此开始处理。',
+                    })}
+                  >
+                    <Button type='primary' size='small' onClick={() => navigate('/issues')}>
+                      {t('common.superAssistant.howToUseOpenIssues', { defaultValue: '去 Issues 选择任务' })}
+                    </Button>
+                  </Empty>
                 )}
               </Card>
               <Card title={t('common.superAssistant.recentRunTitle', { defaultValue: '最近运行 / 执行反馈' })}>
@@ -868,6 +946,13 @@ const SuperAssistantPage: React.FC = () => {
             </Card>
           </>
         ) : null}
+        {currentTab === 'agents' ? (
+          <AgentsTab
+            executionGroups={superAssistantData.agentExecutionGroups}
+            onCreateAgent={() => setCreateAgentVisible(true)}
+            onCreateAutomation={() => setAgentAutomationVisible(true)}
+          />
+        ) : null}
         {currentTab === 'issues' ? (
           <IssuesWorkbench
             isAdmin={isAdmin}
@@ -932,7 +1017,14 @@ const SuperAssistantPage: React.FC = () => {
                 defaultValue: '这里聚合运行中的 Agent、执行状态和阻塞信号，便于从产品视角查看最近运行。',
               })}
             </div>
-            <AgentsTab executionGroups={superAssistantData.agentExecutionGroups} />
+            <AgentsTab
+              executionGroups={superAssistantData.agentExecutionGroups}
+              onCreateAgent={() => {
+                handleSwitchTab('agents');
+                setCreateAgentVisible(true);
+              }}
+              onCreateAutomation={() => setAgentAutomationVisible(true)}
+            />
           </Card>
         ) : null}
         {currentTab === 'settings' ? (
@@ -945,6 +1037,40 @@ const SuperAssistantPage: React.FC = () => {
           </Card>
         ) : null}
       </div>
+      <CreateWorkspaceAgentModal
+        visible={createAgentVisible}
+        teams={teams}
+        defaultTeamId={superAssistantData.primaryTeam?.id}
+        onClose={() => setCreateAgentVisible(false)}
+        onConfirm={handleCreateWorkspaceAgent}
+      />
+      <CreateTaskDialog
+        visible={agentAutomationVisible}
+        onClose={() => setAgentAutomationVisible(false)}
+        conversationTitle={currentIssue?.subject ?? 'Agent 自动化'}
+        initialName={
+          currentIssue
+            ? t('common.issues.automationDefaultName', {
+                defaultValue: 'Issue 自动跟进 · {{subject}}',
+                subject: currentIssue.subject,
+              })
+            : t('common.superAssistant.agentAutomationDefaultName', { defaultValue: 'Agent 定时巡检' })
+        }
+        initialPrompt={
+          currentIssue
+            ? t('common.issues.automationDefaultPrompt', {
+                defaultValue:
+                  '你是 Issue「{{subject}}」的值班 Agent。请检查当前进展、阻塞项与下一步行动，输出简洁 Markdown 摘要。',
+                subject: currentIssue.subject,
+              })
+            : t('common.superAssistant.agentAutomationDefaultPrompt', {
+                defaultValue: '扫描团队未关闭 Issue 与阻塞项，输出摘要并 @ 相关负责人。',
+              })
+        }
+        initialFrequency='weekdays'
+        initialAgentKey={autopilotDefaults?.initialAgentKey}
+        autopilotContext={autopilotDefaults?.autopilotContext}
+      />
       <CreateSharedTaskModal
         visible={sharedTaskVisible}
         onClose={() => setSharedTaskVisible(false)}

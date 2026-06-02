@@ -556,6 +556,44 @@ export function registerDevOpsRoutes(app: Express): void {
     }
   });
 
+  // POST /api/admin/requirements/:id/comments — 用户 / Agent 发表评论
+  app.post('/api/admin/requirements/:id/comments', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const requirementId = String(req.params.id);
+      const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
+      if (!body) {
+        res.status(400).json({ success: false, message: 'Comment body is required' });
+        return;
+      }
+
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const requirement = driver
+        .prepare(`SELECT id FROM requirements WHERE id = ? AND tenant_id = ?`)
+        .get(requirementId, tenantId);
+      if (!requirement) {
+        res.status(404).json({ success: false, message: 'Requirement not found' });
+        return;
+      }
+
+      const { insertRequirementComment } = await import('@process/services/devops/requirementCommentService');
+      const commentId = await insertRequirementComment({
+        tenantId,
+        requirementId,
+        authorType: 'user',
+        authorId: req.user!.id,
+        authorName: req.user!.username,
+        body,
+      });
+
+      res.json({ success: true, data: { id: commentId } });
+    } catch (err) {
+      console.error('[DevOpsRoute] create requirement comment error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
   // GET /api/admin/requirements/:id/comments — Issue 评论（含 Autopilot 回写）
   app.get('/api/admin/requirements/:id/comments', apiRateLimiter, auth, async (req, res) => {
     try {

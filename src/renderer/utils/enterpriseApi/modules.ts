@@ -471,6 +471,17 @@ export async function listRequirementComments(requirementId: string): Promise<Re
   );
 }
 
+export async function createRequirementComment(
+  requirementId: string,
+  body: string
+): Promise<{ id: string }> {
+  return enterpriseMutate<{ id: string }>(
+    `/api/admin/requirements/${encodeURIComponent(requirementId)}/comments`,
+    'POST',
+    { body }
+  );
+}
+
 export async function createTeam(payload: Record<string, unknown>): Promise<void> {
   await enterpriseMutate('/api/admin/teams', 'POST', payload);
 }

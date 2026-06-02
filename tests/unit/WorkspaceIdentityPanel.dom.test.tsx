@@ -145,7 +145,7 @@ describe('WorkspaceIdentityPanel', () => {
     expect(screen.getByLabelText('账户与组织')).toBeTruthy();
   });
 
-  it('shows enterprise guest identity instead of plain guest when enterprise is connected', () => {
+  it('shows enterprise pending-login identity when enterprise is connected but user is not signed in', () => {
     authState.status = 'unauthenticated';
     authState.user = null;
     enterpriseModeState.hasJoinedEnterprise = true;
@@ -166,7 +166,7 @@ describe('WorkspaceIdentityPanel', () => {
     };
 
     render(<WorkspaceIdentityPanel />);
-    expect(screen.getByText('企业访客')).toBeTruthy();
-    expect(screen.getByText('Acme Corp · 未登录企业账号')).toBeTruthy();
+    expect(screen.getByText('请登录企业账号')).toBeTruthy();
+    expect(screen.getByText('Acme Corp · 登录后显示姓名与组织架构')).toBeTruthy();
   });
 });

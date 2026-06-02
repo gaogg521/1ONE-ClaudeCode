@@ -1,10 +1,13 @@
 import React from 'react';
-import { Card, Empty, Tag } from '@arco-design/web-react';
+import { Button, Card, Empty, Tag } from '@arco-design/web-react';
+import { Plus } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import type { SuperAssistantAgentExecutionGroup } from '../hooks/useSuperAssistantData';
 
 type AgentsTabProps = {
   executionGroups: SuperAssistantAgentExecutionGroup[];
+  onCreateAgent?: () => void;
+  onCreateAutomation?: () => void;
 };
 
 function getStatusMeta(
@@ -29,16 +32,25 @@ function getStatusMeta(
   }
 }
 
-const AgentsTab: React.FC<AgentsTabProps> = ({ executionGroups }) => {
+const AgentsTab: React.FC<AgentsTabProps> = ({ executionGroups, onCreateAgent, onCreateAutomation }) => {
   const { t } = useTranslation();
 
   return (
     <div className='space-y-12px'>
-      <Card title={t('common.superAssistant.agentsExecutionTitle', { defaultValue: '当前执行编组' })}>
+      <Card title={t('common.superAssistant.agentsExecutionTitle', { defaultValue: '团队智能体' })}>
         <div className='text-12px text-t-tertiary'>
           {t('common.superAssistant.agentsExecutionDesc', {
-            defaultValue: '按团队查看每个 Agent 当前在处理什么、是否阻塞，以及它依赖的工作区 / 技能 / MCP 能力。',
+            defaultValue:
+              '创建个人或团队 Agent，并为其配置定时自动化，让 Agent 像 7×24 员工一样持续跟进 Issues。',
           })}
+        </div>
+        <div className='mt-12px flex flex-wrap gap-8px'>
+          <Button type='primary' size='small' icon={<Plus theme='outline' size='14' />} onClick={() => onCreateAgent?.()}>
+            {t('common.superAssistant.createAgentTitle', { defaultValue: '创建智能体' })}
+          </Button>
+          <Button size='small' type='outline' onClick={() => onCreateAutomation?.()}>
+            {t('common.superAssistant.agentAutomationCreate', { defaultValue: '新建自动化' })}
+          </Button>
         </div>
       </Card>
       {executionGroups.length === 0 ? (

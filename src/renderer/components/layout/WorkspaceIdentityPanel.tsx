@@ -54,13 +54,18 @@ function buildOrgLine(
 
 const GuestProfileMenu: React.FC<{
   onJoinEnterprise: () => void;
+  onEnterpriseLogin: () => void;
   onAdminLogin: () => void;
   enterpriseConnected?: boolean;
   tenantLabel?: string | null;
-}> = ({ onJoinEnterprise, onAdminLogin, enterpriseConnected = false, tenantLabel = null }) => {
+}> = ({ onJoinEnterprise, onEnterpriseLogin, onAdminLogin, enterpriseConnected = false, tenantLabel = null }) => {
   const { t } = useTranslation();
 
   const handleMenuItem = (key: string) => {
+    if (key === 'enterprise-login') {
+      onEnterpriseLogin();
+      return;
+    }
     if (key === 'join') {
       onJoinEnterprise();
       return;
@@ -75,13 +80,16 @@ const GuestProfileMenu: React.FC<{
       <div className={styles.menuHeader}>
         <Typography.Text bold>
           {enterpriseConnected
-            ? t('settings.workspaceIdentity.enterpriseGuestTitle', { defaultValue: '企业访客' })
+            ? t('settings.workspaceIdentity.enterprisePendingLoginTitle', {
+                defaultValue: '请登录企业账号',
+              })
             : t('settings.workspaceIdentity.guestTitle', { defaultValue: '访客模式' })}
         </Typography.Text>
         <Typography.Paragraph type='secondary' className={styles.menuSub}>
           {enterpriseConnected
-            ? t('settings.workspaceIdentity.enterpriseGuestDesc', {
-                defaultValue: '当前实例已接入 {{tenant}}，但此桌面会话尚未登录企业账号。请先登录或加入团队后再使用企业协作能力。',
+            ? t('settings.workspaceIdentity.enterprisePendingLoginDesc', {
+                defaultValue:
+                  '当前实例已接入 {{tenant}}。登录企业账号后，将显示你的姓名、角色、组织架构与所属团队。',
                 tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业组织' }),
               })
             : t('settings.workspaceIdentity.guestDesc', {
@@ -90,9 +98,15 @@ const GuestProfileMenu: React.FC<{
         </Typography.Paragraph>
       </div>
       <Divider style={{ margin: '8px 0' }} />
-      <Menu.Item key='join'>
-        {t('settings.workspaceIdentity.guestJoinEnterprise', { defaultValue: '登录 / 加入团队' })}
-      </Menu.Item>
+      {enterpriseConnected ? (
+        <Menu.Item key='enterprise-login'>
+          {t('settings.edition.enterpriseLoginAction', { defaultValue: '登录企业账号' })}
+        </Menu.Item>
+      ) : (
+        <Menu.Item key='join'>
+          {t('settings.workspaceIdentity.guestJoinEnterprise', { defaultValue: '登录 / 加入团队' })}
+        </Menu.Item>
+      )}
       <Menu.Item key='admin-login'>
         {t('settings.workspaceIdentity.guestAdminLogin', { defaultValue: 'WebUI 管理员登录' })}
       </Menu.Item>
@@ -296,7 +310,15 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
     enterpriseMode.enterpriseContext?.tenantName ?? enterpriseMode.enterpriseContext?.tenantId ?? null;
   const isEnterpriseGuest = isGuest && enterpriseMode.hasJoinedEnterprise && Boolean(enterpriseGuestTenantLabel);
 
+  const handleGuestEnterpriseLogin = () => {
+    void enterpriseMode.openEnterpriseLoginInBrowser();
+  };
+
   const handleGuestJoin = () => {
+    if (isEnterpriseGuest) {
+      handleGuestEnterpriseLogin();
+      return;
+    }
     void enterpriseMode.setManagementMode('enterprise').then(() => {
       void navigate('/enterprise/join');
     });
@@ -348,8 +370,8 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
 
   const orgLine = isGuest
     ? isEnterpriseGuest
-      ? t('settings.workspaceIdentity.enterpriseGuestEdition', {
-          defaultValue: '{{tenant}} · 未登录企业账号',
+      ? t('settings.workspaceIdentity.enterprisePendingLoginEdition', {
+          defaultValue: '{{tenant}} · 登录后显示姓名与组织架构',
           tenant: enterpriseGuestTenantLabel,
         })
       : t('settings.workspaceIdentity.guestEdition', { defaultValue: '个人版 · 未登录' })
@@ -357,13 +379,22 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
 
   const displayName = isGuest
     ? isEnterpriseGuest
-      ? t('settings.workspaceIdentity.enterpriseGuestName', { defaultValue: '企业访客' })
+      ? t('settings.workspaceIdentity.enterprisePendingLoginName', {
+          defaultValue: '请登录企业账号',
+        })
       : t('settings.workspaceIdentity.guestName', { defaultValue: '访客' })
     : profile.username;
+
+  const avatarInitial = isGuest
+    ? isEnterpriseGuest
+      ? (enterpriseGuestTenantLabel?.slice(0, 1) ?? '企')
+      : displayName.slice(0, 1).toUpperCase()
+    : displayName.slice(0, 1).toUpperCase();
 
   const droplist = isGuest ? (
     <GuestProfileMenu
       onJoinEnterprise={handleGuestJoin}
+      onEnterpriseLogin={handleGuestEnterpriseLogin}
       onAdminLogin={handleGuestAdminLogin}
       enterpriseConnected={isEnterpriseGuest}
       tenantLabel={enterpriseGuestTenantLabel}
@@ -404,7 +435,7 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
           aria-label={t('settings.workspaceIdentity.openMenu', { defaultValue: '账户与组织' })}
         >
           <Avatar size={compact ? 24 : 28} className={styles.avatar}>
-            {avatarSrc ? <img src={avatarSrc} alt='' /> : displayName.slice(0, 1).toUpperCase()}
+            {avatarSrc ? <img src={avatarSrc} alt='' /> : avatarInitial}
           </Avatar>
           {!compact ? (
             <span className={classNames(styles.meta, surface === 'card' && styles.metaCard)}>
