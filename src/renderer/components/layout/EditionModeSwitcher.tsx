@@ -8,7 +8,7 @@ import React, { useCallback } from 'react';
 import { Button, Popover, Radio, Tag, Tooltip } from '@arco-design/web-react';
 import { Help } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { WebuiManagementMode } from '@/common/config/webuiEnterpriseConfig';
 import { resolveEnterpriseEditionPath } from '@/common/auth/enterpriseRoles';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
@@ -26,6 +26,7 @@ type EditionModeSwitcherProps = {
 const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'bar' }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const isDesktop = isElectronDesktop();
   const { status } = useAuth();
   const {
@@ -35,13 +36,18 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
     enterpriseContext,
     setManagementMode,
     openEnterpriseAdminInBrowser,
-    openEnterpriseLoginInBrowser,
+    startEnterpriseLogin,
     showEnterpriseAdminNav,
     canUseEnterpriseEditionSwitcher,
   } = useWebuiEnterpriseMode();
 
   /** 版本切换只看 managementMode，与 /enterprise 管理后台路由无关 */
   const activeEdition: WebuiManagementMode = managementMode;
+
+  const handleEnterpriseLogin = useCallback(() => {
+    const returnTo = `${location.pathname}${location.search}` || '/sessions';
+    void startEnterpriseLogin((path) => navigate(path), returnTo);
+  }, [location.pathname, location.search, navigate, startEnterpriseLogin]);
 
   const openAdminConsole = useCallback(async () => {
     const result = await openAdminConsoleRoute({
@@ -109,7 +115,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
         <div className={styles.compact}>
           <Tag size='small' color='arcoblue'>{enterpriseTagLabel}</Tag>
           {isEnterpriseGuest ? (
-            <Button size='mini' type='text' onClick={() => void openEnterpriseLoginInBrowser()}>
+            <Button size='mini' type='text' onClick={handleEnterpriseLogin}>
               {t('settings.edition.enterpriseLoginAction', { defaultValue: '登录企业账号' })}
             </Button>
           ) : null}
@@ -128,7 +134,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
             <Tag color='arcoblue'>{enterpriseTagLabel}</Tag>
           </div>
           {isEnterpriseGuest ? (
-            <Button size='small' type='text' onClick={() => void openEnterpriseLoginInBrowser()}>
+            <Button size='small' type='text' onClick={handleEnterpriseLogin}>
               {t('settings.edition.enterpriseLoginAction', { defaultValue: '登录企业账号' })}
             </Button>
           ) : null}
@@ -266,8 +272,8 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
             defaultValue: '桌面端需先在浏览器完成组织账号登录，再回到此页加入企业。',
           })}
         >
-          <Button size='small' type='text' onClick={() => void openEnterpriseLoginInBrowser()}>
-            {t('settings.edition.openLogin', { defaultValue: '浏览器登录' })}
+          <Button size='small' type='text' onClick={handleEnterpriseLogin}>
+            {t('settings.edition.openLogin', { defaultValue: '登录企业账号' })}
           </Button>
         </Tooltip>
       ) : null}

@@ -41,7 +41,7 @@ const EditionWorkspaceGuide: React.FC = () => {
     effectiveRole,
     setManagementMode,
     openEnterpriseAdminInBrowser,
-    openEnterpriseLoginInBrowser,
+    startEnterpriseLogin,
   } = useWebuiEnterpriseMode();
 
   const joinedWhilePersonal = managementMode === 'standalone' && hasJoinedEnterprise;
@@ -102,7 +102,8 @@ const EditionWorkspaceGuide: React.FC = () => {
             size='mini'
             type='text'
             onClick={() => {
-              void openEnterpriseLoginInBrowser();
+              const returnTo = `${location.pathname}${location.search}` || '/sessions';
+              void startEnterpriseLogin((path) => navigate(path), returnTo);
             }}
           >
             {t('settings.edition.guideGoEnterpriseLogin', { defaultValue: '登录企业账号' })}
@@ -156,14 +157,16 @@ const EditionWorkspaceGuide: React.FC = () => {
     hasJoinedEnterprise,
     isAdmin,
     managementMode,
-    openEnterpriseLoginInBrowser,
+    location.pathname,
+    location.search,
+    navigate,
+    startEnterpriseLogin,
     openAdminConsoleHandler,
     showEnterpriseAdminNav,
     status,
     switchToEnterpriseEdition,
     t,
     tenantLabel,
-    navigate,
   ]);
 
   if (loading || !visible || !isWorkspaceRoute(location.pathname)) {

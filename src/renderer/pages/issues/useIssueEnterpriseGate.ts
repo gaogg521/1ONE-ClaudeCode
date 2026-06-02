@@ -1,11 +1,15 @@
 import { useCallback } from 'react';
 import { Message } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { readCurrentHashPath } from '@/renderer/utils/enterpriseLoginNavigation';
 
 export function useIssueEnterpriseGate() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const auth = useAuth();
   const enterpriseMode = useWebuiEnterpriseMode();
   const isAuthenticated = auth.status === 'authenticated';
@@ -31,10 +35,11 @@ export function useIssueEnterpriseGate() {
                 : '请先登录企业账号后再创建 Issue。',
         })
       );
-      void enterpriseMode.openEnterpriseLoginInBrowser();
+      const returnTo = `${location.pathname}${location.search}` || readCurrentHashPath();
+      void enterpriseMode.startEnterpriseLogin((path) => navigate(path), returnTo);
       return false;
     },
-    [enterpriseMode, isAuthenticated, t]
+    [enterpriseMode, isAuthenticated, location.pathname, location.search, navigate, t]
   );
 
   return { isAuthenticated, ensureEnterpriseLogin };

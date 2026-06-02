@@ -311,7 +311,11 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
   const isEnterpriseGuest = isGuest && enterpriseMode.hasJoinedEnterprise && Boolean(enterpriseGuestTenantLabel);
 
   const handleGuestEnterpriseLogin = () => {
-    void enterpriseMode.openEnterpriseLoginInBrowser();
+    const returnTo =
+      location.pathname.startsWith('/login') || location.pathname.startsWith('/enterprise/join')
+        ? '/sessions'
+        : `${location.pathname}${location.search}`;
+    void enterpriseMode.startEnterpriseLogin((path) => navigate(path), returnTo);
   };
 
   const handleGuestJoin = () => {

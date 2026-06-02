@@ -13,6 +13,7 @@ import {
   resolveUserAvatarFile,
   updateUserAvatar,
 } from '@process/services/user/userProfileService';
+import { registerBrowserSessionFromRequest } from '@process/webserver/auth/registerBrowserWebuiLoginSession';
 
 const avatarUpload = multer({
   storage: multer.memoryStorage(),
@@ -34,6 +35,11 @@ export function registerProfileRoutes(app: Express, opts: RegisterProfileRoutesO
         res.status(404).json({ success: false, message: 'User not found' });
         return;
       }
+      registerBrowserSessionFromRequest(req, {
+        id: profile.userId,
+        username: profile.username,
+        role: profile.role,
+      });
       res.json({ success: true, data: profile });
     } catch (error) {
       console.error('[ProfileRoute] workspace-profile error:', error);

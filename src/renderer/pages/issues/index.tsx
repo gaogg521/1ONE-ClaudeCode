@@ -262,7 +262,14 @@ const IssuesPage: React.FC = () => {
               '当前实例已接入企业，但你尚未登录企业账号。登录后将显示你的姓名、组织架构，并启用「分配给我」等筛选。',
           })}
           action={
-            <Button size='mini' type='text' onClick={() => void enterpriseMode.openEnterpriseLoginInBrowser()}>
+            <Button
+              size='mini'
+              type='text'
+              onClick={() => {
+                const returnTo = `${location.pathname}${location.search}`;
+                void enterpriseMode.startEnterpriseLogin((path) => navigate(path), returnTo);
+              }}
+            >
               {t('settings.edition.enterpriseLoginAction', { defaultValue: '登录企业账号' })}
             </Button>
           }

@@ -49,7 +49,10 @@ import { resolvePostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
 import { readRequestOrigin, resolveOAuthCallbackUri } from '@/common/auth/oauthCallbackUri';
 import { fetchFeishuOrgUnitPath } from '../auth/orgProfile/feishuOrgProfile';
 import { updateUserOrgProfile } from '@process/services/user/userProfileService';
-import { registerBrowserWebuiLoginSession } from '../auth/registerBrowserWebuiLoginSession';
+import {
+  registerBrowserWebuiLoginSession,
+  registerBrowserSessionFromRequest,
+} from '../auth/registerBrowserWebuiLoginSession';
 import { revokeBrowserWebuiSession } from '../auth/browserSessionBridge';
 import { getOrgEditionSettings } from '../auth/orgEditionSettings';
 import {
@@ -913,6 +916,9 @@ export function registerAuthRoutes(app: Express): void {
     AuthMiddleware.authenticateToken,
     authenticatedActionLimiter,
     (req: Request, res: Response) => {
+      if (req.user) {
+        registerBrowserSessionFromRequest(req, req.user, req.user.role);
+      }
       res.json({
         success: true,
         user: req.user,

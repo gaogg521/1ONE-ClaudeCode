@@ -9,6 +9,7 @@ import {
   isElectronDesktopRequest,
   registerBrowserWebuiSession,
 } from '@process/webserver/auth/browserSessionBridge';
+import { TokenUtils } from '@process/webserver/auth/middleware/TokenMiddleware';
 
 export function registerBrowserWebuiLoginSession(
   req: Pick<Request, 'headers'>,
@@ -26,4 +27,20 @@ export function registerBrowserWebuiLoginSession(
     role,
     token,
   });
+}
+
+/** Refresh desktop bridge when browser already has a session cookie (no new login POST). */
+export function registerBrowserSessionFromRequest(
+  req: Pick<Request, 'headers'>,
+  user: { id: string; username: string; role?: string },
+  roleOverride?: string
+): void {
+  if (isElectronDesktopRequest(req)) {
+    return;
+  }
+  const token = TokenUtils.extractFromRequest(req as Request);
+  if (!token) {
+    return;
+  }
+  registerBrowserWebuiLoginSession(req, user, token, roleOverride);
 }

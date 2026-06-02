@@ -43,6 +43,10 @@ import {
 } from '@/common/auth/enterpriseEditionSync';
 import { isEnterpriseTenantId } from '@/common/config/webuiEnterpriseConfig';
 import { setPostLoginRedirect } from '@/renderer/utils/postLoginRedirect';
+import {
+  buildEnterpriseLoginPath,
+  readCurrentHashPath,
+} from '@/renderer/utils/enterpriseLoginNavigation';
 import type { EnterpriseJoinResult } from '@/common/types/enterpriseJoin';
 
 export type WebuiEnterpriseModeValue = {
@@ -64,6 +68,9 @@ export type WebuiEnterpriseModeValue = {
   openEnterpriseAdminInBrowser: () => Promise<'opened' | 'webui_not_running' | 'failed'>;
   /** Opens WebUI login with post-login redirect to /enterprise (LDAP / Feishu / invite flow). */
   openEnterpriseLoginInBrowser: () => Promise<'opened' | 'webui_not_running' | 'failed'>;
+  /** Desktop: navigate in-app; browser WebUI: open system browser. */
+  startEnterpriseLogin: (navigate: (path: string) => void, returnTo?: string) => Promise<void>;
+  buildEnterpriseLoginPath: (returnTo?: string) => string;
   canCreateEnterprise: boolean;
   hasSystemAdmin: boolean;
   canClaimSystemAdmin: boolean;
@@ -309,11 +316,37 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
     [isDesktop, webuiApiBase]
   );
 
+  const buildEnterpriseLoginPathForContext = useCallback(
+    (returnTo?: string) => buildEnterpriseLoginPath(returnTo ?? readCurrentHashPath()),
+    []
+  );
+
   const openEnterpriseLoginInBrowser = useCallback(async (): Promise<'opened' | 'webui_not_running' | 'failed'> => {
     const landing = resolveEnterpriseEditionPath(hasJoinedEnterprise);
     setPostLoginRedirect(landing);
-    return openUrlInBrowser(`/login?redirect=${encodeURIComponent(landing)}`);
-  }, [hasJoinedEnterprise, openUrlInBrowser]);
+    const result = await openUrlInBrowser(`/login?redirect=${encodeURIComponent(landing)}`);
+    if (result === 'opened' && isDesktop) {
+      const synced = await syncBrowserWebuiSessionToDesktop();
+      if (synced?.token) {
+        await refreshAuth();
+        await refreshEnterpriseContext();
+        window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+      }
+    }
+    return result;
+  }, [hasJoinedEnterprise, isDesktop, openUrlInBrowser, refreshAuth, refreshEnterpriseContext]);
+
+  const startEnterpriseLogin = useCallback(
+    async (navigate: (path: string) => void, returnTo?: string) => {
+      const loginPath = buildEnterpriseLoginPath(returnTo ?? readCurrentHashPath());
+      if (isDesktop) {
+        navigate(loginPath);
+        return;
+      }
+      await openEnterpriseLoginInBrowser();
+    },
+    [isDesktop, openEnterpriseLoginInBrowser]
+  );
 
   const openEnterpriseAdminInBrowser = useCallback(async (): Promise<'opened' | 'webui_not_running' | 'failed'> => {
     setPostLoginRedirect('/enterprise/auth');
@@ -373,6 +406,8 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
       refreshEnterpriseContext,
       openEnterpriseAdminInBrowser,
       openEnterpriseLoginInBrowser,
+      startEnterpriseLogin,
+      buildEnterpriseLoginPath: buildEnterpriseLoginPathForContext,
       canCreateEnterprise,
       hasSystemAdmin,
       canClaimSystemAdmin,
@@ -396,6 +431,8 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
       managementMode,
       openEnterpriseAdminInBrowser,
       openEnterpriseLoginInBrowser,
+      startEnterpriseLogin,
+      buildEnterpriseLoginPathForContext,
       refreshEnterpriseContext,
       setManagementMode,
       showEnterpriseAdminNav,
