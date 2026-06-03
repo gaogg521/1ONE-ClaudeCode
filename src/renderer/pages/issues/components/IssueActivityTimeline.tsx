@@ -33,12 +33,13 @@ function formatRelativeTime(timestamp: number, t: (key: string, opts?: Record<st
 export function buildIssueActivityItems(
   issue: RequirementRecord,
   comments: RequirementCommentRecord[],
-  t: (key: string, opts?: Record<string, unknown>) => string
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  creatorDisplayName?: string
 ): IssueActivityItem[] {
   const items: IssueActivityItem[] = [
     {
       id: `created-${issue.id}`,
-      authorName: issue.creator_id,
+      authorName: creatorDisplayName ?? issue.creator_name ?? issue.creator_id,
       authorType: 'system',
       action: t('common.issues.activityCreated', { defaultValue: '创建了此 Issue' }),
       createdAt: issue.created_at,

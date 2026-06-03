@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Empty, Result, Spin, Tag, Typography } from '@arco-design/web-react';
+import { Button, Card, Empty, Spin, Tag, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ipcBridge } from '@/common';
@@ -12,7 +12,8 @@ const SkillDetailPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { skillKey } = useParams<{ skillKey: string }>();
-  const { hasJoinedEnterprise } = useEditionFeatures();
+  const { can } = useEditionFeatures();
+  const canUseOrgSkills = can('skills.org');
   const [loading, setLoading] = useState(true);
   const [localSkills, setLocalSkills] = useState<SkillMetadata[]>([]);
   const [orgSkills, setOrgSkills] = useState<SkillRecord[]>([]);
@@ -28,7 +29,7 @@ const SkillDetailPage: React.FC = () => {
     setLoading(true);
     void Promise.allSettled([
       ipcBridge.fs.listAvailableSkills.invoke(),
-      listSkills(),
+      canUseOrgSkills ? listSkills() : Promise.resolve([]),
     ]).then(async ([localResult, orgResult]) => {
       if (disposed) {
         return;
@@ -63,7 +64,7 @@ const SkillDetailPage: React.FC = () => {
     return () => {
       disposed = true;
     };
-  }, [skillKey]);
+  }, [canUseOrgSkills, skillKey]);
 
   const resolvedSkill = useMemo(() => {
     if (!skillKey) {
@@ -78,23 +79,6 @@ const SkillDetailPage: React.FC = () => {
     const localSkill = localSkills.find((item) => item.name === decodedKey);
     return localSkill ? { source: 'local' as const, localSkill } : null;
   }, [localSkills, orgSkills, skillKey]);
-
-  if (!hasJoinedEnterprise) {
-    return (
-      <Result
-        status='403'
-        title={t('common.skills.joinRequiredTitle', { defaultValue: '加入企业后可使用 Skills' })}
-        subTitle={t('common.skills.joinRequiredDesc', {
-          defaultValue: 'Skills 页面会整合本地技能、团队技能与导入入口，请先加入企业组织。',
-        })}
-        extra={
-          <Button type='primary' onClick={() => navigate('/sessions')}>
-            {t('common.skills.backToWorkspace', { defaultValue: '返回主工作台' })}
-          </Button>
-        }
-      />
-    );
-  }
 
   return (
     <PageContentShell className='skill-detail-shell' contentClassName='max-w-1400px pb-40px'>
@@ -142,7 +126,7 @@ const SkillDetailPage: React.FC = () => {
                     <Button size='small' type='outline' onClick={() => navigate('/settings/skills-hub')}>
                       {t('common.skills.openHub', { defaultValue: '打开 Skills Hub' })}
                     </Button>
-                    {resolvedSkill.source === 'org' ? (
+                    {resolvedSkill.source === 'org' && canUseOrgSkills ? (
                       <Button size='small' type='primary' onClick={() => navigate('/enterprise/skills')}>
                         {t('common.skills.openAdmin', { defaultValue: '打开团队技能后台' })}
                       </Button>

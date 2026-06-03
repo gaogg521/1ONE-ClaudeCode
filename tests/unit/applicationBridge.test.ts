@@ -243,6 +243,7 @@ describe('CDP configuration functions', () => {
           updateCdpConfig: { provider: vi.fn(), emit: vi.fn(), invoke: vi.fn() },
           getStartOnBootStatus: { provider: vi.fn(), emit: vi.fn(), invoke: vi.fn() },
           setStartOnBoot: { provider: vi.fn(), emit: vi.fn(), invoke: vi.fn() },
+          restoreHiddenBuiltinAssistants: { provider: vi.fn(), emit: vi.fn(), invoke: vi.fn() },
         },
       },
     }));
@@ -259,6 +260,9 @@ describe('CDP configuration functions', () => {
 
     vi.doMock('@process/utils', () => ({
       copyDirectoryRecursively: vi.fn(),
+    }));
+    vi.doMock('@process/utils/devRestart', () => ({
+      scheduleApplicationRestart: vi.fn(),
     }));
 
     vi.resetModules();

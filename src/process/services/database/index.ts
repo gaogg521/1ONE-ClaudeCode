@@ -708,12 +708,14 @@ export class OneCmdDatabase {
       const row = conversationToRow(conversation, userId || this.defaultUserId);
 
       const stmt = this.db.prepare(`
-        INSERT INTO conversations (id, user_id, name, type, extra, model, status, source, channel_chat_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO conversations (id, tenant_id, team_id, user_id, name, type, extra, model, status, source, channel_chat_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
         row.id,
+        row.tenant_id ?? 'default',
+        row.team_id ?? null,
         row.user_id,
         row.name,
         row.type,
@@ -741,7 +743,7 @@ export class OneCmdDatabase {
   getConversation(conversationId: string): IQueryResult<TChatConversation> {
     try {
       const row = this.db
-        .prepare("SELECT * FROM conversations WHERE tenant_id = 'default' AND id = ?")
+        .prepare('SELECT * FROM conversations WHERE id = ?')
         .get(conversationId) as
         | IConversationRow
         | undefined;
@@ -1045,7 +1047,9 @@ export class OneCmdDatabase {
 
       const stmt = this.db.prepare(`
         UPDATE conversations
-        SET name       = ?,
+        SET tenant_id  = ?,
+            team_id    = ?,
+            name       = ?,
             extra      = ?,
             model      = ?,
             status     = ?,
@@ -1053,7 +1057,16 @@ export class OneCmdDatabase {
         WHERE id = ?
       `);
 
-      stmt.run(row.name, row.extra, row.model, row.status, row.updated_at, conversationId);
+      stmt.run(
+        row.tenant_id ?? 'default',
+        row.team_id ?? null,
+        row.name,
+        row.extra,
+        row.model,
+        row.status,
+        row.updated_at,
+        conversationId
+      );
 
       return {
         success: true,
@@ -2215,9 +2228,16 @@ export class OneCmdDatabase {
 let dbInstancePromise: Promise<OneCmdDatabase> | null = null;
 // Synchronous reference to the resolved instance — used for safe close on exit
 let dbResolved: OneCmdDatabase | null = null;
+let testDbPathOverride: string | null = null;
 
 function resolveDbPath(): string {
-  return path.join(getDataPath(), '1one.db');
+  return testDbPathOverride ?? path.join(getDataPath(), '1one.db');
+}
+
+/** @internal Vitest / maintenance scripts only */
+export function __testOnlySetDatabasePath(dbPath: string | null): void {
+  closeDatabase();
+  testDbPathOverride = dbPath;
 }
 
 export function getDatabase(): Promise<OneCmdDatabase> {

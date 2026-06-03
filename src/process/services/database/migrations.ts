@@ -1876,6 +1876,91 @@ const migration_v47: IMigration = {
 };
 
 /**
+ * Migration v47 -> v48: Add independent personal agents table
+ */
+const migration_v48: IMigration = {
+  version: 48,
+  name: 'Add independent personal agents table',
+  up: (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS personal_agents (
+      id TEXT PRIMARY KEY,
+      owner_user_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL DEFAULT 'default',
+      name TEXT NOT NULL,
+      description TEXT,
+      agent_type TEXT NOT NULL,
+      conversation_type TEXT NOT NULL,
+      custom_agent_id TEXT,
+      cli_path TEXT,
+      automation_config TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_personal_agents_owner ON personal_agents(owner_user_id, updated_at DESC)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_personal_agents_tenant ON personal_agents(tenant_id)');
+    console.log('[Migration v48] Added independent personal agents table');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_personal_agents_tenant');
+    db.exec('DROP INDEX IF EXISTS idx_personal_agents_owner');
+    db.exec('DROP TABLE IF EXISTS personal_agents');
+    console.log('[Migration v48] Rolled back: removed personal_agents table');
+  },
+};
+
+/**
+ * Migration v48 -> v49: Normalize legacy organization resource scope names
+ */
+const migration_v49: IMigration = {
+  version: 49,
+  name: 'Normalize legacy organization resource scopes',
+  up: (db) => {
+    for (const table of ['rag_documents', 'mcp_registry', 'skills_registry']) {
+      db.exec(`UPDATE ${table} SET scope = 'organization' WHERE scope IN ('tenant', 'org')`);
+    }
+    console.log('[Migration v49] Normalized legacy organization resource scopes');
+  },
+  down: (_db) => {
+    console.log('[Migration v49] Rollback skipped: normalized scope values retained');
+  },
+};
+
+/**
+ * Migration v49 -> v50: Team runtime node registry (machine + installed agents)
+ */
+const migration_v50: IMigration = {
+  version: 50,
+  name: 'Add team runtime nodes registry',
+  up: (db) => {
+    db.exec(`CREATE TABLE IF NOT EXISTS team_runtime_nodes (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      machine_id TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      hostnames TEXT NOT NULL DEFAULT '[]',
+      ip_addresses TEXT NOT NULL DEFAULT '[]',
+      installed_agents TEXT NOT NULL DEFAULT '[]',
+      last_seen_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`);
+    db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_team_runtime_nodes_tenant_seen ON team_runtime_nodes(tenant_id, last_seen_at DESC)'
+    );
+    db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_team_runtime_nodes_user ON team_runtime_nodes(tenant_id, user_id)'
+    );
+    console.log('[Migration v50] Added team_runtime_nodes table');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_team_runtime_nodes_user');
+    db.exec('DROP INDEX IF EXISTS idx_team_runtime_nodes_tenant_seen');
+    db.exec('DROP TABLE IF EXISTS team_runtime_nodes');
+    console.log('[Migration v50] Rolled back: removed team_runtime_nodes');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -1907,6 +1992,9 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v45,
   migration_v46,
   migration_v47,
+  migration_v48,
+  migration_v49,
+  migration_v50,
 ];
 
 /**

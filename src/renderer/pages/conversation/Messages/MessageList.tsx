@@ -30,6 +30,8 @@ import MessageTips from './components/MessageTips';
 import MessageToolCall from './components/MessageToolCall';
 import MessageToolGroup from './components/MessageToolGroup';
 import MessageToolGroupSummary from './components/MessageToolGroupSummary';
+import WebSourcesCitationBar from './components/WebSourcesCitationBar';
+import { collectWebSourcesFromToolMessages, type WebSourceItem } from '@/renderer/utils/web/collectWebSourcesFromTools';
 import MessageCronTrigger from './components/MessageCronTrigger';
 import MessageSkillSuggest from './components/MessageSkillSuggest';
 import MessageText from './components/MessagetText';
@@ -50,7 +52,8 @@ type IMessageVO =
       id: string;
       messages: Array<IMessageToolGroup | IMessageAcpToolCall>;
       sourceMessageIds: string[];
-    };
+    }
+  | { type: 'web_sources'; id: string; sources: WebSourceItem[]; sourceMessageIds: string[] };
 
 type ConversationLocationState = {
   targetMessageId?: string;
@@ -62,6 +65,9 @@ const getProcessedItemSourceMessageIds = (item: IMessageVO): string[] => {
     return item.sourceMessageIds;
   }
   if ('type' in item && item.type === 'file_summary') {
+    return item.sourceMessageIds;
+  }
+  if ('type' in item && item.type === 'web_sources') {
     return item.sourceMessageIds;
   }
   return 'id' in item ? [item.id] : [];
@@ -207,6 +213,21 @@ const MessageList: React.FC<{ className?: string }> = () => {
       toolList = [];
       toolSourceMessageIds = [];
     };
+    const pushWebSourcesBeforeReply = (anchorMessageId: string) => {
+      if (!toolList.length) {
+        return;
+      }
+      const sources = collectWebSourcesFromToolMessages(toolList);
+      if (sources.length > 0) {
+        result.push({
+          type: 'web_sources',
+          id: `web-sources-${anchorMessageId}`,
+          sources,
+          sourceMessageIds: [...toolSourceMessageIds],
+        });
+      }
+    };
+
     const pushToolList = (message: IMessageToolGroup | IMessageAcpToolCall) => {
       if (!toolList.length) {
         toolSourceMessageIds = [];
@@ -255,11 +276,15 @@ const MessageList: React.FC<{ className?: string }> = () => {
         pushToolList(message);
         continue;
       }
+      pushWebSourcesBeforeReply(message.id);
       toolList = [];
       toolSourceMessageIds = [];
       diffsChanges = [];
       diffsSourceMessageIds = [];
       result.push(message);
+    }
+    if (toolList.length > 0) {
+      pushWebSourcesBeforeReply(toolSourceMessageIds[toolSourceMessageIds.length - 1] ?? 'tail');
     }
     return result;
   }, [list]);
@@ -322,7 +347,8 @@ const MessageList: React.FC<{ className?: string }> = () => {
       const targetIndex = processedList.findIndex((item) => {
         if (
           (item as { type?: string }).type === 'file_summary' ||
-          (item as { type?: string }).type === 'tool_summary'
+          (item as { type?: string }).type === 'tool_summary' ||
+          (item as { type?: string }).type === 'web_sources'
         ) {
           return false;
         }
@@ -357,7 +383,7 @@ const MessageList: React.FC<{ className?: string }> = () => {
 
   const renderItem = (_index: number, item: (typeof processedList)[0]) => {
     const highlighted = matchesTargetMessage(item, highlightedMessageId);
-    if ('type' in item && ['file_summary', 'tool_summary'].includes(item.type)) {
+    if ('type' in item && ['file_summary', 'tool_summary', 'web_sources'].includes(item.type)) {
       return (
         <div
           key={item.id}
@@ -373,6 +399,7 @@ const MessageList: React.FC<{ className?: string }> = () => {
         >
           {item.type === 'file_summary' && <MessageFileChanges diffsChanges={item.diffs} />}
           {item.type === 'tool_summary' && <MessageToolGroupSummary messages={item.messages}></MessageToolGroupSummary>}
+          {item.type === 'web_sources' && <WebSourcesCitationBar sources={item.sources} />}
         </div>
       );
     }

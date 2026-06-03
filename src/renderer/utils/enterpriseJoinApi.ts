@@ -7,7 +7,8 @@
 import { webui } from '@/common/adapter/ipcBridge';
 import type { EnterpriseInvitePreview, EnterpriseJoinResult, EnterpriseSetupResult } from '@/common/types/enterpriseJoin';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import { fetchWebuiApi, fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
+import { fetchWebuiApi, fetchWebuiApiJson, getWebuiApiBaseUrl } from '@/renderer/utils/webuiApiBase';
+import { rememberEnterpriseApiOrigin } from '@/renderer/utils/rememberEnterpriseApiOrigin';
 import { hasValidCsrfToken, withCsrfToken } from '@process/webserver/middleware/csrfClient';
 
 /** Prime CSRF from a safe GET when the session token was not captured yet. */
@@ -35,14 +36,22 @@ export async function joinEnterpriseWithCode(code: string): Promise<EnterpriseJo
     if (!result.success || !result.data) {
       throw new Error(result.msg || 'Join failed');
     }
+    const base = await getWebuiApiBaseUrl();
+    if (base) {
+      await rememberEnterpriseApiOrigin(base);
+    }
     return result.data;
   }
   await ensureWebuiCsrfToken();
-  return fetchWebuiApiJson<EnterpriseJoinResult>('/api/auth/enterprise-join', {
+  const joined = await fetchWebuiApiJson<EnterpriseJoinResult>('/api/auth/enterprise-join', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(withCsrfToken({ code })),
   });
+  if (typeof window !== 'undefined') {
+    await rememberEnterpriseApiOrigin(window.location.origin);
+  }
+  return joined;
 }
 
 export async function createEnterprise(name: string): Promise<EnterpriseSetupResult> {

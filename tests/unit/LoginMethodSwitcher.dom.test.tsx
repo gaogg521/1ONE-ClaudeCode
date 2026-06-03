@@ -25,7 +25,7 @@ describe('LoginMethodSwitcher', () => {
     expect(onChange).toHaveBeenCalledWith('ldap');
   });
 
-  it('does not switch to ldap when ldap is disabled', () => {
+  it('still emits ldap selection when ldap tab is clicked', () => {
     const onChange = vi.fn();
 
     render(
@@ -40,6 +40,6 @@ describe('LoginMethodSwitcher', () => {
     );
 
     fireEvent.click(screen.getByRole('tab', { name: 'LDAP 域控' }));
-    expect(onChange).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenCalledWith('ldap');
   });
 });

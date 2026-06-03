@@ -1,5 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Empty, Input, Message, Spin, Tag } from '@arco-design/web-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Button, Empty, Input, Message, Select, Spin, Tag } from '@arco-design/web-react';
+import {
+  useBindableSkillOptions,
+  type BindableSkillOption,
+} from '@/renderer/hooks/skills/useBindableSkillOptions';
 import { useTranslation } from 'react-i18next';
 import AionModal from '@/renderer/components/base/AionModal';
 import type { ICronJob } from '@/common/adapter/ipcBridge';
@@ -8,7 +12,10 @@ import { useAllCronJobs } from '@/renderer/pages/cron/useCronJobs';
 import { formatCronScheduleBrief, listAgentCronJobs } from '../utils/agentAutomationUtils';
 
 export type ManagedAgentRef = {
+  scope: 'personal' | 'team';
   teamId: string;
+  tenantId: string;
+  teamName: string;
   slotId: string;
   agentName: string;
   agentType: string;
@@ -24,6 +31,10 @@ type ManageWorkspaceAgentModalProps = {
   onAddAutomation: (agent: ManagedAgentRef) => void;
   onEditAutomation: (agent: ManagedAgentRef, job: ICronJob) => void;
   onRunAutomation: (job: ICronJob) => Promise<void>;
+  initialSkillIds?: string[];
+  onSaveSkillIds?: (skillIds: string[]) => Promise<void>;
+  onOpenExecutionModules?: () => void;
+  onOpenDispatchView?: () => void;
 };
 
 const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
@@ -35,19 +46,32 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
   onAddAutomation,
   onEditAutomation,
   onRunAutomation,
+  initialSkillIds = [],
+  onSaveSkillIds,
+  onOpenExecutionModules,
+  onOpenDispatchView,
 }) => {
   const { t } = useTranslation();
   const { jobs, loading, refetch } = useAllCronJobs();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [runningJobId, setRunningJobId] = useState<string | null>(null);
+  const [skillIds, setSkillIds] = useState<string[]>(initialSkillIds);
+  const { options: skillOptions, loading: skillsLoading } = useBindableSkillOptions(visible);
+  const [savingSkills, setSavingSkills] = useState(false);
+  const prevVisibleRef = useRef(false);
 
   useEffect(() => {
+    const opened = visible && !prevVisibleRef.current;
+    prevVisibleRef.current = visible;
     if (visible && agent) {
       setName(agent.agentName);
-      void refetch();
+      setSkillIds(initialSkillIds);
+      if (opened) {
+        void refetch();
+      }
     }
-  }, [agent, refetch, visible]);
+  }, [agent, initialSkillIds, refetch, visible]);
 
   const linkedJobs = useMemo(
     () => (agent ? listAgentCronJobs(jobs, agent.teamId, agent.slotId) : []),
@@ -100,7 +124,7 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
     <AionModal
       visible={visible}
       onCancel={onClose}
-      header={t('common.superAssistant.editAgentTitle', { defaultValue: '管理智能体' })}
+      header={t('common.superAssistant.editAgentTitle', { defaultValue: '管理数字员工' })}
       size='medium'
       footer={
         <div className='flex justify-end gap-8px pt-4px'>
@@ -128,9 +152,84 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
         </div>
 
         <div className='rd-10px border border-solid border-[var(--color-border-2)] p-12px'>
+          <div className='text-14px font-600 text-t-primary'>
+            {t('common.superAssistant.agentSkillsSection', { defaultValue: 'Skills 能力包' })}
+          </div>
+          <div className='mt-6px text-12px text-t-tertiary'>
+            {t('common.superAssistant.agentSkillsSectionDesc', {
+              defaultValue: '为数字员工绑定 Skills，在跟进 Issue 时自动复用流程与工具链。',
+            })}
+          </div>
+          <Select
+            className='mt-10px'
+            mode='multiple'
+            allowClear
+            loading={skillsLoading}
+            value={skillIds}
+            onChange={(value) => setSkillIds((value as string[]) ?? [])}
+            placeholder={t('common.superAssistant.createAgentSkillsPlaceholder', {
+              defaultValue: '选择要注入的能力包（可选）',
+            })}
+            disabled={(!skillsLoading && skillOptions.length === 0) || !onSaveSkillIds}
+            showSearch
+            filterOption={(input, option) => {
+              const label = String(option?.children ?? '').toLowerCase();
+              return label.includes(input.trim().toLowerCase());
+            }}
+          >
+            {skillOptions.map((skill: BindableSkillOption) => (
+              <Select.Option key={skill.value} value={skill.value}>
+                {skill.source === 'local'
+                  ? `${skill.label} (${t('common.skills.localSkill', { defaultValue: '本地技能' })})`
+                  : `${skill.label} (${t('common.skills.orgSkill', { defaultValue: '团队技能' })})`}
+              </Select.Option>
+            ))}
+          </Select>
+          {onSaveSkillIds ? (
+            <div className='mt-10px flex justify-end'>
+              <Button
+                size='mini'
+                type='outline'
+                loading={savingSkills}
+                onClick={() => {
+                  setSavingSkills(true);
+                  void onSaveSkillIds(skillIds)
+                    .then(() => Message.success(t('common.superAssistant.editAgentSuccess', { defaultValue: '数字员工已更新' })))
+                    .catch((error) =>
+                      Message.error(error instanceof Error ? error.message : t('common.superAssistant.editAgentFailed', { defaultValue: '更新数字员工失败' }))
+                    )
+                    .finally(() => setSavingSkills(false));
+                }}
+              >
+                {t('common.save', { defaultValue: '保存' })}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className='rd-10px border border-solid border-[var(--color-border-2)] p-12px'>
+          <div className='text-14px font-600 text-t-primary'>
+            {t('common.superAssistant.executionModulesSection', { defaultValue: '执行模块' })}
+          </div>
+          <div className='mt-6px text-12px text-t-tertiary'>
+            {t('common.superAssistant.executionModulesDesc', {
+              defaultValue: '在「执行模块」标签查看运行状态；在「调度视图」分派 Issue 给数字员工。',
+            })}
+          </div>
+          <div className='mt-10px flex gap-8px flex-wrap'>
+            <Button size='mini' type='outline' onClick={() => onOpenExecutionModules?.()}>
+              {t('common.superAssistant.openExecutionModules', { defaultValue: '打开执行模块' })}
+            </Button>
+            <Button size='mini' type='outline' onClick={() => onOpenDispatchView?.()}>
+              {t('common.superAssistant.openDispatchView', { defaultValue: '打开调度视图' })}
+            </Button>
+          </div>
+        </div>
+
+        <div className='rd-10px border border-solid border-[var(--color-border-2)] p-12px'>
           <div className='flex items-center justify-between gap-8px flex-wrap'>
             <div className='text-14px font-600 text-t-primary'>
-              {t('common.superAssistant.agentAutomationSection', { defaultValue: '自动化' })}
+              {t('common.superAssistant.agentAutomationSection', { defaultValue: '定时任务' })}
             </div>
             <div className='flex gap-8px flex-wrap'>
               <Button size='mini' type='primary' onClick={() => onAddAutomation(agent)}>

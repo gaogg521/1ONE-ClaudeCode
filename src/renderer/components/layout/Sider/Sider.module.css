@@ -22,6 +22,10 @@
   cursor: pointer;
   color: var(--color-text-3);
   border: 1px solid transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: transparent;
+  font: inherit;
   transition:
     background-color 0.15s ease,
     color 0.15s ease,

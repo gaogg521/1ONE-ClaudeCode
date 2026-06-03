@@ -5,6 +5,9 @@ export interface WebUIStatus {
   allowRemote: boolean;
   localUrl: string;
   networkUrl?: string;
+  adminPort?: number;
+  adminLocalUrl?: string;
+  adminNetworkUrl?: string;
   lanIP?: string;
   adminUsername: string;
   adminEmail?: string;

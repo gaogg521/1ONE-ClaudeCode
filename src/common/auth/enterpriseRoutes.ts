@@ -13,6 +13,7 @@ export type EnterpriseNavKey =
   | 'settings'
   | 'users'
   | 'teams'
+  | 'runtimes'
   | 'auth'
   | 'invites'
   | 'cteam'
@@ -46,6 +47,7 @@ export const ENTERPRISE_HOME_PATH = '/enterprise';
 export const ENTERPRISE_SETTINGS_PATH = '/enterprise/settings';
 export const ENTERPRISE_USERS_PATH = '/enterprise/users';
 export const ENTERPRISE_TEAMS_PATH = '/enterprise/teams';
+export const ENTERPRISE_RUNTIMES_PATH = '/enterprise/runtimes';
 export const ENTERPRISE_AUTH_PATH = '/enterprise/auth';
 export const ENTERPRISE_INVITES_PATH = '/enterprise/invites';
 export const ENTERPRISE_KANBAN_PATH = '/enterprise/kanban';
@@ -87,6 +89,12 @@ export const ENTERPRISE_ROUTE_META: EnterpriseRouteMeta[] = [
     key: 'teams',
     path: ENTERPRISE_TEAMS_PATH,
     requiresRole: 'admin',
+    platformPolicy: 'all',
+  },
+  {
+    key: 'runtimes',
+    path: ENTERPRISE_RUNTIMES_PATH,
+    requiresRole: 'member',
     platformPolicy: 'all',
   },
   {

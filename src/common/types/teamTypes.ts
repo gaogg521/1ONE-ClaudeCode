@@ -22,11 +22,18 @@ export type TeamAgent = {
   status: TeammateStatus;
   cliPath?: string;
   customAgentId?: string;
+  /** Enterprise skill ids bound to this digital employee */
+  skillIds?: string[];
+  /** ACP model id chosen at creation (falls back to global agent default when unset) */
+  preferredModelId?: string;
+  /** Provider-backed model key for gemini/aionrs (`providerId::modelName`) */
+  providerModelKey?: string;
 };
 
 /** Persisted team record (stored in SQLite `teams` table) */
 export type TTeam = {
   id: string;
+  tenantId: string;
   userId: string;
   name: string;
   workspace: string;

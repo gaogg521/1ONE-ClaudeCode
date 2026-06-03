@@ -8,7 +8,12 @@ import {
   clearCsrfSessionToken,
 } from '@process/webserver/middleware/csrfClient';
 import { CSRF_COOKIE_NAME } from '@process/webserver/config/constants';
-import { getWebuiApiBaseUrl, fetchWebuiApi } from '@/renderer/utils/webuiApiBase';
+import {
+  clearAuthUserRequestBackoff,
+  fetchWebuiApi,
+  getWebuiApiBaseUrl,
+  shouldSkipAuthUserRequest,
+} from '@/renderer/utils/webuiApiBase';
 import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 import {
   getWebuiDesktopSession,
@@ -21,12 +26,7 @@ import {
 } from '@/common/config/webuiClientHeaders';
 import { dispatchWebuiConfigRefresh } from '@/renderer/utils/webuiConfigSync';
 import { syncBrowserWebuiSessionToDesktop } from '@/renderer/utils/syncBrowserWebuiSession';
-import {
-  DEFAULT_WEBUI_MANAGEMENT_MODE,
-  WEBUI_MANAGEMENT_MODE_KEY,
-  normalizeWebuiManagementMode,
-} from '@/common/config/webuiEnterpriseConfig';
-import { ConfigStorage } from '@/common/config/storage';
+import { rememberEnterpriseApiOrigin } from '@/renderer/utils/rememberEnterpriseApiOrigin';
 
 export { DESKTOP_OPERATOR_USER_ID };
 
@@ -81,8 +81,23 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const AUTH_USER_ENDPOINT = '/api/auth/user';
+const DESKTOP_AUTH_TIMEOUT_MS = 8_000;
 
 const isDesktopRuntime = typeof window !== 'undefined' && Boolean(window.electronAPI);
+
+async function withAuthTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
 
 // Clear expired auth cache including cookies and localStorage
 // 清除过期的认证缓存，包括 Cookie 和 localStorage
@@ -120,6 +135,9 @@ async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> 
     captureCsrfTokenFromResponse(response);
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        clearAuthCache();
+      }
       return null;
     }
 
@@ -219,16 +237,28 @@ async function loginViaWebui(path: string, body: Record<string, unknown>): Promi
   return { success: true, user: data.user };
 }
 
+function buildDesktopOperatorUser(adminUsername?: string): AuthUser {
+  return {
+    id: DESKTOP_OPERATOR_USER_ID,
+    username: adminUsername || 'admin',
+    tenant_id: 'default',
+    role: 'member',
+  };
+}
+
 async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
   try {
-    const statusResult = await webui.getStatus.invoke();
+    const statusResult = await withAuthTimeout(webui.getStatus.invoke(), 5_000, 'webui.getStatus');
     if (!statusResult.success || !statusResult.data) {
       return null;
     }
 
-    await syncBrowserWebuiSessionToDesktop();
+    await withAuthTimeout(syncBrowserWebuiSessionToDesktop(), 5_000, 'syncBrowserWebuiSession');
 
     try {
+      if (shouldSkipAuthUserRequest()) {
+        throw new Error('AUTH_USER_BACKOFF');
+      }
       const response = await fetchWebuiApi('/api/auth/user');
       if (response.ok) {
         const data = (await response.json()) as {
@@ -247,32 +277,34 @@ async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
           }
           return data.user;
         }
+      } else if (response.status === 401 || response.status === 403) {
+        setWebuiDesktopSession(null);
+        clearAuthCache();
       }
     } catch {
       // WebUI not running or no browser session yet
     }
 
     const session = getWebuiDesktopSession();
-    if (session?.token) {
-      return authUserFromDesktopSession(session);
+    if (session?.token && !shouldSkipAuthUserRequest()) {
+      const verified = await fetchWebuiApi('/api/auth/user').catch(() => null);
+      if (verified?.ok) {
+        return authUserFromDesktopSession(session);
+      }
+      setWebuiDesktopSession(null);
     }
 
-    const storedMode = await ConfigStorage.get(WEBUI_MANAGEMENT_MODE_KEY).catch((): undefined => undefined);
-    const managementMode = normalizeWebuiManagementMode(storedMode ?? DEFAULT_WEBUI_MANAGEMENT_MODE);
-    if (managementMode === 'enterprise') {
-      return null;
-    }
-
-    const enterpriseResult = await webui.getEnterpriseContext.invoke();
-    const enterpriseContext = enterpriseResult.success ? enterpriseResult.data : undefined;
-    return {
-      id: DESKTOP_OPERATOR_USER_ID,
-      username: statusResult.data.adminUsername || 'admin',
-      tenant_id: enterpriseContext?.tenantId,
-      role: (enterpriseContext?.role as AuthUser['role']) ?? 'member',
-    };
+    return buildDesktopOperatorUser(statusResult.data.adminUsername);
   } catch (error) {
-    console.error('Failed to fetch desktop current user:', error);
+    console.warn('[Auth] Desktop user fetch failed, attempting local operator fallback:', error);
+    try {
+      const statusResult = await withAuthTimeout(webui.getStatus.invoke(), 3_000, 'webui.getStatus(fallback)');
+      if (statusResult.success && statusResult.data) {
+        return buildDesktopOperatorUser(statusResult.data.adminUsername);
+      }
+    } catch {
+      // ignore
+    }
     return null;
   }
 }
@@ -290,16 +322,40 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   readyRef.current = ready;
   const userRef = useRef(user);
   userRef.current = user;
+  const desktopUserIdRef = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (isDesktopRuntime) {
-      const currentUser = await fetchDesktopCurrentUser();
+      let currentUser: AuthUser | null = null;
+      try {
+        currentUser = await withAuthTimeout(
+          fetchDesktopCurrentUser(),
+          DESKTOP_AUTH_TIMEOUT_MS,
+          'fetchDesktopCurrentUser'
+        );
+      } catch (error) {
+        console.warn('[Auth] Desktop refresh timed out, using local operator if available:', error);
+        try {
+          const statusResult = await withAuthTimeout(webui.getStatus.invoke(), 3_000, 'webui.getStatus(recover)');
+          if (statusResult.success && statusResult.data) {
+            currentUser = buildDesktopOperatorUser(statusResult.data.adminUsername);
+          }
+        } catch {
+          currentUser = null;
+        }
+      } finally {
+        setReady(true);
+      }
       setStatus(currentUser ? 'authenticated' : 'unauthenticated');
       setUser(currentUser);
-      setReady(true);
       dispatchWebuiConfigRefresh();
-      if (currentUser) {
+      const nextUserId = currentUser?.id ?? null;
+      if (currentUser && nextUserId !== desktopUserIdRef.current) {
+        desktopUserIdRef.current = nextUserId;
         window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+      }
+      if (!currentUser) {
+        desktopUserIdRef.current = null;
       }
       return;
     }
@@ -315,6 +371,9 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
     const currentUser = await fetchCurrentUser(controller.signal);
     if (currentUser) {
+      if (typeof window !== 'undefined') {
+        void rememberEnterpriseApiOrigin(window.location.origin);
+      }
       setUser(currentUser);
       setStatus('authenticated');
     } else {
@@ -339,6 +398,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           return result;
         }
         if (result.user) {
+          clearAuthUserRequestBackoff();
           setUser(result.user);
           setStatus('authenticated');
           setReady(true);
@@ -430,6 +490,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       setUser(data.user);
       setStatus('authenticated');
       setReady(true);
+      clearAuthUserRequestBackoff();
       if (data.token) {
         setWebuiDesktopSession({
           userId: data.user.id,
@@ -487,6 +548,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           return result;
         }
         if (result.user) {
+          clearAuthUserRequestBackoff();
           setUser(result.user);
           setStatus('authenticated');
           setReady(true);
@@ -526,6 +588,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       setUser(data.user);
       setStatus('authenticated');
       setReady(true);
+      clearAuthUserRequestBackoff();
       dispatchWebuiConfigRefresh();
       window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
       if (typeof window !== 'undefined' && (window as any).__websocketReconnect) {
@@ -628,6 +691,18 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
   if (!context) {
+    if (process.env.NODE_ENV === 'test') {
+      return {
+        ready: true,
+        user: null,
+        status: 'unauthenticated',
+        login: async () => ({ success: false, error: 'AuthProvider not mounted in test context' }),
+        loginWithLdap: async () => ({ success: false, error: 'AuthProvider not mounted in test context' }),
+        logout: async () => {},
+        refresh: async () => {},
+        clearAuthCache: () => {},
+      };
+    }
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;

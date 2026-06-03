@@ -166,6 +166,10 @@ export const application = {
   setStartOnBoot: bridge.buildProvider<IBridgeResponse<IStartOnBootStatus>, { enabled: boolean }>(
     'app.set-start-on-boot'
   ), // 设置开机启动
+  /** Clear Chromium HTTP cache (dev stale Vite chunks after route refactors). */
+  clearRendererHttpCache: bridge.buildProvider<IBridgeResponse<{ cleared: boolean }>, void>(
+    'app.clear-renderer-http-cache'
+  ),
   /** Clear hidden builtin assistant IDs and re-merge presets into `acp.customAgents` (main process). */
   restoreHiddenBuiltinAssistants: bridge.buildProvider<IBridgeResponse<{ restoredCount: number }>, void>(
     'app.restore-hidden-builtin-assistants'
@@ -812,6 +816,10 @@ export interface IWebUIStatus {
   allowRemote: boolean;
   localUrl: string;
   networkUrl?: string;
+  /** Dedicated admin console port (member port + 1 when dual listener is active). */
+  adminPort?: number;
+  adminLocalUrl?: string;
+  adminNetworkUrl?: string;
   lanIP?: string; // 局域网 IP，用于构建远程访问 URL / LAN IP for building remote access URL
   adminUsername: string;
   adminEmail?: string;
@@ -856,9 +864,21 @@ export const webui = {
     IBridgeResponse<{ tenantId: string; tenantName: string }>,
     { name: string }
   >('webui.create-enterprise'),
+  setEnterpriseApiOrigins: bridge.buildProvider<IBridgeResponse<{ ok: true }>, { origins: string[] }>(
+    'webui.set-enterprise-api-origins'
+  ),
   // 启动 WebUI / Start WebUI
   start: bridge.buildProvider<
-    IBridgeResponse<{ port: number; localUrl: string; networkUrl?: string; lanIP?: string; initialPassword?: string }>,
+    IBridgeResponse<{
+      port: number;
+      localUrl: string;
+      networkUrl?: string;
+      lanIP?: string;
+      initialPassword?: string;
+      adminPort?: number;
+      adminLocalUrl?: string;
+      adminNetworkUrl?: string;
+    }>,
     { port?: number; allowRemote?: boolean }
   >('webui.start'),
   // 停止 WebUI / Stop WebUI
@@ -883,9 +903,15 @@ export const webui = {
     'webui.verify-qr-token'
   ),
   // 状态变更事件 / Status changed event
-  statusChanged: bridge.buildEmitter<{ running: boolean; port?: number; localUrl?: string; networkUrl?: string }>(
-    'webui.status-changed'
-  ),
+  statusChanged: bridge.buildEmitter<{
+    running: boolean;
+    port?: number;
+    localUrl?: string;
+    networkUrl?: string;
+    adminPort?: number;
+    adminLocalUrl?: string;
+    adminNetworkUrl?: string;
+  }>('webui.status-changed'),
   orgConfigChanged: bridge.buildEmitter<import('@/common/types/orgConfigEvents').OrgConfigChangedPayload>(
     'webui.org-config-changed'
   ),
@@ -1069,6 +1095,10 @@ export interface ICreateConversationParams {
     excludeBuiltinSkills?: string[];
     /** Team ownership — conversations with teamId are hidden from the sidebar */
     teamId?: string;
+    /** Tenant ownership for enterprise/team-created conversations */
+    tenantId?: string;
+    /** Personal agent that spawned this conversation */
+    personalAgentId?: string;
   };
 }
 interface IResetConversationParams {
@@ -1376,6 +1406,7 @@ export const hub = {
 };
 // Team Mode API
 export type ICreateTeamParams = {
+  tenantId?: string;
   userId: string;
   name: string;
   workspace: string;
@@ -1385,29 +1416,73 @@ export type ICreateTeamParams = {
 
 export type IAddTeamAgentParams = {
   teamId: string;
+  tenantId?: string;
   agent: Omit<import('@process/team/types').TeamAgent, 'slotId'>;
 };
 
 export const team = {
   create: bridge.buildProvider<import('@process/team/types').TTeam, ICreateTeamParams>('team.create'),
-  list: bridge.buildProvider<import('@process/team/types').TTeam[], { userId: string }>('team.list'),
-  get: bridge.buildProvider<import('@process/team/types').TTeam | null, { id: string }>('team.get'),
-  remove: bridge.buildProvider<void, { id: string }>('team.remove'),
+  list: bridge.buildProvider<import('@process/team/types').TTeam[], { userId: string; tenantId?: string }>('team.list'),
+  get: bridge.buildProvider<import('@process/team/types').TTeam | null, { id: string; tenantId?: string }>('team.get'),
+  remove: bridge.buildProvider<void, { id: string; tenantId?: string }>('team.remove'),
   addAgent: bridge.buildProvider<import('@process/team/types').TeamAgent, IAddTeamAgentParams>('team.add-agent'),
-  removeAgent: bridge.buildProvider<void, { teamId: string; slotId: string }>('team.remove-agent'),
-  sendMessage: bridge.buildProvider<void, { teamId: string; content: string }>('team.send-message'),
-  sendMessageToAgent: bridge.buildProvider<void, { teamId: string; slotId: string; content: string }>(
+  removeAgent: bridge.buildProvider<void, { teamId: string; tenantId?: string; slotId: string }>('team.remove-agent'),
+  sendMessage: bridge.buildProvider<void, { teamId: string; tenantId?: string; content: string }>('team.send-message'),
+  sendMessageToAgent: bridge.buildProvider<void, { teamId: string; tenantId?: string; slotId: string; content: string }>(
     'team.send-message-to-agent'
   ),
   stop: bridge.buildProvider<void, { teamId: string }>('team.stop'),
-  ensureSession: bridge.buildProvider<void, { teamId: string }>('team.ensure-session'),
-  renameAgent: bridge.buildProvider<void, { teamId: string; slotId: string; newName: string }>('team.rename-agent'),
-  renameTeam: bridge.buildProvider<void, { id: string; name: string }>('team.rename'),
+  ensureSession: bridge.buildProvider<void, { teamId: string; tenantId?: string }>('team.ensure-session'),
+  renameAgent: bridge.buildProvider<void, { teamId: string; tenantId?: string; slotId: string; newName: string }>('team.rename-agent'),
+  updateAgentSkillIds: bridge.buildProvider<
+    void,
+    { teamId: string; tenantId?: string; slotId: string; skillIds: string[] }
+  >('team.update-agent-skills'),
+  renameTeam: bridge.buildProvider<void, { id: string; tenantId?: string; name: string }>('team.rename'),
   messageStream: bridge.buildEmitter<import('@process/team/types').ITeamMessageEvent>('team.message.stream'),
   agentStatusChanged: bridge.buildEmitter<import('@process/team/types').ITeamAgentStatusEvent>('team.agent.status'),
   agentSpawned: bridge.buildEmitter<import('@/common/types/teamTypes').ITeamAgentSpawnedEvent>('team.agent.spawned'),
   agentRemoved: bridge.buildEmitter<import('@/common/types/teamTypes').ITeamAgentRemovedEvent>('team.agent.removed'),
   agentRenamed: bridge.buildEmitter<import('@/common/types/teamTypes').ITeamAgentRenamedEvent>('team.agent.renamed'),
+};
+
+export const teamRuntime = {
+  publishLocal: bridge.buildProvider<
+    import('@/common/types/teamRuntimeTypes').TeamRuntimeNode,
+    { tenantId: string; userId: string }
+  >('team-runtime.publish-local'),
+  upsert: bridge.buildProvider<
+    import('@/common/types/teamRuntimeTypes').TeamRuntimeNode,
+    import('@/common/types/teamRuntimeTypes').UpsertTeamRuntimeNodeInput
+  >('team-runtime.upsert'),
+  list: bridge.buildProvider<
+    import('@/common/types/teamRuntimeTypes').TeamRuntimeNode[],
+    import('@/common/types/teamRuntimeTypes').ListTeamRuntimeNodesInput
+  >('team-runtime.list'),
+  startHeartbeat: bridge.buildProvider<{ ok: true }, { tenantId: string; userId: string }>(
+    'team-runtime.start-heartbeat'
+  ),
+  stopHeartbeat: bridge.buildProvider<{ ok: true }, void>('team-runtime.stop-heartbeat'),
+};
+
+export const personalAgent = {
+  create: bridge.buildProvider<
+    import('@/common/types/personalAgentTypes').PersonalAgent,
+    import('@/common/types/personalAgentTypes').CreatePersonalAgentInput
+  >('personal-agent.create'),
+  list: bridge.buildProvider<
+    import('@/common/types/personalAgentTypes').PersonalAgent[],
+    { ownerUserId: string }
+  >('personal-agent.list'),
+  get: bridge.buildProvider<
+    import('@/common/types/personalAgentTypes').PersonalAgent | null,
+    { id: string; ownerUserId: string }
+  >('personal-agent.get'),
+  update: bridge.buildProvider<
+    import('@/common/types/personalAgentTypes').PersonalAgent,
+    { id: string; ownerUserId: string; updates: import('@/common/types/personalAgentTypes').UpdatePersonalAgentInput }
+  >('personal-agent.update'),
+  remove: bridge.buildProvider<void, { id: string; ownerUserId: string }>('personal-agent.remove'),
 };
 
 // ─── Hooks Bridge ─────────────────────────────────────────────────────────────

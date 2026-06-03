@@ -13,6 +13,10 @@
 const { execSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+
+/** Keep in sync with electron-builder.yml executableName */
+const WIN_PACKAGED_EXE = '1onecode.exe';
+const WIN_PACKAGED_PROCESS_NAMES = [WIN_PACKAGED_EXE, '1OneClaudeCode.exe', 'AionUi.exe', 'electron.exe'];
 const crypto = require('crypto');
 const prepareBundledBun = require('./prepareBundledBun');
 const prepareAionrs = require('./prepareAionrs');
@@ -598,14 +602,13 @@ try {
     const winUnpackedDir = path.join(outDir, 'win-unpacked');
     let cleaned = tryRemoveDir(winUnpackedDir);
     if (!cleaned) {
-      const aionRunning = isProcessRunningWindows('AionUi.exe');
-      const electronRunning = isProcessRunningWindows('electron.exe');
-      if (aionRunning || electronRunning) {
-        console.log('⚠️  Detected running AionUi/Electron process. Attempting to close...');
-        killWindowsProcesses(['AionUi.exe', 'electron.exe']);
+      const packagedRunning = WIN_PACKAGED_PROCESS_NAMES.some((name) => isProcessRunningWindows(name));
+      if (packagedRunning) {
+        console.log('⚠️  Detected running 1ONE Code / Electron process. Attempting to close...');
+        killWindowsProcesses(WIN_PACKAGED_PROCESS_NAMES);
         cleaned = tryRemoveDir(winUnpackedDir);
         if (!cleaned) {
-          console.log('⚠️  Directory still locked. Please close any running AionUi/Electron processes and retry.');
+          console.log('⚠️  Directory still locked. Please close any running 1onecode/electron processes and retry.');
         }
       }
     }
@@ -620,7 +623,7 @@ try {
   try {
     buildWithDmgRetry(builderCommand, targetArch);
   } catch (error) {
-    const winExePath = path.join(outDir, 'win-unpacked', 'AionUi.exe');
+    const winExePath = path.join(outDir, 'win-unpacked', WIN_PACKAGED_EXE);
     const firstError = formatExecError(error);
     const canRetryWithoutExecutableEdit =
       process.platform === 'win32' && isWindowsBuild && process.env.CI !== 'true' && fs.existsSync(winExePath);
@@ -629,7 +632,7 @@ try {
       throw error;
     }
 
-    console.log('⚠️  Windows local build failed after AionUi.exe was produced.');
+    console.log(`⚠️  Windows local build failed after ${WIN_PACKAGED_EXE} was produced.`);
     if (firstError) {
       console.log('   First failure summary:');
       console.log(
@@ -642,7 +645,7 @@ try {
     }
     console.log('   Retrying local build with win.signAndEditExecutable=false...');
     console.log('   This fallback is intended for transient rcedit / file-lock failures on developer machines.');
-    killWindowsProcesses(['AionUi.exe', 'electron.exe']);
+    killWindowsProcesses(WIN_PACKAGED_PROCESS_NAMES);
     cleanupWindowsPackOutput();
 
     try {

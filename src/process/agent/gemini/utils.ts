@@ -316,13 +316,54 @@ export const processGeminiStreamEvents = async (
   }
 };
 
+import { isOneWebSearchToolName, normalizeOneWebSearchToolParams } from './cli/tools/one-web-search';
+import { isWebFetchToolName, normalizeWebFetchToolParams } from './cli/tools/web-fetch-params';
+
 /**
  * 规范化工具参数名称
  * 某些模型可能返回不同的参数名称，需要映射到工具期望的标准名称
  * Normalize tool parameter names - some models may return different param names
  */
-const normalizeToolParams = (toolName: string, args: Record<string, unknown>): Record<string, unknown> => {
+export type NormalizeToolParamsOptions = {
+  fallbackText?: string;
+};
+
+/** Extract plain text from a Gemini agent query payload for tool-arg fallback. */
+export const extractTextFromAgentQuery = (query: unknown): string | undefined => {
+  if (typeof query === 'string') {
+    return query;
+  }
+  if (Array.isArray(query)) {
+    const parts: string[] = [];
+    for (const item of query) {
+      if (typeof item === 'string') {
+        parts.push(item);
+      } else if (item && typeof item === 'object') {
+        const text = (item as Record<string, unknown>).text;
+        if (typeof text === 'string') {
+          parts.push(text);
+        }
+      }
+    }
+    return parts.length > 0 ? parts.join('\n') : undefined;
+  }
+  return undefined;
+};
+
+export const normalizeToolParams = (
+  toolName: string,
+  args: Record<string, unknown>,
+  options?: NormalizeToolParamsOptions
+): Record<string, unknown> => {
   const normalized = { ...args };
+
+  if (isWebFetchToolName(toolName)) {
+    return normalizeWebFetchToolParams(normalized, options);
+  }
+
+  if (isOneWebSearchToolName(toolName)) {
+    return normalizeOneWebSearchToolParams(normalized, options);
+  }
 
   // Strip leading "@" for file references (users often write @file.ext)
   if (typeof normalized.file_path === 'string' && normalized.file_path.startsWith('@')) {

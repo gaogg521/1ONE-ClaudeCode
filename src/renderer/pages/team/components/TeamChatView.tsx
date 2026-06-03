@@ -77,6 +77,7 @@ type TeamChatViewProps = {
   hideSendBox?: boolean;
   /** When set, the SendBox routes messages through team.sendMessage instead of direct conversation send */
   teamId?: string;
+  tenantId?: string;
   /** When set alongside teamId, routes messages to a specific agent via team.sendMessageToAgent */
   agentSlotId?: string;
 };
@@ -85,7 +86,7 @@ type TeamChatViewProps = {
  * Routes to the correct platform chat component based on conversation type.
  * Does NOT wrap in ChatLayout — that is done by the parent TeamPage.
  */
-const TeamChatView: React.FC<TeamChatViewProps> = ({ conversation, hideSendBox, teamId, agentSlotId }) => {
+const TeamChatView: React.FC<TeamChatViewProps> = ({ conversation, hideSendBox, teamId, tenantId, agentSlotId }) => {
   const content = (() => {
     switch (conversation.type) {
       case 'acp':
@@ -99,6 +100,7 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({ conversation, hideSendBox, 
             agentName={(conversation.extra as { agentName?: string })?.agentName}
             hideSendBox={hideSendBox}
             teamId={teamId}
+            tenantId={tenantId}
             agentSlotId={agentSlotId}
             stretchLayout
           />
@@ -112,6 +114,7 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({ conversation, hideSendBox, 
             backend='codex'
             hideSendBox={hideSendBox}
             teamId={teamId}
+            tenantId={tenantId}
             agentSlotId={agentSlotId}
             stretchLayout
           />

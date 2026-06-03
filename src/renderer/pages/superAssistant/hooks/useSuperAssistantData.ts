@@ -20,7 +20,9 @@ import {
 import { useConversationHistoryContext } from '@/renderer/hooks/context/ConversationHistoryContext';
 import { useTeamList } from '@/renderer/pages/team/hooks/useTeamList';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 import type { TeamAgent, TeammateStatus, TTeam } from '@/common/types/teamTypes';
+import type { PersonalAgent } from '@/common/types/personalAgentTypes';
 
 export type SuperAssistantBoardColumn = {
   key: 'unassigned' | 'active' | 'review' | 'done';
@@ -176,6 +178,7 @@ export function useSuperAssistantData(
   const [ragDocuments, setRagDocuments] = useState<RagDocumentRecord[]>([]);
   const [codeRepos, setCodeRepos] = useState<CodeRepo[]>([]);
   const [pipelines, setPipelines] = useState<PipelineListItem[]>([]);
+  const [personalAgents, setPersonalAgents] = useState<PersonalAgent[]>([]);
   const [runtimeStatusMap, setRuntimeStatusMap] = useState<Map<string, RuntimeStatusInfo>>(new Map());
   const [loading, setLoading] = useState(enabled);
 
@@ -187,19 +190,23 @@ export function useSuperAssistantData(
       setRagDocuments([]);
       setCodeRepos([]);
       setPipelines([]);
+      setPersonalAgents([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    const [requirementsResult, skillsResult, mcpResult, ragResult, codeRepoResult, pipelineResult] =
+    const ownerUserId = user?.id ?? DESKTOP_OPERATOR_USER_ID;
+    const loadEnterpriseAdminData = isAdmin;
+    const [requirementsResult, skillsResult, mcpResult, ragResult, codeRepoResult, pipelineResult, personalAgentsResult] =
       await Promise.allSettled([
       listRequirementsTree(),
       listSkills(),
-      listMcpRegistry(),
-        listRagDocuments(),
-        listCodeRepos(),
-        listPipelines(),
+      loadEnterpriseAdminData ? listMcpRegistry() : Promise.resolve([]),
+      loadEnterpriseAdminData ? listRagDocuments() : Promise.resolve([]),
+      loadEnterpriseAdminData ? listCodeRepos() : Promise.resolve([]),
+      loadEnterpriseAdminData ? listPipelines() : Promise.resolve([]),
+      ipcBridge.personalAgent.list.invoke({ ownerUserId }),
       ]);
     setRequirements(requirementsResult.status === 'fulfilled' ? (requirementsResult.value ?? []) : []);
     setSkills(skillsResult.status === 'fulfilled' ? (skillsResult.value ?? []) : []);
@@ -207,8 +214,9 @@ export function useSuperAssistantData(
     setRagDocuments(ragResult.status === 'fulfilled' ? (ragResult.value ?? []) : []);
     setCodeRepos(codeRepoResult.status === 'fulfilled' ? (codeRepoResult.value ?? []) : []);
     setPipelines(pipelineResult.status === 'fulfilled' ? (pipelineResult.value ?? []) : []);
+    setPersonalAgents(personalAgentsResult.status === 'fulfilled' ? (personalAgentsResult.value ?? []) : []);
     setLoading(false);
-  }, [enabled]);
+  }, [enabled, isAdmin, user?.id]);
 
   useEffect(() => {
     let disposed = false;
@@ -223,6 +231,12 @@ export function useSuperAssistantData(
     };
   }, [refresh]);
 
+  const teamSessionKey = useMemo(
+    () => teams.map((team) => `${team.id}:${team.tenantId ?? ''}`).join('|'),
+    [teams]
+  );
+  const runtimeTeamsSnapshot = useMemo(() => teams, [teamSessionKey]);
+
   useEffect(() => {
     if (!enabled) {
       setRuntimeStatusMap(new Map());
@@ -231,7 +245,7 @@ export function useSuperAssistantData(
 
     setRuntimeStatusMap(
       new Map(
-        teams.flatMap((team) => {
+        runtimeTeamsSnapshot.flatMap((team) => {
           const failedAgents = loadFailedAgents(team.id);
           return team.agents.map(
             (agent): [string, RuntimeStatusInfo] => [
@@ -244,8 +258,6 @@ export function useSuperAssistantData(
         })
       )
     );
-
-    void Promise.allSettled(teams.map((team) => ipcBridge.team.ensureSession.invoke({ teamId: team.id })));
 
     const unsubscribe = ipcBridge.team.agentStatusChanged.on((event) => {
       setRuntimeStatusMap((prev) => {
@@ -261,17 +273,14 @@ export function useSuperAssistantData(
     return () => {
       unsubscribe();
     };
-  }, [enabled, teams]);
+  }, [enabled, runtimeTeamsSnapshot]);
 
   const visibleRequirements = useMemo(() => {
     const flattened = flattenRequirements(requirements).filter((item) => item.type !== 'epic');
     if (isAdmin) {
       return flattened;
     }
-    const userId = user?.id;
-    if (!userId) {
-      return [];
-    }
+    const userId = user?.id ?? DESKTOP_OPERATOR_USER_ID;
     return flattened.filter((item) => item.assigned_to === userId || item.creator_id === userId);
   }, [isAdmin, requirements, user?.id]);
 
@@ -403,8 +412,8 @@ export function useSuperAssistantData(
   );
 
   const totalAgentCount = useMemo(
-    () => teams.reduce((sum, team) => sum + team.agents.length, 0),
-    [teams]
+    () => personalAgents.length + teams.reduce((sum, team) => sum + team.agents.length, 0),
+    [personalAgents.length, teams]
   );
 
   const activeAgentCount = useMemo(
@@ -423,7 +432,38 @@ export function useSuperAssistantData(
 
   const agentExecutionGroups = useMemo<SuperAssistantAgentExecutionGroup[]>(
     () =>
-      teams.map((team) => {
+      [
+        ...(personalAgents.length > 0
+          ? [
+              {
+                teamId: 'personal',
+                teamName: '个人数字员工',
+                workspace: '',
+                conversationCount: 0,
+                agentCount: personalAgents.length,
+                activeAgentCount: 0,
+                agents: personalAgents.map(
+                  (agent): SuperAssistantAgentExecutionItem => ({
+                    teamId: 'personal',
+                    teamName: '个人数字员工',
+                    teamWorkspace: '',
+                    teamConversationCount: 0,
+                    slotId: agent.id,
+                    agentName: agent.name,
+                    role: 'teammate',
+                    agentType: agent.agentType,
+                    conversationType: agent.conversationType,
+                    status: 'idle',
+                    currentIssueSubject: null,
+                    queuedIssueSubject: prioritizedOpenIssues[0]?.subject ?? null,
+                    blockerMessage: null,
+                    dependencyNames: [skills[0]?.name ?? '', enabledMcpNames[0] ?? ''].filter(Boolean),
+                  })
+                ),
+              } satisfies SuperAssistantAgentExecutionGroup,
+            ]
+          : []),
+        ...teams.map((team) => {
         const assignedIssuesBySlot = new Map<string, RequirementRecord>();
         const assignedIssueIds = new Set<string>();
         Object.values(issueAssignments).forEach((assignment) => {
@@ -533,7 +573,8 @@ export function useSuperAssistantData(
           }),
         } satisfies SuperAssistantAgentExecutionGroup;
       }),
-    [enabledMcpNames, issueAssignments, prioritizedOpenIssues, runtimeStatusMap, skills, teamConversationCountByTeam, teams, visibleRequirements]
+      ],
+    [enabledMcpNames, issueAssignments, personalAgents, prioritizedOpenIssues, runtimeStatusMap, skills, teamConversationCountByTeam, teams, visibleRequirements]
   );
 
   const openAssigneeUserIds = useMemo(
@@ -548,6 +589,25 @@ export function useSuperAssistantData(
     [visibleRequirements]
   );
 
+  const issueLookup = useMemo(
+    () =>
+      Object.fromEntries(
+        visibleRequirements.map((item) => [
+          item.id,
+          {
+            id: item.id,
+            subject: item.subject,
+            description: item.description,
+            status: item.status,
+            priority: item.priority,
+          } satisfies SuperAssistantIssueItem,
+        ])
+      ),
+    [visibleRequirements]
+  );
+
+  const primaryTeam = useMemo(() => teams[0] ?? null, [teamSessionKey]);
+
   return {
     loading,
     refresh,
@@ -555,25 +615,14 @@ export function useSuperAssistantData(
     featuredIssue,
     teams,
     teamSummaries,
-    primaryTeam: teams[0] ?? null,
+    primaryTeam,
     teamConversationCount,
     visibleIssueCount: visibleRequirements.length,
     openIssueCount: visibleRequirements.filter((item) => item.status !== 'completed').length,
     totalAgentCount,
     activeAgentCount,
     agentExecutionGroups,
-    issueLookup: Object.fromEntries(
-      visibleRequirements.map((item) => [
-        item.id,
-        {
-          id: item.id,
-          subject: item.subject,
-          description: item.description,
-          status: item.status,
-          priority: item.priority,
-        } satisfies SuperAssistantIssueItem,
-      ])
-    ),
+    issueLookup,
     skillCount: skills.length,
     skillNames: skills.slice(0, 3).map((skill) => skill.name),
     enabledMcpCount: mcpRegistry.filter((item) => item.enabled).length,

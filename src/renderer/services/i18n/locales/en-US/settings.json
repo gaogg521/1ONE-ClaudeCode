@@ -842,6 +842,8 @@
   "webui.running": "Running",
   "webui.starting": "Starting…",
   "webui.accessUrl": "Access URL",
+  "webui.memberAccessLabel": "Team members (port {{port}})",
+  "webui.adminAccessLabel": "Admin console (port {{port}})",
   "webui.loginInfo": "Login Info",
   "webui.randomPassword": "[Random Password]",
   "webui.noPasswordToCopy": "No password to copy",

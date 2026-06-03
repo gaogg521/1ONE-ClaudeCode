@@ -6,6 +6,7 @@ import { ipcBridge } from '@/common';
 import type { TTeam, TeamAgent } from '@/common/types/teamTypes';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useConversationAgents } from '@renderer/pages/conversation/hooks/useConversationAgents';
+import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import { isElectronDesktop } from '@renderer/utils/platform';
 import {
   agentKey,
@@ -25,6 +26,7 @@ type Props = {
 const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { identity } = useEditionFeatures();
   const { cliAgents } = useConversationAgents();
   const [name, setName] = useState('');
   const [dispatchAgentKey, setDispatchAgentKey] = useState<string | undefined>(undefined);
@@ -49,7 +51,11 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   };
 
   const handleCreate = async () => {
-    const userId = user?.id ?? 'system_default_user';
+    const userId = user?.id ?? identity.userId;
+    if (!userId) {
+      Message.error(t('team.create.loginRequired', { defaultValue: '请先登录企业账号后再创建团队' }));
+      return;
+    }
     setLoading(true);
     try {
       const agents: TeamAgent[] = [];
@@ -69,6 +75,7 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       });
 
       const team = await ipcBridge.team.create.invoke({
+        tenantId: identity.tenantId,
         userId,
         name,
         workspace,

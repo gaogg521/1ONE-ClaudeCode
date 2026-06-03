@@ -11,6 +11,7 @@ import type { GeminiClient } from '@office-ai/aioncli-core';
 import { AuthType, Config } from '@office-ai/aioncli-core';
 import { mkdirSync } from 'fs';
 import path from 'path';
+import { OneWebSearchTool } from './one-web-search';
 import { WebFetchTool } from './web-fetch';
 import { WebSearchTool } from './web-search';
 
@@ -31,6 +32,7 @@ const getGeminiWebSearchRuntimeDir = () => {
 export class ConversationToolConfig {
   private useGeminiWebSearch = false;
   private useOneCmdWebFetch = false;
+  private useOneCmdWebSearch = false;
   private geminiModel: TProviderWithModel | null = null;
   private excludeTools: string[] = [];
   private dedicatedGeminiClient: GeminiClient | null = null; // 缓存专门的Gemini客户端
@@ -50,6 +52,10 @@ export class ConversationToolConfig {
     // 所有模型都使用 ONE_web_fetch 替换内置的 web_fetch
     this.useOneCmdWebFetch = true;
     this.excludeTools.push('web_fetch');
+
+    // 所有模型都使用 1one_web_search（百度/必应等），不依赖 Google 登录
+    this.useOneCmdWebSearch = true;
+    this.excludeTools.push('google_web_search');
 
     // 根据 webSearchEngine 配置决定启用哪个搜索工具
     // gemini_web_search 只能在 Google OAuth 认证下使用，因为它需要创建 Google OAuth 客户端
@@ -129,6 +135,7 @@ export class ConversationToolConfig {
     return {
       useGeminiWebSearch: this.useGeminiWebSearch,
       useOneCmdWebFetch: this.useOneCmdWebFetch,
+      useOneCmdWebSearch: this.useOneCmdWebSearch,
       geminiModel: this.geminiModel,
       excludeTools: this.excludeTools,
     };
@@ -147,7 +154,13 @@ export class ConversationToolConfig {
       toolRegistry.registerTool(customWebFetchTool);
     }
 
-    // 注册 gemini_web_search 工具（仅OpenAI模型）
+    // 注册 1one_web_search（百度等，无需 Google 登录）
+    if (this.useOneCmdWebSearch) {
+      const oneWebSearchTool = new OneWebSearchTool(geminiClient, config.getMessageBus());
+      toolRegistry.registerTool(oneWebSearchTool);
+    }
+
+    // 注册 gemini_web_search 工具（仅 Google OAuth，可选增强）
     if (this.useGeminiWebSearch) {
       try {
         // 前端已通过 webSearchEngine 参数确认认证状态，直接创建客户端

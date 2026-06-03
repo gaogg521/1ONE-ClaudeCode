@@ -43,9 +43,12 @@ describe('mainWindowLifecycle', () => {
     const window = {
       isDestroyed: vi.fn(() => false),
       isMinimized: vi.fn(() => true),
+      isVisible: vi.fn(() => false),
       restore: vi.fn(),
       show: vi.fn(),
       focus: vi.fn(),
+      setSkipTaskbar: vi.fn(),
+      setAlwaysOnTop: vi.fn(),
     } as unknown as Electron.BrowserWindow;
     const { showOrCreateMainWindow } = await import('@process/utils/mainWindowLifecycle');
 

@@ -367,7 +367,7 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
     );
   };
 
-  if (hasJoinedEnterprise) {
+  if (hasJoinedEnterprise && status === 'authenticated' && user && !isDesktopOperatorUser(user)) {
     return null;
   }
 

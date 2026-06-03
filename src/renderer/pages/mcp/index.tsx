@@ -41,7 +41,9 @@ const MCPPage: React.FC = () => {
   );
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const allServers = [...mcpServers.filter(s => !s.builtin), ...extensionMcpServers];
+  const userMcpServers = mcpServers.filter((s) => !s.builtin);
+  const builtinWebTools = mcpServers.filter((s) => s.builtin && s.name === 'one-web-tools');
+  const allServers = [...userMcpServers, ...builtinWebTools, ...extensionMcpServers];
 
   const wrappedAdd = async (data: Omit<IMcpServer, 'id' | 'createdAt' | 'updatedAt'>) => {
     const s = await handleAddMcpServer(data);
@@ -95,7 +97,9 @@ const MCPPage: React.FC = () => {
             {allServers.map(server => {
               const toolCount = (server as any).tools?.length ?? 0;
               const isExpanded = expandedId === server.id;
-              const isReadOnly = extensionMcpServers.some(e => e.id === server.id);
+              const isBuiltinWebTools = server.builtin === true && server.name === 'one-web-tools';
+              const isReadOnly =
+                isBuiltinWebTools || extensionMcpServers.some((e) => e.id === server.id);
               return (
                 <React.Fragment key={server.id}>
                   <tr

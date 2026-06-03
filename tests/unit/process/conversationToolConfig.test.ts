@@ -32,6 +32,10 @@ vi.mock('../../../src/process/agent/gemini/cli/tools/web-fetch', () => ({
   WebFetchTool: class {},
 }));
 
+vi.mock('../../../src/process/agent/gemini/cli/tools/one-web-search', () => ({
+  OneWebSearchTool: class {},
+}));
+
 vi.mock('../../../src/process/agent/gemini/cli/tools/web-search', () => ({
   WebSearchTool: class {},
 }));

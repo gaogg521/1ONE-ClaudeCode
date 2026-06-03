@@ -24,17 +24,61 @@ export type SsoProvisionProfile = {
   orgSource?: 'ldap' | 'feishu';
 };
 
+const GENERATED_SSO_USERNAME = /^sso_[0-9a-f]{8}$/i;
+
 function sanitizeUsername(raw: string): string {
-  const trimmed = raw.trim().toLowerCase();
-  const cleaned = trimmed.replace(/[^a-z0-9._@-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-  if (cleaned.length >= 2) {
-    return cleaned.slice(0, 64);
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return '';
   }
+
+  if (/^[\x00-\x7F]+$/.test(trimmed)) {
+    const lowered = trimmed.toLowerCase();
+    const cleaned = lowered
+      .replace(/[^a-z0-9._@-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+    if (cleaned.length >= 2) {
+      return cleaned.slice(0, 64);
+    }
+    return '';
+  }
+
+  const unicodeCleaned = trimmed
+    .replace(/[^\p{L}\p{N}._@-]/gu, '')
+    .replace(/^\.+|\.+$/g, '');
+  if (unicodeCleaned.length >= 2) {
+    return unicodeCleaned.slice(0, 64);
+  }
+  return '';
+}
+
+function fallbackSsoUsername(): string {
   return `sso_${randomBytes(4).toString('hex')}`;
 }
 
+function isGeneratedSsoUsername(username: string): boolean {
+  return GENERATED_SSO_USERNAME.test(username.trim());
+}
+
+async function maybeUpgradeSsoDisplayUsername(
+  user: AuthUser,
+  preferredDisplayName: string
+): Promise<AuthUser> {
+  const next = sanitizeUsername(preferredDisplayName);
+  if (next.length < 2 || !isGeneratedSsoUsername(user.username) || user.username === next) {
+    return user;
+  }
+  const existing = await UserRepository.findByUsername(next);
+  if (existing && existing.id !== user.id) {
+    return user;
+  }
+  await UserRepository.updateUsername(user.id, next);
+  return (await UserRepository.findById(user.id)) ?? { ...user, username: next };
+}
+
 async function allocateUniqueUsername(preferred: string): Promise<string> {
-  const base = sanitizeUsername(preferred);
+  const base = sanitizeUsername(preferred) || fallbackSsoUsername();
   let candidate = base;
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const existing = await UserRepository.findByUsername(candidate);
@@ -80,10 +124,13 @@ export async function resolveOrProvisionSsoUser(
     throw Object.assign(new Error('Missing SSO external id'), { code: 'SSO_IDENTITY_MISSING' });
   }
 
+  const preferred = profile.preferredUsername.trim() || `${provider}_${externalId.slice(0, 16)}`;
+
   const bound = await loadBoundUser(provider, externalId);
   if (bound) {
     await ensureUserJoinedDefaultEnterprise(bound.id);
-    const refreshed = (await UserRepository.findById(bound.id)) ?? bound;
+    let refreshed = (await UserRepository.findById(bound.id)) ?? bound;
+    refreshed = await maybeUpgradeSsoDisplayUsername(refreshed, preferred);
     if (profile.orgUnitPath?.trim() && profile.orgSource) {
       try {
         await updateUserOrgProfile({
@@ -98,13 +145,17 @@ export async function resolveOrProvisionSsoUser(
     return { user: refreshed, created: false };
   }
 
-  const preferred = profile.preferredUsername.trim() || `${provider}_${externalId.slice(0, 16)}`;
-  const byName = await UserRepository.findByUsername(sanitizeUsername(preferred));
-  if (byName) {
-    await AuthIdentityRepository.bind(provider, externalId, byName.id);
-    await ensureUserJoinedDefaultEnterprise(byName.id);
-    const refreshed = (await UserRepository.findById(byName.id)) ?? byName;
-    return { user: refreshed, created: false };
+  // LDAP may reuse an existing local account by login name; OAuth must bind only by external id
+  // to avoid hijacking unrelated users (e.g. shared test mailbox usernames).
+  if (provider === 'ldap') {
+    const sanitizedPreferred = sanitizeUsername(preferred);
+    const byName = sanitizedPreferred ? await UserRepository.findByUsername(sanitizedPreferred) : null;
+    if (byName) {
+      await AuthIdentityRepository.bind(provider, externalId, byName.id);
+      await ensureUserJoinedDefaultEnterprise(byName.id);
+      const refreshed = (await UserRepository.findById(byName.id)) ?? byName;
+      return { user: refreshed, created: false };
+    }
   }
 
   const user = await createProvisionedUser(provider, externalId, preferred, 'member');

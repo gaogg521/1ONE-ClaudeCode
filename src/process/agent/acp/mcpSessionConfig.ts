@@ -6,6 +6,7 @@
 
 import type { IMcpServer } from '@/common/config/storage';
 import type { AcpResponse } from '@/common/types/acpTypes';
+import { BUILTIN_WEB_TOOLS_NAME } from '@/process/resources/builtinMcp/constants';
 
 export interface AcpSessionMcpNameValue {
   name: string;
@@ -172,6 +173,17 @@ export type TeamMcpStdioConfig = {
  * Returns null if the config is missing or has no command — callers should
  * simply skip injection in that case.
  */
+/** Always-on built-in web fetch/search MCP (Baidu, no Google login). */
+export function buildOneWebToolsAcpSessionMcpServer(scriptPath: string): AcpSessionMcpServerStdio {
+  return {
+    type: 'stdio',
+    name: BUILTIN_WEB_TOOLS_NAME,
+    command: 'node',
+    args: [scriptPath],
+    env: [],
+  };
+}
+
 export function buildTeamMcpServer(config: TeamMcpStdioConfig | undefined | null): AcpSessionMcpServerStdio | null {
   if (!config || !config.command) return null;
   return {

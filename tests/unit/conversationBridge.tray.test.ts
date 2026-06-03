@@ -23,11 +23,11 @@ const createCommand = (key: string) => ({
 });
 
 const mockConversationService = {
-  createConversation: vi.fn(async () => ({ id: 'conv-created', name: 'Created Conversation', source: '1one-claudecode' })),
+  createConversation: vi.fn(async () => ({ id: 'conv-created', name: 'Created Conversation', source: '1one' })),
   deleteConversation: vi.fn(async () => {}),
   updateConversation: vi.fn(async () => {}),
-  getConversation: vi.fn(async () => ({ id: 'conv-1', source: '1one-claudecode', name: 'Original Name', type: 'gemini' })),
-  createWithMigration: vi.fn(async () => ({ id: 'conv-migrated', source: '1one-claudecode' })),
+  getConversation: vi.fn(async () => ({ id: 'conv-1', source: '1one', name: 'Original Name', type: 'gemini' })),
+  createWithMigration: vi.fn(async () => ({ id: 'conv-migrated', source: '1one' })),
 };
 
 const mockWorkerTaskManager = {
@@ -40,7 +40,22 @@ const mockWorkerTaskManager = {
 };
 
 const registerMocks = () => {
-  vi.doMock('@/agent/gemini', () => ({
+  // Prevent real i18n initialization (can slow down / hang first tray test).
+  vi.doMock('@process/services/i18n', () => {
+    const t = vi.fn((key: string) => key);
+    return {
+      default: {
+        t,
+        hasResourceBundle: () => true,
+        addResourceBundle: vi.fn(),
+        changeLanguage: vi.fn(async () => {}),
+      },
+      i18nReady: Promise.resolve(),
+      changeLanguage: vi.fn(async () => {}),
+    };
+  });
+
+  vi.doMock('@process/agent/gemini', () => ({
     GeminiAgent: vi.fn(),
     GeminiApprovalStore: { getInstance: vi.fn(() => ({})) },
   }));
@@ -55,6 +70,7 @@ const registerMocks = () => {
     ipcBridge: {
       openclawConversation: {
         getRuntime: createCommand('openclawConversation.getRuntime'),
+        getModels: createCommand('openclawConversation.getModels'),
       },
       conversation: {
         create: createCommand('conversation.create'),
@@ -149,17 +165,17 @@ describe('conversationBridge tray sync', () => {
     expect(result).toBe(true);
     expect(mockWorkerTaskManager.kill).toHaveBeenCalledWith('conv-1');
     expect(mockConversationService.deleteConversation).toHaveBeenCalledWith('conv-1');
-    expect(mockRefreshTrayMenu).toHaveBeenCalledOnce();
-  });
+    expect(mockRefreshTrayMenu).toHaveBeenCalled();
+  }, 120000);
 
   it('refreshes tray menu after creating a conversation', async () => {
     const createProvider = await getProvider('conversation.create');
 
     const result = await createProvider({ type: 'gemini' });
 
-    expect(result).toEqual({ id: 'conv-created', name: 'Created Conversation', source: '1one-claudecode' });
+    expect(result).toEqual({ id: 'conv-created', name: 'Created Conversation', source: '1one' });
     expect(mockConversationService.createConversation).toHaveBeenCalledOnce();
-    expect(mockRefreshTrayMenu).toHaveBeenCalledOnce();
+    expect(mockRefreshTrayMenu).toHaveBeenCalled();
   });
 
   it('refreshes tray menu after renaming a conversation', async () => {

@@ -75,7 +75,15 @@ describe('extensions/fileResolver', () => {
     const symlinkDir = path.join(extensionDir, 'linked');
 
     await fs.writeFile(outsideFile, 'secret', 'utf-8');
-    await fs.symlink(outsideDir, symlinkDir, 'dir');
+    try {
+      await fs.symlink(outsideDir, symlinkDir, 'dir');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+        // Windows CI/本机未开启开发者模式时，创建目录符号链接会被系统拒绝。
+        return;
+      }
+      throw error;
+    }
 
     const result = await resolveFileRefs('$file:linked/secret.txt', extensionDir);
 

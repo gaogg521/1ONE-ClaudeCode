@@ -126,6 +126,7 @@ export default defineConfig(({ mode }) => {
             aionrs: resolve('src/process/worker/aionrs.ts'),
             // Built-in MCP server entry points
             'builtin-mcp-image-gen': resolve('src/process/resources/builtinMcp/imageGenServer.ts'),
+            'builtin-mcp-web-tools': resolve('src/process/resources/builtinMcp/webToolsServer.ts'),
           },
           onwarn(warning, warn) {
             if (warning.code === 'EVAL') return;
@@ -160,12 +161,18 @@ export default defineConfig(({ mode }) => {
         // Default to 5173; when occupied (e.g. another 1ONE ClaudeCode clone is running),
         // Vite auto-increments to the next available port.
         // electron-vite reads the actual port and sets ELECTRON_RENDERER_URL accordingly.
+        // IPv4 only: Windows often binds Vite to ::1 when host is omitted, while Electron loads 127.0.0.1.
+        host: '127.0.0.1',
         port: 5173,
         // Explicit HMR host so Vite client connects directly to the Vite dev server,
         // not to the WebUI proxy server (which would reject the WebSocket and cause infinite reload).
         // Port is omitted so it automatically matches the server port.
         hmr: {
-          host: 'localhost',
+          host: '127.0.0.1',
+        },
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          Pragma: 'no-cache',
         },
         watch: {
           // 忽略大目录，减少文件系统监听开销，加快 HMR 响应

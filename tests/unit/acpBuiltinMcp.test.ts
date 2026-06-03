@@ -181,6 +181,9 @@ const mockUnrelatedMcpAgents = (emptyDetect: () => Promise<IMcpServer[]>) => {
   vi.doMock('../../src/process/services/mcpServices/agents/AionrsMcpAgent', () => ({
     AionrsMcpAgent: makeAgentClass(emptyDetect),
   }));
+  vi.doMock('../../src/process/services/mcpServices/agents/OneCmdMcpAgent', () => ({
+    OneCmdMcpAgent: makeAgentClass(emptyDetect),
+  }));
 };
 
 describe('McpService Gemini detection', () => {
@@ -198,13 +201,14 @@ describe('McpService Gemini detection', () => {
       execSync: vi.fn(() => {
         throw new Error('gemini not installed');
       }),
+      execFile: vi.fn(),
     }));
     mockUnrelatedMcpAgents(emptyDetect);
     vi.doMock('../../src/process/services/mcpServices/agents/GeminiMcpAgent', () => ({
       GeminiMcpAgent: makeAgentClass(nativeDetect),
     }));
-    vi.doMock('../../src/process/services/mcpServices/agents/AionuiMcpAgent', () => ({
-      AionuiMcpAgent: makeAgentClass(builtinDetect),
+    vi.doMock('../../src/process/services/mcpServices/agents/OneCmdMcpAgent', () => ({
+      OneCmdMcpAgent: makeAgentClass(builtinDetect),
     }));
 
     const { McpService } = await import('../../src/process/services/mcpServices/McpService');
@@ -230,13 +234,14 @@ describe('McpService Gemini detection', () => {
 
     vi.doMock('child_process', () => ({
       execSync: vi.fn(() => '/usr/local/bin/gemini\n'),
+      execFile: vi.fn(),
     }));
     mockUnrelatedMcpAgents(emptyDetect);
     vi.doMock('../../src/process/services/mcpServices/agents/GeminiMcpAgent', () => ({
       GeminiMcpAgent: makeAgentClass(nativeDetect),
     }));
-    vi.doMock('../../src/process/services/mcpServices/agents/AionuiMcpAgent', () => ({
-      AionuiMcpAgent: makeAgentClass(builtinDetect),
+    vi.doMock('../../src/process/services/mcpServices/agents/OneCmdMcpAgent', () => ({
+      OneCmdMcpAgent: makeAgentClass(builtinDetect),
     }));
 
     const { McpService } = await import('../../src/process/services/mcpServices/McpService');
@@ -264,13 +269,14 @@ describe('McpService Gemini detection', () => {
       execSync: vi.fn(() => {
         throw new Error('gemini not installed');
       }),
+      execFile: vi.fn(),
     }));
     mockUnrelatedMcpAgents(emptyDetect);
     vi.doMock('../../src/process/services/mcpServices/agents/GeminiMcpAgent', () => ({
       GeminiMcpAgent: makeAgentClass(emptyDetect),
     }));
-    vi.doMock('../../src/process/services/mcpServices/agents/AionuiMcpAgent', () => ({
-      AionuiMcpAgent: makeAgentClass(builtinDetect),
+    vi.doMock('../../src/process/services/mcpServices/agents/OneCmdMcpAgent', () => ({
+      OneCmdMcpAgent: makeAgentClass(builtinDetect),
     }));
 
     const { McpService } = await import('../../src/process/services/mcpServices/McpService');
@@ -297,13 +303,14 @@ describe('McpService OpenCode detection', () => {
       execSync: vi.fn(() => {
         throw new Error('gemini not installed');
       }),
+      execFile: vi.fn(),
     }));
     mockUnrelatedMcpAgents(emptyDetect);
     vi.doMock('../../src/process/services/mcpServices/agents/GeminiMcpAgent', () => ({
       GeminiMcpAgent: makeAgentClass(emptyDetect),
     }));
-    vi.doMock('../../src/process/services/mcpServices/agents/AionuiMcpAgent', () => ({
-      AionuiMcpAgent: makeAgentClass(emptyDetect),
+    vi.doMock('../../src/process/services/mcpServices/agents/OneCmdMcpAgent', () => ({
+      OneCmdMcpAgent: makeAgentClass(emptyDetect),
     }));
     vi.doMock('../../src/process/services/mcpServices/agents/OpencodeMcpAgent', () => ({
       OpencodeMcpAgent: makeAgentClass(opencodeDetect),

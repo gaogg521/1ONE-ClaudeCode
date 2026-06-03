@@ -11,6 +11,9 @@ export const DEFAULT_TENANT_ID = 'default';
 
 export const WEBUI_MANAGEMENT_MODE_KEY = 'webui.managementMode' as const;
 
+/** User explicitly chose personal edition; do not auto-switch back to enterprise. */
+export const WEBUI_USER_CHOSE_STANDALONE_KEY = 'webui.userChoseStandalone' as const;
+
 export const DEFAULT_WEBUI_MANAGEMENT_MODE: WebuiManagementMode = 'standalone';
 
 export type EnterpriseContextSnapshot = {

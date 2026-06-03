@@ -5,7 +5,7 @@
  */
 
 import type { BrowserWindow } from 'electron';
-import { app } from 'electron';
+import { app, session } from 'electron';
 import { ipcBridge } from '@/common';
 import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
 import { ProcessConfig } from '@process/utils/initStorage';
@@ -193,6 +193,16 @@ export function initApplicationBridge(workerTaskManager: IWorkerTaskManager): vo
       return { success: true, data: status };
     } catch (e) {
       return { success: false, msg: e.message || e.toString() };
+    }
+  });
+
+  ipcBridge.application.clearRendererHttpCache.provider(async () => {
+    try {
+      await session.defaultSession.clearCache();
+      return { success: true, data: { cleared: true } };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { success: false, msg };
     }
   });
 

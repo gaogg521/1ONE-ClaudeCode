@@ -33,6 +33,15 @@
     "cardTitle": "登录 WebUI",
     "cardSubtitle": "用户名与密码见「设置 → 远程连接 → WebUI」"
   },
+  "admin": {
+    "heroBadge": "实例管理",
+    "heroTitle": "团队版管理员专属后台",
+    "brandDesc": "使用本机 WebUI 管理员账户登录，配置认证、邀请码、租户与系统治理；与团队成员登录入口分离。",
+    "introTitle": "实例治理与认证配置",
+    "introText": "面向系统管理员与组织管理员：管理 LDAP/飞书、成员邀请、企业团队版开关及后台模块，不面向普通员工日常使用。",
+    "cardTitle": "团队版管理员专属后台",
+    "cardSubtitle": "使用「设置 → 远程连接 → WebUI」中的本地管理员账号登录"
+  },
   "enterprise": {
     "tag": "1ONE Code",
     "heroBadge": "1ONE Code 企业版",

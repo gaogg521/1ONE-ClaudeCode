@@ -1,24 +1,27 @@
 import React, { Suspense } from 'react';
 import { HashRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import AppLoader from '@renderer/components/layout/AppLoader';
+import PersonalShell from '@/renderer/components/layout/PersonalShell';
 import PersonalBrowserAuthLayout from '@/renderer/components/layout/PersonalBrowserAuthLayout';
+import Guid from '@renderer/pages/guid';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { resolvePostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { buildEnterpriseRouteLoginPath } from '@/renderer/utils/enterpriseLoginNavigation';
 import {
   consumePostLoginRedirect,
   readRedirectFromSearch,
   setPostLoginRedirect,
 } from '@/renderer/utils/postLoginRedirect';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
-const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const SessionsPage = React.lazy(() => import('@renderer/pages/sessions'));
 const TasksPage = React.lazy(() => import('@renderer/pages/tasks'));
 const AdminUsers = React.lazy(() => import('@renderer/pages/admin/AdminUsers'));
 const AdminAuth = React.lazy(() => import('@renderer/pages/admin/AdminAuth'));
 const AdminInvites = React.lazy(() => import('@renderer/pages/admin/AdminInvites'));
 const AdminTeams = React.lazy(() => import('@renderer/pages/admin/AdminTeams'));
+const AdminTeamRuntimes = React.lazy(() => import('@renderer/pages/admin/AdminTeamRuntimes'));
 const AdminKanban = React.lazy(() => import('@renderer/pages/admin/AdminKanban'));
 const AdminRag = React.lazy(() => import('@renderer/pages/admin/AdminRag'));
 const AdminMcp = React.lazy(() => import('@renderer/pages/admin/AdminMcp'));
@@ -36,7 +39,6 @@ const EnterpriseHome = React.lazy(() => import('@renderer/pages/enterprise/Enter
 const EnterpriseSettings = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseSettings'));
 const EnterpriseUsagePage = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseUsagePage'));
 const EnterpriseSecurityPage = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseSecurityPage'));
-const PersonalShell = React.lazy(() => import('@renderer/components/layout/PersonalShell'));
 const LegacyEnterpriseRedirect = React.lazy(() => import('@renderer/components/layout/LegacyEnterpriseRedirect'));
 const HooksPage = React.lazy(() => import('@renderer/pages/hooks'));
 const MCPPage = React.lazy(() => import('@renderer/pages/mcp'));
@@ -100,11 +102,7 @@ const EnterpriseAuthLayout: React.FC = () => {
     if (returnPath && returnPath !== '/login') {
       setPostLoginRedirect(returnPath);
     }
-    const query = new URLSearchParams({
-      redirect: returnPath || '/enterprise',
-      mode: 'enterprise',
-    });
-    return <Navigate to={`/login?${query.toString()}`} replace />;
+    return <Navigate to={buildEnterpriseRouteLoginPath(returnPath || '/enterprise')} replace />;
   }
 
   return <Outlet />;
@@ -116,7 +114,7 @@ const LoginRoute: React.FC = () => {
   const { loading: enterpriseLoading } = useWebuiEnterpriseMode();
 
   if (status === 'authenticated' && user) {
-    if (enterpriseLoading) {
+    if (enterpriseLoading && !isElectronDesktop()) {
       return <AppLoader />;
     }
     const fromQuery = readRedirectFromSearch(location.search);
@@ -139,7 +137,7 @@ const PanelRoute: React.FC = () => {
       <Routes>
         <Route path='/login' element={<LoginRoute />} />
         <Route element={<PersonalBrowserAuthLayout />}>
-          <Route element={withRouteFallback(PersonalShell)}>
+          <Route element={<PersonalShell />}>
           <Route index element={<Navigate to='/guid' replace />} />
           <Route path='/sessions' element={withRouteFallback(SessionsPage)} />
           <Route path='/workspace' element={withRouteFallback(WorkspacePage)} />
@@ -203,7 +201,7 @@ const PanelRoute: React.FC = () => {
           <Route path='/hooks' element={withRouteFallback(HooksPage)} />
           <Route path='/mcp' element={withRouteFallback(MCPPage)} />
           <Route path='/memory' element={withRouteFallback(MemoryPage)} />
-          <Route path='/guid' element={withRouteFallback(Guid)} />
+          <Route path='/guid' element={<Guid />} />
           <Route path='/conversation/:id' element={withRouteFallback(Conversation)} />
           <Route path='/settings/aionrs' element={withRouteFallback(AionrsSettings)} />
           <Route path='/team/:id' element={withRouteFallback(TeamIndex)} />
@@ -232,6 +230,7 @@ const PanelRoute: React.FC = () => {
             <Route path='settings' element={withRouteFallback(EnterpriseSettings)} />
             <Route path='users' element={withRouteFallback(AdminUsers)} />
             <Route path='teams' element={withRouteFallback(AdminTeams)} />
+            <Route path='runtimes' element={withRouteFallback(AdminTeamRuntimes)} />
             <Route path='auth' element={withRouteFallback(AdminAuth)} />
             <Route path='invites' element={withRouteFallback(AdminInvites)} />
             <Route path='cteam' element={withRouteFallback(AdminKanban)} />
@@ -246,7 +245,7 @@ const PanelRoute: React.FC = () => {
             <Route path='cmeas' element={withRouteFallback(CMeasDashboard)} />
             <Route path='ctest' element={withRouteFallback(CTestManagement)} />
             <Route path='cflow' element={withRouteFallback(CFlowBoard)} />
-            <Route path='cagent' element={<Navigate to='/super-assistant?tab=workspace' replace />} />
+            <Route path='cagent' element={<Navigate to='/super-assistant?tab=overview' replace />} />
             <Route path='usage' element={withRouteFallback(EnterpriseUsagePage)} />
             <Route path='security' element={withRouteFallback(EnterpriseSecurityPage)} />
           </Route>

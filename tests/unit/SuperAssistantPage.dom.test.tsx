@@ -22,6 +22,8 @@ const conversationHistoryMock = vi.hoisted(() => vi.fn());
 const locationMock = vi.hoisted(() => ({ pathname: '/super-assistant', search: '' }));
 const ensureSessionMock = vi.hoisted(() => vi.fn());
 const sendMessageToAgentMock = vi.hoisted(() => vi.fn());
+const createConversationMock = vi.hoisted(() => vi.fn());
+const buildCliAgentParamsMock = vi.hoisted(() => vi.fn());
 const requirementTreeState = vi.hoisted(() => ({
   items: [] as Array<Record<string, unknown>>,
 }));
@@ -31,6 +33,7 @@ const teamTaskState = vi.hoisted(() => ({
 const teamRuntimeState = vi.hoisted(() => ({
   agentStatusListener: null as null | ((event: { teamId: string; slotId: string; status: string; lastMessage?: string }) => void),
 }));
+const isElectronDesktopMock = vi.hoisted(() => vi.fn(() => false));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -47,6 +50,34 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/common', () => ({
   ipcBridge: {
+    cron: {
+      listJobs: {
+        invoke: vi.fn().mockResolvedValue([]),
+      },
+      runNow: {
+        invoke: vi.fn().mockResolvedValue({}),
+      },
+      updateJob: {
+        invoke: vi.fn().mockResolvedValue({}),
+      },
+      removeJob: {
+        invoke: vi.fn().mockResolvedValue(undefined),
+      },
+      onJobCreated: {
+        on: vi.fn(() => vi.fn()),
+      },
+      onJobUpdated: {
+        on: vi.fn(() => vi.fn()),
+      },
+      onJobRemoved: {
+        on: vi.fn(() => vi.fn()),
+      },
+    },
+    conversation: {
+      create: {
+        invoke: createConversationMock,
+      },
+    },
     team: {
       ensureSession: {
         invoke: ensureSessionMock,
@@ -65,6 +96,17 @@ vi.mock('@/common', () => ({
             };
           }
         ),
+      },
+    },
+    personalAgent: {
+      list: {
+        invoke: vi.fn().mockResolvedValue([]),
+      },
+      create: {
+        invoke: vi.fn().mockResolvedValue({}),
+      },
+      update: {
+        invoke: vi.fn().mockResolvedValue({}),
       },
     },
   },
@@ -121,12 +163,37 @@ vi.mock('@/renderer/pages/cron/ScheduledTasksPage/CreateTaskDialog', () => ({
   default: ({ visible }: { visible?: boolean }) => (visible ? <div role='dialog'>CreateTaskDialog</div> : null),
 }));
 
+vi.mock('@/renderer/pages/conversation/utils/createConversationParams', () => ({
+  buildCliAgentParams: (...args: unknown[]) => buildCliAgentParamsMock(...args),
+}));
+
+vi.mock('@/renderer/utils/platform', () => ({
+  isElectronDesktop: () => isElectronDesktopMock(),
+}));
+
+vi.mock('@/renderer/components/base/AionModal', () => ({
+  default: ({
+    visible,
+    children,
+    header,
+    footer,
+  }: React.PropsWithChildren<{ visible?: boolean; header?: React.ReactNode; footer?: React.ReactNode }>) =>
+    visible ? (
+      <div role='dialog'>
+        {header ? <div>{header}</div> : null}
+        {children}
+        {footer}
+      </div>
+    ) : null,
+}));
+
 vi.mock('@arco-design/web-react', () => ({
   Button: ({
     children,
     onClick,
+    loading: _loading,
     ...props
-  }: React.PropsWithChildren<Record<string, unknown> & { onClick?: () => void }>) => (
+  }: React.PropsWithChildren<Record<string, unknown> & { onClick?: () => void; loading?: boolean }>) => (
     <button onClick={onClick} {...props}>
       {children}
     </button>
@@ -159,6 +226,56 @@ vi.mock('@arco-design/web-react', () => ({
       </div>
     ) : null,
   Empty: ({ description }: { description?: React.ReactNode }) => <div>{description}</div>,
+  Spin: ({ children }: React.PropsWithChildren<{ loading?: boolean }>) => <div>{children}</div>,
+  Input: Object.assign(
+    ({
+      value,
+      onChange,
+      placeholder,
+    }: {
+      value?: string;
+      onChange?: (value: string) => void;
+      placeholder?: string;
+    }) => <input value={value} onChange={(event) => onChange?.(event.target.value)} placeholder={placeholder} />,
+    {
+      TextArea: ({
+        value,
+        onChange,
+        placeholder,
+      }: {
+        value?: string;
+        onChange?: (value: string) => void;
+        placeholder?: string;
+      }) => <textarea value={value} onChange={(event) => onChange?.(event.target.value)} placeholder={placeholder} />,
+    }
+  ),
+  Select: Object.assign(
+    ({
+      children,
+      value,
+      onChange,
+    }: React.PropsWithChildren<{ value?: string; onChange?: (value: string) => void }>) => (
+      <select value={value} onChange={(event) => onChange?.(event.target.value)}>
+        {children}
+      </select>
+    ),
+    {
+      Option: ({ children, value }: React.PropsWithChildren<{ value: string }>) => (
+        <option value={value}>{children}</option>
+      ),
+    }
+  ),
+  Radio: Object.assign(
+    ({ children, value, disabled }: React.PropsWithChildren<{ value?: string; disabled?: boolean }>) => (
+      <label>
+        <input type='radio' value={value} disabled={disabled} />
+        {children}
+      </label>
+    ),
+    {
+      Group: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+    }
+  ),
   Result: ({ title, subTitle }: { title?: React.ReactNode; subTitle?: React.ReactNode }) => (
     <div>
       <div>{title}</div>
@@ -173,12 +290,16 @@ vi.mock('@arco-design/web-react', () => ({
 }));
 
 import SuperAssistantPage from '@/renderer/pages/superAssistant';
+import { ipcBridge } from '@/common';
+import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 
 describe('SuperAssistantPage (refactored command center)', () => {
   beforeEach(() => {
     navigateMock.mockReset();
     ensureSessionMock.mockReset();
     sendMessageToAgentMock.mockReset();
+    createConversationMock.mockReset();
+    buildCliAgentParamsMock.mockReset();
     updateRequirementMock.mockReset();
     listTeamTasksMock.mockReset();
     createTeamTaskMock.mockReset();
@@ -295,6 +416,14 @@ describe('SuperAssistantPage (refactored command center)', () => {
     ]);
     listCodeReposMock.mockResolvedValue([{ id: 'repo-1', name: '1one-command' }]);
     listPipelinesMock.mockResolvedValue([{ id: 'pipe-1', name: 'Release Pipeline' }]);
+    vi.mocked(ipcBridge.personalAgent.list.invoke).mockResolvedValue([]);
+    createConversationMock.mockResolvedValue({ id: 'conv-personal-agent' });
+    buildCliAgentParamsMock.mockResolvedValue({
+      type: 'acp',
+      name: '个人 Agent',
+      model: {},
+      extra: { workspace: '', backend: 'codex', agentName: '个人 Agent' },
+    });
     useTeamListMock.mockReturnValue({
       teams: [
         {
@@ -338,6 +467,79 @@ describe('SuperAssistantPage (refactored command center)', () => {
     expect(screen.getByText('最近运行 / 执行反馈')).toBeInTheDocument();
   });
 
+  it('uses desktop operator identity for local personal resources when not logged in', async () => {
+    authMock.mockReturnValue({ user: null });
+    requirementTreeState.items = [
+      {
+        id: 'story-local',
+        type: 'story',
+        subject: '本地个人 Issue',
+        description: 'local issue',
+        status: 'backlog',
+        priority: 'medium',
+        assigned_to: null,
+        creator_id: DESKTOP_OPERATOR_USER_ID,
+        tenant_id: 'default',
+        created_at: 1,
+        updated_at: 1,
+      },
+    ];
+
+    render(<SuperAssistantPage />);
+
+    await waitFor(() => {
+      expect(ipcBridge.personalAgent.list.invoke).toHaveBeenCalledWith({
+        ownerUserId: DESKTOP_OPERATOR_USER_ID,
+      });
+    });
+    expect(await screen.findAllByText('本地个人 Issue')).not.toHaveLength(0);
+  });
+
+  it('runs personal agents through personal conversation creation instead of team IPC', async () => {
+    vi.mocked(ipcBridge.personalAgent.list.invoke).mockResolvedValue([
+      {
+        id: 'personal-agent-1',
+        ownerUserId: 'user-1',
+        tenantId: 'default',
+        name: '个人执行 Agent',
+        description: 'personal',
+        agentType: 'codex',
+        conversationType: 'acp',
+        automationConfig: {},
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]);
+
+    locationMock.search = '?tab=agents';
+    render(<SuperAssistantPage />);
+    const editButtons = await screen.findAllByRole('button', { name: '编辑' });
+    ensureSessionMock.mockClear();
+    sendMessageToAgentMock.mockClear();
+    fireEvent.click(editButtons[0]!);
+    const runButtons = await screen.findAllByRole('button', { name: '立即执行' });
+    fireEvent.click(runButtons[0]!);
+
+    await waitFor(() => {
+      expect(buildCliAgentParamsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ backend: 'codex', name: '个人执行 Agent' }),
+        ''
+      );
+      expect(createConversationMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: '个人执行 Agent',
+          extra: expect.objectContaining({
+            personalAgentId: 'personal-agent-1',
+            tenantId: 'default',
+          }),
+        })
+      );
+    });
+    expect(ensureSessionMock).not.toHaveBeenCalled();
+    expect(sendMessageToAgentMock).not.toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith('/conversation/conv-personal-agent');
+  });
+
   it('assigns issue to agent from command panel', async () => {
     locationMock.search = '?tab=issues';
     render(<SuperAssistantPage />);
@@ -346,7 +548,7 @@ describe('SuperAssistantPage (refactored command center)', () => {
       expect(createTeamTaskMock).toHaveBeenCalledWith(
         expect.objectContaining({ teamId: 'team-1', owner: 'dev' })
       );
-      expect(ensureSessionMock).toHaveBeenCalledWith({ teamId: 'team-1' });
+      expect(ensureSessionMock).toHaveBeenCalledWith(expect.objectContaining({ teamId: 'team-1' }));
       expect(sendMessageToAgentMock).toHaveBeenCalledWith(
         expect.objectContaining({ teamId: 'team-1', slotId: 'dev' })
       );
@@ -392,7 +594,7 @@ describe('SuperAssistantPage (refactored command center)', () => {
     fireEvent.click((await screen.findAllByText('修复团队上下文深链'))[0]!);
     fireEvent.click(await screen.findByRole('button', { name: '共享会话' }));
     await waitFor(() => {
-      expect(ensureSessionMock).toHaveBeenCalledWith({ teamId: 'team-1' });
+      expect(ensureSessionMock).toHaveBeenCalledWith(expect.objectContaining({ teamId: 'team-1' }));
     });
     expect(navigateMock).toHaveBeenCalled();
   });
@@ -416,11 +618,21 @@ describe('SuperAssistantPage (refactored command center)', () => {
     expect(await screen.findByText('协作视图')).toBeInTheDocument();
   });
 
+  it('switches internal tabs immediately and updates the route', async () => {
+    isElectronDesktopMock.mockReturnValue(false);
+    locationMock.search = '?tab=overview';
+    render(<SuperAssistantPage />);
+    fireEvent.click(await screen.findByRole('button', { name: '智能体' }));
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/super-assistant?tab=agents&issueId=story-1', { replace: true });
+    });
+  });
+
   it('renders empty state when there are no teams and issues', async () => {
     listRequirementsTreeMock.mockResolvedValue([]);
     useTeamListMock.mockReturnValue({ teams: [], mutate: vi.fn(), removeTeam: vi.fn() });
     render(<SuperAssistantPage />);
-    expect((await screen.findAllByText('暂无共享 Issue')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('还没有团队')).toBeInTheDocument();
     cleanup();
     locationMock.search = '?tab=runtimes';
     render(<SuperAssistantPage />);

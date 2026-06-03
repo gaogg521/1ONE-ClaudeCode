@@ -24,6 +24,11 @@ if (!app.isPackaged) {
   // Explicitly override userData to the dev directory.
   const appSupportDir = path.dirname(app.getPath('userData'));
   app.setPath('userData', path.join(appSupportDir, devAppName));
+
+  // Dev desktop loads from Vite (localhost:5173). Without this, Chromium persists old JS chunks
+  // across restarts and dynamic-import paths drift after refactors → "Failed to fetch …PersonalShell.tsx".
+  app.commandLine.appendSwitch('disable-http-cache');
+  app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 }
 
 // Configure Chromium command-line flags for WebUI and CLI modes

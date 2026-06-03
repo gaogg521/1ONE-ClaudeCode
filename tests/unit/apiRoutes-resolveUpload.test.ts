@@ -31,130 +31,137 @@ import { resolveUploadWorkspace } from '../../src/process/webserver/routes/apiRo
 import { getDatabase } from '@process/services/database';
 
 describe('apiRoutes - resolveUploadWorkspace', () => {
+  const baseUser = { id: 'user-1', tenant_id: 'default', role: 'member' as const };
+
+  function mockDbWithConversation(row: { user_id: string; team_id: string | null; extra: string } | undefined) {
+    const prepare = vi.fn((sql: string) => ({
+      get: vi.fn((...args: unknown[]) => {
+        if (sql.includes('FROM conversations')) {
+          return row;
+        }
+        if (sql.includes('FROM team_memberships')) {
+          return undefined;
+        }
+        return undefined;
+      }),
+    }));
+
+    return {
+      getDriver: vi.fn(() => ({
+        prepare,
+      })),
+    };
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('throws error when conversationId is empty', async () => {
-    await expect(resolveUploadWorkspace('', '/workspace')).rejects.toThrow('Missing conversation id');
+    await expect(resolveUploadWorkspace('', '/workspace', baseUser)).rejects.toThrow('Missing conversation id');
   });
 
   it('throws error when conversationId is undefined-like', async () => {
-    await expect(resolveUploadWorkspace('' as string, undefined)).rejects.toThrow('Missing conversation id');
+    await expect(resolveUploadWorkspace('' as string, undefined, baseUser)).rejects.toThrow('Missing conversation id');
   });
 
   it('throws error when conversation workspace not found', async () => {
-    const mockDb = {
-      getConversation: vi.fn().mockReturnValue({
-        success: false,
-        data: null,
-      }),
-    };
-    vi.mocked(getDatabase).mockResolvedValue(mockDb as any);
+    vi.mocked(getDatabase).mockResolvedValue(mockDbWithConversation(undefined) as any);
 
-    await expect(resolveUploadWorkspace('conv-123', undefined)).rejects.toThrow('Conversation workspace not found');
+    await expect(resolveUploadWorkspace('conv-123', undefined, baseUser)).rejects.toThrow(
+      'Conversation workspace not found'
+    );
   });
 
   it('throws error when conversation has no workspace', async () => {
-    const mockDb = {
-      getConversation: vi.fn().mockReturnValue({
-        success: true,
-        data: { extra: {} },
-      }),
-    };
-    vi.mocked(getDatabase).mockResolvedValue(mockDb as any);
+    vi.mocked(getDatabase).mockResolvedValue(
+      mockDbWithConversation({ user_id: 'user-1', team_id: null, extra: '{}' }) as any
+    );
 
-    await expect(resolveUploadWorkspace('conv-123', undefined)).rejects.toThrow('Conversation workspace not found');
+    await expect(resolveUploadWorkspace('conv-123', undefined, baseUser)).rejects.toThrow(
+      'Conversation workspace not found'
+    );
   });
 
   it('throws workspace mismatch error when requested workspace differs', async () => {
-    const mockDb = {
-      getConversation: vi.fn().mockReturnValue({
-        success: true,
-        data: {
-          extra: { workspace: '/actual/workspace' },
-        },
-      }),
-    };
-    vi.mocked(getDatabase).mockResolvedValue(mockDb as any);
+    vi.mocked(getDatabase).mockResolvedValue(
+      mockDbWithConversation({
+        user_id: 'user-1',
+        team_id: null,
+        extra: JSON.stringify({ workspace: '/actual/workspace' }),
+      }) as any
+    );
 
-    await expect(resolveUploadWorkspace('conv-123', '/different/workspace')).rejects.toThrow('Workspace mismatch');
+    await expect(resolveUploadWorkspace('conv-123', '/different/workspace', baseUser)).rejects.toThrow(
+      'Workspace mismatch'
+    );
   });
 
   it('returns conversation workspace when no requested workspace', async () => {
-    const mockDb = {
-      getConversation: vi.fn().mockReturnValue({
-        success: true,
-        data: {
-          extra: { workspace: '/actual/workspace' },
-        },
-      }),
-    };
-    vi.mocked(getDatabase).mockResolvedValue(mockDb as any);
+    vi.mocked(getDatabase).mockResolvedValue(
+      mockDbWithConversation({
+        user_id: 'user-1',
+        team_id: null,
+        extra: JSON.stringify({ workspace: '/actual/workspace' }),
+      }) as any
+    );
 
-    const result = await resolveUploadWorkspace('conv-123', undefined);
+    const result = await resolveUploadWorkspace('conv-123', undefined, baseUser);
     expect(result).toBe(path.resolve('/actual/workspace'));
   });
 
   it('returns resolved path when requested workspace matches conversation workspace', async () => {
     const workspace = '/home/user/workspace';
-    const mockDb = {
-      getConversation: vi.fn().mockReturnValue({
-        success: true,
-        data: {
-          extra: { workspace },
-        },
-      }),
-    };
-    vi.mocked(getDatabase).mockResolvedValue(mockDb as any);
+    vi.mocked(getDatabase).mockResolvedValue(
+      mockDbWithConversation({
+        user_id: 'user-1',
+        team_id: null,
+        extra: JSON.stringify({ workspace }),
+      }) as any
+    );
 
-    const result = await resolveUploadWorkspace('conv-123', workspace);
+    const result = await resolveUploadWorkspace('conv-123', workspace, baseUser);
     expect(result).toBe(path.resolve(workspace));
   });
 
   it('handles relative paths in workspace', async () => {
-    const mockDb = {
-      getConversation: vi.fn().mockReturnValue({
-        success: true,
-        data: {
-          extra: { workspace: './relative/path' },
-        },
-      }),
-    };
-    vi.mocked(getDatabase).mockResolvedValue(mockDb as any);
+    vi.mocked(getDatabase).mockResolvedValue(
+      mockDbWithConversation({
+        user_id: 'user-1',
+        team_id: null,
+        extra: JSON.stringify({ workspace: './relative/path' }),
+      }) as any
+    );
 
-    const result = await resolveUploadWorkspace('conv-123', undefined);
+    const result = await resolveUploadWorkspace('conv-123', undefined, baseUser);
     expect(result).toBe(path.resolve('./relative/path'));
   });
 
   it('handles absolute paths in workspace', async () => {
-    const mockDb = {
-      getConversation: vi.fn().mockReturnValue({
-        success: true,
-        data: {
-          extra: { workspace: '/absolute/path/to/workspace' },
-        },
-      }),
-    };
-    vi.mocked(getDatabase).mockResolvedValue(mockDb as any);
+    vi.mocked(getDatabase).mockResolvedValue(
+      mockDbWithConversation({
+        user_id: 'user-1',
+        team_id: null,
+        extra: JSON.stringify({ workspace: '/absolute/path/to/workspace' }),
+      }) as any
+    );
 
-    const result = await resolveUploadWorkspace('conv-123', undefined);
+    const result = await resolveUploadWorkspace('conv-123', undefined, baseUser);
     expect(result).toBe(path.resolve('/absolute/path/to/workspace'));
   });
 
   it('calls getConversation with the conversationId', async () => {
-    const mockDb = {
-      getConversation: vi.fn().mockReturnValue({
-        success: true,
-        data: {
-          extra: { workspace: '/workspace' },
-        },
-      }),
-    };
+    const mockDb = mockDbWithConversation({
+      user_id: 'user-1',
+      team_id: null,
+      extra: JSON.stringify({ workspace: '/workspace' }),
+    });
     vi.mocked(getDatabase).mockResolvedValue(mockDb as any);
 
-    await resolveUploadWorkspace('test-conv-id', undefined);
+    await resolveUploadWorkspace('test-conv-id', undefined, baseUser);
 
-    expect(mockDb.getConversation).toHaveBeenCalledWith('test-conv-id');
+    const driver = mockDb.getDriver();
+    const firstPrepare = (driver.prepare as ReturnType<typeof vi.fn>).mock.results[0]?.value;
+    expect(firstPrepare?.get).toHaveBeenCalledWith('default', 'test-conv-id');
   });
 });

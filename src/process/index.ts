@@ -16,38 +16,41 @@ import { app } from 'electron';
 if (app.isPackaged) {
   process.env.PREBUILDS_ONLY = '1';
 }
-import initStorage from './utils/initStorage';
+import initStorage, { initStorageCore, initStorageDeferred } from './utils/initStorage';
 import { bootstrapAgentToolkit } from './services/agentToolkit/bootstrap';
 import './utils/initBridge';
 import './services/i18n'; // Initialize i18n for main process
 import { getChannelManager } from '@process/channels';
 import { ExtensionRegistry } from '@process/extensions';
 
-export const initializeProcess = async () => {
+/** Fast storage path — unblocks desktop window creation. */
+export const initializeProcess = initStorageCore;
+
+/** MCP / builtin assistants — may run while the window is already visible. */
+export const initializeStorageDeferred = initStorageDeferred;
+
+/** Full storage init (core + deferred) for callers that need everything before proceeding. */
+export const initializeStorageFull = initStorage;
+
+/** Extensions, channels, agent toolkit — runs after the window is created so startup feels responsive. */
+export const initializeBackgroundServices = async (): Promise<void> => {
   const t0 = performance.now();
   const mark = (label: string) => console.log(`[1ONE:process] ${label} +${Math.round(performance.now() - t0)}ms`);
-
-  await initStorage();
-  mark('initStorage');
 
   void bootstrapAgentToolkit();
   mark('agentToolkit');
 
-  // Initialize Extension Registry (scan and resolve all extensions)
   try {
     await ExtensionRegistry.getInstance().initialize();
   } catch (error) {
     console.error('[Process] Failed to initialize ExtensionRegistry:', error);
-    // Don't fail app startup if extensions fail to initialize
   }
   mark('ExtensionRegistry');
 
-  // Initialize Channel subsystem
   try {
     await getChannelManager().initialize();
   } catch (error) {
     console.error('[Process] Failed to initialize ChannelManager:', error);
-    // Don't fail app startup if channel fails to initialize
   }
   mark('ChannelManager');
 };

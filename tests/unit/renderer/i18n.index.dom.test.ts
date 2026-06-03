@@ -92,7 +92,7 @@ describe('renderer i18n localStorage guards', () => {
 
     expect(mockI18n.init).toHaveBeenCalledWith(
       expect.objectContaining({
-        lng: 'en-US',
+        lng: 'zh-CN',
       })
     );
     expect(mockI18n.changeLanguage).toHaveBeenCalledWith('ja-JP');

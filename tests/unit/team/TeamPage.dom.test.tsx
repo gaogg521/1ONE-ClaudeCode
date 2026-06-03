@@ -12,6 +12,7 @@ const collaborationContextMock = vi.hoisted(() => vi.fn());
 vi.mock('@/renderer/hooks/webui/useEditionFeatures', () => ({
   useEditionFeatures: () => ({
     hasJoinedEnterprise: true,
+    showTeamsFeature: true,
     showEnterpriseAdminNav: true,
   }),
 }));
@@ -207,6 +208,7 @@ describe('TeamPage', () => {
       <TeamPage
         team={{
           id: 'team-1',
+          tenantId: 'tenant-1',
           userId: 'user-1',
           name: 'Alpha Team',
           workspace: '',
@@ -234,6 +236,7 @@ describe('TeamPage', () => {
       <TeamPage
         team={{
           id: 'team-1',
+          tenantId: 'tenant-1',
           userId: 'user-1',
           name: 'Alpha Team',
           workspace: '',
@@ -272,6 +275,7 @@ describe('TeamPage', () => {
       <TeamPage
         team={{
           id: 'team-1',
+          tenantId: 'tenant-1',
           userId: 'user-1',
           name: 'Alpha Team',
           workspace: '',
@@ -296,6 +300,7 @@ describe('TeamPage', () => {
       <TeamPage
         team={{
           id: 'team-1',
+          tenantId: 'tenant-1',
           userId: 'user-1',
           name: 'Alpha Team',
           workspace: '',
@@ -342,6 +347,7 @@ describe('TeamPage', () => {
       <TeamPage
         team={{
           id: 'team-1',
+          tenantId: 'tenant-1',
           userId: 'user-1',
           name: 'Alpha Team',
           workspace: '/repo/team-alpha',
@@ -389,6 +395,7 @@ describe('TeamPage', () => {
       <TeamPage
         team={{
           id: 'team-1',
+          tenantId: 'tenant-1',
           userId: 'user-1',
           name: 'Alpha Team',
           workspace: '',

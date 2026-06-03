@@ -16,7 +16,9 @@ import { useFeishuQrLogin } from '@/renderer/hooks/auth/useFeishuQrLogin';
 import { formatOAuthAuthorizeError, startOAuthAuthorize } from '@/renderer/utils/oauthAuthorize';
 import { useLoginUiProviders } from '@/renderer/hooks/auth/useLoginUiProviders';
 import { useAuth } from '../../hooks/context/AuthContext';
+import { syncBrowserWebuiSessionToDesktop } from '@/renderer/utils/syncBrowserWebuiSession';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { resolveLoginIntentFromSearch } from '@/renderer/utils/enterpriseLoginNavigation';
 import '@/renderer/styles/enterprise-theme.css';
 import LoginFormCard from './components/LoginFormCard';
 import LoginHeroPanel from './components/LoginHeroPanel';
@@ -105,18 +107,21 @@ const LoginPage: React.FC = () => {
   const isBrowserWebUi = !isElectronDesktop();
 
   const postLoginTarget = readRedirectFromSearch(location.search);
-  const enterpriseLoginMode = new URLSearchParams(location.search).get('mode') === 'enterprise';
+  const loginIntent = resolveLoginIntentFromSearch(location.search);
+  const enterpriseLoginMode = loginIntent === 'enterprise-member';
+  const adminLoginMode = loginIntent === 'webui-admin';
   const enterpriseIntent = useMemo(
     () =>
-      enterpriseLoginMode ||
-      postLoginTarget === '/enterprise/join' ||
-      postLoginTarget?.startsWith('/enterprise/join') ||
-      postLoginTarget === '/enterprise' ||
-      (postLoginTarget?.startsWith('/enterprise') ?? false),
-    [enterpriseLoginMode, postLoginTarget]
+      !adminLoginMode &&
+      (enterpriseLoginMode ||
+        postLoginTarget === '/enterprise/join' ||
+        postLoginTarget?.startsWith('/enterprise/join') ||
+        postLoginTarget === '/enterprise' ||
+        (postLoginTarget?.startsWith('/enterprise') ?? false)),
+    [adminLoginMode, enterpriseLoginMode, postLoginTarget]
   );
   const isEnterpriseLogin =
-    enterpriseLoginMode || enterpriseIntent || providers.mode === 'enterprise';
+    !adminLoginMode && (enterpriseLoginMode || enterpriseIntent || providers.mode === 'enterprise');
   const useEnterpriseChannelPanel = isDesktopApp && isEnterpriseLogin;
   const oauthRedirect = useMemo(() => {
     const fromQuery = readRedirectFromSearch(location.search);
@@ -177,9 +182,16 @@ const LoginPage: React.FC = () => {
 
   useEffect(() => {
     if (status === 'authenticated' && user && !enterpriseLoading) {
+      if (isDesktopApp) {
+        void syncBrowserWebuiSessionToDesktop().finally(() => {
+          navigateAfterLogin(user ?? undefined);
+          window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+        });
+        return;
+      }
       navigateAfterLogin(user ?? undefined);
     }
-  }, [enterpriseLoading, navigateAfterLogin, status, user]);
+  }, [enterpriseLoading, isDesktopApp, navigateAfterLogin, status, user]);
 
   const handleFormMethodChange = useCallback((value: FormMethod) => {
     setFormMethod(value);
@@ -397,52 +409,82 @@ const LoginPage: React.FC = () => {
     return <Navigate to={ENTERPRISE_JOIN_PATH} replace />;
   }
 
-  const cardTitle = isEnterpriseLogin
-    ? t('login.enterprise.cardTitle', { defaultValue: '登录您的账户' })
-    : t('login.standalone.cardTitle', { defaultValue: '登录 WebUI' });
-  const cardSubtitle = isEnterpriseLogin
-    ? t('login.enterprise.cardSubtitle', { defaultValue: '管理您的会话与任务' })
-    : t('login.standalone.cardSubtitle', {
-        defaultValue: '用户名与密码见「设置 → 远程连接 → WebUI」',
-      });
+  const loginEdition: 'enterprise' | 'admin' | 'standalone' = adminLoginMode
+    ? 'admin'
+    : pageEdition === 'enterprise'
+      ? 'enterprise'
+      : 'standalone';
+
+  const cardTitle =
+    loginEdition === 'admin'
+      ? t('login.admin.cardTitle', { defaultValue: '团队版管理员专属后台' })
+      : loginEdition === 'enterprise'
+        ? t('login.enterprise.cardTitle', { defaultValue: '登录您的账户' })
+        : t('login.standalone.cardTitle', { defaultValue: '登录 WebUI' });
+  const cardSubtitle =
+    loginEdition === 'admin'
+      ? t('login.admin.cardSubtitle', {
+          defaultValue: '使用「设置 → 远程连接 → WebUI」中的本地管理员账号登录',
+        })
+      : loginEdition === 'enterprise'
+        ? t('login.enterprise.cardSubtitle', { defaultValue: '管理您的会话与任务' })
+        : t('login.standalone.cardSubtitle', {
+            defaultValue: '用户名与密码见「设置 → 远程连接 → WebUI」',
+          });
   const heroBadge =
-    pageEdition === 'enterprise'
-      ? t('login.enterprise.heroBadge', { defaultValue: '1ONE Code 企业版' })
-      : t('login.standalone.heroBadge', { defaultValue: 'WEB 控制台' });
+    loginEdition === 'admin'
+      ? t('login.admin.heroBadge', { defaultValue: '实例管理' })
+      : loginEdition === 'enterprise'
+        ? t('login.enterprise.heroBadge', { defaultValue: '1ONE Code 企业版' })
+        : t('login.standalone.heroBadge', { defaultValue: 'WEB 控制台' });
   const heroTitle =
-    pageEdition === 'enterprise'
-      ? t('login.enterprise.heroTitle', { defaultValue: '团队 AI 协作工作台' })
-      : t('login.standalone.heroTitle', { defaultValue: 'WebUI 远程访问' });
+    loginEdition === 'admin'
+      ? t('login.admin.heroTitle', { defaultValue: '团队版管理员专属后台' })
+      : loginEdition === 'enterprise'
+        ? t('login.enterprise.heroTitle', { defaultValue: '团队 AI 协作工作台' })
+        : t('login.standalone.heroTitle', { defaultValue: 'WebUI 远程访问' });
   const heroDescription =
-    pageEdition === 'enterprise'
-      ? t('login.enterprise.brandDesc', {
+    loginEdition === 'admin'
+      ? t('login.admin.brandDesc', {
           defaultValue:
-            '面向团队的命令行与对话型 AI 体验，统一账号与权限，支持本地、域控与飞书等多种登录方式。',
+            '使用本机 WebUI 管理员账户登录，配置认证、邀请码、租户与系统治理；与团队成员登录入口分离。',
         })
-      : t('login.standalone.brandDesc', {
-          defaultValue: '使用本机管理员账户登录，在手机或远程浏览器中管理 1ONE 会话与任务。',
-        });
+      : loginEdition === 'enterprise'
+        ? t('login.enterprise.brandDesc', {
+            defaultValue:
+              '面向团队的命令行与对话型 AI 体验，统一账号与权限，支持本地、域控与飞书等多种登录方式。',
+          })
+        : t('login.standalone.brandDesc', {
+            defaultValue: '使用本机管理员账户登录，在手机或远程浏览器中管理 1ONE 会话与任务。',
+          });
   const heroIntroTitle =
-    pageEdition === 'enterprise'
-      ? t('login.enterprise.introTitle', { defaultValue: '专注于企业团队 AI 协作' })
-      : t('login.standalone.introTitle', { defaultValue: '专注于远程运维与会话掌控' });
+    loginEdition === 'admin'
+      ? t('login.admin.introTitle', { defaultValue: '实例治理与认证配置' })
+      : loginEdition === 'enterprise'
+        ? t('login.enterprise.introTitle', { defaultValue: '专注于企业团队 AI 协作' })
+        : t('login.standalone.introTitle', { defaultValue: '专注于远程运维与会话掌控' });
   const heroIntroText =
-    pageEdition === 'enterprise'
-      ? t('login.enterprise.introText', {
+    loginEdition === 'admin'
+      ? t('login.admin.introText', {
           defaultValue:
-            '支持多租户管理、LDAP 域控集成、飞书/钉钉/企微 SSO，为企业团队提供安全、高效的 AI 工作体验。',
+            '面向系统管理员与组织管理员：管理 LDAP/飞书、成员邀请、企业团队版开关及后台模块，不面向普通员工日常使用。',
         })
-      : t('login.standalone.introText', {
-          defaultValue:
-            '在浏览器中安全访问本机 1ONE，统一查看任务、会话和运行状态，适合移动办公与远程协作场景。',
-        });
+      : loginEdition === 'enterprise'
+        ? t('login.enterprise.introText', {
+            defaultValue:
+              '支持多租户管理、LDAP 域控集成、飞书/钉钉/企微 SSO，为企业团队提供安全、高效的 AI 工作体验。',
+          })
+        : t('login.standalone.introText', {
+            defaultValue:
+              '在浏览器中安全访问本机 1ONE，统一查看任务、会话和运行状态，适合移动办公与远程协作场景。',
+          });
   const illustrationAlt = t('login.heroIllustrationAlt', {
     defaultValue: '企业 AI 工作台主视觉',
   });
 
   return (
     <div
-      className={`login-page login-page--${pageEdition}${isBrowserWebUi ? ' login-page--web' : ' login-page--desktop'}${isDesktopApp ? ' login-page--desktop-app' : ''}`}
+      className={`login-page login-page--${loginEdition}${isBrowserWebUi ? ' login-page--web' : ' login-page--desktop'}${isDesktopApp ? ' login-page--desktop-app' : ''}`}
     >
       {!isDesktopApp ? (
       <LoginHeroPanel

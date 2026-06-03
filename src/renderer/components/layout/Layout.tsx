@@ -21,6 +21,7 @@ import { cleanupSiderTooltips } from '@renderer/utils/ui/siderTooltip';
 import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShortcuts';
 import { isElectronDesktop } from '@renderer/utils/platform';
 import EditionRouteGuard from '@/renderer/components/layout/EditionRouteGuard';
+import TeamRuntimeAdminSyncMount from '@/renderer/components/enterprise/TeamRuntimeAdminSyncMount';
 import EditionWorkspaceGuide from '@/renderer/components/layout/EditionWorkspaceGuide';
 import '@renderer/styles/layout.css';
 
@@ -458,6 +459,7 @@ const Layout: React.FC<{
                 : undefined
             }
           >
+            <TeamRuntimeAdminSyncMount />
             <EditionRouteGuard />
             <EditionWorkspaceGuide />
             <Outlet />

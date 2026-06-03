@@ -4,8 +4,8 @@ import type { MailboxMessage, TeamTask, TTeam } from '../types';
 /** Team CRUD + cascade-delete operations */
 export interface ITeamCrudRepository {
   create(team: TTeam): Promise<TTeam>;
-  findById(id: string): Promise<TTeam | null>;
-  findAll(userId: string): Promise<TTeam[]>;
+  findById(id: string, tenantId?: string): Promise<TTeam | null>;
+  findAll(userId: string, tenantId?: string): Promise<TTeam[]>;
   update(id: string, updates: Partial<TTeam>): Promise<TTeam>;
   delete(id: string): Promise<void>;
   deleteMailboxByTeam(teamId: string): Promise<void>;

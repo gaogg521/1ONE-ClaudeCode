@@ -48,6 +48,17 @@ export const useAcpInitialMessage = ({
         // Avoid two inconsistent sets of file references in the message
         const msg_id = uuid();
 
+        const userMessage: TMessage = {
+          id: msg_id,
+          msg_id,
+          conversation_id: conversationId,
+          type: 'text',
+          position: 'right',
+          content: { content: input },
+          createdAt: Date.now(),
+        };
+        addOrUpdateMessage(userMessage, true);
+
         // Start AI processing loading state (user message will be added via backend response)
         setAiProcessing(true);
 

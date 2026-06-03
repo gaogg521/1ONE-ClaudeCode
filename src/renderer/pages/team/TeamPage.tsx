@@ -62,15 +62,24 @@ function buildSharedWorkspaceScopePath(path: '/sessions' | '/tasks', team: TTeam
   return `${path}?${params.toString()}`;
 }
 
-function buildIssueKanbanPath(team: TTeam, issueContext: TeamIssueContext): string {
+function buildIssueKanbanPath(
+  team: TTeam,
+  issueContext: TeamIssueContext,
+  teamsCollaborationEnabled: boolean
+): string {
   if (!issueContext.issueId || !issueContext.issueSubject) {
     return '/issues';
   }
   const params = new URLSearchParams({
     teamId: team.id,
     teamName: team.name,
+    issueId: issueContext.issueId,
     issueSubject: issueContext.issueSubject,
   });
+  if (teamsCollaborationEnabled) {
+    return `/enterprise/cteam?${params.toString()}`;
+  }
+  params.delete('issueId');
   return `/issues/${encodeURIComponent(issueContext.issueId)}?${params.toString()}`;
 }
 
@@ -105,13 +114,14 @@ const AionrsHeaderModelSelector: React.FC<{ conversationId: string; initialModel
 const AgentChatSlot: React.FC<{
   agent: TeamAgent;
   teamId: string;
+  tenantId: string;
   isLead: boolean;
   isFullscreen?: boolean;
   runtimeStatus?: string;
   runtimeLastMessage?: string;
   onToggleFullscreen?: () => void;
   onRemove?: () => void;
-}> = ({ agent, teamId, isLead, isFullscreen = false, runtimeStatus, runtimeLastMessage, onToggleFullscreen, onRemove }) => {
+}> = ({ agent, teamId, tenantId, isLead, isFullscreen = false, runtimeStatus, runtimeLastMessage, onToggleFullscreen, onRemove }) => {
   const { data: conversation } = useSWR(agent.conversationId ? ['team-conversation', agent.conversationId] : null, () =>
     ipcBridge.conversation.get.invoke({ id: agent.conversationId })
   );
@@ -206,6 +216,7 @@ const AgentChatSlot: React.FC<{
           <TeamChatView
             conversation={conversation as TChatConversation}
             teamId={teamId}
+            tenantId={tenantId}
             agentSlotId={isLead ? undefined : agent.slotId}
           />
         ) : (
@@ -246,8 +257,8 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const { hasJoinedEnterprise, showEnterpriseAdminNav } = useEditionFeatures();
-  const collaborationContext = useEnterpriseCollaborationContext(hasJoinedEnterprise);
+  const { showTeamsFeature, showEnterpriseAdminNav } = useEditionFeatures();
+  const collaborationContext = useEnterpriseCollaborationContext(showTeamsFeature);
   const { agents, activeSlotId, statusMap, switchTab } = useTeamTabs();
   const [, messageContext] = Message.useMessage({ maxCount: 1 });
 
@@ -275,13 +286,13 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
 
   const handleRemoveAgent = useCallback(
     async (slotId: string) => {
-      await ipcBridge.team.removeAgent.invoke({ teamId: team.id, slotId });
+      await ipcBridge.team.removeAgent.invoke({ teamId: team.id, tenantId: team.tenantId, slotId });
       Message.success(t('common.deleteSuccess'));
       // Switch to lead tab after removal
       if (leadAgent?.slotId) switchTab(leadAgent.slotId);
       if (fullscreenSlotId === slotId) setFullscreenSlotId(null);
     },
-    [team.id, leadAgent?.slotId, switchTab, fullscreenSlotId, t]
+    [team.id, team.tenantId, leadAgent?.slotId, switchTab, fullscreenSlotId, t]
   );
   const leadConversationId = leadAgent?.conversationId ?? '';
   const isLeadAgent = activeAgent?.role === 'lead';
@@ -444,7 +455,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
           <Button
             size='small'
             type='primary'
-            onClick={() => void navigate(buildIssueKanbanPath(team, issueContext))}
+            onClick={() => void navigate(buildIssueKanbanPath(team, issueContext, showTeamsFeature))}
           >
             {t('common.workspace.issueOpenKanban', {
               defaultValue: '打开当前 Issue 看板',
@@ -468,7 +479,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
         </div>
       </div>
     ),
-    [collaborationContext, issueContext, navigate, showEnterpriseAdminNav, t, team]
+    [collaborationContext, issueContext, navigate, showEnterpriseAdminNav, showTeamsFeature, t, team]
   );
 
   return (
@@ -504,6 +515,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
                   <AgentChatSlot
                     agent={agent}
                     teamId={team.id}
+                    tenantId={team.tenantId}
                     isLead={isLeadSlot}
                     isFullscreen
                     runtimeStatus={statusMap.get(agent.slotId)?.status}
@@ -555,6 +567,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
                       <AgentChatSlot
                         agent={agent}
                         teamId={team.id}
+                      tenantId={team.tenantId}
                         isLead={isLeadSlot}
                         runtimeStatus={statusMap.get(agent.slotId)?.status}
                         runtimeLastMessage={statusMap.get(agent.slotId)?.lastMessage}
@@ -616,16 +629,16 @@ const TeamPage: React.FC<Props> = ({ team }) => {
   const handleRenameTeam = useCallback(
     async (newName: string): Promise<boolean> => {
       try {
-        await ipcBridge.team.renameTeam.invoke({ id: team.id, name: newName });
+        await ipcBridge.team.renameTeam.invoke({ id: team.id, tenantId: team.tenantId, name: newName });
         await mutateTeam();
-        await globalMutate(`teams/${user?.id ?? 'system_default_user'}`);
+        await globalMutate(`teams/${team.tenantId}/${user?.id ?? 'system_default_user'}`);
         return true;
       } catch (error) {
         console.error('Failed to rename team:', error);
         return false;
       }
     },
-    [team.id, mutateTeam, globalMutate, user]
+    [team.id, team.tenantId, mutateTeam, globalMutate, user]
   );
 
   return (

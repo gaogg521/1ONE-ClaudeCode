@@ -17,6 +17,7 @@ import {
   Server,
   Setting,
 } from '@icon-park/react';
+import type { EditionCapability } from '@/common/auth/identityPolicy';
 
 export type NavItem = {
   icon: React.ReactNode;
@@ -24,8 +25,11 @@ export type NavItem = {
   labelDefault: string;
   path: string;
   paths?: string[];
-  /** 仅企业版工作区显示 */
-  enterpriseOnly?: boolean;
+  capability?: EditionCapability;
+};
+
+export type SidebarNavGate = {
+  can: (capability: EditionCapability) => boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -58,7 +62,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     icon: <Robot theme='outline' size={18} />,
     labelKey: 'nav.agentAssistant',
-    labelDefault: 'Agent 助手',
+    labelDefault: '超级助手',
     path: '/super-assistant',
     paths: ['/enterprise/cagent'],
   },
@@ -74,6 +78,7 @@ const NAV_ITEMS: NavItem[] = [
     labelKey: 'nav.enterpriseConsole',
     labelDefault: '企业后台',
     path: '/enterprise',
+    capability: 'admin.console',
   },
   {
     icon: <Lightning theme='outline' size={18} />,
@@ -107,22 +112,11 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-export function getSidebarNavItems(hasJoinedEnterprise: boolean, isEnterpriseEdition: boolean): NavItem[] {
-  let items = NAV_ITEMS;
-  if (!hasJoinedEnterprise) {
-    items = items.filter(
-      (x) =>
-        x.path !== '/enterprise' &&
-        x.path !== '/super-assistant' &&
-        x.path !== '/issues' &&
-        x.path !== '/skills'
-    );
-  } else {
-    // 企业版：需求看板与任务看板合并到 Issues，避免侧栏重复入口
+export function getSidebarNavItems(gate: SidebarNavGate): NavItem[] {
+  let items = NAV_ITEMS.filter((item) => !item.capability || gate.can(item.capability));
+  if (gate.can('issues.teamPlanning')) {
+    // 企业团队版：需求看板与任务看板合并到 Issues，避免侧栏重复入口
     items = items.filter((x) => x.path !== '/tasks');
-  }
-  if (!isEnterpriseEdition) {
-    items = items.filter((x) => !x.enterpriseOnly);
   }
   return items;
 }

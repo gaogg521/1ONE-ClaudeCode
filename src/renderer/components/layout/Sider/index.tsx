@@ -1,4 +1,4 @@
-﻿import { DeleteOne, EditOne, Peoples, Plus, Pushpin } from '@icon-park/react';
+import { DeleteOne, EditOne, Peoples, Plus, Pushpin } from '@icon-park/react';
 import { Input, Message, Modal, Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -10,6 +10,8 @@ import { cleanupSiderTooltips, getSiderTooltipProps } from '@renderer/utils/ui/s
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { blurActiveElement } from '@renderer/utils/ui/focus';
 import { useThemeContext } from '@renderer/hooks/context/ThemeContext';
+import type { ColorScheme } from '@renderer/hooks/ui/useColorScheme';
+import type { Theme } from '@renderer/hooks/system/useTheme';
 import { useTeamList } from '@renderer/pages/team/hooks/useTeamList';
 import { useSWRConfig } from 'swr';
 import TeamCreateModal from '@renderer/pages/team/components/TeamCreateModal';
@@ -33,12 +35,12 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const location = useLocation();
-  const { pathname, search, hash } = location;
+  const { pathname } = location;
 
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { closePreview } = usePreviewContext();
-  const { theme, setTheme } = useThemeContext();
+  const { theme, setTheme, setColorScheme } = useThemeContext();
   const [createTeamVisible, setCreateTeamVisible] = useState(false);
   const { teams, mutate: refreshTeams, removeTeam } = useTeamList();
   const { mutate: globalMutate } = useSWRConfig();
@@ -70,9 +72,10 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     if (!renameId || !renameName.trim()) return;
     setRenameLoading(true);
     try {
-      await ipcBridge.team.renameTeam.invoke({ id: renameId, name: renameName.trim() });
+      const tenantId = teams.find((team) => team.id === renameId)?.tenantId;
+      await ipcBridge.team.renameTeam.invoke({ id: renameId, tenantId, name: renameName.trim() });
       await refreshTeams();
-      await globalMutate(`team/${renameId}`);
+      await globalMutate(tenantId ? `team/${tenantId}/${renameId}` : `team/${renameId}`);
       Message.success(t('team.sider.renameSuccess'));
       setRenameVisible(false);
       setRenameId(null);
@@ -83,7 +86,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     } finally {
       setRenameLoading(false);
     }
-  }, [renameId, renameName, refreshTeams, t]);
+  }, [globalMutate, renameId, renameName, refreshTeams, teams, t]);
 
   // Sorted teams: pinned first
   const sortedTeams = useMemo(() => {
@@ -91,7 +94,8 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     const unpinned = teams.filter((team) => !pinnedIds.includes(team.id));
     return [...pinned, ...unpinned];
   }, [teams, pinnedIds]);
-  const { showTeamsFeature, isEnterpriseEdition, hasJoinedEnterprise } = useEditionFeatures();
+  const { showTeamsFeature, isEnterpriseEdition, hasInstanceEnterprise, hasJoinedEnterprise } =
+    useEditionFeatures();
   const isSettings = pathname.startsWith('/settings');
 
   useEffect(() => {
@@ -123,9 +127,13 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     }
   };
 
-  const handleQuickThemeToggle = () => {
-    void setTheme(theme === 'dark' ? 'light' : 'dark');
-  };
+  const handleThemePresetApplied = useCallback(
+    (preset: { colorScheme: ColorScheme; theme: Theme }) => {
+      void setColorScheme(preset.colorScheme);
+      void setTheme(preset.theme);
+    },
+    [setColorScheme, setTheme]
+  );
 
   const tooltipEnabled = collapsed && !isMobile;
   const siderTooltipProps = getSiderTooltipProps(tooltipEnabled);
@@ -151,7 +159,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
       {showChatSidebarPanel ? (
         <div className='flex-1 min-h-0 overflow-y-auto'>
               {/* Team section — 企业版且已加入企业 */}
-              {isEnterpriseEdition && !hasJoinedEnterprise && !collapsed ? (
+              {isEnterpriseEdition && hasInstanceEnterprise && !hasJoinedEnterprise && !collapsed ? (
                 <div className='shrink-0 mb-8px px-12px py-8px rd-8px border border-dashed border-border-2 bg-fill-2'>
                   <span className='text-12px text-t-tertiary leading-relaxed'>
                     {t('settings.edition.teamsNeedJoin', {
@@ -298,7 +306,8 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
           collapsed={collapsed}
           theme={theme}
           siderTooltipProps={siderTooltipProps}
-          onThemeToggle={handleQuickThemeToggle}
+          onThemeToggle={() => void setTheme(theme === 'dark' ? 'light' : 'dark')}
+          onThemePresetApplied={handleThemePresetApplied}
         />
       </div>
       <TeamCreateModal

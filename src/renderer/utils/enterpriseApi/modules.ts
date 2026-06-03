@@ -220,6 +220,7 @@ export type RequirementRecord = {
   assigned_to: string | null;
   milestone_id?: string | null;
   creator_id: string;
+  creator_name?: string;
   created_at: number;
   updated_at: number;
   children?: RequirementRecord[];

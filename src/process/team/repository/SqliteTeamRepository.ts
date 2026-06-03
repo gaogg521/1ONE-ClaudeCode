@@ -10,6 +10,7 @@ import type { ITeamRepository } from './ITeamRepository';
 
 type TeamRow = {
   id: string;
+  tenant_id: string;
   user_id: string;
   name: string;
   workspace: string;
@@ -53,6 +54,7 @@ type TaskRow = {
 function rowToTeam(row: TeamRow): TTeam {
   return {
     id: row.id,
+    tenantId: row.tenant_id,
     userId: row.user_id,
     name: row.name,
     workspace: row.workspace,
@@ -122,10 +124,11 @@ export class SqliteTeamRepository implements ITeamRepository {
   async create(team: TTeam): Promise<TTeam> {
     const db = await this.getDb();
     db.prepare(
-      `INSERT INTO teams (id, user_id, name, workspace, workspace_mode, lead_agent_id, agents, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO teams (id, tenant_id, user_id, name, workspace, workspace_mode, lead_agent_id, agents, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       team.id,
+      team.tenantId,
       team.userId,
       team.name,
       team.workspace,
@@ -140,29 +143,41 @@ export class SqliteTeamRepository implements ITeamRepository {
     // tenant_id defaults to 'default' for now.
     db.prepare(
       `INSERT INTO team_memberships (tenant_id, team_id, user_id, role, created_at, updated_at)
-       VALUES ('default', ?, ?, 'owner', ?, ?)
+       VALUES (?, ?, ?, 'owner', ?, ?)
        ON CONFLICT(team_id, user_id) DO UPDATE SET role='owner', updated_at=excluded.updated_at`
-    ).run(team.id, team.userId, team.createdAt, team.updatedAt);
+    ).run(team.tenantId, team.id, team.userId, team.createdAt, team.updatedAt);
     return team;
   }
 
-  async findById(id: string): Promise<TTeam | null> {
+  async findById(id: string, tenantId?: string): Promise<TTeam | null> {
     const db = await this.getDb();
-    const row = db.prepare('SELECT * FROM teams WHERE id = ?').get(id) as TeamRow | undefined;
+    const row = tenantId
+      ? (db.prepare('SELECT * FROM teams WHERE id = ? AND tenant_id = ?').get(id, tenantId) as TeamRow | undefined)
+      : (db.prepare('SELECT * FROM teams WHERE id = ?').get(id) as TeamRow | undefined);
     return row ? rowToTeam(row) : null;
   }
 
-  async findAll(userId: string): Promise<TTeam[]> {
+  async findAll(userId: string, tenantId?: string): Promise<TTeam[]> {
     const db = await this.getDb();
-    const rows = db
-      .prepare(
-        `SELECT DISTINCT t.*
-         FROM teams t
-         LEFT JOIN team_memberships m ON m.team_id = t.id AND m.user_id = ?
-         WHERE t.user_id = ? OR m.user_id = ?
-         ORDER BY t.updated_at DESC`
-      )
-      .all(userId, userId, userId) as TeamRow[];
+    const rows = tenantId
+      ? (db
+          .prepare(
+            `SELECT DISTINCT t.*
+             FROM teams t
+             LEFT JOIN team_memberships m ON m.team_id = t.id AND m.user_id = ? AND m.tenant_id = ?
+             WHERE (t.user_id = ? OR m.user_id = ?) AND t.tenant_id = ?
+             ORDER BY t.updated_at DESC`
+          )
+          .all(userId, tenantId, userId, userId, tenantId) as TeamRow[])
+      : (db
+          .prepare(
+            `SELECT DISTINCT t.*
+             FROM teams t
+             LEFT JOIN team_memberships m ON m.team_id = t.id AND m.user_id = ?
+             WHERE t.user_id = ? OR m.user_id = ?
+             ORDER BY t.updated_at DESC`
+          )
+          .all(userId, userId, userId) as TeamRow[]);
     return rows.map(rowToTeam);
   }
 
@@ -173,9 +188,10 @@ export class SqliteTeamRepository implements ITeamRepository {
     const db = await this.getDb();
     db.prepare(
       `UPDATE teams
-       SET name = ?, workspace = ?, workspace_mode = ?, lead_agent_id = ?, agents = ?, updated_at = ?
+       SET tenant_id = ?, name = ?, workspace = ?, workspace_mode = ?, lead_agent_id = ?, agents = ?, updated_at = ?
        WHERE id = ?`
     ).run(
+      merged.tenantId,
       merged.name,
       merged.workspace,
       merged.workspaceMode,

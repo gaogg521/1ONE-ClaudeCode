@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tasks — 任务看板（团队版）
  * - user: 只看/操作自己的任务
  * - admin: 看全部，可按成员过滤
@@ -208,7 +208,7 @@ const TasksPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [scope, setScope] = useState<WorkspaceScope>(() => resolveWorkspaceScope(location.search));
-  const { hasJoinedEnterprise, isEnterpriseEdition, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
+  const { hasJoinedEnterprise, isEnterpriseEdition, showTeamsFeature, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
   const enterpriseMode = useWebuiEnterpriseMode();
   const {
     teamId: scopedTeamId,
@@ -257,8 +257,8 @@ const TasksPage: React.FC = () => {
       if (!raw) return;
       const old: IKanbanTask[] = JSON.parse(raw);
       if (!Array.isArray(old) || old.length === 0) return;
-      for (const t of old) {
-        await kanbanApi.create({ subject: t.subject, status: t.status, active_form: t.active_form, session_name: t.session_name, assigned_to: t.assigned_to });
+      for (const task of old) {
+        await kanbanApi.create({ subject: task.subject, status: task.status, active_form: task.active_form, session_name: task.session_name, assigned_to: task.assigned_to });
       }
       localStorage.removeItem('1one_tasks');
     } catch {
@@ -286,8 +286,9 @@ const TasksPage: React.FC = () => {
   }, [migrateLocalStorage, loadMe, loadTasks, loadConversations, loadUsers]);
 
   useEffect(() => {
-    setScope(resolveWorkspaceScope(location.search));
-  }, [location.search]);
+    const nextScope = resolveWorkspaceScope(location.search);
+    setScope(!showTeamsFeature && nextScope === 'team' ? 'personal' : nextScope);
+  }, [location.search, showTeamsFeature]);
 
   const openAdd = () => {
     setEditing(null);
@@ -363,6 +364,9 @@ const TasksPage: React.FC = () => {
       return !isTeamConversationId(task.session_name, conversations);
     }
     if (scope === 'team') {
+      if (!showTeamsFeature) {
+        return false;
+      }
       if (!isTeamConversationId(task.session_name, conversations)) {
         return false;
       }
@@ -377,15 +381,16 @@ const TasksPage: React.FC = () => {
   });
   const byStatus = (s: TaskStatus) => visibleTasks.filter((t) => t.status === s);
   const convList = Array.from(conversations.values()).filter((conversation) =>
-    matchesConversationScope(conversation, scope, scopedTeamId)
+    matchesConversationScope(conversation, !showTeamsFeature && scope === 'team' ? 'personal' : scope, scopedTeamId)
   );
   const defaultScopedConversationId =
     scope === 'team' && scopedTeamId ? (convList[0]?.id ?? '') : '';
   const userList = Array.from(users.values());
 
   const applyScope = (nextScope: WorkspaceScope) => {
-    setScope(nextScope);
-    navigate(buildWorkspaceScopePath(location.pathname, location.search, nextScope), { replace: true });
+    const resolvedScope = !showTeamsFeature && nextScope === 'team' ? 'personal' : nextScope;
+    setScope(resolvedScope);
+    navigate(buildWorkspaceScopePath(location.pathname, location.search, resolvedScope), { replace: true });
   };
 
   if (loading) {
@@ -478,7 +483,7 @@ const TasksPage: React.FC = () => {
         </div>
       ) : null}
 
-      {hasJoinedEnterprise ? (
+      {showTeamsFeature ? (
         <div className='mb-16px flex items-center justify-between gap-12px flex-wrap'>
           <div className='text-12px text-t-tertiary'>
             {t('common.workspace.scopeHint', {

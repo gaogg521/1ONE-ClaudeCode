@@ -4,14 +4,16 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import TeamPage from './TeamPage';
+import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 
 const TeamIndex: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { identity, showTeamsFeature } = useEditionFeatures();
 
   const { data: team, isLoading, error } = useSWR(
-    id ? `team/${id}` : null,
-    () => ipcBridge.team.get.invoke({ id: id! })
+    showTeamsFeature && id ? `team/${identity.tenantId}/${id}` : null,
+    () => ipcBridge.team.get.invoke({ id: id!, tenantId: identity.tenantId })
   );
 
   if (isLoading) return (

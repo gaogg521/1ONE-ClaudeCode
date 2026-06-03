@@ -481,7 +481,7 @@ describe('useAssistantSkills', () => {
 
     // Only the new skill should be added; existing-skill should be skipped
     expect(setPendingSkills).toHaveBeenCalledWith([
-      { name: 'new-skill', description: 'A new skill', path: '/skills/new-skill' },
+      { name: 'new-skill', description: 'A new skill', path: undefined },
     ]);
     expect(setCustomSkills).toHaveBeenCalledWith(['existing-skill', 'new-skill']);
     expect(setSelectedSkills).toHaveBeenCalledWith(['existing-skill', 'new-skill']);

@@ -78,6 +78,7 @@ describe('WorkspacePage', () => {
     editionFeaturesMock.mockReturnValue({
       hasJoinedEnterprise: true,
       showEnterpriseAdminNav: true,
+      showTeamsFeature: true,
       tenantLabel: '欢乐互娱有限公司',
     });
 
@@ -86,7 +87,7 @@ describe('WorkspacePage', () => {
     expect(screen.getByTestId('page-content-shell-content')).toBeInTheDocument();
     expect(screen.getByText('企业协同与平台能力')).toBeInTheDocument();
     expect(screen.getByText('企业能力总览')).toBeInTheDocument();
-    expect(screen.getByText('Issues')).toBeInTheDocument();
+    expect(screen.getByText('敏捷 Issues')).toBeInTheDocument();
     expect(screen.getByText('共享会话')).toBeInTheDocument();
     expect(screen.getByText('共享任务')).toBeInTheDocument();
     expect(screen.getByText('CCI 流水线')).toBeInTheDocument();
@@ -98,6 +99,7 @@ describe('WorkspacePage', () => {
     editionFeaturesMock.mockReturnValue({
       hasJoinedEnterprise: true,
       showEnterpriseAdminNav: true,
+      showTeamsFeature: true,
       tenantLabel: '欢乐互娱有限公司',
     });
 
@@ -121,6 +123,7 @@ describe('WorkspacePage', () => {
     editionFeaturesMock.mockReturnValue({
       hasJoinedEnterprise: true,
       showEnterpriseAdminNav: true,
+      showTeamsFeature: true,
       tenantLabel: '欢乐互娱有限公司',
     });
     window.sessionStorage.setItem('workspace:last-active-team-scope', JSON.stringify({ teamId: 'team-1', teamName: 'Alpha Team' }));

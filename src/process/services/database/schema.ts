@@ -121,6 +121,24 @@ export function initSchema(db: ISqliteDriver): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_teams_user_id ON teams(user_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_teams_updated_at ON teams(updated_at)');
 
+  // Personal agents table (个人智能体，独立于企业 Team)
+  db.exec(`CREATE TABLE IF NOT EXISTS personal_agents (
+    id TEXT PRIMARY KEY,
+    owner_user_id TEXT NOT NULL,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
+    name TEXT NOT NULL,
+    description TEXT,
+    agent_type TEXT NOT NULL,
+    conversation_type TEXT NOT NULL,
+    custom_agent_id TEXT,
+    cli_path TEXT,
+    automation_config TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_personal_agents_owner ON personal_agents(owner_user_id, updated_at DESC)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_personal_agents_tenant ON personal_agents(tenant_id)');
+
   // Tenants table（企业/租户）
   db.exec(`CREATE TABLE IF NOT EXISTS tenants (
     id TEXT PRIMARY KEY,
@@ -469,4 +487,4 @@ export function setDatabaseVersion(db: ISqliteDriver, version: number): void {
  * Current database schema version
  * Update this when adding new migrations in migrations.ts
  */
-export const CURRENT_DB_VERSION = 46;
+export const CURRENT_DB_VERSION = 49;

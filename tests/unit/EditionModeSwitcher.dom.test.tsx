@@ -9,6 +9,7 @@ const authState = vi.hoisted(() => ({
 const enterpriseModeState = vi.hoisted(() => ({
   loading: false,
   hasJoinedEnterprise: true,
+  hasInstanceEnterprise: true,
   managementMode: 'enterprise',
   enterpriseContext: { tenantId: 'tenant-1', tenantName: 'Acme Corp' },
   setManagementMode: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
+  useLocation: () => ({ pathname: '/workspace', search: '' }),
 }));
 
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({
@@ -67,9 +69,12 @@ vi.mock('@arco-design/web-react', () => ({
     </button>
   ),
   Popover: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  Radio: {
-    Group: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  },
+  Radio: Object.assign(
+    ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    {
+      Group: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    }
+  ),
   Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
   Tooltip: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -82,6 +87,7 @@ describe('EditionModeSwitcher', () => {
     authState.status = 'authenticated';
     enterpriseModeState.loading = false;
     enterpriseModeState.hasJoinedEnterprise = true;
+    enterpriseModeState.hasInstanceEnterprise = true;
     enterpriseModeState.managementMode = 'enterprise';
     enterpriseModeState.enterpriseContext = { tenantId: 'tenant-1', tenantName: 'Acme Corp' };
     enterpriseModeState.showEnterpriseAdminNav = false;
@@ -90,19 +96,23 @@ describe('EditionModeSwitcher', () => {
 
   it('shows enterprise guest status in compact mode when instance joined but user not signed in', () => {
     authState.status = 'unauthenticated';
+    enterpriseModeState.hasJoinedEnterprise = false;
+    enterpriseModeState.hasInstanceEnterprise = true;
 
     render(<EditionModeSwitcher variant='compact' />);
 
-    expect(screen.getByText('企业实例 · Acme Corp')).toBeTruthy();
-    expect(screen.getByText('登录企业账号')).toBeTruthy();
+    expect(screen.getByText('企业团队版')).toBeTruthy();
+    expect(screen.queryByText('登录企业账号')).toBeNull();
   });
 
   it('shows enterprise guest status in bar mode when instance joined but user not signed in', () => {
     authState.status = 'unauthenticated';
+    enterpriseModeState.hasJoinedEnterprise = false;
+    enterpriseModeState.hasInstanceEnterprise = true;
 
     render(<EditionModeSwitcher variant='bar' />);
 
-    expect(screen.getByText('企业实例 · Acme Corp')).toBeTruthy();
+    expect(screen.getByText('实例已接入 · 待登录')).toBeTruthy();
     expect(screen.getByText('登录企业账号')).toBeTruthy();
   });
 });

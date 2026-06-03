@@ -13,6 +13,7 @@ import type { WorkspaceStateDetail } from '@renderer/utils/workspace/workspaceEv
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import { isElectronDesktop, isMacOS } from '@/renderer/utils/platform';
 import './titlebar.css';
 
@@ -35,6 +36,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const layout = useLayoutContext();
   const auth = useAuth();
   const enterpriseMode = useWebuiEnterpriseMode();
+  const { identity } = useEditionFeatures();
   const location = useLocation();
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -144,7 +146,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
     if (teamId) {
       let cancelled = false;
       void ipcBridge.team.get
-        .invoke({ id: teamId })
+        .invoke({ id: teamId, tenantId: identity.tenantId })
         .then((team) => {
           if (cancelled) return;
           setMobileCenterTitle(team?.name || appTitle);
@@ -181,7 +183,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
     return () => {
       cancelled = true;
     };
-  }, [appTitle, layout?.isMobile, location.pathname]);
+  }, [appTitle, identity.tenantId, layout?.isMobile, location.pathname]);
 
   useEffect(() => {
     if (!layout?.isMobile) {

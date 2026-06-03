@@ -179,7 +179,7 @@ const AionModal: React.FC<AionModalProps> = ({
   const { fontScale } = useThemeContext();
   const { t } = useTranslation();
   // 处理 contentStyle 配置，转换为 CSS 变量
-  const contentBg = contentStyle?.background || 'var(--bg-1)';
+  const contentBg = contentStyle?.background || 'var(--color-bg-2, var(--bg-1))';
   const contentBorderRadius = contentStyle?.borderRadius || '16px';
   const contentPadding = contentStyle?.padding || '0';
   const contentOverflow = contentStyle?.overflow || 'auto';

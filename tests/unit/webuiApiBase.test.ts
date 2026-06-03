@@ -41,7 +41,13 @@ describe('webuiApiBase', () => {
       electronAPI: {
         webuiGetStatus: vi.fn().mockResolvedValue({
           success: true,
-          data: { running: true, port: 25809 },
+          data: {
+            running: true,
+            port: 25809,
+            localUrl: 'http://localhost:25809',
+            networkUrl: 'http://172.29.128.120:25809',
+            lanIP: '172.29.128.120',
+          },
         }),
       },
     });
@@ -63,10 +69,29 @@ describe('webuiApiBase', () => {
     const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
     const headers = new Headers((init as RequestInit | undefined)?.headers);
 
-    expect(url).toBe('http://127.0.0.1:25809/api/admin/skills');
+    expect(url).toBe('http://localhost:25809/api/admin/skills');
     expect((init as RequestInit | undefined)?.credentials).toBe('include');
     expect(headers.get('authorization')).toBe('Bearer browser-synced-token');
     expect(headers.get('x-one-client')).toBe('electron-desktop');
     expect(captureCsrfTokenFromResponseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to LAN origin when loopback fetch fails', async () => {
+    vi.mocked(fetch)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'x-csrf-token': 'csrf-token' },
+        })
+      );
+
+    await fetchWebuiApi('/api/admin/skills');
+
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe('http://localhost:25809/api/admin/skills');
+    expect(vi.mocked(fetch).mock.calls[1]?.[0]).toBe('http://127.0.0.1:25809/api/admin/skills');
+    expect(vi.mocked(fetch).mock.calls[2]?.[0]).toBe('http://172.29.128.120:25809/api/admin/skills');
   });
 });

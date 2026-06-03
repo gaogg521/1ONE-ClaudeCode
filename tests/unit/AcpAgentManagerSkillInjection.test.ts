@@ -54,7 +54,9 @@ vi.mock('@process/utils/initStorage', () => ({
 vi.mock('@process/utils/message', () => ({
   addMessage: vi.fn(),
   addOrUpdateMessage: vi.fn(),
-  nextTickToLocalFinish: vi.fn(),
+  nextTickToLocalFinish: vi.fn((fn: () => void) => {
+    fn();
+  }),
 }));
 
 vi.mock('@process/utils/previewUtils', () => ({
@@ -117,6 +119,27 @@ vi.mock('@process/utils/initAgent', () => ({
 vi.mock('@process/task/agentUtils', () => ({
   prepareFirstMessageWithSkillsIndex: mockPrepareFirstMessage,
   buildSystemInstructions: vi.fn(async () => undefined),
+  prepareFirstMessage: vi.fn(async (content: string, config?: { presetContext?: string }) => {
+    if (config?.presetContext) {
+      return `[Assistant Rules - You MUST follow these instructions]\n${config.presetContext}\n\n[User Request]\n${content}`;
+    }
+    return content;
+  }),
+}));
+
+vi.mock('@process/services/agentToolkit/config', () => ({
+  getAgentToolkitConfig: vi.fn(async () => ({
+    enabled: true,
+    codegraphEnabled: false,
+    codegraphAutoIndex: false,
+    agentBrowserAutoInstall: false,
+    superpowersHooksEnabled: false,
+    injectSkillsForAllAgents: false,
+  })),
+}));
+
+vi.mock('@process/services/agentToolkit/superpowersHooks', () => ({
+  getSuperpowersSessionContext: vi.fn(async () => null),
 }));
 
 // Mock AcpAgent class

@@ -21,6 +21,7 @@ const describeOrSkip = nativeModuleAvailable ? describe : describe.skip;
 function makeTeam(overrides: Partial<TTeam> = {}): TTeam {
   return {
     id: 'team-1',
+    tenantId: 'tenant-1',
     userId: 'user-1',
     name: 'Test Team',
     workspace: '/tmp/workspace',
@@ -80,6 +81,31 @@ describeOrSkip('SqliteTeamRepository', () => {
     await repo.create(makeTeam({ id: 'team-2', name: 'Team 2' }));
     const list = await repo.findAll('user-1');
     expect(list).toHaveLength(2);
+  });
+
+  it('lists teams within the requested tenant boundary', async () => {
+    await repo.create(makeTeam({ id: 'team-1', tenantId: 'tenant-1' }));
+    await repo.create(makeTeam({ id: 'team-2', tenantId: 'tenant-2' }));
+
+    const list = await repo.findAll('user-1', 'tenant-1');
+
+    expect(list.map((team) => team.id)).toEqual(['team-1']);
+  });
+
+  it('does not read teams across tenant ids', async () => {
+    await repo.create(makeTeam({ id: 'team-1', tenantId: 'tenant-1' }));
+
+    await expect(repo.findById('team-1', 'tenant-2')).resolves.toBeNull();
+  });
+
+  it('writes owner membership with the team tenant id', async () => {
+    await repo.create(makeTeam({ id: 'team-1', tenantId: 'tenant-1' }));
+
+    const row = driver
+      .prepare('SELECT tenant_id FROM team_memberships WHERE team_id = ? AND user_id = ?')
+      .get('team-1', 'user-1') as { tenant_id: string };
+
+    expect(row.tenant_id).toBe('tenant-1');
   });
 
   it('updates a team', async () => {

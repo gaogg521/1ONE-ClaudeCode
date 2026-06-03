@@ -89,6 +89,8 @@ export interface IPaginatedResult<T> {
  */
 export interface IConversationRow {
   id: string;
+  tenant_id?: string;
+  team_id?: string | null;
   user_id: string;
   name: string;
   type: string;
@@ -135,8 +137,13 @@ export interface IConfigRow {
  * Convert TChatConversation to database row
  */
 export function conversationToRow(conversation: TChatConversation, userId: string): IConversationRow {
+  const extra = conversation.extra as Record<string, unknown>;
+  const tenantId = typeof extra.tenantId === 'string' && extra.tenantId.trim() ? extra.tenantId.trim() : 'default';
+  const teamId = typeof extra.teamId === 'string' && extra.teamId.trim() ? extra.teamId.trim() : null;
   return {
     id: conversation.id,
+    tenant_id: tenantId,
+    team_id: teamId,
     user_id: userId,
     name: conversation.name,
     type: conversation.type,

@@ -10,7 +10,7 @@ import { SERVER_CONFIG } from '@process/webserver/config/constants';
 import { WebuiService } from './services/WebuiService';
 import { generateQRLoginUrlDirect, verifyQRTokenDirect } from './webuiQR';
 // 预加载 webserver 模块避免启动时延迟 / Preload webserver module to avoid startup delay
-import { startWebServerWithInstance } from '@process/webserver/index';
+import { closeAdminWebListener, startWebServerWithInstance } from '@process/webserver/index';
 import { cleanupWebAdapter } from '@process/webserver/adapter';
 
 export { generateQRLoginUrlDirect, verifyQRTokenDirect };
@@ -105,6 +105,17 @@ export function initWebuiBridge(): void {
     }, 'Create enterprise');
   });
 
+  webui.setEnterpriseApiOrigins.provider(async ({ origins }) => {
+    return WebuiService.handleAsync(async () => {
+      const { ProcessConfig } = await import('@process/utils/initStorage');
+      const { mergeEnterpriseApiOrigins } = await import('@/common/config/enterpriseApiOrigins');
+      const stored =
+        ((await ProcessConfig.get('webui.enterpriseApiOrigins').catch(() => [])) as string[] | undefined) ?? [];
+      await ProcessConfig.set('webui.enterpriseApiOrigins', mergeEnterpriseApiOrigins(stored, origins));
+      return { success: true, data: { ok: true as const } };
+    }, 'Set enterprise API origins');
+  });
+
   // 启动 WebUI / Start WebUI
   webui.start.provider(async ({ port: requestedPort, allowRemote }) => {
     try {
@@ -119,6 +130,7 @@ export function initWebuiBridge(): void {
             // Force resolve after 2s to avoid hanging
             setTimeout(resolve, 2000);
           });
+          await closeAdminWebListener();
           cleanupWebAdapter();
         } catch (err) {
           console.warn('[WebUI Bridge] Error stopping previous server:', err);
@@ -147,6 +159,9 @@ export function initWebuiBridge(): void {
         port: actualPort,
         localUrl,
         networkUrl,
+        adminPort: status.adminPort,
+        adminLocalUrl: status.adminLocalUrl,
+        adminNetworkUrl: status.adminNetworkUrl,
       });
 
       return {
@@ -157,6 +172,9 @@ export function initWebuiBridge(): void {
           networkUrl,
           lanIP: lanIP ?? undefined,
           initialPassword,
+          adminPort: status.adminPort,
+          adminLocalUrl: status.adminLocalUrl,
+          adminNetworkUrl: status.adminNetworkUrl,
         },
       };
     } catch (error) {
@@ -192,6 +210,8 @@ export function initWebuiBridge(): void {
           else resolve();
         });
       });
+
+      await closeAdminWebListener();
 
       // 清理 WebSocket 广播注册 / Cleanup WebSocket broadcaster registration
       cleanupWebAdapter();

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -13,12 +13,15 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import type { WebuiManagementMode } from '@/common/config/webuiEnterpriseConfig';
 import type { WorkspaceUserProfile } from '@/common/types/workspaceProfile';
 import { ANONYMOUS_WORKSPACE_USER_ID } from '@/common/types/workspaceProfile';
-import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { isDesktopOperatorUser, useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useWorkspaceUserProfile } from '@/renderer/hooks/enterprise/useWorkspaceUserProfile';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { openAdminConsole } from '@/renderer/utils/openAdminConsole';
+import { buildWebuiAdminLoginPath } from '@/renderer/utils/enterpriseLoginNavigation';
+import { appNavigate } from '@/renderer/utils/appNavigate';
+import { navigateAfterEditionSwitch } from '@/renderer/utils/editionSwitchNavigation';
 import styles from './WorkspaceIdentityPanel.module.css';
 
 type WorkspaceIdentityPanelProps = {
@@ -257,25 +260,47 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
 
   const switchEdition = useCallback(
     (next: WebuiManagementMode) => {
-      void enterpriseMode.setManagementMode(next).then(async () => {
-        if (next === 'enterprise') {
-          if (isDesktop && !enterpriseMode.hasJoinedEnterprise) {
-            void navigate('/enterprise/join');
-            return;
-          }
-          if (auth.status !== 'authenticated') {
-            void navigate('/enterprise/join');
-            return;
-          }
+      void enterpriseMode.setManagementMode(next).then(() => {
+        navigateAfterEditionSwitch({
+          next,
+          navigate,
+          isDesktop,
+          hasJoinedEnterprise: enterpriseMode.hasJoinedEnterprise,
+          hasInstanceEnterprise: enterpriseMode.hasInstanceEnterprise,
+          isAuthenticated: auth.status === 'authenticated',
+          isDesktopOperator: isDesktopOperatorUser(auth.user),
+          currentPath: location.pathname,
+          onAlreadyAtTarget: () => {
+            Message.info(
+              t('settings.edition.switchAlreadyHere', {
+                defaultValue: next === 'enterprise' ? '已切换到企业团队版视图' : '已切换到个人版视图',
+              })
+            );
+          },
+        });
+        if (
+          next === 'enterprise' &&
+          isDesktop &&
+          isDesktopOperatorUser(auth.user) &&
+          !enterpriseMode.hasJoinedEnterprise &&
+          enterpriseMode.hasInstanceEnterprise
+        ) {
+          Message.info(
+            t('settings.edition.desktopOperatorSwitched', {
+              defaultValue: '已切换到企业团队版视图。如需以组织成员身份操作，请登录企业账号。',
+            })
+          );
         }
-        void navigate('/sessions');
       });
     },
     [
       auth.status,
+      auth.user,
       enterpriseMode,
       isDesktop,
+      location.pathname,
       navigate,
+      t,
     ]
   );
 
@@ -308,14 +333,19 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
   const isGuest = profile.userId === ANONYMOUS_WORKSPACE_USER_ID;
   const enterpriseGuestTenantLabel =
     enterpriseMode.enterpriseContext?.tenantName ?? enterpriseMode.enterpriseContext?.tenantId ?? null;
-  const isEnterpriseGuest = isGuest && enterpriseMode.hasJoinedEnterprise && Boolean(enterpriseGuestTenantLabel);
+  const isEnterpriseGuest =
+    isGuest &&
+    enterpriseMode.managementMode === 'enterprise' &&
+    enterpriseMode.hasInstanceEnterprise &&
+    !enterpriseMode.hasJoinedEnterprise &&
+    Boolean(enterpriseGuestTenantLabel);
 
   const handleGuestEnterpriseLogin = () => {
     const returnTo =
       location.pathname.startsWith('/login') || location.pathname.startsWith('/enterprise/join')
         ? '/sessions'
         : `${location.pathname}${location.search}`;
-    void enterpriseMode.startEnterpriseLogin((path) => navigate(path), returnTo);
+    void enterpriseMode.startEnterpriseLogin((path) => appNavigate(navigate, path), returnTo);
   };
 
   const handleGuestJoin = () => {
@@ -324,7 +354,7 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
       return;
     }
     void enterpriseMode.setManagementMode('enterprise').then(() => {
-      void navigate('/enterprise/join');
+      appNavigate(navigate, '/enterprise/join');
     });
   };
 
@@ -333,7 +363,7 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
       location.pathname.startsWith('/login') || location.pathname.startsWith('/enterprise/join')
         ? '/sessions'
         : `${location.pathname}${location.search}`;
-    void navigate('/login', { state: { returnTo } });
+    void navigate(buildWebuiAdminLoginPath(returnTo), { state: { returnTo } });
   };
 
   const handleLogout = async () => {
@@ -356,7 +386,16 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
       return;
     }
     void enterpriseMode.setManagementMode('enterprise').then(() => {
-      void navigate('/enterprise/join');
+      navigateAfterEditionSwitch({
+        next: 'enterprise',
+        navigate,
+        isDesktop,
+        hasJoinedEnterprise: enterpriseMode.hasJoinedEnterprise,
+        hasInstanceEnterprise: enterpriseMode.hasInstanceEnterprise,
+        isAuthenticated: auth.status === 'authenticated',
+        isDesktopOperator: isDesktopOperatorUser(auth.user),
+        currentPath: location.pathname,
+      });
     });
   };
 

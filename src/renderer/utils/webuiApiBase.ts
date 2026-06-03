@@ -7,17 +7,80 @@
 import { captureCsrfTokenFromResponse, getCsrfToken, withCsrfHeader } from '@process/webserver/middleware/csrfClient';
 import { webui } from '@/common/adapter/ipcBridge';
 import {
+  buildWebuiApiBaseCandidates,
+  type WebuiServerAddressSnapshot,
+} from '@/common/config/webuiApiBaseCandidates';
+import { resolveWebuiAdminPort } from '@/common/config/webuiLoginAccess';
+import {
   ONE_WEBUI_CLIENT_DESKTOP,
   ONE_WEBUI_CLIENT_HEADER,
 } from '@/common/config/webuiClientHeaders';
+import { mergeEnterpriseApiOrigins } from '@/common/config/enterpriseApiOrigins';
 import { normalizeEnterpriseApiError } from '@/renderer/utils/enterpriseApi/error';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { readEnterpriseApiOrigins, rememberEnterpriseApiOrigin } from '@/renderer/utils/rememberEnterpriseApiOrigin';
 import { getDesktopWebuiBearerToken } from '@/renderer/utils/syncBrowserWebuiSession';
+
+const AUTH_USER_BACKOFF_MS = 4000;
+let authUserBackoffUntil = 0;
+
+export function shouldSkipAuthUserRequest(): boolean {
+  return Date.now() < authUserBackoffUntil;
+}
+
+export function markAuthUserRequestFailureBackoff(): void {
+  authUserBackoffUntil = Date.now() + AUTH_USER_BACKOFF_MS;
+}
+
+export function clearAuthUserRequestBackoff(): void {
+  authUserBackoffUntil = 0;
+}
+
+type DesktopWebuiStatus = WebuiServerAddressSnapshot & {
+  running?: boolean;
+  allowRemote?: boolean;
+  adminLocalUrl?: string;
+  adminNetworkUrl?: string;
+};
+
+async function readDesktopWebuiStatus(): Promise<DesktopWebuiStatus | null> {
+  try {
+    if (window.electronAPI?.webuiGetStatus) {
+      const result = await window.electronAPI.webuiGetStatus();
+      if (result?.success && result.data?.running && result.data.port) {
+        return result.data;
+      }
+      return null;
+    }
+    const result = await webui.getStatus.invoke();
+    if (result.success && result.data?.running && result.data.port) {
+      return result.data;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
+ * Ordered API origins for the running desktop WebUI (loopback first, then LAN).
+ */
+export async function getWebuiApiBaseCandidates(): Promise<string[]> {
+  if (typeof window === 'undefined' || !isElectronDesktop()) {
+    return [];
+  }
+  const status = await readDesktopWebuiStatus();
+  const stored = await readEnterpriseApiOrigins();
+  if (!status?.port) {
+    return stored;
+  }
+  return mergeEnterpriseApiOrigins(stored, buildWebuiApiBaseCandidates(status));
+}
 
 /**
  * Base URL for WebUI HTTP APIs.
  * - Browser WebUI: current origin
- * - Electron desktop: local WebUI server when running
+ * - Electron desktop: primary loopback origin when WebUI is running
  */
 export async function getWebuiApiBaseUrl(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
@@ -26,26 +89,42 @@ export async function getWebuiApiBaseUrl(): Promise<string | null> {
     return window.location.origin;
   }
 
+  const candidates = await getWebuiApiBaseCandidates();
+  return candidates[0] ?? null;
+}
+
+function normalizeWebuiOrigin(url: string): string | null {
   try {
-    let status: { running?: boolean; port?: number } | null = null;
-    if (window.electronAPI?.webuiGetStatus) {
-      const result = await window.electronAPI.webuiGetStatus();
-      if (result?.success && result.data) {
-        status = result.data;
-      }
-    } else {
-      const result = await webui.getStatus.invoke();
-      if (result.success && result.data) {
-        status = result.data;
-      }
-    }
-    if (status?.running && status.port) {
-      return `http://127.0.0.1:${status.port}`;
-    }
+    return new URL(url).origin;
   } catch {
-    // ignore
+    return null;
   }
-  return null;
+}
+
+/**
+ * Origin for opening the admin WebUI login in a browser (dedicated port when available).
+ */
+export async function getWebuiAdminBrowserOrigin(): Promise<string | null> {
+  if (!isElectronDesktop()) {
+    return typeof window !== 'undefined' ? window.location.origin : null;
+  }
+  const status = await readDesktopWebuiStatus();
+  if (!status?.port) {
+    return null;
+  }
+  if (status.allowRemote && status.adminNetworkUrl) {
+    return normalizeWebuiOrigin(status.adminNetworkUrl);
+  }
+  if (status.adminLocalUrl) {
+    return normalizeWebuiOrigin(status.adminLocalUrl);
+  }
+  const memberPort = status.port;
+  const adminPort = resolveWebuiAdminPort(memberPort);
+  const loopback = `http://127.0.0.1:${adminPort}`;
+  if (status.allowRemote && status.lanIP) {
+    return `http://${status.lanIP}:${adminPort}`;
+  }
+  return normalizeWebuiOrigin(loopback) ?? loopback;
 }
 
 async function getDesktopWebuiAuthHeaders(headers?: HeadersInit): Promise<HeadersInit | undefined> {
@@ -77,40 +156,75 @@ function withCsrfFormData(body: BodyInit | null | undefined): BodyInit | null | 
   return body;
 }
 
-async function ensureCsrfTokenForMutation(base: string, authHeaders: HeadersInit | undefined): Promise<void> {
+async function ensureCsrfTokenForMutation(
+  bases: string[],
+  authHeaders: HeadersInit | undefined
+): Promise<void> {
   if (getCsrfToken()) {
     return;
   }
-  const response = await fetch(`${base}/api/auth/workspace-profile`, {
-    method: 'GET',
-    headers: authHeaders,
-    credentials: 'include',
-  });
-  captureCsrfTokenFromResponse(response);
+  let lastError: unknown = null;
+  for (const candidate of bases) {
+    try {
+      const response = await fetch(`${candidate}/api/auth/login-ui`, {
+        method: 'GET',
+        headers: authHeaders,
+        credentials: 'include',
+      });
+      captureCsrfTokenFromResponse(response);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('WEBUI_NOT_RUNNING');
 }
 
 export async function fetchWebuiApi(path: string, init?: RequestInit): Promise<Response> {
-  const base = await getWebuiApiBaseUrl();
-  if (!base) {
+  const bases = isElectronDesktop() ? await getWebuiApiBaseCandidates() : [window.location.origin];
+  if (bases.length === 0) {
     throw new Error('WEBUI_NOT_RUNNING');
   }
-  const url = path.startsWith('/') ? `${base}${path}` : `${base}/${path}`;
+
   const method = (init?.method ?? 'GET').toUpperCase();
   const authHeaders = await getDesktopWebuiAuthHeaders(init?.headers);
   const isMutation = method !== 'GET' && method !== 'HEAD';
   if (isMutation) {
-    await ensureCsrfTokenForMutation(base, authHeaders);
+    await ensureCsrfTokenForMutation(bases, authHeaders);
   }
   const headers = isMutation ? withCsrfHeader(authHeaders) : authHeaders;
   const body = isMutation ? withCsrfFormData(init?.body ?? null) : init?.body;
-  const response = await fetch(url, {
-    ...init,
-    body,
-    headers,
-    credentials: 'include',
-  });
-  captureCsrfTokenFromResponse(response);
-  return response;
+  const credentials =
+    init?.credentials ??
+    (path === '/api/auth/user' && !getDesktopWebuiBearerToken() ? 'omit' : 'include');
+
+  let lastError: unknown = null;
+  for (const candidate of bases) {
+    const url = path.startsWith('/') ? `${candidate}${path}` : `${candidate}/${path}`;
+    try {
+      const response = await fetch(url, {
+        ...init,
+        body,
+        headers,
+        credentials,
+      });
+      if (path === '/api/auth/user') {
+        if (response.status === 401 || response.status === 403) {
+          markAuthUserRequestFailureBackoff();
+        } else if (response.ok) {
+          clearAuthUserRequestBackoff();
+        }
+      }
+      captureCsrfTokenFromResponse(response);
+      if (response.ok) {
+        void rememberEnterpriseApiOrigin(candidate);
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('WEBUI_NOT_RUNNING');
 }
 
 /** Error thrown by {@link fetchWebuiApiJson} with HTTP metadata when available */

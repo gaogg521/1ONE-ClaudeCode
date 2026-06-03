@@ -1,3 +1,5 @@
+import { ANONYMOUS_WORKSPACE_USER_ID } from '@/common/types/workspaceProfile';
+import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 import type {
   RequirementPriority,
   RequirementRecord,
@@ -129,4 +131,24 @@ export function priorityTagColor(priority: RequirementPriority): string {
 export function formatStatusLabel(status: RequirementStatus, t?: IssueLabelTranslator): string {
   const fallback = STATUS_ZH[status] ?? status;
   return t ? t(`common.issues.status.${status}`, { defaultValue: fallback }) : fallback;
+}
+
+export function formatCreatorDisplayName(
+  issue: Pick<RequirementRecord, 'creator_id' | 'creator_name'>,
+  currentUser?: { id: string; username: string } | null
+): string {
+  const resolved = issue.creator_name?.trim();
+  if (resolved && resolved !== issue.creator_id) {
+    return resolved;
+  }
+  if (currentUser && issue.creator_id === currentUser.id) {
+    return currentUser.username;
+  }
+  if (issue.creator_id === DESKTOP_OPERATOR_USER_ID) {
+    return '本地用户';
+  }
+  if (issue.creator_id === ANONYMOUS_WORKSPACE_USER_ID || issue.creator_id === 'anonymous') {
+    return '访客';
+  }
+  return resolved || issue.creator_id;
 }

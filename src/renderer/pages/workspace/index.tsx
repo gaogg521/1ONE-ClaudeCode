@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Empty, Typography } from '@arco-design/web-react';
 import { Right, Setting } from '@icon-park/react';
@@ -74,7 +74,13 @@ const WorkspacePage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
   const { groupedHistory, conversations } = useConversationHistoryContext();
-  const { hasJoinedEnterprise, showEnterpriseAdminNav, tenantLabel } = useEditionFeatures();
+  const {
+    hasJoinedEnterprise,
+    showTeamsFeature,
+    showEnterpriseAdminNav,
+    showEnterpriseWorkspaceHub,
+    tenantLabel,
+  } = useEditionFeatures();
   const lastActiveTeamScope = useMemo(() => readLastActiveTeamScope(), []);
 
   const workspaceEntries = useMemo<WorkspaceEntry[]>(() => {
@@ -127,7 +133,8 @@ const WorkspacePage: React.FC = () => {
   const enterpriseCards = useMemo(
     () =>
       [
-        {
+        showTeamsFeature
+          ? {
           key: 'overview',
           title: t('common.workspace.hub.enterpriseOverviewTitle', {
             defaultValue: '企业能力总览',
@@ -136,18 +143,20 @@ const WorkspacePage: React.FC = () => {
             defaultValue: '打开企业协同、研发平台能力与组织治理入口。',
           }),
           path: '/enterprise',
-        },
+        }
+          : null,
         {
           key: 'cteam',
           title: t('common.workspace.hub.enterpriseKanbanTitle', {
-            defaultValue: 'Issues',
+            defaultValue: '敏捷 Issues',
           }),
           description: t('common.workspace.hub.enterpriseKanbanDesc', {
-            defaultValue: '进入统一的 Issue 工作台，查看状态、拆解结果与协作上下文。',
+            defaultValue: '与侧栏 Issues 相同的需求工作台，查看状态、拆解结果与协作评论。',
           }),
           path: '/issues',
         },
-        {
+        showTeamsFeature
+          ? {
           key: 'shared-sessions',
           title: t('common.workspace.hub.enterpriseSharedSessionsTitle', {
             defaultValue: '共享会话',
@@ -156,8 +165,10 @@ const WorkspacePage: React.FC = () => {
             defaultValue: '直接进入主工作台里的团队协同会话范围。',
           }),
           path: buildSharedWorkspaceScopePath('/sessions', lastActiveTeamScope),
-        },
-        {
+        }
+          : null,
+        showTeamsFeature
+          ? {
           key: 'shared-tasks',
           title: t('common.workspace.hub.enterpriseSharedTasksTitle', {
             defaultValue: '共享任务',
@@ -166,7 +177,8 @@ const WorkspacePage: React.FC = () => {
             defaultValue: '直接进入主工作台里的团队协同任务范围。',
           }),
           path: buildSharedWorkspaceScopePath('/tasks', lastActiveTeamScope),
-        },
+        }
+          : null,
         {
           key: 'cagent',
           title: t('common.workspace.hub.enterpriseAgentTitle', {
@@ -175,7 +187,7 @@ const WorkspacePage: React.FC = () => {
           description: t('common.workspace.hub.enterpriseAgentDesc', {
             defaultValue: '直接处理当前 Issue、查看运行结果，并在需要时进入协作调度。',
           }),
-          path: '/super-assistant?tab=workspace',
+          path: '/super-assistant?tab=overview',
         },
         showEnterpriseAdminNav
           ? {
@@ -202,7 +214,7 @@ const WorkspacePage: React.FC = () => {
             }
           : null,
       ].filter((item): item is { key: string; title: string; description: string; path: string } => Boolean(item)),
-    [lastActiveTeamScope, showEnterpriseAdminNav, t]
+    [lastActiveTeamScope, showEnterpriseAdminNav, showTeamsFeature, t]
   );
 
   return (
@@ -224,7 +236,7 @@ const WorkspacePage: React.FC = () => {
         </Button>
       </div>
 
-      {hasJoinedEnterprise ? (
+      {showEnterpriseWorkspaceHub ? (
         <div className='mt-16px mb-20px'>
           <div className='flex items-center justify-between gap-12px flex-wrap mb-10px'>
             <div className='min-w-0'>

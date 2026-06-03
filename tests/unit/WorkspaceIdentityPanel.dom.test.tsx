@@ -11,10 +11,12 @@ const enterpriseModeState = vi.hoisted(() => ({
   effectiveRole: 'member',
   showEnterpriseAdminNav: false,
   hasJoinedEnterprise: true,
+  hasInstanceEnterprise: true,
   managementMode: 'enterprise',
   enterpriseContext: { tenantId: 'tenant-1', tenantName: 'Acme Corp' },
   setManagementMode: vi.fn(),
   openEnterpriseAdminInBrowser: vi.fn(),
+  startEnterpriseLogin: vi.fn(),
 }));
 const profileState = vi.hoisted(() => ({
   visible: true,
@@ -110,7 +112,8 @@ describe('WorkspaceIdentityPanel', () => {
     authState.user = { id: 'user-1', username: 'alice', role: 'member' };
     enterpriseModeState.effectiveRole = 'member';
     enterpriseModeState.showEnterpriseAdminNav = false;
-    enterpriseModeState.hasJoinedEnterprise = true;
+    enterpriseModeState.hasJoinedEnterprise = false;
+    enterpriseModeState.hasInstanceEnterprise = true;
     enterpriseModeState.managementMode = 'enterprise';
     enterpriseModeState.enterpriseContext = { tenantId: 'tenant-1', tenantName: 'Acme Corp' };
     profileState.visible = true;
@@ -148,7 +151,8 @@ describe('WorkspaceIdentityPanel', () => {
   it('shows enterprise pending-login identity when enterprise is connected but user is not signed in', () => {
     authState.status = 'unauthenticated';
     authState.user = null;
-    enterpriseModeState.hasJoinedEnterprise = true;
+    enterpriseModeState.hasJoinedEnterprise = false;
+    enterpriseModeState.hasInstanceEnterprise = true;
     enterpriseModeState.managementMode = 'enterprise';
     enterpriseModeState.enterpriseContext = { tenantId: 'tenant-1', tenantName: 'Acme Corp' };
     profileState.profile = {
@@ -168,5 +172,32 @@ describe('WorkspaceIdentityPanel', () => {
     render(<WorkspaceIdentityPanel />);
     expect(screen.getByText('请登录企业账号')).toBeTruthy();
     expect(screen.getByText('Acme Corp · 登录后显示姓名与组织架构')).toBeTruthy();
+  });
+
+  it('keeps personal guest identity in personal edition even when instance is connected to enterprise', () => {
+    authState.status = 'unauthenticated';
+    authState.user = null;
+    enterpriseModeState.hasJoinedEnterprise = true;
+    enterpriseModeState.hasInstanceEnterprise = true;
+    enterpriseModeState.managementMode = 'standalone';
+    enterpriseModeState.enterpriseContext = { tenantId: 'tenant-1', tenantName: 'Acme Corp' };
+    profileState.profile = {
+      userId: 'anonymous',
+      username: 'Guest',
+      email: null,
+      role: 'member',
+      tenantId: 'default',
+      tenantName: null,
+      joinedEnterprise: false,
+      avatarUrl: null,
+      orgUnitPath: null,
+      teams: [],
+      updatedAt: Date.now(),
+    };
+
+    render(<WorkspaceIdentityPanel />);
+    expect(screen.getByText('访客')).toBeTruthy();
+    expect(screen.getByText('个人版 · 未登录')).toBeTruthy();
+    expect(screen.queryByText('请登录企业账号')).toBeNull();
   });
 });

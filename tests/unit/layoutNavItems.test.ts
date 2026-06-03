@@ -6,26 +6,55 @@ import {
 } from '@/renderer/components/layout/sidebarNav';
 
 describe('getSidebarNavItems', () => {
-  it('shows the issues entry to joined enterprise members', () => {
-    const items = getSidebarNavItems(true, false);
+  const personalGate = {
+    can: (capability: string) =>
+      [
+        'personal.workspace',
+        'issues.personal',
+        'personal.agents',
+        'skills.local',
+        'mcp.personal',
+      ].includes(capability),
+  };
+
+  const teamGate = {
+    can: (capability: string) =>
+      [
+        'personal.workspace',
+        'issues.personal',
+        'personal.agents',
+        'skills.local',
+        'mcp.personal',
+        'enterprise.workspace',
+        'teams.collaboration',
+        'issues.teamPlanning',
+        'workspace.agents',
+        'skills.org',
+        'mcp.org',
+        'admin.console',
+      ].includes(capability),
+  };
+
+  it('shows the issues entry for personal users', () => {
+    const items = getSidebarNavItems(personalGate);
 
     expect(items.some((item) => item.path === '/issues')).toBe(true);
   });
 
-  it('shows the agent assistant entry to joined enterprise members', () => {
-    const items = getSidebarNavItems(true, false);
+  it('shows the agent assistant entry for personal users', () => {
+    const items = getSidebarNavItems(personalGate);
 
     expect(items.some((item) => item.path === '/super-assistant')).toBe(true);
   });
 
-  it('shows the skills entry to joined enterprise members', () => {
-    const items = getSidebarNavItems(true, false);
+  it('shows the skills entry for personal users', () => {
+    const items = getSidebarNavItems(personalGate);
 
     expect(items.some((item) => item.path === '/skills')).toBe(true);
   });
 
-  it('hides standalone task board nav when enterprise is joined (merged into Issues)', () => {
-    const items = getSidebarNavItems(true, false);
+  it('hides standalone task board nav when team planning is available (merged into Issues)', () => {
+    const items = getSidebarNavItems(teamGate);
 
     expect(items.some((item) => item.path === '/tasks')).toBe(false);
     const issues = items.find((item) => item.path === '/issues');
@@ -33,27 +62,15 @@ describe('getSidebarNavItems', () => {
   });
 
   it('keeps standalone task board nav for personal edition', () => {
-    const items = getSidebarNavItems(false, false);
+    const items = getSidebarNavItems(personalGate);
 
     expect(items.some((item) => item.path === '/tasks')).toBe(true);
   });
 
-  it('keeps the issues entry hidden before joining an enterprise', () => {
-    const items = getSidebarNavItems(false, false);
+  it('hides the enterprise console when admin capability is unavailable', () => {
+    const items = getSidebarNavItems(personalGate);
 
-    expect(items.some((item) => item.path === '/issues')).toBe(false);
-  });
-
-  it('keeps the super assistant hidden before joining an enterprise', () => {
-    const items = getSidebarNavItems(false, false);
-
-    expect(items.some((item) => item.path === '/super-assistant')).toBe(false);
-  });
-
-  it('keeps the skills entry hidden before joining an enterprise', () => {
-    const items = getSidebarNavItems(false, false);
-
-    expect(items.some((item) => item.path === '/skills')).toBe(false);
+    expect(items.some((item) => item.path === '/enterprise')).toBe(false);
   });
 });
 

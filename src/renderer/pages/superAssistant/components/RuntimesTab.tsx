@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button, Card } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
+import TeamRuntimeFleetPanel from './TeamRuntimeFleetPanel';
 
 type RuntimesTabProps = {
   totalAgentCount: number;
@@ -8,6 +9,8 @@ type RuntimesTabProps = {
   enabledMcpCount: number;
   onOpenAgentSettings: () => void;
   onOpenModelSettings: () => void;
+  showTeamFleet?: boolean;
+  fleetTeamIds?: string[];
 };
 
 const RuntimesTab: React.FC<RuntimesTabProps> = ({
@@ -16,10 +19,26 @@ const RuntimesTab: React.FC<RuntimesTabProps> = ({
   enabledMcpCount,
   onOpenAgentSettings,
   onOpenModelSettings,
+  showTeamFleet = false,
+  fleetTeamIds,
 }) => {
   const { t } = useTranslation();
 
   return (
+    <div className='space-y-12px'>
+      {showTeamFleet ? (
+        <Card
+          title={t('common.superAssistant.runtimeFleet.title', { defaultValue: '团队运行时' })}
+        >
+          <div className='mb-10px text-12px text-t-tertiary'>
+            {t('common.superAssistant.runtimeFleet.desc', {
+              defaultValue:
+                '加入同一组织（邀请码、邮箱邀请、LDAP/飞书等企业登录）后，成员机器会自动同步到组织服务器，可在此查看机器名、IP 与已安装的 Agent。',
+            })}
+          </div>
+          <TeamRuntimeFleetPanel teamIds={fleetTeamIds} enabled={showTeamFleet} />
+        </Card>
+      ) : null}
     <div className='grid gap-12px md:grid-cols-2'>
       <Card title={t('common.superAssistant.runtimesRuntimeTitle', { defaultValue: '运行时与执行环境' })}>
         <div className='text-12px text-t-tertiary'>
@@ -48,6 +67,7 @@ const RuntimesTab: React.FC<RuntimesTabProps> = ({
           </Button>
         </div>
       </Card>
+    </div>
     </div>
   );
 };

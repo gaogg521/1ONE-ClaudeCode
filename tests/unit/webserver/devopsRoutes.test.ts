@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // 1. Mock 验证中间件，自动放行并注入模拟的用户上下文
 vi.mock('@process/webserver/auth/middleware/TokenMiddleware', () => ({
   TokenMiddleware: {
+    extractToken: vi.fn(() => null),
     validateToken: () => ((req, _res, next) => {
       req.user = { id: 'test-user-id', tenant_id: 'tenant-123', role: 'org_admin' };
       next();
@@ -74,6 +75,31 @@ function getRouteHandler(app: express.Express, method: string, path: string): Re
   return layer?.route?.stack?.at(-1)?.handle as RequestHandler;
 }
 
+async function runRouteStack(app: express.Express, method: string, path: string, req: any, res: any): Promise<void> {
+  const layer = app.router.stack.find(
+    (entry: any) => entry.route?.path === path && entry.route?.methods[method]
+  );
+  const stack = layer?.route?.stack as Array<{ handle: RequestHandler }> | undefined;
+  if (!stack) {
+    throw new Error(`Route ${method.toUpperCase()} ${path} not found`);
+  }
+  const dispatch = async (index: number): Promise<void> => {
+    const entry = stack[index];
+    if (!entry) return;
+    let nextCalled = false;
+    await entry.handle(req, res, (error?: unknown) => {
+      nextCalled = true;
+      if (error) {
+        throw error;
+      }
+    });
+    if (nextCalled) {
+      await dispatch(index + 1);
+    }
+  };
+  await dispatch(0);
+}
+
 describe('devopsRoutes', () => {
   let app: express.Express;
 
@@ -101,7 +127,8 @@ describe('devopsRoutes', () => {
 
       await handler(req, res, () => {});
 
-      expect(mockDriver.prepare).toHaveBeenCalledWith(expect.stringContaining('FROM requirements'));
+      expect(mockDriver.prepare).toHaveBeenCalledWith(expect.stringContaining('creator_name'));
+      expect(mockDriver.prepare).toHaveBeenCalledWith(expect.stringContaining('FROM requirements r'));
       expect(res.json).toHaveBeenCalledWith({
         success: true,
         data: [
@@ -132,6 +159,54 @@ describe('devopsRoutes', () => {
       });
     });
 
+    it('POST /api/admin/requirements - 桌面本机未登录时写入默认工作区', async () => {
+      const req = {
+        headers: { host: '127.0.0.1:25809', 'x-one-client': 'electron-desktop' },
+        ip: '127.0.0.1',
+        socket: { remoteAddress: '127.0.0.1' },
+        body: { type: 'story', subject: 'Personal Story', description: 'desc', priority: 'medium' },
+      } as any;
+      const res = createResponseMock();
+
+      await runRouteStack(app, 'post', '/api/admin/requirements', req, res);
+
+      expect(mockRun).toHaveBeenCalledWith(
+        expect.any(String),
+        'default',
+        null,
+        'story',
+        'Personal Story',
+        'desc',
+        'backlog',
+        'medium',
+        null,
+        null,
+        'desktop-local-admin',
+        expect.any(Number),
+        expect.any(Number)
+      );
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: expect.objectContaining({ id: expect.any(String) }),
+      });
+    });
+
+    it('POST /api/admin/requirements - 远程浏览器未登录时拒绝写入默认工作区', async () => {
+      const req = {
+        headers: { host: '192.168.1.10:25809' },
+        ip: '192.168.1.20',
+        socket: { remoteAddress: '192.168.1.20' },
+        body: { type: 'story', subject: 'Remote Story', description: 'desc', priority: 'medium' },
+      } as any;
+      const res = createResponseMock();
+
+      await runRouteStack(app, 'post', '/api/admin/requirements', req, res);
+
+      expect(mockRun).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({ success: false, message: 'Authentication required' });
+    });
+
     it('PATCH /api/admin/requirements/:id - closes open stage and records process duration on status change', async () => {
       mockGet
         .mockReturnValueOnce({ id: 'req-1' })
@@ -155,6 +230,44 @@ describe('devopsRoutes', () => {
         expect.stringContaining('INSERT INTO value_stream_stages')
       );
       expect(res.json).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('PATCH /api/admin/requirements/:id - 个人未登录时可更新默认工作区 Issue', async () => {
+      mockGet.mockReturnValueOnce({ type: 'story' });
+
+      const handler = getRouteHandler(app, 'patch', '/api/admin/requirements/:id');
+      const req = {
+        params: { id: 'req-personal' },
+        body: { status: 'developing' },
+      } as any;
+      const res = createResponseMock();
+
+      await handler(req, res, () => {});
+
+      expect(mockDriver.prepare).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT type FROM requirements WHERE id = ? AND tenant_id = ?')
+      );
+      expect(mockRun).toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('POST /api/admin/requirements/:id/comments - 个人未登录时可发表评论', async () => {
+      mockGet.mockReturnValueOnce({ id: 'req-personal' });
+
+      const handler = getRouteHandler(app, 'post', '/api/admin/requirements/:id/comments');
+      const req = {
+        params: { id: 'req-personal' },
+        body: { body: '个人评论' },
+      } as any;
+      const res = createResponseMock();
+
+      await handler(req, res, () => {});
+
+      expect(mockRun).toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: expect.objectContaining({ id: expect.any(String) }),
+      });
     });
   });
 

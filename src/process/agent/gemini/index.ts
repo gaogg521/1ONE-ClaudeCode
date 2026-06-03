@@ -47,7 +47,9 @@ import { mapToDisplay, type TrackedToolCall } from './cli/useReactToolScheduler'
 import {
   compactToolResponsesInHistory,
   getPromptCount,
+  extractTextFromAgentQuery,
   handleCompletedTools,
+  normalizeToolParams,
   processGeminiStreamEvents,
   startNewPrompt,
 } from './utils';
@@ -813,6 +815,12 @@ export class GeminiAgent {
         }
 
         if (toolCallRequests.length > 0) {
+          const fallbackText = extractTextFromAgentQuery(query);
+          for (const req of toolCallRequests) {
+            req.args = normalizeToolParams(req.name, (req.args ?? {}) as Record<string, unknown>, {
+              fallbackText,
+            });
+          }
           // Emit preview_open for navigation tools, but don't block execution
           // 对导航工具发送 preview_open 事件，但不阻止执行
           // Agent needs chrome-devtools to fetch web page content

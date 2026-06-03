@@ -19,6 +19,7 @@ vi.mock('../../src/common', () => ({
       checkEnv: makeChannel('checkEnv'),
       detectCliPath: makeChannel('detectCliPath'),
       getAvailableAgents: makeChannel('getAvailableAgents'),
+      refreshDetectedAgents: makeChannel('refreshDetectedAgents'),
       refreshCustomAgents: makeChannel('refreshCustomAgents'),
       testCustomAgent: makeChannel('testCustomAgent'),
       checkAgentHealth: makeChannel('checkAgentHealth'),
@@ -61,8 +62,13 @@ vi.mock('../../src/process/services/mcpServices/McpService', () => ({
   mcpService: { getSupportedTransportsForAgent: vi.fn(() => []) },
 }));
 
+vi.mock('../../src/process/utils/initStorage', () => ({
+  ProcessConfig: { get: vi.fn(async () => []) },
+}));
+
 vi.mock('../../src/process/agent/aionrs/binaryResolver', () => ({
   detectAionrs: vi.fn(() => ({ available: false, path: null })),
+  resolveAionrsBinary: vi.fn(() => null),
 }));
 
 vi.mock('../../src/process/utils/mainLogger', () => ({

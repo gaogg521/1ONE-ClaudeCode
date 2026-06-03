@@ -298,7 +298,7 @@ describe('AdminKanban', () => {
     );
 
     fireEvent.click(screen.getAllByText('返回超级助手')[0]!);
-    expect(navigateMock).toHaveBeenLastCalledWith('/super-assistant?tab=issues&issueId=story-2');
+    expect(navigateMock).toHaveBeenLastCalledWith('/issues/story-2');
 
     fireEvent.click(screen.getByText('返回当前团队'));
     expect(navigateMock).toHaveBeenLastCalledWith(
@@ -337,7 +337,7 @@ describe('AdminKanban', () => {
     });
 
     fireEvent.click(screen.getByText('AI 需求一键拆单'));
-    fireEvent.change(screen.getByPlaceholderText(/例如：在 1ONE Code 企业版中加一个 RAG 本地知识库/), {
+    fireEvent.change(screen.getByPlaceholderText(/例如：在1ONE Code 企业版中加一个 RAG 本地知识库/), {
       target: {
         value: `安全门户需求分析：首页
 1. 首页搜索安全知识库、个人中心和通知

@@ -7,6 +7,7 @@
 import type { BrowserWindow } from 'electron';
 import { setApplicationMainWindow } from '../bridge/applicationBridge';
 import { setDeepLinkMainWindow } from './deepLink';
+import { showAndFocusMainWindow } from './mainWindowFocus';
 import { setTrayMainWindow } from './tray';
 
 export const bindMainWindowReferences = (window: BrowserWindow): void => {
@@ -15,13 +16,7 @@ export const bindMainWindowReferences = (window: BrowserWindow): void => {
   setApplicationMainWindow(window);
 };
 
-export const showAndFocusMainWindow = (window: BrowserWindow): void => {
-  if (window.isMinimized()) {
-    window.restore();
-  }
-  window.show();
-  window.focus();
-};
+export { showAndFocusMainWindow } from './mainWindowFocus';
 
 export const showOrCreateMainWindow = ({
   mainWindow,

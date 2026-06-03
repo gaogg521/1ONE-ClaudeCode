@@ -8,10 +8,17 @@ import fs from 'fs/promises';
 import path from 'path';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
+vi.mock('electron', () => ({ app: { setName: vi.fn(), getPath: () => '/tmp/1one-claudecode-test' } }));
+vi.mock('@process/utils/initStorage', () => ({
+  getSkillsDir: () => path.join('/tmp/1one-claudecode-test', 'skills'),
+  getAutoSkillsDir: () => path.join('/tmp/1one-claudecode-test', 'skills', '_builtin'),
+  getBuiltinSkillsCopyDir: () => path.join('/tmp/1one-claudecode-test', 'builtin-skills'),
+}));
+
 /**
  * Skills Market feature tests
  *
- * Tests the enable/disable flow for the 1one-claudecode-skills builtin skill:
+ * Tests the enable/disable flow for the 1one-skills builtin skill:
  * - Bundled SKILL.md content validation
  * - Enable: copy bundled SKILL.md → user builtin skills directory
  * - Disable: remove the skill directory
@@ -21,7 +28,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 // Path to the bundled SKILL.md in the project
 const BUNDLED_SKILL_PATH = path.resolve(
   __dirname,
-  '../../src/process/resources/skills/_builtin/1one-claudecode-skills/SKILL.md'
+  '../../src/process/resources/skills/_builtin/1one-skills/SKILL.md'
 );
 
 describe('Skills Market - Bundled SKILL.md', () => {
@@ -32,23 +39,23 @@ describe('Skills Market - Bundled SKILL.md', () => {
 
   it('has valid frontmatter with name and description', async () => {
     const content = await fs.readFile(BUNDLED_SKILL_PATH, 'utf-8');
-    const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+    const frontmatterMatch = content.match(/^\uFEFF?---\s*\r?\n([\s\S]*?)\r?\n---/);
     expect(frontmatterMatch).not.toBeNull();
 
     const frontmatter = frontmatterMatch![1];
 
     const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
     expect(nameMatch).not.toBeNull();
-    expect(nameMatch![1].trim()).toBe('1one-claudecode-skills');
+    expect(nameMatch![1].trim()).toBe('1ONE-skills');
 
     const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
     expect(descMatch).not.toBeNull();
-    expect(descMatch![1]).toContain('1ONE ClaudeCode Skills');
+    expect(descMatch![1]).toContain('1ONE Skills registry');
   });
 
   it('contains the curl command for fetching full SKILL.md', async () => {
     const content = await fs.readFile(BUNDLED_SKILL_PATH, 'utf-8');
-    expect(content).toContain('curl -s https://skills.1one-claudecode.com/SKILL.md');
+    expect(content).toContain('curl -s https://skills.1ONE.com/SKILL.md');
   });
 
   it('contains the 3-step setup guide', async () => {
@@ -60,7 +67,7 @@ describe('Skills Market - Bundled SKILL.md', () => {
 
   it('references the standard credentials path', async () => {
     const content = await fs.readFile(BUNDLED_SKILL_PATH, 'utf-8');
-    expect(content).toContain('~/.config/1one-claudecode-skills');
+    expect(content).toContain('~/.config/1ONE-skills');
   });
 
   it('is concise enough for [LOAD_SKILL] injection (under 50 lines)', async () => {
@@ -74,7 +81,7 @@ describe('Skills Market - Bundled SKILL.md', () => {
     // Full SKILL.md contains detailed API endpoints; the bundled version should not
     expect(content).not.toContain('POST /api/v1/agents/register');
     expect(content).not.toContain('GET /api/v1/skills?q=');
-    expect(content).not.toContain('X-1ONE ClaudeCode-Skills-Checksum');
+    expect(content).not.toContain('X-1ONE-skills-Checksum');
   });
 });
 
@@ -89,9 +96,9 @@ describe('Skills Market - Enable/Disable flow', () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
-  it('enable: creates 1one-claudecode-skills directory with SKILL.md', async () => {
+  it('enable: creates 1one-skills directory with SKILL.md', async () => {
     const builtinDir = path.join(tmpDir, '_builtin');
-    const skillDir = path.join(builtinDir, '1one-claudecode-skills');
+    const skillDir = path.join(builtinDir, '1one-skills');
 
     // Simulate enable flow
     await fs.mkdir(skillDir, { recursive: true });
@@ -101,12 +108,12 @@ describe('Skills Market - Enable/Disable flow', () => {
     // Verify
     const written = await fs.readFile(path.join(skillDir, 'SKILL.md'), 'utf-8');
     expect(written).toBe(content);
-    expect(written).toContain('name: 1one-claudecode-skills');
+    expect(written).toContain('name: 1ONE-skills');
   });
 
-  it('disable: removes 1one-claudecode-skills directory completely', async () => {
+  it('disable: removes 1one-skills directory completely', async () => {
     const builtinDir = path.join(tmpDir, '_builtin');
-    const skillDir = path.join(builtinDir, '1one-claudecode-skills');
+    const skillDir = path.join(builtinDir, '1one-skills');
 
     // Setup: create the skill
     await fs.mkdir(skillDir, { recursive: true });
@@ -120,7 +127,7 @@ describe('Skills Market - Enable/Disable flow', () => {
   });
 
   it('disable: fs.rm with force does not throw if directory does not exist', async () => {
-    const skillDir = path.join(tmpDir, '_builtin', '1one-claudecode-skills');
+    const skillDir = path.join(tmpDir, '_builtin', '1one-skills');
 
     // Should not throw even if directory doesn't exist
     await expect(fs.rm(skillDir, { recursive: true, force: true })).resolves.toBeUndefined();
@@ -128,14 +135,6 @@ describe('Skills Market - Enable/Disable flow', () => {
 });
 
 describe('Skills Market - AcpSkillManager integration', () => {
-  // Mock Electron app and initStorage before importing AcpSkillManager
-  vi.mock('electron', () => ({ app: { setName: vi.fn(), getPath: () => '/tmp/1one-claudecode-test' } }));
-  vi.mock('../../src/process/utils/initStorage', () => ({
-    getSkillsDir: () => path.join('/tmp/1one-claudecode-test', 'skills'),
-    getAutoSkillsDir: () => path.join('/tmp/1one-claudecode-test', 'skills', '_builtin'),
-    getBuiltinSkillsCopyDir: () => path.join('/tmp/1one-claudecode-test', 'builtin-skills'),
-  }));
-
   it('resetInstance clears the singleton so new discoveries happen', async () => {
     const { AcpSkillManager } = await import('../../src/process/task/AcpSkillManager');
 

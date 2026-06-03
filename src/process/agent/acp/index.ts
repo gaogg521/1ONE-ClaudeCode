@@ -44,10 +44,22 @@ import { buildAcpModelInfo, summarizeAcpModelInfo } from './modelInfo';
 import {
   buildBuiltinAcpSessionMcpServers,
   buildEnabledAcpSessionMcpServers,
+  buildOneWebToolsAcpSessionMcpServer,
   buildTeamMcpServer,
   parseAcpMcpCapabilities,
   type AcpSessionMcpServer,
 } from './mcpSessionConfig';
+import { getBuiltinMcpScriptPath } from '@process/utils/initStorage';
+import {
+  buildWebToolsReminderForUserMessage,
+  isReadOnlyUrlFetchCommand,
+  pickAllowOnceOptionId,
+} from '@/common/web/acpWebToolsHint';
+import {
+  prefetchWebContextForUserMessage,
+  shouldPrefetchWebContext,
+  type WebPrefetchResult,
+} from '@/common/web/prefetchWebContext';
 import { getClaudeModel } from './utils';
 
 /** Enable ACP performance diagnostics via ACP_PERF=1 */
@@ -723,6 +735,34 @@ export class AcpAgent {
         this.pendingModelSwitchNotice = null;
       }
 
+      let webPrefetchApplied = false;
+      if (shouldPrefetchWebContext(processedContent)) {
+        const prefetchStart = Date.now();
+        try {
+          const prefetch = await prefetchWebContextForUserMessage(processedContent);
+          if (prefetch) {
+            webPrefetchApplied = true;
+            this.emitMessage(this.buildWebPrefetchToolCall(prefetch));
+            processedContent = prefetch.block + processedContent;
+            if (ACP_PERF_LOG) {
+              console.log(`[ACP-PERF] send: web prefetch completed ${Date.now() - prefetchStart}ms`);
+            }
+          }
+        } catch (prefetchError) {
+          console.warn(
+            '[ACP] Web prefetch failed:',
+            prefetchError instanceof Error ? prefetchError.message : String(prefetchError)
+          );
+        }
+      }
+
+      const webToolsReminder = webPrefetchApplied
+        ? null
+        : buildWebToolsReminderForUserMessage(processedContent);
+      if (webToolsReminder) {
+        processedContent = webToolsReminder + processedContent;
+      }
+
       // Re-read timeout config before each prompt so changes take effect immediately
       await this.applyPromptTimeoutFromConfig();
 
@@ -1111,6 +1151,13 @@ export class AcpAgent {
         return;
       }
 
+      const command =
+        typeof data.toolCall.rawInput?.command === 'string' ? data.toolCall.rawInput.command : undefined;
+      if (data.toolCall.kind === 'execute' && isReadOnlyUrlFetchCommand(command)) {
+        resolve({ optionId: pickAllowOnceOptionId(data.options) });
+        return;
+      }
+
       // Clean up any existing metadata for this requestId before storing new one
       // This handles duplicate permission requests properly
       if (this.permissionRequestMeta.has(requestId)) {
@@ -1285,6 +1332,45 @@ export class AcpAgent {
           },
           content: contentPreview,
           locations: [{ path: operation.path }],
+        },
+      },
+    };
+  }
+
+  private buildWebPrefetchToolCall(result: WebPrefetchResult): TMessage {
+    const toolCallId = uuid();
+    const title = result.kind === 'fetch' ? 'one_web_fetch' : 'one_web_search';
+    const rawInput =
+      result.kind === 'fetch'
+        ? { url: result.url }
+        : { query: result.query, url: result.searchUrl || undefined };
+    const previewText =
+      result.kind === 'fetch'
+        ? (result.text ? result.text.slice(0, 500) : `Fetched ${result.url}`)
+        : `${result.query}\n${result.text.slice(0, 400)}`;
+
+    return {
+      id: toolCallId,
+      msg_id: toolCallId,
+      conversation_id: this.id,
+      type: 'acp_tool_call',
+      position: 'left',
+      createdAt: Date.now(),
+      content: {
+        sessionId: '',
+        update: {
+          sessionUpdate: 'tool_call',
+          toolCallId,
+          status: 'completed',
+          title,
+          kind: result.kind === 'fetch' ? 'fetch' : 'search',
+          rawInput,
+          content: [
+            {
+              type: 'content',
+              content: { type: 'text', text: previewText },
+            },
+          ],
         },
       },
     };
@@ -1581,6 +1667,15 @@ export class AcpAgent {
       if (teamServer) {
         servers.push(teamServer);
         mainLog(`[ACP ${this.extra.backend}]`, `Injecting team MCP server (stdio): ${teamServer.name}`);
+      }
+
+      // Web fetch/search for all ACP backends (Kimi, Claude, Codex, …) — no Google login
+      const webToolsServer = buildOneWebToolsAcpSessionMcpServer(
+        getBuiltinMcpScriptPath('builtin-mcp-web-tools')
+      );
+      if (!servers.some((s) => s.name === webToolsServer.name)) {
+        servers.push(webToolsServer);
+        mainLog(`[ACP ${this.extra.backend}]`, 'Injecting built-in web tools MCP (one-web-tools)');
       }
 
       if (servers.length > 0) {

@@ -50,7 +50,15 @@ describe('extensions/pathSafety', () => {
 
     await fs.mkdir(outsideDir, { recursive: true });
     await fs.writeFile(outsideFile, 'secret', 'utf-8');
-    await fs.symlink(outsideDir, symlinkDir, 'dir');
+    try {
+      await fs.symlink(outsideDir, symlinkDir, 'dir');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+        // Windows 未开启开发者模式时会拒绝目录 symlink，跳过该平台限制场景。
+        return;
+      }
+      throw error;
+    }
 
     expect(isPathWithinDirectory(path.join(symlinkDir, 'secret.txt'), root)).toBe(false);
   });

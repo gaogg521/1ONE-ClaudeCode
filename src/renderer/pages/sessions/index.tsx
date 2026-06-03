@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Sessions — Claude Code 会话中心（接真实数据）
  */
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
@@ -310,7 +310,7 @@ const SessionsPage: React.FC = () => {
   const location = useLocation();
   const [scope, setScope] = useState<WorkspaceScope>(() => resolveWorkspaceScope(location.search));
   const navigate = useNavigate();
-  const { hasJoinedEnterprise, isEnterpriseEdition, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
+  const { hasJoinedEnterprise, isEnterpriseEdition, showTeamsFeature, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
   const enterpriseMode = useWebuiEnterpriseMode();
   const { mutate: refreshTeams } = useTeamList();
   const {
@@ -320,7 +320,6 @@ const SessionsPage: React.FC = () => {
     issueSubject: scopedIssueSubject,
   } = parseWorkspaceScopeSearch(location.search);
   const isCurrentTeamScope = scope === 'team' && Boolean(scopedTeamId);
-  const isTeamScopeWithoutTeam = scope === 'team' && !scopedTeamId;
 
   const handleOpenAdminConsole = useCallback(() => {
     void openAdminConsole({
@@ -369,9 +368,10 @@ const SessionsPage: React.FC = () => {
   }, [load]);
 
   useEffect(() => {
-    setScope(resolveWorkspaceScope(location.search));
+    const nextScope = resolveWorkspaceScope(location.search);
+    setScope(!showTeamsFeature && nextScope === 'team' ? 'personal' : nextScope);
     setActiveDateKey(null);
-  }, [location.search]);
+  }, [location.search, showTeamsFeature]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -442,6 +442,7 @@ const SessionsPage: React.FC = () => {
     const scopeFiltered = convs.filter((conv) => {
       if (scope === 'personal') return !isTeamConversation(conv);
       if (scope === 'team') {
+        if (!showTeamsFeature) return false;
         if (!isTeamConversation(conv)) return false;
         if (!scopedTeamId) return true;
         const extra = conv.extra as { teamId?: string } | undefined;
@@ -458,7 +459,7 @@ const SessionsPage: React.FC = () => {
       const contentMatch = debouncedQ ? contentMatchMap.has(c.id) : false;
       return nameMatch || contentMatch;
     });
-  }, [convs, scope, scopedTeamId, search, debouncedSearch, contentMatchMap]);
+  }, [convs, scope, scopedTeamId, search, debouncedSearch, contentMatchMap, showTeamsFeature]);
 
   const isSearchActive = Boolean(search.trim());
 
@@ -498,9 +499,10 @@ const SessionsPage: React.FC = () => {
   }, [activeDateKey, folders]);
 
   const applyScope = (nextScope: WorkspaceScope) => {
-    setScope(nextScope);
+    const resolvedScope = !showTeamsFeature && nextScope === 'team' ? 'personal' : nextScope;
+    setScope(resolvedScope);
     setActiveDateKey(null);
-    navigate(buildWorkspaceScopePath(location.pathname, location.search, nextScope), { replace: true });
+    navigate(buildWorkspaceScopePath(location.pathname, location.search, resolvedScope), { replace: true });
   };
 
   const handleOpenCurrentTeam = useCallback(() => {
@@ -620,7 +622,7 @@ const SessionsPage: React.FC = () => {
         </div>
       ) : null}
 
-      {hasJoinedEnterprise ? (
+      {showTeamsFeature ? (
         <div
           style={{
             marginBottom: 16,

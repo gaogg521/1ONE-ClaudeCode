@@ -32,14 +32,28 @@ export type ScopedResourceRow = {
   created_by: string;
 };
 
+const ORGANIZATION_SCOPE_SQL = `scope IN ('organization', 'tenant', 'org')`;
+
+/** Normalize legacy organization scope names left by older resource loaders. */
+export function normalizeResourceScope(scope: unknown): ResourceScope {
+  const value = String(scope ?? 'personal').trim();
+  if (value === 'organization' || value === 'tenant' || value === 'org') {
+    return 'organization';
+  }
+  if (value === 'team') {
+    return 'team';
+  }
+  return 'personal';
+}
+
 /** Non-admin visibility filter: organization + own personal + team resources where user is a member. */
-export const VISIBLE_RESOURCE_WHERE = `(scope = 'organization' OR created_by = ? OR (scope = 'team' AND team_id IN (
+export const VISIBLE_RESOURCE_WHERE = `(${ORGANIZATION_SCOPE_SQL} OR created_by = ? OR (scope = 'team' AND team_id IN (
   SELECT team_id FROM team_memberships WHERE tenant_id = ? AND user_id = ?
 )))`;
 
 /** Same as VISIBLE_RESOURCE_WHERE but with a table alias prefix (e.g. `d`). */
 export const VISIBLE_RESOURCE_WHERE_ALIAS = (alias: string): string =>
-  `(${alias}.scope = 'organization' OR ${alias}.created_by = ? OR (${alias}.scope = 'team' AND ${alias}.team_id IN (
+  `(${alias}.scope IN ('organization', 'tenant', 'org') OR ${alias}.created_by = ? OR (${alias}.scope = 'team' AND ${alias}.team_id IN (
   SELECT team_id FROM team_memberships WHERE tenant_id = ? AND user_id = ?
 )))`;
 
@@ -50,7 +64,7 @@ export function resolveResourceScope(
   input: { scope?: unknown; team_id?: unknown }
 ): ResolvedResourceScope | ResourceScopeError {
   const isAdmin = isEnterpriseAdminRole(req.user?.role);
-  const requestedScope = String(input.scope ?? 'personal');
+  const requestedScope = normalizeResourceScope(input.scope);
   const teamId = input.team_id != null ? String(input.team_id).trim() : '';
 
   if (requestedScope === 'organization') {

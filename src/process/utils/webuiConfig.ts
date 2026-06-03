@@ -100,7 +100,15 @@ export const restoreDesktopWebUIFromPreferences = async (): Promise<void> => {
 
     const instance = await startWebServerWithInstance(preferredPort, allowRemote);
     setWebServerInstance(instance);
-    console.log(`[WebUI] Auto-restored from desktop preferences (port=${instance.port}, allowRemote=${allowRemote})`);
+    const { getAdminWebListenPort } = await import('../webserver/index');
+    const adminPort = getAdminWebListenPort();
+    const adminLine =
+      adminPort != null
+        ? ` admin=http://localhost:${adminPort}`
+        : ' admin=not-listening (see warnings above)';
+    console.log(
+      `[WebUI] Auto-restored member=http://localhost:${instance.port} allowRemote=${allowRemote}${adminLine}`
+    );
   } catch (error) {
     console.error('[WebUI] Failed to auto-restore from desktop preferences:', error);
   }

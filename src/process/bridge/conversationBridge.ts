@@ -32,6 +32,7 @@ import fs from 'fs';
 import path from 'path';
 import { migrateConversationToDatabase } from './migrationUtils';
 import { ConversationSideQuestionService } from './services/ConversationSideQuestionService';
+import { resolvePersonalAgentPreset } from '@process/digitalEmployee/resolvePersonalAgentPreset';
 
 const refreshTrayMenuSafely = async (): Promise<void> => {
   try {
@@ -168,10 +169,29 @@ export function initConversationBridge(
     }
     try {
       // Codex now runs through AcpAgentManager — remap type to 'acp' with backend hint
-      const createParams =
+      let createParams =
         params.type === 'codex'
           ? { ...params, type: 'acp' as const, extra: { ...params.extra, backend: 'codex' as const } }
           : params;
+      const personalAgentId = createParams.extra?.personalAgentId;
+      if (personalAgentId) {
+        const preset = await resolvePersonalAgentPreset(personalAgentId);
+        if (preset) {
+          createParams = {
+            ...createParams,
+            extra: {
+              ...createParams.extra,
+              ...(preset.presetContext
+                ? { presetContext: preset.presetContext, presetRules: preset.presetContext }
+                : {}),
+              ...(preset.enabledSkills?.length ? { enabledSkills: preset.enabledSkills } : {}),
+              ...(preset.preferredModelId && !createParams.extra?.currentModelId
+                ? { currentModelId: preset.preferredModelId }
+                : {}),
+            },
+          };
+        }
+      }
       const conversation = await conversationService.createConversation({
         ...createParams,
         source: '1one',

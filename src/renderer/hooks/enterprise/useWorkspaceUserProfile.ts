@@ -112,14 +112,16 @@ export function useWorkspaceUserProfile() {
 
   useEffect(() => {
     void refresh();
-  }, [refresh, auth.user?.id, enterpriseMode.enterpriseContext?.tenantId]);
+  }, [refresh, auth.user?.id]);
 
   const fallbackProfile = useMemo<WorkspaceUserProfile | null>(() => {
     if (!auth.user || auth.status !== 'authenticated') {
       return null;
     }
     const ctx = enterpriseMode.enterpriseContext;
-    const joined = enterpriseMode.hasJoinedEnterprise;
+    const joined =
+      enterpriseMode.hasJoinedEnterprise ||
+      (isDesktopRuntime && enterpriseMode.hasInstanceEnterprise);
     return {
       userId: auth.user.id,
       username: auth.user.username,
@@ -138,6 +140,8 @@ export function useWorkspaceUserProfile() {
     auth.user,
     enterpriseMode.enterpriseContext,
     enterpriseMode.hasJoinedEnterprise,
+    enterpriseMode.hasInstanceEnterprise,
+    isDesktopRuntime,
   ]);
 
   const guestProfile = useMemo<WorkspaceUserProfile | null>(() => {

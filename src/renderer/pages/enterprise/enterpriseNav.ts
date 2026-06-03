@@ -33,6 +33,7 @@ const NAV_LABELS: Record<
   settings: { labelKey: 'settings.enterpriseConsole.navSettings', labelDefault: '企业设置' },
   users: { labelKey: 'settings.enterpriseConsole.navUsers', labelDefault: '用户管理' },
   teams: { labelKey: 'settings.enterpriseConsole.navTeams', labelDefault: '团队与组织' },
+  runtimes: { labelKey: 'admin.teamRuntimes.nav', labelDefault: '团队运行时' },
   auth: { labelKey: 'settings.enterpriseConsole.navAuth', labelDefault: '企业认证' },
   invites: { labelKey: 'settings.enterpriseConsole.navInvites', labelDefault: '邀请码' },
   cteam: { labelKey: 'admin.cteam.nav', labelDefault: 'Issues 规划看板' },

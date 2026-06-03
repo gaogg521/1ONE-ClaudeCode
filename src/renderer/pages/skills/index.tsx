@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Empty, Input, Message, Modal, Result, Spin, Tag, Typography } from '@arco-design/web-react';
+import { Button, Card, Empty, Input, Message, Modal, Spin, Tag, Typography } from '@arco-design/web-react';
 import { Link, Search } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -17,7 +17,8 @@ type SkillListItem =
 const SkillsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { hasJoinedEnterprise } = useEditionFeatures();
+  const { can } = useEditionFeatures();
+  const canUseOrgSkills = can('skills.org');
   const [loading, setLoading] = useState(true);
   const [localSkills, setLocalSkills] = useState<SkillMetadata[]>([]);
   const [orgSkills, setOrgSkills] = useState<SkillRecord[]>([]);
@@ -32,12 +33,12 @@ const SkillsPage: React.FC = () => {
     setLoading(true);
     const [localResult, orgResult] = await Promise.allSettled([
       ipcBridge.fs.listAvailableSkills.invoke(),
-      listSkills(),
+      canUseOrgSkills ? listSkills() : Promise.resolve([]),
     ]);
     setLocalSkills(localResult.status === 'fulfilled' ? localResult.value ?? [] : []);
     setOrgSkills(orgResult.status === 'fulfilled' ? orgResult.value ?? [] : []);
     setLoading(false);
-  }, []);
+  }, [canUseOrgSkills]);
 
   useEffect(() => {
     void reload();
@@ -123,23 +124,6 @@ const SkillsPage: React.FC = () => {
     });
   }, [filter, items, search]);
 
-  if (!hasJoinedEnterprise) {
-    return (
-      <Result
-        status='403'
-        title={t('common.skills.joinRequiredTitle', { defaultValue: '加入企业后可使用 Skills' })}
-        subTitle={t('common.skills.joinRequiredDesc', {
-          defaultValue: 'Skills 页面会整合本地技能、团队技能与导入入口，请先加入企业组织。',
-        })}
-        extra={
-          <Button type='primary' onClick={() => navigate('/sessions')}>
-            {t('common.skills.backToWorkspace', { defaultValue: '返回主工作台' })}
-          </Button>
-        }
-      />
-    );
-  }
-
   return (
     <PageContentShell className='skills-page-shell' contentClassName='max-w-1400px pb-40px'>
       <div className='flex items-start justify-between gap-16px flex-wrap'>
@@ -161,9 +145,11 @@ const SkillsPage: React.FC = () => {
           <Button size='small' onClick={() => setGithubImportModalVisible(true)}>
             {t('common.skills.importFromUrl', { defaultValue: '从 URL 导入' })}
           </Button>
-          <Button size='small' type='primary' onClick={() => navigate('/enterprise/skills')}>
-            {t('common.skills.openAdmin', { defaultValue: '打开团队技能后台' })}
-          </Button>
+          {canUseOrgSkills ? (
+            <Button size='small' type='primary' onClick={() => navigate('/enterprise/skills')}>
+              {t('common.skills.openAdmin', { defaultValue: '打开团队技能后台' })}
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -181,7 +167,9 @@ const SkillsPage: React.FC = () => {
             {([
               ['all', t('common.skills.filterAll', { defaultValue: '全部' })],
               ['local', t('common.skills.filterLocal', { defaultValue: '本地技能' })],
-              ['org', t('common.skills.filterOrg', { defaultValue: '团队技能' })],
+              ...(canUseOrgSkills
+                ? ([['org', t('common.skills.filterOrg', { defaultValue: '团队技能' })]] as const)
+                : []),
             ] as const).map(([key, label]) => (
               <Button
                 key={key}

@@ -7,6 +7,8 @@
 // configureChromium sets app name (dev isolation) and Chromium flags — must run before
 // ANY module that calls app.getPath('userData'), because Electron caches the path on first call.
 import './process/utils/configureChromium';
+import { resolveDevRendererUrl } from '@/common/config/devRendererUrl';
+import { waitForDevRendererUrl } from './process/utils/waitForDevRenderer';
 import * as Sentry from '@sentry/electron/main';
 
 Sentry.init({
@@ -14,7 +16,7 @@ Sentry.init({
 });
 
 import './process/utils/configureConsoleLog';
-import { app, BrowserWindow, nativeImage, net, powerMonitor, protocol, screen } from 'electron';
+import { app, BrowserWindow, nativeImage, net, powerMonitor, protocol, screen, session } from 'electron';
 import fixPath from 'fix-path';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -22,7 +24,7 @@ import { pathToFileURL } from 'url';
 import { initMainAdapterWithWindow } from './common/adapter/main';
 import { ipcBridge } from './common';
 import { AION_ASSET_PROTOCOL } from '@process/extensions';
-import { initializeProcess } from './process';
+import { initializeBackgroundServices, initializeProcess, initializeStorageDeferred } from './process';
 import { ProcessConfig } from './process/utils/initStorage';
 import { loadShellEnvironmentAsync, logEnvironmentDiagnostics, mergePaths } from './process/utils/shellEnv';
 import { initializeAcpDetector, registerWindowMaximizeListeners, disposeAllTeamSessions } from '@process/bridge';
@@ -58,6 +60,7 @@ import {
   refreshTrayMenu,
   setCloseToTrayEnabled,
   setIsQuitting,
+  setTrayCreateWindowHandler,
 } from './process/utils/tray';
 // @ts-expect-error - electron-squirrel-startup doesn't have types
 import electronSquirrelStartup from 'electron-squirrel-startup';
@@ -200,6 +203,13 @@ let appReadyDone = false;
 let mainWindow: BrowserWindow;
 
 const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): void => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    console.log('[1ONE] Main window already exists — focusing');
+    if (showOnReady) {
+      showAndFocusMainWindow(mainWindow);
+    }
+    return;
+  }
   console.log('[1ONE] Creating main window...');
   // Get primary display size
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -260,17 +270,28 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
         mainWindow.focus();
       }
     };
+    const showWhenRendererReady = (): void => {
+      console.log('[1ONE] Renderer ready-to-show', mainWindow.webContents.getURL());
+      showWindow();
+    };
     mainWindow.once('ready-to-show', () => {
       console.log('[1ONE] Window ready-to-show');
-      showWindow();
+      if (app.isPackaged) {
+        showWindow();
+      }
     });
-    // Belt-and-suspenders: also show on did-finish-load in case ready-to-show already fired
-    mainWindow.webContents.once('did-finish-load', () => {
-      console.log('[1ONE] Renderer did-finish-load');
-      showWindow();
-    });
-    // Fallback: show window after 5s even if events don't fire (e.g. loadURL failure)
-    setTimeout(showWindow, 5000);
+    mainWindow.webContents.once('dom-ready', showWhenRendererReady);
+    mainWindow.webContents.once('did-finish-load', showWhenRendererReady);
+    if (app.isPackaged) {
+      setTimeout(showWindow, 5000);
+    } else {
+      setTimeout(() => {
+        if (!mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+          console.warn('[1ONE] Dev force-show after 45s (check renderer load logs above)');
+          showWindow();
+        }
+      }, 45_000);
+    }
   } else if (process.platform === 'darwin' && app.dock) {
     void app.dock.hide();
   }
@@ -307,27 +328,105 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   }
 
   // Load the renderer: dev server URL in development, built HTML file in production
-  const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
+  const rendererUrlRaw = process.env['ELECTRON_RENDERER_URL'];
+  const rendererUrl = rendererUrlRaw ? resolveDevRendererUrl(rendererUrlRaw) : undefined;
   const fallbackFile = path.join(__dirname, '../renderer/index.html');
 
   if (!app.isPackaged && rendererUrl) {
-    console.log(`[1ONE] Loading renderer URL: ${rendererUrl}`);
-    mainWindow.loadURL(rendererUrl).catch((error) => {
-      console.error('[1ONE] loadURL failed, falling back to file:', error.message || error);
-      mainWindow.loadFile(fallbackFile).catch((e2) => {
-        console.error('[1ONE] loadFile fallback also failed:', e2.message || e2);
+    let devLoadAttempts = 0;
+    let devNavigationSettled = false;
+    const maxDevLoadAttempts = 8;
+    const markDevNavigationSettled = (reason: string): void => {
+      if (devNavigationSettled) {
+        return;
+      }
+      devNavigationSettled = true;
+      console.log(`[1ONE] Renderer did-finish-load (${reason})`, mainWindow.webContents.getURL());
+    };
+
+    const loadDevBuiltFallback = (): void => {
+      console.warn(`[1ONE] Loading built renderer fallback: ${fallbackFile}`);
+      mainWindow.loadFile(fallbackFile).catch((error) => {
+        console.error('[1ONE] loadFile fallback failed:', error.message || error);
       });
+    };
+
+    const loadDevRenderer = (): void => {
+      if (devLoadAttempts >= maxDevLoadAttempts) {
+        loadDevBuiltFallback();
+        return;
+      }
+      devLoadAttempts += 1;
+      devNavigationSettled = false;
+      console.log(`[1ONE] Loading renderer URL (attempt ${devLoadAttempts}): ${rendererUrl}`);
+      mainWindow.loadURL(rendererUrl).catch((error) => {
+        console.error('[1ONE] loadURL failed, falling back to built file:', error.message || error);
+        loadDevBuiltFallback();
+      });
+    };
+
+    mainWindow.webContents.on('dom-ready', () => {
+      markDevNavigationSettled('dom-ready');
     });
+    mainWindow.webContents.on('did-finish-load', () => {
+      markDevNavigationSettled('did-finish-load');
+    });
+
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      console.error('[1ONE] did-fail-load:', { errorCode, errorDescription, validatedURL, isMainFrame });
+      if (!isMainFrame) {
+        return;
+      }
+      if (devLoadAttempts >= maxDevLoadAttempts) {
+        loadDevBuiltFallback();
+        return;
+      }
+      setTimeout(() => {
+        void (async () => {
+          await waitForDevRendererUrl(rendererUrl, 30_000);
+          if (!mainWindow.isDestroyed()) {
+            loadDevRenderer();
+          }
+        })();
+      }, 1500);
+    });
+
+    setTimeout(() => {
+      if (mainWindow.isDestroyed() || devNavigationSettled) {
+        return;
+      }
+      const url = mainWindow.webContents.getURL();
+      console.warn('[1ONE] Vite load watchdog: navigation not settled', {
+        url,
+        isLoading: mainWindow.webContents.isLoading(),
+      });
+      loadDevBuiltFallback();
+    }, 25_000);
+
+    void (async () => {
+      console.log('[1ONE] Waiting for Vite dev server before first load...');
+      const viteReady = await waitForDevRendererUrl(rendererUrl);
+      if (mainWindow.isDestroyed()) {
+        return;
+      }
+      if (viteReady) {
+        console.log('[1ONE] Vite dev server ready');
+      } else {
+        console.warn('[1ONE] Vite did not respond in time; using built renderer');
+        loadDevBuiltFallback();
+        return;
+      }
+      loadDevRenderer();
+    })();
   } else {
     console.log(`[1ONE] Loading renderer file: ${fallbackFile}`);
+    mainWindow.webContents.on('did-finish-load', () => {
+      console.log('[1ONE] Renderer did-finish-load');
+    });
     mainWindow.loadFile(fallbackFile).catch((error) => {
       console.error('[1ONE] loadFile failed:', error.message || error);
     });
   }
-
-  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-    console.error('[1ONE] did-fail-load:', { errorCode, errorDescription, validatedURL, isMainFrame });
-  });
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     console.error('[1ONE] render-process-gone:', details);
@@ -381,10 +480,23 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   });
 };
 
+setTrayCreateWindowHandler(() => {
+  createWindow({ showOnReady: true });
+});
+
 const handleAppReady = async (): Promise<void> => {
   const t0 = performance.now();
   const mark = (label: string) => console.log(`[1ONE:ready] ${label} +${Math.round(performance.now() - t0)}ms`);
   mark('start');
+
+  if (!app.isPackaged) {
+    try {
+      await session.defaultSession.clearCache();
+      console.log('[1ONE:ready] dev session cache cleared');
+    } catch (error) {
+      console.warn('[1ONE:ready] dev session clearCache failed:', error);
+    }
+  }
 
   // CLI mode: print app version and exit immediately (used by CI smoke tests)
   if (isVersionMode) {
@@ -442,6 +554,14 @@ const handleAppReady = async (): Promise<void> => {
     initializeZoomFactor(undefined);
   }
 
+  const runBackgroundServices = (): void => {
+    void initializeBackgroundServices()
+      .then(() => mark('backgroundServices'))
+      .catch((error) => {
+        console.error('[1ONE] Background services initialization failed:', error);
+      });
+  };
+
   if (isResetPasswordMode) {
     // Handle password reset without creating window
     try {
@@ -455,6 +575,12 @@ const handleAppReady = async (): Promise<void> => {
       app.exit(1);
     }
   } else if (isWebUIMode) {
+    try {
+      await initializeStorageDeferred();
+      mark('initializeStorageDeferred');
+    } catch (error) {
+      console.error('[1ONE] Deferred storage init failed:', error);
+    }
     const userConfigInfo = loadUserWebUIConfig();
     if (userConfigInfo.exists && userConfigInfo.path) {
       // Config file loaded from user directory
@@ -479,6 +605,7 @@ const handleAppReady = async (): Promise<void> => {
         console.warn('[WebUI] Prevented unexpected quit — server is still running');
       }
     });
+    runBackgroundServices();
   } else {
     // 初始化关闭到托盘设置 / Initialize close-to-tray setting
     if (isE2ETestMode) {
@@ -488,14 +615,8 @@ const handleAppReady = async (): Promise<void> => {
       try {
         const savedCloseToTray = await ProcessConfig.get('system.closeToTray');
         setCloseToTrayEnabled(app.isPackaged ? (savedCloseToTray ?? false) : true);
-        if (getCloseToTrayEnabled()) {
-          createOrUpdateTray();
-        }
       } catch {
         setCloseToTrayEnabled(!app.isPackaged);
-        if (getCloseToTrayEnabled()) {
-          createOrUpdateTray();
-        }
       }
 
       onCloseToTrayChanged((enabled) => {
@@ -513,6 +634,33 @@ const handleAppReady = async (): Promise<void> => {
     createWindow({ showOnReady: showMainWindowOnReady });
     appReadyDone = true;
     mark('createWindow');
+
+    void initializeStorageDeferred()
+      .then(() => mark('initializeStorageDeferred'))
+      .catch((error) => {
+        console.error('[1ONE] Deferred storage init failed:', error);
+      });
+
+    if (getCloseToTrayEnabled()) {
+      let trayCreated = false;
+      const scheduleTray = (): void => {
+        if (trayCreated) {
+          return;
+        }
+        trayCreated = true;
+        createOrUpdateTray();
+        mark('createTray');
+      };
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.once('ready-to-show', scheduleTray);
+        // Fallback if ready-to-show never fires (broken renderer load).
+        setTimeout(scheduleTray, 10_000);
+      } else {
+        scheduleTray();
+      }
+    }
+
+    runBackgroundServices();
 
     // Run ACP detection in parallel with renderer loading.
     // By the time React mounts and calls getAvailableAgents (~300ms+),
@@ -554,7 +702,6 @@ const handleAppReady = async (): Promise<void> => {
     }
   }
 
-  // WebUI mode also needs ACP detection for remote agent access
   if (isWebUIMode) {
     await initializeAcpDetector();
   }

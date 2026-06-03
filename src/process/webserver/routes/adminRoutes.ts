@@ -14,7 +14,11 @@ import { AuthIdentityRepository } from '../auth/repository/AuthIdentityRepositor
 import { TokenMiddleware } from '../auth/middleware/TokenMiddleware';
 import { apiRateLimiter } from '../middleware/rateLimiter';
 import { getDatabase } from '@process/services/database';
-import { testLdapConnection, type LdapProviderConfig } from '../auth/providers/LdapAuthProvider';
+import {
+  formatLdapConnectionError,
+  testLdapConnection,
+  type LdapProviderConfig,
+} from '../auth/providers/LdapAuthProvider';
 import { resolveLocalUserForLdapEntry, searchLdapDirectoryForAdmin } from '../auth/ldapDirectorySearch';
 import { testFeishuAppCredentials } from '../auth/providers/FeishuAuthProvider';
 import nodemailer from 'nodemailer';
@@ -202,19 +206,20 @@ export function registerAdminRoutes(app: Express): void {
 
   // POST /api/admin/auth/providers/ldap/test — LDAP 连通性测试（合并已保存的密钥）
   app.post('/api/admin/auth/providers/ldap/test', apiRateLimiter, auth, requireAdmin, async (req, res) => {
+    const bodyConfig =
+      req.body?.config && typeof req.body.config === 'object' ? (req.body.config as Record<string, unknown>) : {};
+    const existing = await AuthProviderRepository.getProvider('ldap');
+    const merged = { ...existing?.config, ...bodyConfig } as Record<string, unknown>;
+    if (merged.bindPassword === '******') {
+      merged.bindPassword = (existing?.config as { bindPassword?: string })?.bindPassword ?? '';
+    }
+    const ldapConfig = merged as LdapProviderConfig;
     try {
-      const bodyConfig =
-        req.body?.config && typeof req.body.config === 'object' ? (req.body.config as Record<string, unknown>) : {};
-      const existing = await AuthProviderRepository.getProvider('ldap');
-      const merged = { ...existing?.config, ...bodyConfig } as Record<string, unknown>;
-      if (merged.bindPassword === '******') {
-        merged.bindPassword = (existing?.config as { bindPassword?: string })?.bindPassword ?? '';
-      }
-      await testLdapConnection(merged as LdapProviderConfig);
+      await testLdapConnection(ldapConfig);
       res.json({ success: true });
     } catch (err) {
       console.error('[AdminRoute] ldap test error:', err);
-      const message = err instanceof Error ? err.message : 'LDAP test failed';
+      const message = formatLdapConnectionError(err, ldapConfig);
       res.status(400).json({ success: false, message });
     }
   });

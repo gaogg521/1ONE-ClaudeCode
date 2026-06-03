@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -35,6 +35,7 @@ const EditionWorkspaceGuide: React.FC = () => {
   const {
     loading,
     managementMode,
+    hasInstanceEnterprise,
     hasJoinedEnterprise,
     enterpriseContext,
     showEnterpriseAdminNav,
@@ -90,7 +91,7 @@ const EditionWorkspaceGuide: React.FC = () => {
         ),
       };
     }
-    if (managementMode === 'enterprise' && hasJoinedEnterprise && status !== 'authenticated') {
+    if (managementMode === 'enterprise' && hasInstanceEnterprise && status !== 'authenticated') {
       return {
         type: 'warning' as const,
         line: t('settings.edition.guideEnterpriseGuestLine', {
@@ -154,6 +155,7 @@ const EditionWorkspaceGuide: React.FC = () => {
       action: null,
     };
   }, [
+    hasInstanceEnterprise,
     hasJoinedEnterprise,
     isAdmin,
     managementMode,

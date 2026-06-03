@@ -844,6 +844,8 @@
   "webui.running": "运行中",
   "webui.starting": "启动中…",
   "webui.accessUrl": "访问地址",
+  "webui.memberAccessLabel": "团队/员工访问（端口 {{port}}）",
+  "webui.adminAccessLabel": "管理员专属后台（端口 {{port}}）",
   "webui.loginInfo": "登录信息",
   "webui.randomPassword": "[随机密码]",
   "webui.noPasswordToCopy": "暂无密码可复制",

@@ -47,6 +47,7 @@
   "permissionRequest": "权限请求",
   "agentRequestingPermission": "代理正在请求权限。",
   "command": "命令：",
+  "permissionWebFetchHint": "提示：下次读取网页请优先使用 MCP 工具 one_web_fetch（one-web-tools），无需 curl。若本次仍用 curl，确认后将显示来源链接。",
   "chooseAction": "选择一个操作：",
   "option": "选项",
   "noOptionsAvailable": "无可用选项",

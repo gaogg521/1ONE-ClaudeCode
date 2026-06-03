@@ -13,6 +13,7 @@ import { AuthService } from '@process/webserver/auth/service/AuthService';
 import { UserRepository } from '@process/webserver/auth/repository/UserRepository';
 import { AUTH_CONFIG, SERVER_CONFIG } from './config/constants';
 import { initWebAdapter } from './adapter';
+import { nextWebuiMemberPortAfterConflict, resolveWebuiAdminPort } from '@/common/config/webuiLoginAccess';
 import { setupBasicMiddleware, setupCors, setupErrorHandler } from './setup';
 import { registerAuthRoutes } from './routes/authRoutes';
 import { registerApiRoutes } from './routes/apiRoutes';
@@ -228,6 +229,62 @@ export interface WebServerInstance {
   allowRemote: boolean;
 }
 
+let adminHttpServer: import('http').Server | null = null;
+let adminListenPort: number | null = null;
+
+export function getAdminWebListenPort(): number | null {
+  return adminListenPort;
+}
+
+export async function closeAdminWebListener(): Promise<void> {
+  const server = adminHttpServer;
+  adminHttpServer = null;
+  adminListenPort = null;
+  if (!server) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    server.close(() => resolve());
+    setTimeout(resolve, 2000);
+  });
+}
+
+function listenHttpServer(
+  server: import('http').Server,
+  port: number,
+  host: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, host, () => {
+      server.removeListener('error', reject);
+      resolve();
+    });
+  });
+}
+
+async function startAdminWebListener(
+  app: express.Application,
+  memberPort: number,
+  allowRemote: boolean
+): Promise<number | null> {
+  const adminPort = resolveWebuiAdminPort(memberPort);
+  const host = allowRemote ? SERVER_CONFIG.REMOTE_HOST : SERVER_CONFIG.DEFAULT_HOST;
+  const server = createServer(app);
+  try {
+    await listenHttpServer(server, adminPort, host);
+    adminHttpServer = server;
+    adminListenPort = adminPort;
+    console.log(`[WebUI] Admin listener / 管理员入口: http://localhost:${adminPort}`);
+    return adminPort;
+  } catch (err) {
+    server.close();
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[WebUI] Admin port ${adminPort} not started: ${message}`);
+    return null;
+  }
+}
+
 /**
  * 启动 Web 服务器并返回实例（供 IPC 调用）
  * Start web server and return instance (for IPC calls)
@@ -253,7 +310,7 @@ export async function startWebServerWithInstance(port: number, allowRemote = fal
 
   // 配置中间件 / Configure middleware
   setupBasicMiddleware(app);
-  setupCors(app, port, allowRemote);
+  setupCors(app, port, allowRemote, [resolveWebuiAdminPort(port)]);
 
   // 注册路由 / Register routes
   registerAuthRoutes(app);
@@ -268,25 +325,22 @@ export async function startWebServerWithInstance(port: number, allowRemote = fal
   // Listen on 0.0.0.0 (all interfaces) or 127.0.0.1 (local only) based on allowRemote
   const host = allowRemote ? SERVER_CONFIG.REMOTE_HOST : SERVER_CONFIG.DEFAULT_HOST;
   return new Promise((resolve, reject) => {
-    server.listen(port, host, () => {
+    const onListening = async () => {
       const localUrl = `http://localhost:${port}`;
       const serverIP = getServerIP();
       const displayUrl = serverIP ? `http://${serverIP}:${port}` : localUrl;
 
-      // 显示初始凭证（如果是首次启动）/ Display initial credentials (if first startup)
       if (initialCredentials) {
         displayInitialCredentials(initialCredentials, localUrl, allowRemote, displayUrl);
+      } else if (allowRemote && serverIP && serverIP !== 'localhost') {
+        console.log(`\n   🚀 Local access / 本地访问: ${localUrl}`);
+        console.log(`   🚀 Network access / 网络访问: ${displayUrl}\n`);
       } else {
-        if (allowRemote && serverIP && serverIP !== 'localhost') {
-          console.log(`\n   🚀 Local access / 本地访问: ${localUrl}`);
-          console.log(`   🚀 Network access / 网络访问: ${displayUrl}\n`);
-        } else {
-          console.log(`\n   🚀 WebUI started / WebUI 已启动: ${localUrl}\n`);
-        }
+        console.log(`\n   🚀 WebUI started / WebUI 已启动: ${localUrl}\n`);
       }
 
-      // 初始化 WebSocket 适配器 / Initialize WebSocket adapter
       initWebAdapter(wss);
+      await startAdminWebListener(app, port, allowRemote);
 
       resolve({
         server,
@@ -294,24 +348,29 @@ export async function startWebServerWithInstance(port: number, allowRemote = fal
         port,
         allowRemote,
       });
-    });
+    };
 
-    server.on('error', (err: NodeJS.ErrnoException) => {
+    server.once('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
-        const nextPort = port + 1;
+        const nextPort = nextWebuiMemberPortAfterConflict(port, SERVER_CONFIG.DEFAULT_PORT);
         const maxPort = SERVER_CONFIG.DEFAULT_PORT + 10;
         if (nextPort <= maxPort) {
           console.warn(`⚠️ Port ${port} is in use, trying ${nextPort}... / 端口 ${port} 已被占用，尝试 ${nextPort}...`);
           server.close();
+          void closeAdminWebListener();
           resolve(startWebServerWithInstance(nextPort, allowRemote));
         } else {
           console.error(`❌ Ports ${SERVER_CONFIG.DEFAULT_PORT}-${maxPort} all in use / 端口全部被占用`);
           reject(err);
         }
-      } else {
-        console.error('❌ Server error / 服务器错误:', err);
-        reject(err);
+        return;
       }
+      console.error('❌ Server error / 服务器错误:', err);
+      reject(err);
+    });
+
+    server.listen(port, host, () => {
+      void onListening().catch(reject);
     });
   });
 }

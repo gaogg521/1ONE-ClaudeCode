@@ -16,22 +16,33 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 
+const MCP_BUILDS = [
+  {
+    entry: 'src/process/resources/builtinMcp/imageGenServer.ts',
+    outfile: 'out/main/builtin-mcp-image-gen.js',
+  },
+  {
+    entry: 'src/process/resources/builtinMcp/webToolsServer.ts',
+    outfile: 'out/main/builtin-mcp-web-tools.js',
+  },
+];
+
 async function main() {
-  await esbuild.build({
-    entryPoints: [path.join(ROOT, 'src/process/resources/builtinMcp/imageGenServer.ts')],
-    bundle: true,
-    platform: 'node',
-    format: 'cjs',
-    outfile: path.join(ROOT, 'out/main/builtin-mcp-image-gen.js'),
-    external: ['electron'],
-    tsconfig: path.join(ROOT, 'tsconfig.json'),
-    loader: { '.wasm': 'empty' }, // tree-sitter wasm files not needed by image gen
-    define: {
-      // @office-ai/aioncli-core uses import.meta.url for version detection.
-      // Provide a valid file: URL so fileURLToPath() does not throw at startup.
-      'import.meta.url': JSON.stringify('file:///C:/placeholder'),
-    },
-  });
+  for (const { entry, outfile } of MCP_BUILDS) {
+    await esbuild.build({
+      entryPoints: [path.join(ROOT, entry)],
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      outfile: path.join(ROOT, outfile),
+      external: ['electron'],
+      tsconfig: path.join(ROOT, 'tsconfig.json'),
+      loader: { '.wasm': 'empty' },
+      define: {
+        'import.meta.url': JSON.stringify('file:///C:/placeholder'),
+      },
+    });
+  }
 }
 
 main().catch((err) => {

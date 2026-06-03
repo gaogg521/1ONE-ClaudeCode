@@ -8,8 +8,10 @@ import { getPlatformServices } from '@/common/platform';
 import { getDataPath } from '@process/utils';
 import * as path from 'path';
 import type { ExtensionSource } from './types';
-export const ONE_EXTENSIONS_PATH_ENV = '1one_EXTENSIONS_PATH';
-export const ONE_STRICT_ENV_ENV = '1one_STRICT_ENV';
+export const ONE_EXTENSIONS_PATH_ENV = 'ONE_EXTENSIONS_PATH';
+export const LEGACY_ONE_EXTENSIONS_PATH_ENV = '1one_EXTENSIONS_PATH';
+export const ONE_STRICT_ENV_ENV = 'ONE_STRICT_ENV';
+export const LEGACY_ONE_STRICT_ENV_ENV = '1one_STRICT_ENV';
 export const EXTENSION_MANIFEST_FILE = 'aion-extension.json';
 export const EXTENSIONS_DIR_NAME = 'extensions';
 export const PATH_SEPARATOR = process.platform === 'win32' ? ';' : ':';
@@ -23,7 +25,8 @@ export function getAppDataExtensionsDir(): string {
 }
 
 export function getEnvExtensionsDirs(): string[] {
-  const envPath = process.env[ONE_EXTENSIONS_PATH_ENV];
+  const envPath =
+    process.env[ONE_EXTENSIONS_PATH_ENV] ?? process.env[LEGACY_ONE_EXTENSIONS_PATH_ENV];
   if (!envPath) return [];
   return envPath.split(PATH_SEPARATOR).filter(Boolean);
 }

@@ -11,6 +11,7 @@ import { transformMessage } from '@/common/chat/chatLib';
 import type { IResponseMessage } from '@/common/adapter/ipcBridge';
 import type { IMcpServer, TProviderWithModel } from '@/common/config/storage';
 import { ProcessConfig, getSkillsDir } from '@process/utils/initStorage';
+import { BUILTIN_WEB_TOOLS_ID } from '@process/resources/builtinMcp/constants';
 import { ExtensionRegistry } from '@process/extensions';
 import { buildSystemInstructionsWithSkillsIndex } from './agentUtils';
 import { detectSkillLoadRequest, AcpSkillManager, buildSkillContentText } from './AcpSkillManager';
@@ -325,6 +326,11 @@ export class GeminiAgentManager extends BaseAgentManager<
       // MCPServerConfig supports: stdio (command/args/env), sse/http (url/type/headers)
       const mcpConfig: Record<string, UiMcpServerConfig> = {};
       allServers
+        .filter(
+          (server: IMcpServer) =>
+            // Gemini registers native one_web_fetch / one_web_search — skip duplicate builtin MCP
+            server.id !== BUILTIN_WEB_TOOLS_ID
+        )
         .filter((server: IMcpServer) => server.enabled && server.status === 'connected') // 只使用启用且连接成功的服务器
         .forEach((server: IMcpServer) => {
           if (server.transport.type === 'stdio') {

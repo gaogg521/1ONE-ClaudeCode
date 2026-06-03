@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   canManageScopedResource,
   getTeamPeerUserIds,
+  normalizeResourceScope,
   resolveResourceScope,
   VISIBLE_RESOURCE_WHERE,
 } from '@process/webserver/routes/resourceScope';
@@ -69,6 +70,16 @@ describe('resourceScope', () => {
     expect(result).toEqual({ scope: 'organization', teamId: null });
   });
 
+  it('normalizes legacy organization scope aliases', () => {
+    expect(normalizeResourceScope('tenant')).toBe('organization');
+    expect(normalizeResourceScope('org')).toBe('organization');
+    expect(normalizeResourceScope('organization')).toBe('organization');
+    expect(resolveResourceScope(createRequest('org_admin'), createDriver(), 'tenant-1', { scope: 'tenant' })).toEqual({
+      scope: 'organization',
+      teamId: null,
+    });
+  });
+
   it('requires team_id for team scope', () => {
     const driver = createDriver([{ team_id: 'team-1' }]);
     const result = resolveResourceScope(createRequest('member'), driver, 'tenant-1', {
@@ -108,6 +119,7 @@ describe('resourceScope', () => {
   it('includes team membership subquery in visibility filter', () => {
     expect(VISIBLE_RESOURCE_WHERE).toContain('team_memberships');
     expect(VISIBLE_RESOURCE_WHERE).toContain("scope = 'team'");
+    expect(VISIBLE_RESOURCE_WHERE).toContain("'tenant'");
   });
 
   it('returns self when user has no team memberships', () => {

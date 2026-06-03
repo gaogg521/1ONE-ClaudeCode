@@ -3,6 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { spawn } from 'node:child_process';
+import {
+  MAC_LEGACY_PACKAGED_EXES,
+  MAC_PACKAGED_EXE,
+  WIN_LEGACY_PACKAGED_EXES,
+  WIN_PACKAGED_EXE,
+} from './packagedExecutable.mjs';
 
 function parseArgs(argv) {
   const flags = new Set(argv.filter((x) => x.startsWith('--')));
@@ -30,8 +36,10 @@ function resolvePackagedApp(projectRoot) {
 
   if (process.platform === 'win32') {
     for (const dir of ['win-unpacked', 'win-x64-unpacked', 'win-arm64-unpacked']) {
-      const exe = path.join(outDir, dir, 'AionUi.exe');
-      if (fs.existsSync(exe)) return { executablePath: exe, cwd: path.join(outDir, dir) };
+      for (const fileName of [WIN_PACKAGED_EXE, ...WIN_LEGACY_PACKAGED_EXES]) {
+        const exe = path.join(outDir, dir, fileName);
+        if (fs.existsSync(exe)) return { executablePath: exe, cwd: path.join(outDir, dir) };
+      }
     }
   } else if (process.platform === 'darwin') {
     for (const dir of ['mac-arm64', 'mac-x64', 'mac', 'mac-universal']) {
@@ -39,14 +47,16 @@ function resolvePackagedApp(projectRoot) {
       if (!fs.existsSync(macDir)) continue;
       const appBundle = fs.readdirSync(macDir).find((f) => f.endsWith('.app'));
       if (!appBundle) continue;
-      const exe = path.join(macDir, appBundle, 'Contents', 'MacOS', 'AionUi');
-      if (fs.existsSync(exe)) return { executablePath: exe, cwd: macDir };
+      for (const binary of [MAC_PACKAGED_EXE, ...MAC_LEGACY_PACKAGED_EXES]) {
+        const exe = path.join(macDir, appBundle, 'Contents', 'MacOS', binary);
+        if (fs.existsSync(exe)) return { executablePath: exe, cwd: macDir };
+      }
     }
   } else {
     for (const dir of ['linux-unpacked', 'linux-x64-unpacked', 'linux-arm64-unpacked']) {
       const dirPath = path.join(outDir, dir);
       if (!fs.existsSync(dirPath)) continue;
-      for (const name of ['aionui', 'AionUi']) {
+      for (const name of [MAC_PACKAGED_EXE, 'aionui', 'AionUi', '1OneClaudeCode']) {
         const exe = path.join(dirPath, name);
         if (fs.existsSync(exe)) return { executablePath: exe, cwd: dirPath };
       }
@@ -70,8 +80,10 @@ async function main() {
   }
 
   if (shouldClean) {
-    await killProcessByName('AionUi.exe');
-    await killProcessByName('AionUi');
+    await killProcessByName(WIN_PACKAGED_EXE);
+    for (const legacy of WIN_LEGACY_PACKAGED_EXES) {
+      await killProcessByName(legacy);
+    }
     await killProcessByName('electron.exe');
     await killProcessByName('electron');
   }

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -10,12 +10,11 @@ import { Help } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { WebuiManagementMode } from '@/common/config/webuiEnterpriseConfig';
-import { resolveEnterpriseEditionPath } from '@/common/auth/enterpriseRoles';
-import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { isDesktopOperatorUser, useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { openAdminConsole as openAdminConsoleRoute } from '@/renderer/utils/openAdminConsole';
-import { setPostLoginRedirect } from '@/renderer/utils/postLoginRedirect';
+import { navigateAfterEditionSwitch } from '@/renderer/utils/editionSwitchNavigation';
 import styles from '@/renderer/components/layout/EditionModeSwitcher.module.css';
 
 type EditionModeSwitcherProps = {
@@ -28,9 +27,10 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
   const navigate = useNavigate();
   const location = useLocation();
   const isDesktop = isElectronDesktop();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const {
     loading,
+    hasInstanceEnterprise,
     hasJoinedEnterprise,
     managementMode,
     enterpriseContext,
@@ -66,29 +66,29 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
       if (next === 'enterprise' && !canUseEnterpriseEditionSwitcher) {
         return;
       }
-      void setManagementMode(next).then(async () => {
-        if (next === 'enterprise') {
-          if (isDesktop && !hasJoinedEnterprise) {
-            void navigate('/enterprise/join');
-            return;
-          }
-          if (status !== 'authenticated') {
-            void navigate('/enterprise/join');
-            return;
-          }
-          void navigate('/sessions');
-          return;
-        }
-        void navigate('/sessions');
+      void setManagementMode(next).then(() => {
+        navigateAfterEditionSwitch({
+          next,
+          navigate,
+          isDesktop,
+          hasJoinedEnterprise,
+          hasInstanceEnterprise,
+          isAuthenticated: status === 'authenticated',
+          isDesktopOperator: isDesktopOperatorUser(user),
+          currentPath: location.pathname,
+        });
       });
     },
     [
       canUseEnterpriseEditionSwitcher,
+      hasInstanceEnterprise,
       hasJoinedEnterprise,
       isDesktop,
       navigate,
+      location.pathname,
       setManagementMode,
       status,
+      user,
     ]
   );
 
@@ -100,25 +100,14 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
     defaultValue: '企业团队版管理后台',
   });
 
-  // 已加入企业：不显示切换器，直接展示企业身份标识 + 管理后台入口
-  if (hasJoinedEnterprise) {
+  // 已登录企业成员：标题栏展示企业身份；实例访客仍保留个人/企业切换器
+  if (hasJoinedEnterprise && status === 'authenticated' && !isDesktopOperatorUser(user)) {
     const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId;
-    const isEnterpriseGuest = status !== 'authenticated';
-    const enterpriseTagLabel = isEnterpriseGuest
-      ? t('settings.edition.enterpriseInstanceTag', {
-          defaultValue: '企业实例 · {{tenant}}',
-          tenant: tenantLabel ?? t('settings.edition.joined', { defaultValue: '已接入企业' }),
-        })
-      : (tenantLabel ?? t('settings.edition.joined', { defaultValue: '已加入企业' }));
+    const enterpriseTagLabel = tenantLabel ?? t('settings.edition.joined', { defaultValue: '已加入企业' });
     if (variant === 'compact') {
       return (
         <div className={styles.compact}>
           <Tag size='small' color='arcoblue'>{enterpriseTagLabel}</Tag>
-          {isEnterpriseGuest ? (
-            <Button size='mini' type='text' onClick={handleEnterpriseLogin}>
-              {t('settings.edition.enterpriseLoginAction', { defaultValue: '登录企业账号' })}
-            </Button>
-          ) : null}
           {showEnterpriseAdminNav ? (
             <Button size='mini' type='text' onClick={() => void openAdminConsole()}>
               {enterpriseAdminConsoleLabel}
@@ -133,11 +122,6 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
           <div className={styles.barLeft}>
             <Tag color='arcoblue'>{enterpriseTagLabel}</Tag>
           </div>
-          {isEnterpriseGuest ? (
-            <Button size='small' type='text' onClick={handleEnterpriseLogin}>
-              {t('settings.edition.enterpriseLoginAction', { defaultValue: '登录企业账号' })}
-            </Button>
-          ) : null}
           {showEnterpriseAdminNav ? (
             <Button size='small' type='outline' onClick={() => void openAdminConsole()}>
               {enterpriseAdminConsoleLabel}
@@ -245,9 +229,15 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
             </Radio>
           </Tooltip>
         </Radio.Group>
-        {!hasJoinedEnterprise ? (
+        {!hasInstanceEnterprise ? (
           <Tag size='small' color='orangered'>
             {t('settings.edition.needInvite', { defaultValue: '未加入企业' })}
+          </Tag>
+        ) : !hasJoinedEnterprise ? (
+          <Tag size='small' color='gold'>
+            {t('settings.edition.instanceConnected', {
+              defaultValue: '实例已接入 · 待登录',
+            })}
           </Tag>
         ) : (
           <Tag size='small' color='arcoblue'>

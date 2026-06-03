@@ -123,16 +123,19 @@ export function useLoginUiProviders(): LoginUiProvidersState {
   }, [reloadToken]);
 
   useEffect(() => {
-    const handleRefresh = () => {
-      refresh();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleRefresh = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        refresh();
+      }, 800);
     };
-    window.addEventListener('focus', handleRefresh);
-    window.addEventListener('one-enterprise-context-refresh', handleRefresh);
-    window.addEventListener('one-webui-config-refresh', handleRefresh);
+    window.addEventListener('one-enterprise-context-refresh', scheduleRefresh);
+    window.addEventListener('one-webui-config-refresh', scheduleRefresh);
     return () => {
-      window.removeEventListener('focus', handleRefresh);
-      window.removeEventListener('one-enterprise-context-refresh', handleRefresh);
-      window.removeEventListener('one-webui-config-refresh', handleRefresh);
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('one-enterprise-context-refresh', scheduleRefresh);
+      window.removeEventListener('one-webui-config-refresh', scheduleRefresh);
     };
   }, [refresh]);
 

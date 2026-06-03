@@ -7,6 +7,7 @@
 import type { IMessageAcpPermission } from '@/common/chat/chatLib';
 import { conversation } from '@/common/adapter/ipcBridge';
 import { Button, Card, Radio, Typography } from '@arco-design/web-react';
+import { isReadOnlyUrlFetchCommand } from '@/common/web/acpWebToolsHint';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -47,6 +48,9 @@ const MessageAcpPermission: React.FC<MessageAcpPermissionProps> = React.memo(({ 
     };
   };
   const { title, icon } = getToolInfo();
+  const commandText =
+    typeof toolCall?.rawInput?.command === 'string' ? toolCall.rawInput.command : undefined;
+  const showWebToolsHint = isReadOnlyUrlFetchCommand(commandText);
   const [selected, setSelected] = useState<string | null>(null);
   const [isResponding, setIsResponding] = useState(false);
   const [hasResponded, setHasResponded] = useState(false);
@@ -98,6 +102,9 @@ const MessageAcpPermission: React.FC<MessageAcpPermissionProps> = React.memo(({ 
               {toolCall.rawInput?.command || toolCall.title}
             </code>
           </div>
+        )}
+        {showWebToolsHint && (
+          <Text className='text-xs text-t-secondary'>{t('messages.permissionWebFetchHint')}</Text>
         )}
         {!hasResponded && (
           <>

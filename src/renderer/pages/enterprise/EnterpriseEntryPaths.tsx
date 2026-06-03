@@ -1,11 +1,11 @@
-﻿/**
+/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
  */
 
 import React, { useCallback } from 'react';
-import { Alert, Button, Message } from '@arco-design/web-react';
+import { Alert, Button } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
@@ -23,26 +23,16 @@ const EnterpriseEntryPaths: React.FC<EnterpriseEntryPathsProps> = ({ compact = f
   const navigate = useNavigate();
   const isDesktop = isElectronDesktop();
   const { status } = useAuth();
-  const { openEnterpriseLoginInBrowser } = useWebuiEnterpriseMode();
+  const { startEnterpriseLogin } = useWebuiEnterpriseMode();
 
   const goEnterpriseLogin = useCallback(async () => {
     setPostLoginRedirect(ENTERPRISE_JOIN_PATH);
     if (isDesktop) {
-      const result = await openEnterpriseLoginInBrowser();
-      if (result === 'webui_not_running') {
-        Message.warning(
-          t('settings.webui.joinNeedWebuiRunning', { defaultValue: '请先启用 WebUI 服务' })
-        );
-        void navigate('/settings/webui');
-      } else if (result === 'failed') {
-        Message.error(
-          t('settings.edition.openLoginFailed', { defaultValue: '无法打开浏览器，请手动访问 WebUI 登录页' })
-        );
-      }
+      await startEnterpriseLogin((path) => navigate(path), ENTERPRISE_JOIN_PATH);
       return;
     }
     void navigate('/enterprise/join');
-  }, [isDesktop, navigate, openEnterpriseLoginInBrowser, t]);
+  }, [isDesktop, navigate, startEnterpriseLogin]);
 
   if (compact) {
     return (
@@ -89,9 +79,7 @@ const EnterpriseEntryPaths: React.FC<EnterpriseEntryPathsProps> = ({ compact = f
       </ul>
       {(status !== 'authenticated' || isDesktop) && (
         <Button type='primary' onClick={() => void goEnterpriseLogin()}>
-          {isDesktop
-            ? t('settings.enterpriseConsole.openLoginInBrowser', { defaultValue: '在浏览器打开企业登录页' })
-            : t('settings.enterpriseConsole.goEnterpriseLogin', { defaultValue: '前往企业登录' })}
+          {t('settings.enterpriseConsole.goEnterpriseLogin', { defaultValue: '前往企业登录' })}
         </Button>
       )}
     </div>

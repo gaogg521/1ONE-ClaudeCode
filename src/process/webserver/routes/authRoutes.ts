@@ -771,7 +771,11 @@ export function registerAuthRoutes(app: Express): void {
         code === 'ECONNRESET' ||
         code === 'ENOTFOUND'
       ) {
-        res.status(503).json({ success: false, message: 'LDAP service unavailable. Please retry later.' });
+        const { formatLdapConnectionError } = await import('../auth/providers/LdapAuthProvider');
+        res.status(503).json({
+          success: false,
+          message: formatLdapConnectionError(error, cfg),
+        });
         return;
       }
       console.error('[AuthRoute] ldap login error:', error);

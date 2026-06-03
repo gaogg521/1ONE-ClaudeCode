@@ -8,6 +8,7 @@ import type { BrowserWindow } from 'electron';
 import { ipcBridge } from '@/common';
 
 export const PROTOCOL_SCHEME = '1one';
+const SUPPORTED_PROTOCOL_SCHEMES = ['1one', '1one-claudecode'];
 
 /**
  * Parse an 1ONE ClaudeCode:// URL into action and params.
@@ -16,40 +17,58 @@ export const PROTOCOL_SCHEME = '1one';
  *   2. 1ONE ClaudeCode://provider/add?v=1&data=<base64 JSON>  (one-api / new-api style)
  */
 export const parseDeepLinkUrl = (url: string): { action: string; params: Record<string, string> } | null => {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== `${PROTOCOL_SCHEME}:`) return null;
+  // Note: `new URL()` rejects schemes starting with digits (e.g. `1one-claudecode://`).
+  // Parse manually to keep compatibility.
+  const match = url.match(
+    /^([0-9a-zA-Z+.-]+):\/\/([^/?#]+)([^?#]*)(?:\?([^#]*))?(?:#.*)?$/
+  );
+  if (!match) return null;
 
-    const hostname = parsed.hostname || '';
-    const pathname = parsed.pathname.replace(/^\/+/, '');
-    const action = pathname ? `${hostname}/${pathname}` : hostname;
+  const protocol = match[1];
+  if (!SUPPORTED_PROTOCOL_SCHEMES.includes(protocol)) return null;
 
-    const params: Record<string, string> = {};
-    parsed.searchParams.forEach((value, key) => {
-      params[key] = value;
-    });
+  const hostname = match[2] ?? '';
+  const rawPath = match[3] ?? '';
+  const pathname = rawPath.replace(/^\/+/, '');
+  const action = pathname ? `${hostname}/${pathname}` : hostname;
 
-    // If data param exists, decode base64 JSON and merge into params
-    if (params.data) {
+  const queryString = match[4] ?? '';
+  const params: Record<string, string> = {};
+  if (queryString) {
+    for (const part of queryString.split('&')) {
+      if (!part) continue;
+      const eqIndex = part.indexOf('=');
+      const key = eqIndex >= 0 ? part.slice(0, eqIndex) : part;
+      const value = eqIndex >= 0 ? part.slice(eqIndex + 1) : '';
+      if (!key) continue;
       try {
-        const json = JSON.parse(Buffer.from(params.data, 'base64').toString('utf-8'));
-        if (json && typeof json === 'object') {
-          Object.assign(params, json);
-        }
+        params[key] = decodeURIComponent(value);
       } catch {
-        // Ignore decode errors
+        // If decodeURIComponent fails (malformed escape), keep the raw value.
+        params[key] = value;
       }
+    }
+  }
+
+  // If data param exists, decode base64 JSON and merge into params
+  if (params.data !== undefined) {
+    try {
+      const json = JSON.parse(Buffer.from(params.data, 'base64').toString('utf-8'));
+      if (json && typeof json === 'object') Object.assign(params, json);
+    } catch {
+      // Ignore decode errors
+    } finally {
+      // Always remove raw data param after attempting decode
       delete params.data;
     }
-
-    return { action, params };
-  } catch {
-    return null;
   }
+
+  return { action, params };
 };
 
 let mainWindowRef: BrowserWindow | null = null;
-let pendingDeepLinkUrl: string | null = process.argv.find((arg) => arg.startsWith(`${PROTOCOL_SCHEME}://`)) || null;
+let pendingDeepLinkUrl: string | null =
+  process.argv.find((arg) => SUPPORTED_PROTOCOL_SCHEMES.some((scheme) => arg.startsWith(`${scheme}://`))) || null;
 
 export const setDeepLinkMainWindow = (win: BrowserWindow): void => {
   mainWindowRef = win;

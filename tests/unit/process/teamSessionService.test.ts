@@ -361,6 +361,7 @@ describe('TeamSessionService', () => {
 
     const team: TTeam = {
       id: 'team-1',
+      tenantId: 'tenant-1',
       userId: 'user-1',
       name: 'Preset Team',
       workspace: '/workspace',

@@ -177,7 +177,7 @@ describe('SendBox warmup debounce logic', () => {
     expect(mockWarmupInvoke).toHaveBeenCalledWith({ conversation_id: 'test-conv-1' });
   });
 
-  it('cancels warmup on blur before 1s', () => {
+  it('keeps warmup scheduled even if blur happens before 1s', () => {
     const { container } = render(
       React.createElement(SendBox, {
         onSend: vi.fn().mockResolvedValue(undefined),
@@ -199,8 +199,9 @@ describe('SendBox warmup debounce logic', () => {
     // Advance 1000ms more
     vi.advanceTimersByTime(1000);
 
-    // Verify warmup was NOT called
-    expect(mockWarmupInvoke).not.toHaveBeenCalled();
+    // Verify warmup still runs for the focused conversation
+    expect(mockWarmupInvoke).toHaveBeenCalledTimes(1);
+    expect(mockWarmupInvoke).toHaveBeenCalledWith({ conversation_id: 'test-conv-1' });
   });
 
   it('does not re-trigger warmup for same conversation', () => {

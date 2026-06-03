@@ -5,6 +5,12 @@
  */
 
 import { WEBUI_DEFAULT_PORT } from '@/common/config/constants';
+import {
+  buildWebuiAdminLoginUrl,
+  buildWebuiAdminLoginUrlOnDedicatedPort,
+  buildWebuiMemberLoginUrl,
+  resolveWebuiAdminPort,
+} from '@/common/config/webuiLoginAccess';
 import { shell, webui, type IWebUIStatus } from '@/common/adapter/ipcBridge';
 import { ConfigStorage } from '@/common/config/storage';
 import AionModal from '@/renderer/components/base/AionModal';
@@ -18,7 +24,7 @@ import ChannelWeixinLogo from '@/renderer/assets/channel-logos/weixin.svg';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { Button, Collapse, Form, Input, Message, Modal, Switch, Tabs, Tag, Tooltip } from '@arco-design/web-react';
 import { Communication, Copy, Earth, EditTwo, Refresh } from '@icon-park/react';
-import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsViewMode } from '../settingsViewContext';
 import WebuiJoinEnterprisePanel from '@/renderer/pages/settings/WebuiSettings/WebuiJoinEnterprisePanel';
@@ -38,6 +44,30 @@ function resolveWebuiRoleLabel(
   }
   return t('settings.workspaceIdentity.roleMember', { defaultValue: '成员' });
 }
+
+const WebuiUrlCopyRow: React.FC<{ url: string; onCopy: (text: string) => void }> = ({ url, onCopy }) => {
+  const { t } = useTranslation();
+  return (
+    <div className='flex items-center gap-8px min-w-0'>
+      <button
+        type='button'
+        className='text-12px text-primary font-mono hover:underline cursor-pointer bg-transparent border-none p-0 truncate text-left'
+        onClick={() => shell.openExternal.invoke(url).catch(console.error)}
+      >
+        {url}
+      </button>
+      <Tooltip content={t('common.copy')}>
+        <button
+          type='button'
+          className='p-4px text-t-tertiary hover:text-t-primary cursor-pointer bg-transparent border-none shrink-0'
+          onClick={() => onCopy(url)}
+        >
+          <Copy size={14} />
+        </button>
+      </Tooltip>
+    </div>
+  );
+};
 
 const WebuiLoginRoleSection: React.FC<{ webuiRunning: boolean }> = ({ webuiRunning }) => {
   const { t } = useTranslation();
@@ -346,6 +376,9 @@ const WebuiModalContent: React.FC = () => {
           allowRemote: prev?.allowRemote ?? false,
           localUrl: data.localUrl ?? `http://localhost:${data.port ?? WEBUI_DEFAULT_PORT}`,
           networkUrl: data.networkUrl,
+          adminPort: data.adminPort ?? prev?.adminPort,
+          adminLocalUrl: data.adminLocalUrl ?? prev?.adminLocalUrl,
+          adminNetworkUrl: data.adminNetworkUrl ?? prev?.adminNetworkUrl,
           lanIP: prev?.lanIP,
           initialPassword: prev?.initialPassword,
           adminEmail: prev?.adminEmail,
@@ -410,6 +443,33 @@ const WebuiModalContent: React.FC = () => {
     return `http://localhost:${currentPort}`;
   }, [allowRemotePreference, getLocalIP, status?.allowRemote, status?.port, status?.running, port]);
 
+  const getMemberOrigin = useCallback(() => {
+    if (status?.allowRemote && status.networkUrl) {
+      return status.networkUrl;
+    }
+    return status?.localUrl ?? getDisplayUrl();
+  }, [getDisplayUrl, status?.allowRemote, status?.localUrl, status?.networkUrl]);
+
+  const getAdminOrigin = useCallback(() => {
+    if (status?.allowRemote && status.adminNetworkUrl) {
+      return status.adminNetworkUrl;
+    }
+    if (status?.adminLocalUrl) {
+      return status.adminLocalUrl;
+    }
+    const memberOrigin = getMemberOrigin();
+    return buildWebuiAdminLoginUrlOnDedicatedPort(memberOrigin) ?? memberOrigin;
+  }, [getMemberOrigin, status?.adminLocalUrl, status?.adminNetworkUrl, status?.allowRemote]);
+
+  const memberLoginUrl = useMemo(
+    () => (status?.running ? buildWebuiMemberLoginUrl(getMemberOrigin()) : null),
+    [getMemberOrigin, status?.running]
+  );
+  const adminLoginUrl = useMemo(
+    () => (status?.running ? buildWebuiAdminLoginUrl(getAdminOrigin()) : null),
+    [getAdminOrigin, status?.running]
+  );
+
   // 启动/停止 WebUI / Start/Stop WebUI
   const handleToggle = async (enabled: boolean) => {
     // 使用缓存的 IP，不再阻塞获取 / Use cached IP, no longer block to fetch
@@ -449,6 +509,9 @@ const WebuiModalContent: React.FC = () => {
             allowRemote: allowRemotePreference,
             localUrl,
             networkUrl: allowRemotePreference && responseIP ? `http://${responseIP}:${port}` : undefined,
+            adminPort: startResult.data.adminPort,
+            adminLocalUrl: startResult.data.adminLocalUrl,
+            adminNetworkUrl: startResult.data.adminNetworkUrl,
             lanIP: responseIP,
             initialPassword: responsePassword || cachedPassword || prev?.initialPassword,
           }));
@@ -461,6 +524,12 @@ const WebuiModalContent: React.FC = () => {
             localUrl,
             lanIP: currentIP || prev?.lanIP,
             networkUrl: allowRemotePreference && currentIP ? `http://${currentIP}:${port}` : undefined,
+            adminPort: prev?.adminPort,
+            adminLocalUrl: prev?.adminLocalUrl ?? `http://localhost:${resolveWebuiAdminPort(port)}`,
+            adminNetworkUrl:
+              allowRemotePreference && currentIP
+                ? `http://${currentIP}:${resolveWebuiAdminPort(port)}`
+                : prev?.adminNetworkUrl,
             initialPassword: cachedPassword || prev?.initialPassword,
           }));
         }
@@ -903,27 +972,26 @@ const WebuiModalContent: React.FC = () => {
             <Switch checked={webuiEnabled} loading={startLoading} onChange={handleToggle} />
           </PreferenceRow>
 
-          {/* 访问地址（仅运行时显示）/ Access URL (only when running) */}
-          {status?.running && (
-            <PreferenceRow label={t('settings.webui.accessUrl')}>
-              <div className='flex items-center gap-8px min-w-0'>
-                <button
-                  className='text-14px text-primary font-mono hover:underline cursor-pointer bg-transparent border-none p-0 truncate'
-                  onClick={() => shell.openExternal.invoke(getDisplayUrl()).catch(console.error)}
-                >
-                  {getDisplayUrl()}
-                </button>
-                <Tooltip content={t('common.copy')}>
-                  <button
-                    className='p-4px text-t-tertiary hover:text-t-primary cursor-pointer bg-transparent border-none'
-                    onClick={() => handleCopy(getDisplayUrl())}
-                  >
-                    <Copy size={16} />
-                  </button>
-                </Tooltip>
-              </div>
+          {status?.running && memberLoginUrl ? (
+            <PreferenceRow
+              label={t('settings.webui.memberAccessLabel', {
+                defaultValue: '团队/员工访问（端口 {{port}}）',
+                port: status.port,
+              })}
+            >
+              <WebuiUrlCopyRow url={memberLoginUrl} onCopy={handleCopy} />
             </PreferenceRow>
-          )}
+          ) : null}
+          {status?.running && adminLoginUrl ? (
+            <PreferenceRow
+              label={t('settings.webui.adminAccessLabel', {
+                defaultValue: '管理员专属后台（端口 {{port}}）',
+                port: status.adminPort ?? resolveWebuiAdminPort(status.port),
+              })}
+            >
+              <WebuiUrlCopyRow url={adminLoginUrl} onCopy={handleCopy} />
+            </PreferenceRow>
+          ) : null}
 
           {/* 允许局域网访问 / Allow LAN Access */}
           <PreferenceRow

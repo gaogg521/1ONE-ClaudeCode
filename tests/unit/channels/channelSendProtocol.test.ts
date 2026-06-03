@@ -48,7 +48,14 @@ describe('channelSendProtocol', () => {
 
     fs.mkdirSync(workspace, { recursive: true });
     fs.writeFileSync(externalFile, 'secret');
-    fs.symlinkSync(externalFile, symlinkPath);
+    try {
+      fs.symlinkSync(externalFile, symlinkPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+        return;
+      }
+      throw error;
+    }
     mockGetConversation.mockReturnValue({ success: true, data: { extra: { workspace } } });
 
     const parsed = await resolveChannelSendProtocol(

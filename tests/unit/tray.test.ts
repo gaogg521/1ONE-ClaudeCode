@@ -13,8 +13,12 @@ const hoisted = vi.hoisted(() => {
   const mockTrayInstance = {
     setToolTip: vi.fn(),
     setContextMenu: vi.fn(),
+    popUpContextMenu: vi.fn(),
+    focus: vi.fn(),
+    getGUID: vi.fn(() => null),
     on: vi.fn(),
     destroy: vi.fn(),
+    isDestroyed: vi.fn(() => false),
   };
 
   const mockMenuInstance = { items: [] };
@@ -47,7 +51,7 @@ const hoisted = vi.hoisted(() => {
   // without vi.doMock (which breaks hoisted vi.mock restoration).
   let shouldThrowOnConstruct = false;
   class MockTray {
-    constructor() {
+    constructor(_icon?: unknown, _guid?: string) {
       if (shouldThrowOnConstruct) {
         throw new Error('Tray init failed');
       }
@@ -76,10 +80,12 @@ const createMockWindow = () =>
   ({
     isDestroyed: vi.fn(() => false),
     isMinimized: vi.fn(() => false),
+    isVisible: vi.fn(() => false),
     restore: vi.fn(),
     show: vi.fn(),
     focus: vi.fn(),
     hide: vi.fn(),
+    setAlwaysOnTop: vi.fn(),
     webContents: {
       send: vi.fn(),
     },
@@ -193,18 +199,45 @@ describe('tray module', () => {
 
       createOrUpdateTray();
 
-      expect(mockTrayInstance.setToolTip).toHaveBeenCalledWith('1ONE ClaudeCode');
+      if (process.platform === 'win32') {
+        expect(mockTrayInstance.setToolTip).toHaveBeenCalledWith(
+          expect.stringContaining('Ctrl+Shift+O')
+        );
+      } else {
+        expect(mockTrayInstance.setToolTip).toHaveBeenCalledWith('1one');
+      }
     });
 
-    it('should be idempotent - second call does not create another tray', async () => {
+    it('should not recreate tray when existing instance is alive on non-Windows', async () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'darwin',
+        configurable: true,
+      });
+      mockTrayInstance.isDestroyed = vi.fn(() => false);
       const { createOrUpdateTray } = await import('@process/utils/tray');
 
       createOrUpdateTray();
-      const firstCallCount = mockTrayInstance.setToolTip.mock.calls.length;
+      mockTrayInstance.setToolTip.mockClear();
+      mockTrayInstance.destroy.mockClear();
+      createOrUpdateTray();
+
+      expect(mockTrayInstance.destroy).not.toHaveBeenCalled();
+      expect(mockTrayInstance.setToolTip).not.toHaveBeenCalled();
+    });
+
+    it('should recreate tray on Windows to drop stale notification icons', async () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'win32',
+        configurable: true,
+      });
+      mockTrayInstance.isDestroyed = vi.fn(() => false);
+      const { createOrUpdateTray } = await import('@process/utils/tray');
 
       createOrUpdateTray();
-      // setToolTip should not be called again
-      expect(mockTrayInstance.setToolTip).toHaveBeenCalledTimes(firstCallCount);
+      mockTrayInstance.destroy.mockClear();
+      createOrUpdateTray();
+
+      expect(mockTrayInstance.destroy).toHaveBeenCalled();
     });
 
     it('should register double-click and click event handlers', async () => {
@@ -215,6 +248,9 @@ describe('tray module', () => {
       const eventNames = mockTrayInstance.on.mock.calls.map((call) => call[0]);
       expect(eventNames).toContain('double-click');
       expect(eventNames).toContain('click');
+      if (process.platform === 'win32') {
+        expect(eventNames).toContain('right-click');
+      }
     });
 
     it('should handle Tray constructor failure gracefully', async () => {
@@ -268,7 +304,11 @@ describe('tray module', () => {
       await refreshTrayMenu();
 
       expect(mockBuildFromTemplate).toHaveBeenCalledOnce();
-      expect(mockTrayInstance.setContextMenu).toHaveBeenCalledWith(mockMenuInstance);
+      if (process.platform === 'win32') {
+        expect(mockTrayInstance.setContextMenu).not.toHaveBeenCalled();
+      } else {
+        expect(mockTrayInstance.setContextMenu).toHaveBeenCalledWith(mockMenuInstance);
+      }
     });
 
     it('should be a no-op when no tray exists', async () => {
@@ -285,6 +325,28 @@ describe('tray module', () => {
   });
 
   describe('context menu content', () => {
+    it('should popup context menu on right-click for Windows tray', async () => {
+      vi.resetModules();
+      vi.clearAllMocks();
+      Object.defineProperty(process, 'platform', {
+        value: 'win32',
+        configurable: true,
+      });
+      await import('@/common/electronSafe');
+      await import('@process/services/database');
+      const { createOrUpdateTray, refreshTrayMenu } = await import('@process/utils/tray');
+      createOrUpdateTray();
+      await refreshTrayMenu();
+
+      const rightClickHandler = mockTrayInstance.on.mock.calls.find((call) => call[0] === 'right-click')?.[1] as
+        | (() => void)
+        | undefined;
+      expect(rightClickHandler).toBeTypeOf('function');
+      rightClickHandler?.();
+      expect(mockTrayInstance.popUpContextMenu).toHaveBeenCalledWith(mockMenuInstance);
+      expect(mockTrayInstance.setContextMenu).not.toHaveBeenCalled();
+    });
+
     const setupWithOverrides = () => {
       vi.resetModules();
       vi.clearAllMocks();

@@ -5,11 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const navigateMock = vi.hoisted(() => vi.fn());
 const loginMock = vi.hoisted(() => vi.fn());
 const loginWithLdapMock = vi.hoisted(() => vi.fn());
-const fetchMock = vi.hoisted(() => vi.fn());
 const locationSearchMock = vi.hoisted(() => ({ current: '' }));
 const locationStateMock = vi.hoisted(() => ({ current: null as { returnTo?: string } | null }));
 const readRedirectFromSearchMock = vi.hoisted(() => vi.fn(() => null));
 const isDesktopMock = vi.hoisted(() => ({ current: false }));
+const enterpriseModeMock = vi.hoisted(() => ({
+  current: {
+    loading: false,
+    hasJoinedEnterprise: false,
+  },
+}));
 const loginUiProvidersMock = vi.hoisted(() => ({
   current: {
     loading: false,
@@ -76,6 +81,7 @@ vi.mock('@/renderer/utils/platform', () => ({
 }));
 
 vi.mock('../../src/renderer/hooks/context/AuthContext', () => ({
+  isDesktopOperatorUser: (user?: { id?: string } | null) => user?.id === 'desktop_operator',
   useAuth: () => ({
     status: 'unauthenticated',
     user: null,
@@ -85,9 +91,7 @@ vi.mock('../../src/renderer/hooks/context/AuthContext', () => ({
 }));
 
 vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
-  useWebuiEnterpriseMode: () => ({
-    loading: false,
-  }),
+  useWebuiEnterpriseMode: () => enterpriseModeMock.current,
 }));
 
 vi.mock('@/renderer/hooks/auth/useLoginUiProviders', () => ({
@@ -238,6 +242,10 @@ describe('LoginPage', () => {
     vi.clearAllMocks();
     locationSearchMock.current = '';
     isDesktopMock.current = false;
+    enterpriseModeMock.current = {
+      loading: false,
+      hasJoinedEnterprise: false,
+    };
     readRedirectFromSearchMock.mockReturnValue(null);
     loginUiProvidersMock.current = {
       loading: false,
@@ -300,6 +308,49 @@ describe('LoginPage', () => {
     });
 
     expect(screen.queryByText('登录方式')).not.toBeInTheDocument();
+  });
+
+  it('shows enterprise login channels when desktop instance is joined but not signed in', async () => {
+    isDesktopMock.current = true;
+    enterpriseModeMock.current = {
+      loading: false,
+      hasJoinedEnterprise: true,
+    };
+    locationSearchMock.current = '?mode=enterprise&redirect=%2Fsessions';
+    loginUiProvidersMock.current = {
+      ...loginUiProvidersMock.current,
+      mode: 'enterprise',
+      anyProviderConfigured: true,
+    };
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('本地账户')).toBeInTheDocument();
+    });
+    expect(screen.getByText('飞书')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'login.submit' })).not.toBeInTheDocument();
+  });
+
+  it('keeps WebUI admin login separate from enterprise member login', async () => {
+    locationSearchMock.current = '?mode=admin&redirect=%2Fenterprise%2Fauth';
+    loginUiProvidersMock.current = {
+      ...loginUiProvidersMock.current,
+      mode: 'enterprise',
+      ldapEnabled: true,
+      ldapConfigured: true,
+      anyProviderEnabled: true,
+      anyProviderConfigured: true,
+    };
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1, name: '团队版管理员专属后台' })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('登录方式')).not.toBeInTheDocument();
+    expect(screen.queryByText('LDAP 域控')).not.toBeInTheDocument();
   });
 
   it('shows compact desktop login with back navigation', async () => {

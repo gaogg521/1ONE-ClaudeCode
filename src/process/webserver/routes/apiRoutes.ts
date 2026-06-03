@@ -25,6 +25,7 @@ import { registerWeixinLoginRoutes } from './weixinLoginRoutes';
 import { registerKanbanRoutes } from './kanbanRoutes';
 import { registerAdminRoutes } from './adminRoutes';
 import { registerTeamTasksRoutes } from './teamTasksRoutes';
+import { registerTeamRuntimeRoutes } from './teamRuntimeRoutes';
 import { registerDevOpsRoutes } from './devopsRoutes';
 import { registerNotificationRoutes } from './notificationRoutes';
 import { registerProfileRoutes } from './profileRoutes';
@@ -700,6 +701,7 @@ export function registerApiRoutes(app: Express): void {
   registerKanbanRoutes(app);
   registerAdminRoutes(app);
   registerTeamTasksRoutes(app, { rateLimit: apiRateLimiter, auth: validateApiAccess });
+  registerTeamRuntimeRoutes(app, validateApiAccess);
   registerNotificationRoutes(app, { rateLimit: apiRateLimiter, auth: validateApiAccess });
   registerProfileRoutes(app, { rateLimit: apiRateLimiter, auth: validateApiAccess });
   registerDevOpsRoutes(app);

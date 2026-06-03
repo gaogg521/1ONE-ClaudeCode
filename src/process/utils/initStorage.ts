@@ -37,6 +37,8 @@ import {
   BUILTIN_IMAGE_GEN_ID,
   BUILTIN_IMAGE_GEN_LEGACY_NAMES,
   BUILTIN_IMAGE_GEN_NAME,
+  BUILTIN_WEB_TOOLS_ID,
+  BUILTIN_WEB_TOOLS_NAME,
 } from '../resources/builtinMcp/constants';
 import { buildCodegraphMcpServer } from '@process/services/agentToolkit/codegraph';
 import { getAgentToolkitConfig } from '@process/services/agentToolkit/config';
@@ -796,6 +798,62 @@ const ensureBuiltinMcpServers = async (): Promise<void> => {
 
     const toolkitConfig = await getAgentToolkitConfig();
     const codegraphShouldEnable = toolkitConfig.enabled && toolkitConfig.codegraphEnabled;
+    const webToolsScriptPath = getBuiltinMcpScriptPath('builtin-mcp-web-tools');
+    const webToolsIdx = mcpServers.findIndex((s) => s.builtin === true && s.id === BUILTIN_WEB_TOOLS_ID);
+    const webToolsOriginalJson = JSON.stringify(
+      {
+        [BUILTIN_WEB_TOOLS_NAME]: {
+          command: 'node',
+          args: [webToolsScriptPath],
+        },
+      },
+      null,
+      2
+    );
+    if (webToolsIdx >= 0) {
+      const existing = mcpServers[webToolsIdx];
+      const existingArgs = existing.transport.type === 'stdio' ? (existing.transport.args || []).join(' ') : '';
+      const targetArgs = webToolsScriptPath;
+      if (existingArgs !== targetArgs || existing.enabled !== true) {
+        mcpServers[webToolsIdx] = {
+          ...existing,
+          name: BUILTIN_WEB_TOOLS_NAME,
+          description:
+            'Built-in web fetch and search (Baidu/Bing). No Google login required. Always injected for ACP agents.',
+          enabled: true,
+          transport: {
+            type: 'stdio',
+            command: 'node',
+            args: [webToolsScriptPath],
+            env: {},
+          },
+          updatedAt: now,
+          originalJson: webToolsOriginalJson,
+        };
+        changed = true;
+      }
+    } else {
+      mcpServers.push({
+        id: BUILTIN_WEB_TOOLS_ID,
+        name: BUILTIN_WEB_TOOLS_NAME,
+        description:
+          'Built-in web fetch and search (Baidu/Bing). No Google login required. Always injected for ACP agents.',
+        enabled: true,
+        builtin: true,
+        status: 'connected',
+        transport: {
+          type: 'stdio',
+          command: 'node',
+          args: [webToolsScriptPath],
+          env: {},
+        },
+        createdAt: now,
+        updatedAt: now,
+        originalJson: webToolsOriginalJson,
+      });
+      changed = true;
+    }
+
     const codegraphIdx = mcpServers.findIndex((s) => s.builtin === true && s.id === BUILTIN_CODEGRAPH_ID);
     const codegraphServer = buildCodegraphMcpServer(now);
     codegraphServer.enabled = codegraphShouldEnable;
@@ -1052,33 +1110,43 @@ export async function restoreHiddenBuiltinAssistants(): Promise<{ restoredCount:
   return { restoredCount };
 }
 
-const initStorage = async () => {
+const INIT_STEP_TIMEOUT_MS = 120_000;
+
+async function withInitTimeout<T>(promise: Promise<T>, label: string, ms = INIT_STEP_TIMEOUT_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/** Fast path: migrations + config interceptors + DB connect — unblocks desktop window creation. */
+export const initStorageCore = async (): Promise<void> => {
   const t0 = performance.now();
   const mark = (label: string) => console.log(`[1ONE:init] ${label} +${Math.round(performance.now() - t0)}ms`);
-  mark('start');
+  mark('core start');
 
-  // 1. 先执行数据迁移（在任何目录创建之前）
   await migrateLegacyData();
   mark('1. migrateLegacyData');
 
-  // 2. 创建必要的目录（迁移后再创建，确保迁移能正常进行）
-  // Use ensureDirectory to handle cases where a regular file blocks the path (#841)
   ensureDirectory(getHomePage());
   ensureDirectory(getDataPath());
 
-  // 3. 初始化存储系统
   ConfigStorage.interceptor(configFile);
   ChatStorage.interceptor(chatFile);
   ChatMessageStorage.interceptor(chatMessageFile);
   EnvStorage.interceptor(envFile);
   mark('3. storage interceptors');
 
-  // 3.1 Config migration only makes sense in standalone server mode (not inside Electron itself)
   if (!hasElectronAppPath()) {
-    // Migrate config from Electron desktop app (once, after storage is ready)
     await migrateFromElectronConfig(configFile as unknown as Parameters<typeof migrateFromElectronConfig>[0]);
 
-    // Manual import from specified path (if env var present)
     const importFrom = process.env.IMPORT_CONFIG_FROM;
     if (importFrom) {
       const overwrite = process.env.IMPORT_CONFIG_OVERWRITE === 'true';
@@ -1090,6 +1158,23 @@ const initStorage = async () => {
     }
     mark('3.1 configMigration');
   }
+
+  try {
+    console.log('[1ONE:init] 6. database (connecting)...');
+    await withInitTimeout(getDatabase(), 'getDatabase', 30_000);
+    console.log('[1ONE:init] 6. database (connected)');
+  } catch (error) {
+    console.error('[1ONE:init] Database connect failed (window may still open):', error);
+  }
+  mark('core done');
+};
+
+/** Heavy path: MCP bundles, builtin assistants — runs while the window is already visible. */
+export const initStorageDeferred = async (): Promise<void> => {
+  const t0 = performance.now();
+  const mark = (label: string) =>
+    console.log(`[1ONE:init:deferred] ${label} +${Math.round(performance.now() - t0)}ms`);
+  mark('deferred start');
 
   // 4. 初始化 MCP 配置（为所有用户提供默认配置）
   try {
@@ -1105,9 +1190,10 @@ const initStorage = async () => {
   }
   mark('4.1 MCP defaults');
 
-  // 4.2 Ensure built-in MCP servers exist and are up-to-date
   await ensureBuiltinMcpServers();
-  mark('4.2 builtinMcpServers');
+  const { ensureBuiltinMcpBundles } = await import('@process/utils/ensureBuiltinMcpBundles');
+  void ensureBuiltinMcpBundles();
+  mark('4.2 builtinMcpServers (bundles async)');
 
   try {
     const existingToolkit = await configFile.get('tools.agentToolkit').catch((): undefined => undefined);
@@ -1118,29 +1204,34 @@ const initStorage = async () => {
     console.warn('[1ONE ClaudeCode] Failed to seed tools.agentToolkit config:', error);
   }
 
-  // 5. 初始化内置助手（Assistants）
   try {
-    await syncBuiltinAssistantsConfig();
+    await withInitTimeout(syncBuiltinAssistantsConfig(), 'syncBuiltinAssistantsConfig');
     mark('5. builtin assistants');
   } catch (error) {
     console.error('[1ONE ClaudeCode] Failed to initialize builtin assistants:', error);
   }
 
-  // 6. 初始化数据库（better-sqlite3）
   try {
-    await getDatabase();
-    await cleanupOrphanedHealthCheckConversations();
+    await withInitTimeout(getDatabase(), 'getDatabase(deferred)', 15_000);
+    void cleanupOrphanedHealthCheckConversations().catch((error) => {
+      console.warn('[1ONE:init:deferred] health-check cleanup failed:', error);
+    });
   } catch (error) {
-    console.error('[InitStorage] Database initialization failed, falling back to file-based storage:', error);
+    console.warn('[1ONE:init:deferred] database follow-up failed:', error);
   }
-  mark('6. database');
+  mark('6. database follow-up');
 
   if (hasElectronAppPath()) {
     application.systemInfo.provider(() => {
       return Promise.resolve(getSystemDir());
     });
   }
-  mark('done');
+  mark('deferred done');
+};
+
+const initStorage = async (): Promise<void> => {
+  await initStorageCore();
+  await initStorageDeferred();
 };
 
 export const ProcessConfig = configFile;

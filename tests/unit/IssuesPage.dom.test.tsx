@@ -3,8 +3,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigateMock = vi.hoisted(() => vi.fn());
+const locationMock = vi.hoisted(() => ({ pathname: '/issues', search: '' }));
 const authMock = vi.hoisted(() => vi.fn());
 const editionFeaturesMock = vi.hoisted(() => vi.fn());
+const enterpriseModeMock = vi.hoisted(() => vi.fn());
 const listRequirementsTreeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
@@ -22,6 +24,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
+  useLocation: () => locationMock,
 }));
 
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({
@@ -32,12 +35,40 @@ vi.mock('@/renderer/hooks/webui/useEditionFeatures', () => ({
   useEditionFeatures: () => editionFeaturesMock(),
 }));
 
+vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
+  useWebuiEnterpriseMode: () => enterpriseModeMock(),
+}));
+
 vi.mock('@/renderer/utils/enterpriseApi/modules', () => ({
   listRequirementsTree: () => listRequirementsTreeMock(),
 }));
 
+vi.mock('@/renderer/utils/webuiApiBase', () => ({
+  getWebuiApiBaseUrl: vi.fn(async () => 'http://127.0.0.1:25809'),
+}));
+
+vi.mock('@/renderer/utils/ensureDesktopWebui', () => ({
+  ensureDesktopWebuiRunning: vi.fn(async () => undefined),
+}));
+
 vi.mock('@/renderer/components/layout/PageContentShell', () => ({
   default: ({ children }: React.PropsWithChildren) => <div data-testid='page-content-shell'>{children}</div>,
+}));
+
+vi.mock('@/renderer/components/base/AionModal', () => ({
+  default: ({
+    visible,
+    children,
+    header,
+    footer,
+  }: React.PropsWithChildren<{ visible?: boolean; header?: React.ReactNode; footer?: React.ReactNode }>) =>
+    visible ? (
+      <div role='dialog'>
+        {header ? <div>{header}</div> : null}
+        {children}
+        {footer}
+      </div>
+    ) : null,
 }));
 
 vi.mock('@arco-design/web-react', () => ({
@@ -45,7 +76,12 @@ vi.mock('@arco-design/web-react', () => ({
   Button: ({
     children,
     onClick,
-  }: React.PropsWithChildren<{ onClick?: () => void }>) => <button onClick={onClick}>{children}</button>,
+    disabled,
+  }: React.PropsWithChildren<{ onClick?: () => void; disabled?: boolean }>) => (
+    <button onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  ),
   Card: ({
     title,
     children,
@@ -56,15 +92,40 @@ vi.mock('@arco-design/web-react', () => ({
     </section>
   ),
   Empty: ({ description }: { description?: React.ReactNode }) => <div>{description}</div>,
-  Input: ({
-    value,
-    onChange,
-    placeholder,
-  }: {
-    value?: string;
-    onChange?: (value: string) => void;
-    placeholder?: string;
-  }) => <input value={value} onChange={(e) => onChange?.(e.target.value)} placeholder={placeholder} />,
+  Form: Object.assign(
+    ({ children }: React.PropsWithChildren) => <form>{children}</form>,
+    {
+      Item: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+      useForm: () => [
+        {
+          setFieldsValue: vi.fn(),
+          validate: vi.fn().mockResolvedValue({}),
+        },
+      ],
+    }
+  ),
+  Input: Object.assign(
+    ({
+      value,
+      onChange,
+      placeholder,
+    }: {
+      value?: string;
+      onChange?: (value: string) => void;
+      placeholder?: string;
+    }) => <input value={value} onChange={(e) => onChange?.(e.target.value)} placeholder={placeholder} />,
+    {
+      TextArea: ({
+        value,
+        onChange,
+        placeholder,
+      }: {
+        value?: string;
+        onChange?: (value: string) => void;
+        placeholder?: string;
+      }) => <textarea value={value} onChange={(e) => onChange?.(e.target.value)} placeholder={placeholder} />,
+    }
+  ),
   Result: ({
     title,
     subTitle,
@@ -80,6 +141,14 @@ vi.mock('@arco-design/web-react', () => ({
       {extra}
     </div>
   ),
+  Select: Object.assign(
+    ({ children }: React.PropsWithChildren) => <select>{children}</select>,
+    {
+      Option: ({ children, value }: React.PropsWithChildren<{ value: string }>) => (
+        <option value={value}>{children}</option>
+      ),
+    }
+  ),
   Spin: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Tag: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
   Typography: {
@@ -92,6 +161,11 @@ import IssuesPage from '@/renderer/pages/issues';
 describe('IssuesPage', () => {
   beforeEach(() => {
     navigateMock.mockReset();
+    locationMock.pathname = '/issues';
+    locationMock.search = '';
+    enterpriseModeMock.mockReturnValue({
+      startEnterpriseLogin: vi.fn(),
+    });
     listRequirementsTreeMock.mockResolvedValue([
       {
         id: 'epic-1',
@@ -145,22 +219,31 @@ describe('IssuesPage', () => {
       user: { id: 'user-1' },
     });
     editionFeaturesMock.mockReturnValue({
+      hasInstanceEnterprise: true,
       hasJoinedEnterprise: true,
+      isEnterpriseEdition: true,
+      showTeamsFeature: true,
       tenantLabel: '欢乐互娱有限公司',
     });
   });
 
-  it('shows enterprise gate when user has not joined enterprise', () => {
+  it('allows personal Issues while disabling team-only actions when user has not joined enterprise', async () => {
     editionFeaturesMock.mockReturnValue({
+      hasInstanceEnterprise: false,
       hasJoinedEnterprise: false,
+      isEnterpriseEdition: false,
+      showTeamsFeature: false,
       tenantLabel: null,
     });
 
     render(<IssuesPage />);
-    expect(screen.getByText('加入企业后可使用 Issues')).toBeInTheDocument();
+    expect(await screen.findByText('Issues')).toBeInTheDocument();
+    expect(screen.getByText('修复团队上下文深链')).toBeInTheDocument();
+    expect(screen.getByText('打开规划看板')).toBeDisabled();
+    expect(screen.getByText('团队任务')).toBeDisabled();
 
-    fireEvent.click(screen.getByText('返回主工作台'));
-    expect(navigateMock).toHaveBeenCalledWith('/sessions');
+    fireEvent.click(screen.getByText('打开 Agent 助手'));
+    expect(navigateMock).toHaveBeenCalledWith('/super-assistant');
   });
 
   it('renders issue board and product entry actions', async () => {
@@ -185,10 +268,19 @@ describe('IssuesPage', () => {
       status: 'unauthenticated',
       user: null,
     });
+    editionFeaturesMock.mockReturnValue({
+      hasInstanceEnterprise: true,
+      hasJoinedEnterprise: false,
+      isEnterpriseEdition: true,
+      showTeamsFeature: true,
+      tenantLabel: '欢乐互娱有限公司',
+    });
 
     render(<IssuesPage />);
     await waitFor(() => {
-      expect(screen.getByText('当前实例已接入企业，但你尚未登录企业账号；筛选“分配给我”等视角可能不完整。')).toBeInTheDocument();
+      expect(
+        screen.getByText('当前实例已接入企业，但你尚未登录企业账号。登录后将显示你的姓名、组织架构，并启用「分配给我」等筛选。')
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByText('分配给我'));

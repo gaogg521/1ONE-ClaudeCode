@@ -49,6 +49,12 @@ describe('enterpriseAutoJoin', () => {
   it('resolves oldest tenant as default enterprise', async () => {
     mockPrepareInstance.get.mockReturnValue({ id: 'tenant_acme' });
     await expect(resolveDefaultEnterpriseTenantId()).resolves.toBe('tenant_acme');
+    expect(mockDriver.prepare).toHaveBeenCalledWith(expect.stringContaining("WHERE id <> 'default'"));
+  });
+
+  it('does not treat default tenant as an enterprise', async () => {
+    mockPrepareInstance.get.mockReturnValue(undefined);
+    await expect(resolveDefaultEnterpriseTenantId()).resolves.toBeNull();
   });
 
   it('auto-joins placeholder tenant users on SSO login', async () => {

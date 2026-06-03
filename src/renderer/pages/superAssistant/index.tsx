@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Empty, Message, Result, Tag } from '@arco-design/web-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button, Card, Empty, Message, Tag } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ipcBridge } from '@/common';
 import type { ICronJob } from '@/common/adapter/ipcBridge';
 import type { TTeam } from '@/common/types/teamTypes';
-import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
+import { DESKTOP_OPERATOR_USER_ID, isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
@@ -26,15 +26,19 @@ import AgentsTab, { type AgentCardRef } from './components/AgentsTab';
 import CreateWorkspaceAgentModal from './components/CreateWorkspaceAgentModal';
 import ManageWorkspaceAgentModal, { type ManagedAgentRef } from './components/ManageWorkspaceAgentModal';
 import CreateTaskDialog from '@/renderer/pages/cron/ScheduledTasksPage/CreateTaskDialog';
-import { useTeamList } from '@/renderer/pages/team/hooks/useTeamList';
+import { useAssistantCollaborationTeams } from './hooks/useAssistantCollaborationTeams';
 import { useConversationAgents } from '@/renderer/pages/conversation/hooks/useConversationAgents';
+import { buildDigitalEmployeePresetContext } from '@/common/digitalEmployee/presetContext';
+import { buildCliAgentParams } from '@/renderer/pages/conversation/utils/createConversationParams';
 import {
   agentFromKey,
   resolveConversationType,
   resolveTeamAgentType,
 } from '@/renderer/pages/team/components/agentSelectUtils';
+import type { AvailableAgent } from '@/renderer/utils/model/agentTypes';
 import SkillsTab from './components/SkillsTab';
 import RuntimesTab from './components/RuntimesTab';
+import TeamRuntimeFleetPanel from './components/TeamRuntimeFleetPanel';
 import SettingsTab from './components/SettingsTab';
 import type { SuperAssistantIssueAssignmentMap } from './hooks/useSuperAssistantData';
 import { pickEnterpriseCollaborationContext } from './hooks/useEnterpriseCollaborationContext';
@@ -44,14 +48,58 @@ import {
   buildSuperAssistantAutopilotDefaults,
 } from './utils/autopilotDefaults';
 import type { TeamAgent } from '@/common/types/teamTypes';
+import { buildIssuePlanningPath } from '@/renderer/pages/issues/issueCollaborationRouting';
+import { isElectronDesktop } from '@/renderer/utils/platform';
+import type { SuperAssistantAgentExecutionGroup } from './hooks/useSuperAssistantData';
+import { normalizeStoredSkillIds } from '@/renderer/hooks/skills/useBindableSkillOptions';
+import {
+  buildSuperAssistantPath,
+  parseSuperAssistantTab,
+  readStoredSuperAssistantTab,
+  readSuperAssistantSearch,
+  readSuperAssistantTabFromLocation,
+  storeSuperAssistantTab,
+  type SuperAssistantTab,
+} from './superAssistantTabRouting';
 
-function resolveManagedAgent(teams: TTeam[], ref: AgentCardRef): ManagedAgentRef | null {
-  const teamAgent = teams.find((team) => team.id === ref.teamId)?.agents.find((agent) => agent.slotId === ref.slotId);
+function buildManagedTeamAgentFromRef(ref: AgentCardRef): TeamAgent {
+  return {
+    slotId: ref.slotId,
+    conversationId: '',
+    role: 'teammate',
+    agentType: ref.agentType,
+    agentName: ref.agentName,
+    status: 'idle',
+  };
+}
+
+function resolveManagedAgent(
+  teams: TTeam[],
+  _executionGroups: SuperAssistantAgentExecutionGroup[],
+  ref: AgentCardRef
+): ManagedAgentRef | null {
+  if (ref.teamId === 'personal') {
+    return {
+      scope: 'personal',
+      teamId: 'personal',
+      tenantId: 'default',
+      teamName: ref.teamName,
+      slotId: ref.slotId,
+      agentName: ref.agentName,
+      agentType: ref.agentType,
+      teamAgent: buildManagedTeamAgentFromRef(ref),
+    };
+  }
+  const team = teams.find((item) => item.id === ref.teamId);
+  const teamAgent = team?.agents.find((agent) => agent.slotId === ref.slotId);
   if (!teamAgent) {
     return null;
   }
   return {
+    scope: 'team',
     teamId: ref.teamId,
+    tenantId: team?.tenantId ?? 'default',
+    teamName: team?.name ?? ref.teamName,
     slotId: ref.slotId,
     agentName: ref.agentName,
     agentType: ref.agentType,
@@ -59,17 +107,19 @@ function resolveManagedAgent(teams: TTeam[], ref: AgentCardRef): ManagedAgentRef
   };
 }
 
+function personalAgentToAvailableAgent(agent: ManagedAgentRef): AvailableAgent {
+  return {
+    backend: agent.agentType as AvailableAgent['backend'],
+    name: agent.agentName,
+    cliPath: agent.teamAgent.cliPath,
+    customAgentId: agent.teamAgent.customAgentId,
+  };
+}
+
 type NavigationIssueContext = {
   id: string;
   subject: string;
 } | null;
-
-type NavigationTeamContext = {
-  id: string;
-  name: string;
-} | null;
-
-type SuperAssistantTab = 'overview' | 'agents' | 'issues' | 'skills' | 'runtimes' | 'settings';
 
 type SuperAssistantIssueTaskMetadata = {
   source: 'super-assistant-issue';
@@ -81,20 +131,48 @@ type SuperAssistantIssueTaskMetadata = {
   manualBlockerMessage?: string | null;
 };
 
+function areIssueAssignmentsEqual(
+  a: SuperAssistantIssueAssignmentMap,
+  b: SuperAssistantIssueAssignmentMap
+): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) {
+    return false;
+  }
+  return aKeys.every((key) => {
+    const left = a[key];
+    const right = b[key];
+    return (
+      right &&
+      left.issueId === right.issueId &&
+      left.issueSubject === right.issueSubject &&
+      left.teamId === right.teamId &&
+      left.teamName === right.teamName &&
+      left.slotId === right.slotId &&
+      left.agentName === right.agentName &&
+      left.assignedAt === right.assignedAt &&
+      left.manualStatus === right.manualStatus &&
+      left.manualBlockerMessage === right.manualBlockerMessage
+    );
+  });
+}
+
+function areIssueTaskIdMapsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) {
+    return false;
+  }
+  return aKeys.every((key) => a[key] === b[key]);
+}
+
 function appendIssueContext(params: URLSearchParams, issue: NavigationIssueContext): void {
   if (!issue) {
     return;
   }
   params.set('issueId', issue.id);
   params.set('issueSubject', issue.subject);
-}
-
-function appendTeamContext(params: URLSearchParams, team: NavigationTeamContext): void {
-  if (!team) {
-    return;
-  }
-  params.set('teamId', team.id);
-  params.set('teamName', team.name);
 }
 
 function buildTeamScopedPath(
@@ -112,16 +190,6 @@ function buildTeamScopedPath(
   }
   appendIssueContext(params, issue ?? null);
   return `${path}?${params.toString()}`;
-}
-
-function buildKanbanPath(issue?: NavigationIssueContext, team?: NavigationTeamContext): string {
-  if (!issue && !team) {
-    return '/enterprise/cteam';
-  }
-  const params = new URLSearchParams();
-  appendTeamContext(params, team ?? null);
-  appendIssueContext(params, issue ?? null);
-  return `/enterprise/cteam?${params.toString()}`;
 }
 
 function buildTeamPath(teamId: string, issue?: NavigationIssueContext, agentSlotId?: string): string {
@@ -184,77 +252,101 @@ function parseIssueTaskMetadata(task: TeamTaskRecord): SuperAssistantIssueTaskMe
   };
 }
 
-function parseSuperAssistantSearch(search: string): {
-  issueId: string | null;
-  tab: SuperAssistantTab;
-} {
-  const params = new URLSearchParams(search);
-  const issueId = params.get('issueId');
-  const rawTab = params.get('tab');
-  const tab: SuperAssistantTab =
-    rawTab === 'agents' ||
-    rawTab === 'issues' ||
-    rawTab === 'skills' ||
-    rawTab === 'runtimes' ||
-    rawTab === 'settings' ||
-    rawTab === 'overview'
-      ? rawTab
-      : 'overview';
-  return {
-    issueId,
-    tab,
-  };
-}
-
 const SuperAssistantPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { hasJoinedEnterprise, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
+  const { showTeamsFeature, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
   const enterpriseMode = useWebuiEnterpriseMode();
   const [issueAssignments, setIssueAssignments] = useState<SuperAssistantIssueAssignmentMap>({});
   const [issueAssignmentTaskIds, setIssueAssignmentTaskIds] = useState<Record<string, string>>({});
   const isAdmin = isEnterpriseAdminRole(user?.role);
-  const superAssistantData = useSuperAssistantData(hasJoinedEnterprise, isAdmin, issueAssignments);
+  const superAssistantData = useSuperAssistantData(true, isAdmin, issueAssignments);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [sharedTaskVisible, setSharedTaskVisible] = useState(false);
-  const [createAgentVisible, setCreateAgentVisible] = useState(false);
+  const [createDigitalEmployeeVisible, setCreateDigitalEmployeeVisible] = useState(false);
   const [agentAutomationVisible, setAgentAutomationVisible] = useState(false);
   const [automationAgent, setAutomationAgent] = useState<ManagedAgentRef | null>(null);
   const [editingCronJob, setEditingCronJob] = useState<ICronJob | undefined>(undefined);
   const [managingAgent, setManagingAgent] = useState<ManagedAgentRef | null>(null);
-  const { teams, mutate: mutateTeams } = useTeamList();
+  const {
+    teams,
+    canUseWorkspaceVisibility,
+    hasCollaborationTeam,
+    refresh: refreshCollaborationTeams,
+    hydrateTeam,
+  } = useAssistantCollaborationTeams();
   const { cliAgents, presetAssistants } = useConversationAgents();
-  const currentTeam = superAssistantData.primaryTeam
-    ? {
-        id: superAssistantData.primaryTeam.id,
-        name: superAssistantData.primaryTeam.name,
-      }
-    : null;
+  const locationSearch = useMemo(() => readSuperAssistantSearch(location), [location.search]);
+  const routedState = useMemo(() => {
+    const params = new URLSearchParams(locationSearch);
+    return {
+      issueId: params.get('issueId'),
+      tab: parseSuperAssistantTab(locationSearch),
+    };
+  }, [locationSearch]);
+  const [activeTab, setActiveTab] = useState<SuperAssistantTab>(() => {
+    const initialSearch = readSuperAssistantSearch(location);
+    const fromUrl = parseSuperAssistantTab(initialSearch);
+    if (initialSearch.includes('tab=')) {
+      return fromUrl;
+    }
+    return readStoredSuperAssistantTab() ?? fromUrl;
+  });
+  const lastExternalSearchRef = useRef(locationSearch);
 
   useEffect(() => {
-    if (!superAssistantData.featuredIssue) {
-      setSelectedIssueId(null);
+    if (lastExternalSearchRef.current === locationSearch) {
       return;
     }
-    if (!selectedIssueId || !superAssistantData.issueLookup[selectedIssueId]) {
-      setSelectedIssueId(superAssistantData.featuredIssue.id);
+    lastExternalSearchRef.current = locationSearch;
+    const nextTab = parseSuperAssistantTab(locationSearch);
+    setActiveTab((prev) => (prev === nextTab ? prev : nextTab));
+  }, [locationSearch]);
+
+  const issueLookup = superAssistantData.issueLookup;
+  const featuredIssueId = superAssistantData.featuredIssue?.id ?? null;
+
+  useEffect(() => {
+    if (!featuredIssueId) {
+      setSelectedIssueId((prev) => (prev === null ? prev : null));
+      return;
     }
-  }, [selectedIssueId, superAssistantData.featuredIssue, superAssistantData.issueLookup]);
+    setSelectedIssueId((prev) => {
+      if (prev && issueLookup[prev]) {
+        return prev;
+      }
+      return prev === featuredIssueId ? prev : featuredIssueId;
+    });
+  }, [featuredIssueId, issueLookup]);
 
   const currentIssue =
-    (selectedIssueId ? superAssistantData.issueLookup[selectedIssueId] : null) ??
-    superAssistantData.featuredIssue;
+    (selectedIssueId ? issueLookup[selectedIssueId] : null) ?? superAssistantData.featuredIssue;
   const currentIssueAssignment = currentIssue ? issueAssignments[currentIssue.id] ?? null : null;
   const currentIssueAssignmentTaskId = currentIssue ? issueAssignmentTaskIds[currentIssue.id] ?? null : null;
+  const primaryTeamId = superAssistantData.primaryTeam?.id ?? null;
+  const teamsVersionKey = useMemo(
+    () =>
+      teams
+        .map((team) => `${team.id}:${team.tenantId ?? ''}:${team.name}:${team.agents.length}`)
+        .join('|'),
+    [teams]
+  );
+  const teamLookup = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teamsVersionKey]);
+
   const loadIssueAssignmentsFromTeam = useCallback(async () => {
-    if (!superAssistantData.primaryTeam) {
-      setIssueAssignments({});
-      setIssueAssignmentTaskIds({});
+    if (!primaryTeamId) {
+      setIssueAssignments((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      setIssueAssignmentTaskIds((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       return;
     }
-    const team = superAssistantData.primaryTeam;
+    const team = teamLookup.get(primaryTeamId);
+    if (!team) {
+      setIssueAssignments((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      setIssueAssignmentTaskIds((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      return;
+    }
     const tasks = await listTeamTasks(team.id);
     const nextAssignments: SuperAssistantIssueAssignmentMap = {};
     const nextTaskIds: Record<string, string> = {};
@@ -281,14 +373,14 @@ const SuperAssistantPage: React.FC = () => {
       };
       nextTaskIds[metadata.issueId] = task.id;
     });
-    setIssueAssignments(nextAssignments);
-    setIssueAssignmentTaskIds(nextTaskIds);
-  }, [superAssistantData.primaryTeam]);
+    setIssueAssignments((prev) => (areIssueAssignmentsEqual(prev, nextAssignments) ? prev : nextAssignments));
+    setIssueAssignmentTaskIds((prev) => (areIssueTaskIdMapsEqual(prev, nextTaskIds) ? prev : nextTaskIds));
+  }, [primaryTeamId, teamLookup]);
 
   useEffect(() => {
     void loadIssueAssignmentsFromTeam().catch(() => {
-      setIssueAssignments({});
-      setIssueAssignmentTaskIds({});
+      setIssueAssignments((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      setIssueAssignmentTaskIds((prev) => (Object.keys(prev).length === 0 ? prev : {}));
     });
   }, [loadIssueAssignmentsFromTeam]);
 
@@ -384,31 +476,153 @@ const SuperAssistantPage: React.FC = () => {
       })),
     [superAssistantData.primaryTeam]
   );
+  const [managedSkillIds, setManagedSkillIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!managingAgent) {
+      setManagedSkillIds([]);
+      return;
+    }
+    if (managingAgent.scope === 'personal') {
+      void ipcBridge.personalAgent.get
+        .invoke({
+          id: managingAgent.slotId,
+          ownerUserId: user?.id ?? DESKTOP_OPERATOR_USER_ID,
+        })
+        .then((record) => {
+          const config = record?.automationConfig as { skillIds?: string[] } | undefined;
+          setManagedSkillIds(normalizeStoredSkillIds(config?.skillIds ?? []));
+        })
+        .catch(() => setManagedSkillIds([]));
+      return;
+    }
+    setManagedSkillIds(normalizeStoredSkillIds(managingAgent.teamAgent.skillIds ?? []));
+  }, [managingAgent, user?.id]);
+
   const handleCreateWorkspaceAgent = useCallback(
     async (payload: {
       teamId: string;
       agentName: string;
       agentKey: string;
-    }) => {
+      description: string;
+      visibility: 'workspace' | 'personal';
+      skillIds: string[];
+      preferredModelId?: string;
+      providerModelKey?: string;
+      instructions?: string;
+    }): Promise<ManagedAgentRef | null> => {
       const allAgents = [...cliAgents, ...presetAssistants];
       const agent = agentFromKey(payload.agentKey, allAgents);
       const backend = resolveTeamAgentType(agent, 'claude');
-      await ipcBridge.team.addAgent.invoke({
-        teamId: payload.teamId,
-        agent: {
-          conversationId: '',
-          role: 'teammate',
+      const teamAgent: Omit<TeamAgent, 'slotId'> = {
+        conversationId: '',
+        role: 'teammate',
+        agentType: backend,
+        agentName: payload.agentName,
+        status: 'pending',
+        conversationType: resolveConversationType(backend),
+        cliPath: agent?.cliPath,
+        customAgentId: agent?.customAgentId,
+        skillIds: payload.skillIds,
+        preferredModelId: payload.preferredModelId,
+        providerModelKey: payload.providerModelKey,
+      };
+      const automationConfig = {
+        ...(payload.skillIds.length > 0 ? { skillIds: payload.skillIds } : {}),
+        ...(payload.preferredModelId ? { preferredModelId: payload.preferredModelId } : {}),
+        ...(payload.providerModelKey ? { providerModelKey: payload.providerModelKey } : {}),
+        ...(payload.instructions ? { instructions: payload.instructions } : {}),
+      };
+
+      if (payload.visibility === 'personal') {
+        const created = await ipcBridge.personalAgent.create.invoke({
+          ownerUserId: user?.id ?? DESKTOP_OPERATOR_USER_ID,
+          tenantId: 'default',
+          name: payload.agentName,
+          description: payload.description,
           agentType: backend,
-          agentName: payload.agentName,
-          status: 'pending',
           conversationType: resolveConversationType(backend),
           cliPath: agent?.cliPath,
           customAgentId: agent?.customAgentId,
-        },
+          automationConfig,
+        });
+        await superAssistantData.refresh();
+        return {
+          scope: 'personal',
+          teamId: 'personal',
+          tenantId: 'default',
+          teamName: t('common.superAssistant.personalDigitalEmployees', { defaultValue: '个人数字员工' }),
+          slotId: created.id,
+          agentName: created.name,
+          agentType: created.agentType,
+          teamAgent: {
+            slotId: created.id,
+            conversationId: '',
+            role: 'teammate',
+            agentType: created.agentType,
+            agentName: created.name,
+            conversationType: created.conversationType,
+            status: 'idle',
+            cliPath: created.cliPath,
+            customAgentId: created.customAgentId,
+            skillIds: payload.skillIds,
+          },
+        };
+      }
+
+      if (!payload.teamId) {
+        throw new Error(t('common.superAssistant.createAgentTeamRequired', { defaultValue: '请先选择所属团队' }));
+      }
+
+      const createdAgent = await ipcBridge.team.addAgent.invoke({
+        teamId: payload.teamId,
+        tenantId: teams.find((team) => team.id === payload.teamId)?.tenantId,
+        agent: teamAgent,
       });
-      await mutateTeams();
+      await refreshCollaborationTeams();
+      const team = teams.find((item) => item.id === payload.teamId);
+      return {
+        scope: 'team',
+        teamId: payload.teamId,
+        tenantId: team?.tenantId ?? 'default',
+        teamName: team?.name ?? payload.teamId,
+        slotId: createdAgent.slotId,
+        agentName: createdAgent.agentName,
+        agentType: createdAgent.agentType,
+        teamAgent: createdAgent,
+      };
     },
-    [cliAgents, mutateTeams, presetAssistants]
+    [cliAgents, refreshCollaborationTeams, presetAssistants, superAssistantData, t, teams, user?.id]
+  );
+
+  const handleSaveAgentSkills = useCallback(
+    async (managed: ManagedAgentRef, skillIds: string[]) => {
+      if (managed.scope === 'personal') {
+        const existing = await ipcBridge.personalAgent.get.invoke({
+          id: managed.slotId,
+          ownerUserId: user?.id ?? DESKTOP_OPERATOR_USER_ID,
+        });
+        const automationConfig = {
+          ...(existing?.automationConfig ?? {}),
+          skillIds,
+        };
+        await ipcBridge.personalAgent.update.invoke({
+          id: managed.slotId,
+          ownerUserId: user?.id ?? DESKTOP_OPERATOR_USER_ID,
+          updates: { automationConfig },
+        });
+        await superAssistantData.refresh();
+        return;
+      }
+      await ipcBridge.team.updateAgentSkillIds.invoke({
+        teamId: managed.teamId,
+        tenantId: managed.tenantId,
+        slotId: managed.slotId,
+        skillIds,
+      });
+      await refreshCollaborationTeams();
+    },
+    [refreshCollaborationTeams, superAssistantData, user?.id]
   );
 
   const primaryLeadAgent = useMemo(() => {
@@ -464,33 +678,43 @@ const SuperAssistantPage: React.FC = () => {
 
   const handleManageAgent = useCallback(
     (ref: AgentCardRef) => {
-      const managed = resolveManagedAgent(teams, ref);
+      const managed = resolveManagedAgent(teams, superAssistantData.agentExecutionGroups, ref);
       if (!managed) {
         Message.warning(t('common.superAssistant.agentNotFound', { defaultValue: '未找到该智能体' }));
         return;
       }
       setManagingAgent(managed);
     },
-    [t, teams]
+    [superAssistantData.agentExecutionGroups, t, teams]
   );
 
   const handleSaveAgentName = useCallback(
     async (teamId: string, slotId: string, newName: string) => {
-      await ipcBridge.team.renameAgent.invoke({ teamId, slotId, newName });
-      await mutateTeams();
+      if (teamId === 'personal') {
+        await ipcBridge.personalAgent.update.invoke({
+          id: slotId,
+          ownerUserId: user?.id ?? DESKTOP_OPERATOR_USER_ID,
+          updates: { name: newName },
+        });
+        await superAssistantData.refresh();
+        return;
+      }
+      const tenantId = teams.find((team) => team.id === teamId)?.tenantId;
+      await ipcBridge.team.renameAgent.invoke({ teamId, tenantId, slotId, newName });
+      await refreshCollaborationTeams();
     },
-    [mutateTeams]
+    [refreshCollaborationTeams, superAssistantData, teams, user?.id]
   );
 
   const handleScheduleAgent = useCallback(
     (ref: AgentCardRef) => {
-      const managed = resolveManagedAgent(teams, ref);
+      const managed = resolveManagedAgent(teams, superAssistantData.agentExecutionGroups, ref);
       if (!managed) {
         return;
       }
       openAgentAutomationDialog(managed);
     },
-    [openAgentAutomationDialog, teams]
+    [openAgentAutomationDialog, superAssistantData.agentExecutionGroups, teams]
   );
 
   const handleRunAutomationJob = useCallback(
@@ -508,32 +732,72 @@ const SuperAssistantPage: React.FC = () => {
     [navigate, t]
   );
 
-  const routedState = useMemo(() => parseSuperAssistantSearch(location.search), [location.search]);
-  const currentTab = routedState.tab;
+  const currentTab = activeTab;
 
   useEffect(() => {
-    if (routedState.issueId && superAssistantData.issueLookup[routedState.issueId]) {
-      setSelectedIssueId(routedState.issueId);
+    if (routedState.issueId && issueLookup[routedState.issueId]) {
+      setSelectedIssueId((prev) => (prev === routedState.issueId ? prev : routedState.issueId));
     }
-  }, [routedState.issueId, superAssistantData.issueLookup]);
+  }, [issueLookup, routedState.issueId]);
 
   const ensureTeamSession = useCallback(
     async (teamId: string, fallbackMessage: string) => {
       try {
-        await ipcBridge.team.ensureSession.invoke({ teamId });
+        const tenantId = teams.find((team) => team.id === teamId)?.tenantId;
+        await ipcBridge.team.ensureSession.invoke({ teamId, tenantId });
         return true;
       } catch (error) {
         Message.error(getEnterpriseActionError(error, fallbackMessage));
         return false;
       }
     },
-    []
+    [teams]
   );
 
   const handleRunAgentNow = useCallback(
-    async (ref: AgentCardRef) => {
-      const managed = resolveManagedAgent(teams, ref);
+    async (ref: AgentCardRef | ManagedAgentRef): Promise<void> => {
+      const managed = 'teamAgent' in ref ? ref : resolveManagedAgent(teams, superAssistantData.agentExecutionGroups, ref);
       if (!managed) {
+        return;
+      }
+      if (managed.scope === 'personal') {
+        try {
+          const record = await ipcBridge.personalAgent.get.invoke({
+            id: managed.slotId,
+            ownerUserId: user?.id ?? DESKTOP_OPERATOR_USER_ID,
+          });
+          const automation = record?.automationConfig;
+          const params = await buildCliAgentParams(personalAgentToAvailableAgent(managed), '');
+          const preferredModelId =
+            typeof automation?.preferredModelId === 'string' ? automation.preferredModelId : undefined;
+          const presetContext = buildDigitalEmployeePresetContext({
+            name: record?.name ?? managed.agentName,
+            description: record?.description,
+            instructions:
+              typeof automation?.instructions === 'string' ? automation.instructions : undefined,
+          });
+          const skillIds = Array.isArray(automation?.skillIds)
+            ? automation.skillIds.filter((id): id is string => typeof id === 'string')
+            : [];
+          const conversation = await ipcBridge.conversation.create.invoke({
+            ...params,
+            name: managed.agentName,
+            extra: {
+              ...params.extra,
+              personalAgentId: managed.slotId,
+              tenantId: record?.tenantId ?? 'default',
+              ...(preferredModelId ? { currentModelId: preferredModelId } : {}),
+              ...(presetContext
+                ? { presetContext, presetRules: presetContext }
+                : {}),
+              ...(skillIds.length > 0 ? { enabledSkills: skillIds } : {}),
+            },
+          });
+          Message.success(t('common.superAssistant.agentRunNowSuccess', { defaultValue: '已触发智能体执行' }));
+          navigate(`/conversation/${conversation.id}`);
+        } catch (error) {
+          Message.error(getEnterpriseActionError(error, t('common.superAssistant.agentRunNowFailed', { defaultValue: '启动智能体会话失败' })));
+        }
         return;
       }
       const ready = await ensureTeamSession(
@@ -546,6 +810,7 @@ const SuperAssistantPage: React.FC = () => {
       const issueContext = currentIssue ? { id: currentIssue.id, subject: currentIssue.subject } : null;
       await ipcBridge.team.sendMessageToAgent.invoke({
         teamId: managed.teamId,
+        tenantId: managed.tenantId,
         slotId: managed.slotId,
         content: t('common.superAssistant.agentRunNowPrompt', {
           defaultValue:
@@ -556,30 +821,57 @@ const SuperAssistantPage: React.FC = () => {
       Message.success(t('common.superAssistant.agentRunNowSuccess', { defaultValue: '已触发智能体执行' }));
       navigate(buildTeamPath(managed.teamId, issueContext, managed.slotId));
     },
-    [currentIssue, ensureTeamSession, navigate, t, teams]
+    [currentIssue, ensureTeamSession, navigate, superAssistantData.agentExecutionGroups, t, teams]
   );
+
+  const handleOpenCreateDigitalEmployee = useCallback(() => {
+    setCreateDigitalEmployeeVisible(true);
+  }, []);
 
   const agentTabHandlers = useMemo(
     () => ({
-      onCreateAgent: () => setCreateAgentVisible(true),
+      onCreateAgent: handleOpenCreateDigitalEmployee,
       onManageAgent: handleManageAgent,
-      onRunAgentNow: (ref: AgentCardRef) => void handleRunAgentNow(ref),
+      onRunAgentNow: (ref: AgentCardRef): void => {
+        void handleRunAgentNow(ref);
+      },
       onScheduleAgent: handleScheduleAgent,
     }),
-    [handleManageAgent, handleRunAgentNow, handleScheduleAgent]
+    [handleManageAgent, handleOpenCreateDigitalEmployee, handleRunAgentNow, handleScheduleAgent]
   );
 
-  const handleBreakdownIssue = () => navigate(buildKanbanPath(currentIssue, currentTeam));
+  const handleBreakdownIssue = () => {
+    if (!currentIssue) {
+      navigate(showTeamsFeature ? '/enterprise/cteam' : '/issues');
+      return;
+    }
+    navigate(
+      buildIssuePlanningPath({
+        issueId: currentIssue.id,
+        issueSubject: currentIssue.subject,
+        teamsCollaborationEnabled: showTeamsFeature,
+      })
+    );
+  };
   const handleSwitchTab = useCallback(
     (tab: SuperAssistantTab) => {
-      const params = new URLSearchParams(location.search);
-      params.set('tab', tab);
-      if (currentIssue?.id) {
-        params.set('issueId', currentIssue.id);
+      setActiveTab(tab);
+      storeSuperAssistantTab(tab);
+      const nextPath = buildSuperAssistantPath({
+        tab,
+        issueId: currentIssue?.id ?? routedState.issueId,
+      });
+      const nextSearch = nextPath.includes('?') ? nextPath.slice(nextPath.indexOf('?')) : '';
+      lastExternalSearchRef.current = nextSearch;
+      if (isElectronDesktop()) {
+        if (typeof window !== 'undefined' && window.location.hash !== `#${nextPath}`) {
+          window.location.hash = `#${nextPath}`;
+        }
+        return;
       }
-      navigate(`/super-assistant?${params.toString()}`);
+      void navigate(nextPath, { replace: true });
     },
-    [currentIssue?.id, location.search, navigate]
+    [currentIssue?.id, navigate, routedState.issueId]
   );
   const handleOpenTeamFlow = async () => {
     if (!superAssistantData.primaryTeam) {
@@ -630,13 +922,6 @@ const SuperAssistantPage: React.FC = () => {
       openEnterpriseAdminInBrowser: enterpriseMode.openEnterpriseAdminInBrowser,
     });
   }, [enterpriseMode.openEnterpriseAdminInBrowser, navigate, showEnterpriseAdminNav]);
-  const handleOpenEnterpriseDelivery = async () => {
-    if (currentIssue?.id) {
-      navigate(`/issues/${encodeURIComponent(currentIssue.id)}`);
-      return;
-    }
-    navigate('/issues');
-  };
   const handleOpenSkillsHub = () => navigate('/skills');
   const handleOpenMcp = () => navigate('/mcp');
   const handleOpenAgentSettings = () => navigate('/settings/agent');
@@ -679,6 +964,7 @@ const SuperAssistantPage: React.FC = () => {
 
       await ipcBridge.team.sendMessageToAgent.invoke({
         teamId: superAssistantData.primaryTeam.id,
+        tenantId: superAssistantData.primaryTeam.tenantId,
         slotId,
         content: buildIssueAssignmentPrompt(currentIssue, agentName),
       });
@@ -866,23 +1152,6 @@ const SuperAssistantPage: React.FC = () => {
     [superAssistantData.boardColumns]
   );
 
-  if (!hasJoinedEnterprise) {
-    return (
-      <Result
-        status='403'
-        title={t('common.superAssistant.joinRequiredTitle', { defaultValue: '加入企业后可使用超级助手' })}
-        subTitle={t('common.superAssistant.joinRequiredDesc', {
-          defaultValue: '超级助手会复用团队协作、共享任务与企业能力入口，请先加入企业组织。',
-        })}
-        extra={
-          <Button type='primary' onClick={() => navigate('/sessions')}>
-            {t('common.superAssistant.backToWorkspace', { defaultValue: '返回主工作台' })}
-          </Button>
-        }
-      />
-    );
-  }
-
   return (
     <div className='h-full overflow-auto px-20px py-16px'>
       <SuperAssistantHeader
@@ -900,10 +1169,10 @@ const SuperAssistantPage: React.FC = () => {
           <div className='flex items-center gap-8px flex-wrap'>
             {([
               ['overview', t('common.superAssistant.tabs.workbench', { defaultValue: '工作台' })],
-              ['agents', t('common.superAssistant.tabs.agents', { defaultValue: '智能体' })],
+              ['agents', t('common.superAssistant.tabs.agents', { defaultValue: '数字员工' })],
               ['issues', t('common.superAssistant.tabs.dispatch', { defaultValue: '调度视图' })],
               ['skills', t('common.superAssistant.tabs.skills', { defaultValue: 'Skills' })],
-              ['runtimes', t('common.superAssistant.tabs.runtimes', { defaultValue: '运行时' })],
+              ['runtimes', t('common.superAssistant.tabs.runtimes', { defaultValue: '执行模块' })],
               ['settings', t('common.superAssistant.tabs.settings', { defaultValue: '设置' })],
             ] as const).map(([tab, label]) => (
               <Button
@@ -988,15 +1257,16 @@ const SuperAssistantPage: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <Empty
-                    description={t('common.superAssistant.noIssuesPickOne', {
-                      defaultValue: '请先在 Issues 中选择一个 Issue，再在此开始处理。',
-                    })}
-                  >
+                  <div className='flex flex-col items-center gap-12px'>
+                    <Empty
+                      description={t('common.superAssistant.noIssuesPickOne', {
+                        defaultValue: '请先在 Issues 中选择一个 Issue，再在此开始处理。',
+                      })}
+                    />
                     <Button type='primary' size='small' onClick={() => navigate('/issues')}>
                       {t('common.superAssistant.howToUseOpenIssues', { defaultValue: '去 Issues 选择任务' })}
                     </Button>
-                  </Empty>
+                  </div>
                 )}
               </Card>
               <Card title={t('common.superAssistant.recentRunTitle', { defaultValue: '最近运行 / 执行反馈' })}>
@@ -1134,6 +1404,8 @@ const SuperAssistantPage: React.FC = () => {
                 enabledMcpCount={superAssistantData.enabledMcpCount}
                 onOpenAgentSettings={handleOpenAgentSettings}
                 onOpenModelSettings={() => navigate('/settings/model')}
+                showTeamFleet={hasCollaborationTeam}
+                fleetTeamIds={teams.map((team) => team.id)}
               />
             </div>
           </Card>
@@ -1145,12 +1417,17 @@ const SuperAssistantPage: React.FC = () => {
                 defaultValue: '这里聚合运行中的 Agent、执行状态和阻塞信号，便于从产品视角查看最近运行。',
               })}
             </div>
+            {hasCollaborationTeam ? (
+              <div className='mb-16px'>
+                <TeamRuntimeFleetPanel teamIds={teams.map((team) => team.id)} enabled />
+              </div>
+            ) : null}
             <AgentsTab
               executionGroups={superAssistantData.agentExecutionGroups}
               {...agentTabHandlers}
               onCreateAgent={() => {
                 handleSwitchTab('agents');
-                setCreateAgentVisible(true);
+                handleOpenCreateDigitalEmployee();
               }}
             />
           </Card>
@@ -1166,11 +1443,26 @@ const SuperAssistantPage: React.FC = () => {
         ) : null}
       </div>
       <CreateWorkspaceAgentModal
-        visible={createAgentVisible}
+        visible={createDigitalEmployeeVisible}
         teams={teams}
-        defaultTeamId={superAssistantData.primaryTeam?.id}
-        onClose={() => setCreateAgentVisible(false)}
-        onConfirm={handleCreateWorkspaceAgent}
+        defaultTeamId={superAssistantData.primaryTeam?.id ?? teams[0]?.id}
+        workspaceEnabled={canUseWorkspaceVisibility}
+        workspaceUnavailableHint={
+          hasCollaborationTeam
+            ? undefined
+            : t('common.superAssistant.workspaceTeamRequiredHint', {
+                defaultValue:
+                  '你已加入企业组织，但还没有可用的「协同团队」。请让管理员在「企业后台 → 团队」把你加入团队，或在「全部会话」中点击「新建团队会话」创建团队后再选择工作区可见性。',
+              })
+        }
+        onClose={() => setCreateDigitalEmployeeVisible(false)}
+        onConfirm={async (payload) => {
+          const managed = await handleCreateWorkspaceAgent(payload);
+          setCreateDigitalEmployeeVisible(false);
+          if (managed) {
+            setManagingAgent(managed);
+          }
+        }}
       />
       <ManageWorkspaceAgentModal
         visible={Boolean(managingAgent)}
@@ -1178,6 +1470,22 @@ const SuperAssistantPage: React.FC = () => {
         onClose={() => setManagingAgent(null)}
         onSaveName={handleSaveAgentName}
         onRunNow={handleRunAgentNow}
+        initialSkillIds={managedSkillIds}
+        onSaveSkillIds={
+          managingAgent
+            ? async (skillIds) => {
+                await handleSaveAgentSkills(managingAgent, skillIds);
+              }
+            : undefined
+        }
+        onOpenExecutionModules={() => {
+          setManagingAgent(null);
+          handleSwitchTab('runtimes');
+        }}
+        onOpenDispatchView={() => {
+          setManagingAgent(null);
+          handleSwitchTab('issues');
+        }}
         onAddAutomation={(managed) => {
           setManagingAgent(null);
           openAgentAutomationDialog(managed);
@@ -1188,41 +1496,43 @@ const SuperAssistantPage: React.FC = () => {
         }}
         onRunAutomation={handleRunAutomationJob}
       />
-      <CreateTaskDialog
-        visible={agentAutomationVisible}
-        onClose={closeAgentAutomationDialog}
-        editJob={editingCronJob}
-        conversationTitle={automationAgent?.agentName ?? currentIssue?.subject ?? 'Agent 自动化'}
-        initialName={
-          editingCronJob?.name ??
-          (automationAgent
-            ? t('common.superAssistant.agentAutomationDefaultNameForAgent', {
-                defaultValue: '{{agent}} · 定时巡检',
-                agent: automationAgent.agentName,
-              })
-            : currentIssue
-              ? t('common.issues.automationDefaultName', {
-                  defaultValue: 'Issue 自动跟进 · {{subject}}',
+      {agentAutomationVisible ? (
+        <CreateTaskDialog
+          visible={agentAutomationVisible}
+          onClose={closeAgentAutomationDialog}
+          editJob={editingCronJob}
+          conversationTitle={automationAgent?.agentName ?? currentIssue?.subject ?? 'Agent 自动化'}
+          initialName={
+            editingCronJob?.name ??
+            (automationAgent
+              ? t('common.superAssistant.agentAutomationDefaultNameForAgent', {
+                  defaultValue: '{{agent}} · 定时巡检',
+                  agent: automationAgent.agentName,
+                })
+              : currentIssue
+                ? t('common.issues.automationDefaultName', {
+                    defaultValue: 'Issue 自动跟进 · {{subject}}',
+                    subject: currentIssue.subject,
+                  })
+                : t('common.superAssistant.agentAutomationDefaultName', { defaultValue: 'Agent 定时巡检' }))
+          }
+          initialPrompt={
+            editingCronJob?.target.payload.text ??
+            (currentIssue
+              ? t('common.issues.automationDefaultPrompt', {
+                  defaultValue:
+                    '你是 Issue「{{subject}}」的值班 Agent。请检查当前进展、阻塞项与下一步行动，输出简洁 Markdown 摘要。',
                   subject: currentIssue.subject,
                 })
-              : t('common.superAssistant.agentAutomationDefaultName', { defaultValue: 'Agent 定时巡检' }))
-        }
-        initialPrompt={
-          editingCronJob?.target.payload.text ??
-          (currentIssue
-            ? t('common.issues.automationDefaultPrompt', {
-                defaultValue:
-                  '你是 Issue「{{subject}}」的值班 Agent。请检查当前进展、阻塞项与下一步行动，输出简洁 Markdown 摘要。',
-                subject: currentIssue.subject,
-              })
-            : t('common.superAssistant.agentAutomationDefaultPrompt', {
-                defaultValue: '扫描团队未关闭 Issue 与阻塞项，输出摘要并 @ 相关负责人。',
-              }))
-        }
-        initialFrequency='weekdays'
-        initialAgentKey={selectedAgentAutopilotDefaults?.initialAgentKey}
-        autopilotContext={selectedAgentAutopilotDefaults?.autopilotContext}
-      />
+              : t('common.superAssistant.agentAutomationDefaultPrompt', {
+                  defaultValue: '扫描团队未关闭 Issue 与阻塞项，输出摘要并 @ 相关负责人。',
+                }))
+          }
+          initialFrequency='weekdays'
+          initialAgentKey={selectedAgentAutopilotDefaults?.initialAgentKey}
+          autopilotContext={selectedAgentAutopilotDefaults?.autopilotContext}
+        />
+      ) : null}
       <CreateSharedTaskModal
         visible={sharedTaskVisible}
         onClose={() => setSharedTaskVisible(false)}

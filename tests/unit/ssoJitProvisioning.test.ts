@@ -31,6 +31,7 @@ const bindMock = vi.hoisted(() => vi.fn());
 const hashPasswordMock = vi.hoisted(() => vi.fn());
 const generateRandomPasswordMock = vi.hoisted(() => vi.fn());
 const ensureUserJoinedDefaultEnterpriseMock = vi.hoisted(() => vi.fn());
+const updateUsernameMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@process/webserver/auth/repository/UserRepository', () => ({
   UserRepository: {
@@ -38,6 +39,7 @@ vi.mock('@process/webserver/auth/repository/UserRepository', () => ({
     findByUsername: findByUsernameMock,
     createUserWithRole: createUserWithRoleMock,
     setRole: setRoleMock,
+    updateUsername: updateUsernameMock,
   },
 }));
 
@@ -94,6 +96,82 @@ describe('ssoJitProvisioning', () => {
     expect(created).toBe(false);
     expect(user.id).toBe('u1');
     expect(createUserWithRoleMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps Feishu display names with CJK characters', async () => {
+    getByExternalIdMock.mockResolvedValue(null);
+    createUserWithRoleMock.mockResolvedValue({
+      id: 'u_zhao',
+      username: '赵高',
+      role: 'member',
+      tenant_id: 'default',
+    });
+    findByIdMock.mockResolvedValue({
+      id: 'u_zhao',
+      username: '赵高',
+      role: 'member',
+      tenant_id: 'tenant_acme',
+    });
+
+    const { user, created } = await resolveOrProvisionSsoUser('feishu', {
+      externalId: 'ou_feishu_zhao',
+      preferredUsername: '赵高',
+    });
+
+    expect(created).toBe(true);
+    expect(user.username).toBe('赵高');
+    expect(createUserWithRoleMock).toHaveBeenCalledWith('赵高', 'hash', 'member');
+  });
+
+  it('upgrades generated sso_* username on repeat Feishu login', async () => {
+    getByExternalIdMock.mockResolvedValue({ user_id: 'u1' });
+    findByUsernameMock.mockResolvedValue(null);
+    findByIdMock.mockImplementation(async () => ({
+      id: 'u1',
+      username: updateUsernameMock.mock.calls.length > 0 ? '赵高' : 'sso_6c307033',
+      role: 'member',
+      tenant_id: 'tenant_acme',
+    }));
+
+    const { user } = await resolveOrProvisionSsoUser('feishu', {
+      externalId: 'ou_feishu_1',
+      preferredUsername: '赵高',
+    });
+
+    expect(updateUsernameMock).toHaveBeenCalledWith('u1', '赵高');
+    expect(user.username).toBe('赵高');
+  });
+
+  it('does not bind Feishu login to an unrelated existing username', async () => {
+    getByExternalIdMock.mockResolvedValue(null);
+    findByUsernameMock.mockResolvedValue({
+      id: 'u_test_mail',
+      username: '1onetest',
+      role: 'member',
+      tenant_id: 'tenant_acme',
+    });
+    createUserWithRoleMock.mockResolvedValue({
+      id: 'u_new_feishu',
+      username: '赵高',
+      role: 'member',
+      tenant_id: 'default',
+    });
+    findByIdMock.mockResolvedValue({
+      id: 'u_new_feishu',
+      username: '赵高',
+      role: 'member',
+      tenant_id: 'tenant_acme',
+    });
+
+    const { user, created } = await resolveOrProvisionSsoUser('feishu', {
+      externalId: 'ou_feishu_new',
+      preferredUsername: '赵高',
+    });
+
+    expect(created).toBe(true);
+    expect(user.id).toBe('u_new_feishu');
+    expect(bindMock).toHaveBeenCalledWith('feishu', 'ou_feishu_new', 'u_new_feishu');
+    expect(bindMock).not.toHaveBeenCalledWith('feishu', 'ou_feishu_new', 'u_test_mail');
   });
 
   it('provisions user + identity on first Feishu login', async () => {

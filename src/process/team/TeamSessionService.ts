@@ -185,7 +185,13 @@ export class TeamSessionService {
     return {} as TProviderWithModel;
   }
 
-  private async resolvePreferredAcpModelId(agentType: string): Promise<string | undefined> {
+  private async resolvePreferredAcpModelId(
+    agentType: string,
+    agentPreferredModelId?: string
+  ): Promise<string | undefined> {
+    if (typeof agentPreferredModelId === 'string' && agentPreferredModelId.trim().length > 0) {
+      return agentPreferredModelId.trim();
+    }
     const acpConfig = await ProcessConfig.get('acp.config');
     const preferredModelId = (acpConfig as Record<string, { preferredModelId?: string } | undefined> | undefined)?.[
       agentType
@@ -282,6 +288,7 @@ export class TeamSessionService {
 
   private async buildConversationParams(params: {
     teamId: string;
+    tenantId: string;
     teamName: string;
     workspace: string;
     agent: Omit<TeamAgent, 'slotId'> | TeamAgent;
@@ -299,7 +306,9 @@ export class TeamSessionService {
       agent.customAgentId && (backend === 'gemini' || (ACP_ROUTED_PRESET_TYPES as readonly string[]).includes(backend))
     );
     const preferredModelId =
-      getConversationTypeForBackend(backend) === 'acp' ? await this.resolvePreferredAcpModelId(backend) : undefined;
+      getConversationTypeForBackend(backend) === 'acp'
+        ? await this.resolvePreferredAcpModelId(backend, agent.preferredModelId)
+        : undefined;
     const presetResources =
       isPreset && agent.customAgentId ? await this.loadPresetResources(agent.customAgentId) : undefined;
     const model = await this.resolveConversationModel({
@@ -324,6 +333,7 @@ export class TeamSessionService {
       currentModelId: preferredModelId,
       extra: {
         teamId,
+        tenantId: params.tenantId,
       },
     }) as {
       type: AgentType;
@@ -334,6 +344,7 @@ export class TeamSessionService {
   }
 
   async createTeam(params: {
+    tenantId?: string;
     userId: string;
     name: string;
     workspace: string;
@@ -342,6 +353,7 @@ export class TeamSessionService {
   }): Promise<TTeam> {
     const now = Date.now();
     const teamId = uuid(36);
+    const tenantId = params.tenantId ?? 'default';
     const workspace = this.resolveWorkspace(params.workspace);
 
     // Create a real conversation for each agent
@@ -349,6 +361,7 @@ export class TeamSessionService {
       params.agents.map(async (agent) => {
         const conversationParams = await this.buildConversationParams({
           teamId,
+          tenantId,
           teamName: params.name,
           workspace,
           agent,
@@ -357,7 +370,7 @@ export class TeamSessionService {
         const conversation = await this.conversationService.createConversation(conversationParams);
         // Ensure teamId is in extra regardless of which factory function was used
         // (some factories like createCodexAgent/createGeminiAgent drop unknown extra fields)
-        await this.conversationService.updateConversation(conversation.id, { extra: { teamId } } as any, true);
+        await this.conversationService.updateConversation(conversation.id, { extra: { teamId, tenantId } } as any, true);
         const slotId = agent.slotId || `slot-${uuid(8)}`;
         return { ...agent, slotId, conversationId: conversation.id };
       })
@@ -368,6 +381,7 @@ export class TeamSessionService {
 
     const team: TTeam = {
       id: teamId,
+      tenantId,
       userId: params.userId,
       name: params.name,
       workspace,
@@ -381,20 +395,20 @@ export class TeamSessionService {
     return team;
   }
 
-  async getTeam(id: string): Promise<TTeam | null> {
-    return this.repo.findById(id);
+  async getTeam(id: string, tenantId?: string): Promise<TTeam | null> {
+    return this.repo.findById(id, tenantId);
   }
 
-  async listTeams(userId: string): Promise<TTeam[]> {
-    return this.repo.findAll(userId);
+  async listTeams(userId: string, tenantId?: string): Promise<TTeam[]> {
+    return this.repo.findAll(userId, tenantId);
   }
 
-  async deleteTeam(id: string): Promise<void> {
+  async deleteTeam(id: string, tenantId?: string): Promise<void> {
     await this.sessions.get(id)?.dispose();
     this.sessions.delete(id);
 
     // Delete conversations owned by this team's agents
-    const team = await this.repo.findById(id);
+    const team = await this.repo.findById(id, tenantId);
     if (team) {
       const results = await Promise.allSettled(
         team.agents
@@ -413,8 +427,8 @@ export class TeamSessionService {
     await this.repo.delete(id);
   }
 
-  async addAgent(teamId: string, agent: Omit<TeamAgent, 'slotId'>): Promise<TeamAgent> {
-    const team = await this.repo.findById(teamId);
+  async addAgent(teamId: string, agent: Omit<TeamAgent, 'slotId'>, tenantId?: string): Promise<TeamAgent> {
+    const team = await this.repo.findById(teamId, tenantId);
     if (!team) throw new Error(`Team "${teamId}" not found`);
 
     const workspace = this.resolveWorkspace(team.workspace);
@@ -431,6 +445,7 @@ export class TeamSessionService {
 
     const conversationParams = await this.buildConversationParams({
       teamId,
+      tenantId: team.tenantId,
       teamName: team.name,
       workspace,
       agent,
@@ -439,7 +454,7 @@ export class TeamSessionService {
     });
     const conversation = await this.conversationService.createConversation(conversationParams);
     // Ensure teamId is in extra regardless of which factory function was used
-    await this.conversationService.updateConversation(conversation.id, { extra: { teamId } } as any, true);
+    await this.conversationService.updateConversation(conversation.id, { extra: { teamId, tenantId: team.tenantId } } as any, true);
 
     const newAgent: TeamAgent = {
       ...agent,
@@ -469,7 +484,7 @@ export class TeamSessionService {
     return 'acp';
   }
 
-  async renameAgent(teamId: string, slotId: string, newName: string): Promise<void> {
+  async renameAgent(teamId: string, slotId: string, newName: string, tenantId?: string): Promise<void> {
     // Update in-memory session if running
     const session = this.sessions.get(teamId);
     if (session) {
@@ -477,20 +492,38 @@ export class TeamSessionService {
       return; // TeamSession.renameAgent already persists
     }
     // No active session — update DB directly
-    const team = await this.repo.findById(teamId);
+    const team = await this.repo.findById(teamId, tenantId);
     if (!team) throw new Error(`Team "${teamId}" not found`);
     const updatedAgents = team.agents.map((a) => (a.slotId === slotId ? { ...a, agentName: newName.trim() } : a));
     await this.repo.update(teamId, { agents: updatedAgents, updatedAt: Date.now() });
   }
 
-  async renameTeam(id: string, name: string): Promise<void> {
+  async updateAgentSkillIds(
+    teamId: string,
+    slotId: string,
+    skillIds: string[],
+    tenantId?: string
+  ): Promise<void> {
+    const team = await this.repo.findById(teamId, tenantId);
+    if (!team) {
+      throw new Error(`Team "${teamId}" not found`);
+    }
+    const updatedAgents = team.agents.map((agent) =>
+      agent.slotId === slotId ? { ...agent, skillIds } : agent
+    );
+    await this.repo.update(teamId, { agents: updatedAgents, updatedAt: Date.now() });
+  }
+
+  async renameTeam(id: string, name: string, tenantId?: string): Promise<void> {
     const trimmed = name.trim();
     if (!trimmed) return;
+    const team = await this.repo.findById(id, tenantId);
+    if (!team) throw new Error(`Team "${id}" not found`);
     await this.repo.update(id, { name: trimmed, updatedAt: Date.now() });
   }
 
-  async removeAgent(teamId: string, slotId: string): Promise<void> {
-    const team = await this.repo.findById(teamId);
+  async removeAgent(teamId: string, slotId: string, tenantId?: string): Promise<void> {
+    const team = await this.repo.findById(teamId, tenantId);
     if (!team) throw new Error(`Team "${teamId}" not found`);
 
     // If there's an active session, clean up in-memory state first
@@ -503,10 +536,15 @@ export class TeamSessionService {
     await this.repo.update(teamId, { agents: updatedAgents, updatedAt: Date.now() });
   }
 
-  async getOrStartSession(teamId: string): Promise<TeamSession> {
+  async getOrStartSession(teamId: string, tenantId?: string): Promise<TeamSession> {
     const existing = this.sessions.get(teamId);
-    if (existing) return existing;
-    const team = await this.repo.findById(teamId);
+    if (existing) {
+      if (tenantId && !(await this.repo.findById(teamId, tenantId))) {
+        throw new Error(`Team "${teamId}" not found`);
+      }
+      return existing;
+    }
+    const team = await this.repo.findById(teamId, tenantId);
     if (!team) throw new Error(`Team "${teamId}" not found`);
     let session: TeamSession | null = null;
     const spawnAgent = async (agentName: string, agentType?: string) => {
@@ -549,6 +587,8 @@ export class TeamSessionService {
               customWorkspace: true,
               backend: backend as AcpBackendAll,
               agentName: agent.agentName ?? agentType,
+              teamId: team.id,
+              tenantId: team.tenantId,
             },
           });
           return { ...agent, conversationId: newConv.id };

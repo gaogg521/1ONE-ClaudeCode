@@ -104,6 +104,19 @@ vi.mock('@/renderer/hooks/webui/useEditionFeatures', () => ({
   useEditionFeatures: () => editionFeaturesMock(),
 }));
 
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({
+    ready: true,
+    status: 'authenticated',
+    user: { id: 'user-1', role: 'member' },
+    login: vi.fn(),
+    loginWithLdap: vi.fn(),
+    logout: vi.fn(),
+    refresh: vi.fn(),
+    clearAuthCache: vi.fn(),
+  }),
+}));
+
 const openEnterpriseAdminInBrowserMock = vi.hoisted(() => vi.fn(async () => 'opened' as const));
 
 vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
@@ -164,7 +177,8 @@ describe('SessionsPage', () => {
     });
     editionFeaturesMock.mockReturnValue({
       hasJoinedEnterprise: true,
-      isEnterpriseEdition: false,
+      isEnterpriseEdition: true,
+      showTeamsFeature: true,
       tenantLabel: '欢乐互娱有限公司',
       showEnterpriseAdminNav: true,
     });
@@ -304,7 +318,7 @@ describe('SessionsPage', () => {
     expect(await screen.findByText('当前来自超级助手 Issue：修复团队上下文深链')).toBeInTheDocument();
     fireEvent.click(screen.getByText('打开当前 Issue 看板'));
     expect(navigateMock).toHaveBeenCalledWith(
-      '/enterprise/cteam?teamId=team-1&teamName=Alpha+Team&issueId=story-1&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE'
+      '/issues/story-1?teamId=team-1&teamName=Alpha+Team&issueSubject=%E4%BF%AE%E5%A4%8D%E5%9B%A2%E9%98%9F%E4%B8%8A%E4%B8%8B%E6%96%87%E6%B7%B1%E9%93%BE'
     );
   });
 

@@ -6,6 +6,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ipcBridge } from '@/common';
+
 const LEGACY_SW_CACHE_PREFIX = '1one-claudecode-webui-';
 const CACHE_BUST_PARAM = '__one_cache_bust';
 
@@ -35,8 +37,20 @@ export function buildCacheBustedWebuiUrl(currentHref: string, now = Date.now()):
   }
 }
 
+export async function clearElectronRendererHttpCache(): Promise<void> {
+  if (typeof window === 'undefined' || !window.electronAPI) {
+    return;
+  }
+  try {
+    await ipcBridge.application.clearRendererHttpCache.invoke();
+  } catch (error) {
+    console.warn('[WebUI] Failed to clear Electron HTTP cache:', error);
+  }
+}
+
 export async function resetWebuiClientCaches(): Promise<void> {
   await clearWebuiServiceWorkerCaches({ all: true });
+  await clearElectronRendererHttpCache();
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();

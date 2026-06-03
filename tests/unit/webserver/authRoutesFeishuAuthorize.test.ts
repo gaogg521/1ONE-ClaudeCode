@@ -377,7 +377,7 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
     );
 
     expect((callbackRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect).toHaveBeenCalledWith(
-      '/#/enterprise/auth'
+      '/#/sessions'
     );
   });
 

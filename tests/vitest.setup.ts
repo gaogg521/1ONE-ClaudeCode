@@ -8,6 +8,11 @@ import { registerPlatformServices } from '../src/common/platform';
 import { NodePlatformServices } from '../src/common/platform/NodePlatformServices';
 registerPlatformServices(new NodePlatformServices());
 
+// Many modules register process.on('exit') handlers; full-suite runs exceed the default limit of 10.
+if (process.getMaxListeners() <= 10) {
+  process.setMaxListeners(20);
+}
+
 // Make this a module
 
 // Extend global types for testing

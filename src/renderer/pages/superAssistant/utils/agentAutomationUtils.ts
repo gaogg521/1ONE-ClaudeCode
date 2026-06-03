@@ -18,5 +18,5 @@ export function formatCronScheduleBrief(job: ICronJob): string {
   if (job.schedule.kind === 'cron' && !job.schedule.expr?.trim()) {
     return '手动触发';
   }
-  return job.schedule.description || job.schedule.expr || '—';
+  return job.schedule.description || (job.schedule.kind === 'cron' ? job.schedule.expr : '—');
 }

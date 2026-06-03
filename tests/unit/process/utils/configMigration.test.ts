@@ -20,8 +20,8 @@ describe('getElectronConfigCandidatePaths', () => {
     const { getElectronConfigCandidatePaths } = await import('../../../../src/process/utils/configMigration');
     const home = os.homedir();
     const paths = getElectronConfigCandidatePaths();
-    expect(paths).toContain(path.join(home, '.1one-claudecode-config', '1one-claudecode-config.txt'));
-    expect(paths).toContain(path.join(home, '.1one-claudecode-config-dev', '1one-claudecode-config.txt'));
+    expect(paths).toContain(path.join(home, '.1ONE ClaudeCode-config', 'one-config.txt'));
+    expect(paths).toContain(path.join(home, '.1ONE ClaudeCode-config-dev', 'one-config.txt'));
     expect(paths).toHaveLength(2);
   });
 
@@ -31,8 +31,8 @@ describe('getElectronConfigCandidatePaths', () => {
     process.env.APPDATA = appData;
     const { getElectronConfigCandidatePaths } = await import('../../../../src/process/utils/configMigration');
     const paths = getElectronConfigCandidatePaths();
-    expect(paths).toContain(path.join(appData, '1ONE ClaudeCode', 'config', '1one-claudecode-config.txt'));
-    expect(paths).toContain(path.join(appData, '1ONE ClaudeCode-Dev', 'config', '1one-claudecode-config.txt'));
+    expect(paths).toContain(path.join(appData, '1one', 'config', 'one-config.txt'));
+    expect(paths).toContain(path.join(appData, 'one-Dev', 'config', 'one-config.txt'));
     expect(paths).toHaveLength(2);
   });
 
@@ -41,8 +41,8 @@ describe('getElectronConfigCandidatePaths', () => {
     const { getElectronConfigCandidatePaths } = await import('../../../../src/process/utils/configMigration');
     const home = os.homedir();
     const paths = getElectronConfigCandidatePaths();
-    expect(paths).toContain(path.join(home, '.config', '1ONE ClaudeCode', 'config', '1one-claudecode-config.txt'));
-    expect(paths).toContain(path.join(home, '.config', '1ONE ClaudeCode-Dev', 'config', '1one-claudecode-config.txt'));
+    expect(paths).toContain(path.join(home, '.config', '1one', 'config', 'one-config.txt'));
+    expect(paths).toContain(path.join(home, '.config', 'one-Dev', 'config', 'one-config.txt'));
     expect(paths).toHaveLength(2);
   });
 });

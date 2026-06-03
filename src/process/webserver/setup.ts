@@ -81,7 +81,7 @@ function normalizeRequestPathForCsrf(req: Request): string {
 /**
  * Same exclusions as legacy `csrf(..., excludedUrls)` but keyed on pathname only (ignores query / hash).
  */
-function shouldBypassCsrfByPath(pathOnly: string): boolean {
+export function shouldBypassCsrfByPath(pathOnly: string): boolean {
   if (pathOnly === '/login' || pathOnly === '/api/auth/ldap/login') {
     return true;
   }
@@ -89,9 +89,6 @@ function shouldBypassCsrfByPath(pathOnly: string): boolean {
     return true;
   }
   if (pathOnly === '/api/upload' || pathOnly.startsWith('/api/upload/')) {
-    return true;
-  }
-  if (pathOnly === '/api/admin' || pathOnly.startsWith('/api/admin/')) {
     return true;
   }
   return false;
@@ -125,9 +122,8 @@ export function setupBasicMiddleware(app: Express): void {
   app.use(cookieParser('cookie-parser-secret'));
   // P1 安全修复：登录接口启用 CSRF 保护（前端已添加 withCsrfToken）
   // P1 Security fix: Enable CSRF for login (frontend already uses withCsrfToken)
-  // Path-based bypass (see `shouldBypassCsrfByPath`): fixes querystring mismatches vs tiny-csrf string excludes
-  // and keeps /api/admin/* off body verification while still emitting CSRF helpers for SPA.
-  // 企业管理 / 登录豁免：按 pathname 判断，避免因 ?xxx 无法命中 tiny-csrf 的字符串排除而误拦。
+  // Path-based bypass (see `shouldBypassCsrfByPath`): fixes querystring mismatches vs tiny-csrf string excludes.
+  // 企业管理写操作不再整体豁免；前端 JSON/FormData 请求会附带 CSRF token。
   const csrfMw = csrf(CSRF_SECRET, ['POST', 'PUT', 'DELETE', 'PATCH'], [], []);
 
   /**
@@ -167,22 +163,29 @@ function normalizeOrigin(origin: string): string | null {
     }
     const portSuffix = url.port ? `:${url.port}` : '';
     return `${url.protocol}//${url.hostname}${portSuffix}`;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
 
-function getConfiguredOrigins(port: number, allowRemote: boolean): Set<string> {
-  const baseOrigins = new Set<string>([`http://localhost:${port}`, `http://127.0.0.1:${port}`]);
+function getConfiguredOrigins(port: number, allowRemote: boolean, additionalPorts: number[] = []): Set<string> {
+  const ports = [port, ...additionalPorts.filter((p) => p > 0 && p !== port)];
+  const baseOrigins = new Set<string>();
+  for (const listenPort of ports) {
+    baseOrigins.add(`http://localhost:${listenPort}`);
+    baseOrigins.add(`http://127.0.0.1:${listenPort}`);
+  }
 
   if (process.env.NODE_ENV !== 'production') {
     const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
     const normalizedRendererOrigin = rendererUrl ? normalizeOrigin(rendererUrl) : null;
     if (normalizedRendererOrigin) {
       baseOrigins.add(normalizedRendererOrigin);
-    } else {
-      baseOrigins.add('http://localhost:5173');
-      baseOrigins.add('http://127.0.0.1:5173');
+    }
+    // Vite may fall back to 5174+ when 5173 is taken; allow the whole dev port range.
+    for (let vitePort = 5173; vitePort <= 5190; vitePort += 1) {
+      baseOrigins.add(`http://localhost:${vitePort}`);
+      baseOrigins.add(`http://127.0.0.1:${vitePort}`);
     }
   }
 
@@ -191,8 +194,10 @@ function getConfiguredOrigins(port: number, allowRemote: boolean): Set<string> {
   if (allowRemote) {
     const allIPs = getAllNonInternalIPs();
     for (const ip of allIPs) {
-      baseOrigins.add(`http://${ip}:${port}`);
-      console.log(`[CORS] Added IP to allowed origins: http://${ip}:${port}`);
+      for (const listenPort of ports) {
+        baseOrigins.add(`http://${ip}:${listenPort}`);
+        console.log(`[CORS] Added IP to allowed origins: http://${ip}:${listenPort}`);
+      }
     }
   }
 
@@ -215,8 +220,13 @@ function getConfiguredOrigins(port: number, allowRemote: boolean): Set<string> {
   return baseOrigins;
 }
 
-export function setupCors(app: Express, port: number, allowRemote: boolean): void {
-  const allowedOrigins = getConfiguredOrigins(port, allowRemote);
+export function setupCors(
+  app: Express,
+  port: number,
+  allowRemote: boolean,
+  additionalPorts: number[] = []
+): void {
+  const allowedOrigins = getConfiguredOrigins(port, allowRemote, additionalPorts);
 
   app.use(
     cors({

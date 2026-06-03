@@ -61,10 +61,10 @@ See [docs/tech/architecture.md](docs/tech/architecture.md) for details.
 
 Browser WebUI over **LAN IP** (not `localhost`) serves prebuilt files from `out/renderer/`, not Vite HMR. After changing `src/renderer/**`, `src/common/adapter/browser.ts`, or `src/process/webserver/**` routes that affect the UI:
 
-1. Run **`npm run build:webui`** or **`npm run restart:webui`** (build + `--webui` dev).
-2. Tell the user to **Ctrl+F5** the browser.
+1. Run **`npm run restart`** for desktop + full build (not headless). For browser-only server: **`npm run restart:webui`**.
+2. Tell the user to **Ctrl+F5** the browser when testing LAN/static `out/renderer/`.
 
-Do **not** ask the user to verify WebUI fixes after only `npm run restart` — that does not rebuild `out/`.
+Use **`npm run restart:fast`** only for quick desktop HMR (skips clean/build).
 
 ## Testing
 

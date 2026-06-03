@@ -9,6 +9,7 @@ import {
   type RequirementStatus,
   type RequirementType,
 } from '@/renderer/utils/enterpriseApi/modules';
+import { ensureDesktopWebuiRunning } from '@/renderer/utils/ensureDesktopWebui';
 import {
   formatPriorityLabel,
   formatStatusLabel,
@@ -17,7 +18,7 @@ import {
   ISSUE_PRIORITIES,
   ISSUE_STATUS_ORDER,
 } from '../issueUtils';
-import { useIssueEnterpriseGate } from '../useIssueEnterpriseGate';
+import { useIssueAssigneeOptions } from '../hooks/useIssueAssigneeOptions';
 
 const FormItem = Form.Item;
 const TextArea = Input.TextArea;
@@ -28,6 +29,7 @@ export type CreateIssueFormValues = {
   description: string;
   status: RequirementStatus;
   priority: RequirementPriority;
+  assigned_to: string;
   parent_id: string;
 };
 
@@ -47,9 +49,9 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   onCreated,
 }) => {
   const { t } = useTranslation();
-  const { ensureEnterpriseLogin } = useIssueEnterpriseGate();
   const [form] = Form.useForm<CreateIssueFormValues>();
   const [saving, setSaving] = useState(false);
+  const { options: assigneeOptions, loading: assigneesLoading } = useIssueAssigneeOptions(visible);
 
   useEffect(() => {
     if (!visible) {
@@ -61,23 +63,23 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       description: '',
       status: 'backlog',
       priority: 'medium',
+      assigned_to: '',
       parent_id: parentId ?? '',
     });
   }, [defaultType, form, parentId, visible]);
 
   const handleSubmit = async () => {
-    if (!ensureEnterpriseLogin('create')) {
-      return;
-    }
     try {
       const values = await form.validate();
       setSaving(true);
+      await ensureDesktopWebuiRunning();
       const result = await createRequirement({
         type: values.type,
         subject: values.subject.trim(),
         description: values.description?.trim() || null,
         status: values.status,
         priority: values.priority,
+        assigned_to: values.assigned_to?.trim() || null,
         parent_id: values.parent_id?.trim() || parentId || null,
       });
       Message.success(t('common.issues.createSuccess', { defaultValue: 'Issue 已创建' }));
@@ -86,11 +88,17 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     } catch (error) {
       Message.error(
         getEnterpriseActionError(error, t('common.issues.createFailed', { defaultValue: '创建 Issue 失败' }), {
-          not_authenticated: t('common.issues.loginRequiredToCreate', {
-            defaultValue: '请先登录企业账号后再创建 Issue。',
+          webui_unavailable: t('common.issues.webuiRequiredToCreate', {
+            defaultValue: 'WebUI 未启动，请先在设置中启动本机 WebUI。',
           }),
-          forbidden: t('common.issues.loginRequiredToCreate', {
-            defaultValue: '请先登录企业账号后再创建 Issue。',
+          not_authenticated: t('common.issues.personalCreateHint', {
+            defaultValue: '无法创建 Issue：请确认本机 WebUI 已启动（设置 → WebUI）。',
+          }),
+          forbidden: t('common.issues.personalCreateHint', {
+            defaultValue: '无法创建 Issue：请确认本机 WebUI 已启动（设置 → WebUI）。',
+          }),
+          network: t('common.issues.webuiNetworkError', {
+            defaultValue: '无法连接本机 WebUI，请检查服务是否已启动。',
           }),
         })
       );
@@ -169,6 +177,25 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             {ISSUE_PRIORITIES.map((priority) => (
               <Select.Option key={priority} value={priority}>
                 {formatPriorityLabel(priority, t)}
+              </Select.Option>
+            ))}
+          </Select>
+        </FormItem>
+        <FormItem
+          label={t('common.issues.propertyAssignee', { defaultValue: '负责人' })}
+          field='assigned_to'
+          extra={t('common.issues.assigneeHint', {
+            defaultValue: '分配给本企业同事后，对方登录企业账号可在「分配给我」筛选中看到该 Issue。',
+          })}
+        >
+          <Select
+            allowClear
+            loading={assigneesLoading}
+            placeholder={t('common.issues.assigneePlaceholder', { defaultValue: '选择团队成员（可选）' })}
+          >
+            {assigneeOptions.map((member) => (
+              <Select.Option key={member.userId} value={member.userId}>
+                {member.label}
               </Select.Option>
             ))}
           </Select>

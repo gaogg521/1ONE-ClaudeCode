@@ -126,6 +126,24 @@ describe('useGuidSend', () => {
       );
     });
 
+    it('does not resolve preset resources for non-preset agents before navigation', async () => {
+      const deps = makeDeps({
+        selectedAgent: 'claude',
+        selectedAgentInfo: { backend: 'claude', name: 'Claude' },
+        resolvePresetRulesAndSkills: vi.fn().mockResolvedValue({ rules: 'slow preset rules' }),
+        resolveEnabledSkills: vi.fn(() => ['slow-skill']),
+      });
+      const { result } = renderHook(() => useGuidSend(deps));
+
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      expect(deps.resolvePresetRulesAndSkills).not.toHaveBeenCalled();
+      expect(deps.resolveEnabledSkills).not.toHaveBeenCalled();
+      expect(deps.navigate).toHaveBeenCalledWith('/conversation/new-conv');
+    });
+
     it('stores initial message in sessionStorage', async () => {
       const deps = makeDeps();
       const { result } = renderHook(() => useGuidSend(deps));

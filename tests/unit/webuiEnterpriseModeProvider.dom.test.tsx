@@ -7,11 +7,13 @@ const configGetMock = vi.hoisted(() => vi.fn());
 const configSetMock = vi.hoisted(() => vi.fn());
 const getEnterpriseContextInvokeMock = vi.hoisted(() => vi.fn());
 const getWebuiApiBaseUrlMock = vi.hoisted(() => vi.fn());
+const getWebuiAdminBrowserOriginMock = vi.hoisted(() => vi.fn());
 const openExternalUrlMock = vi.hoisted(() => vi.fn());
 const syncBrowserWebuiSessionToDesktopMock = vi.hoisted(() => vi.fn().mockResolvedValue(null));
 
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({
   useAuth: () => useAuthMock(),
+  isDesktopOperatorUser: (user: { role?: string } | null | undefined) => user?.role === 'system_admin',
 }));
 
 vi.mock('@/common/config/storage', () => ({
@@ -37,10 +39,12 @@ vi.mock('@/renderer/utils/platform', () => ({
 vi.mock('@/renderer/utils/webuiApiBase', () => ({
   fetchWebuiApi: vi.fn(),
   getWebuiApiBaseUrl: (...args: unknown[]) => getWebuiApiBaseUrlMock(...args),
+  getWebuiAdminBrowserOrigin: (...args: unknown[]) => getWebuiAdminBrowserOriginMock(...args),
 }));
 
 vi.mock('@/renderer/utils/syncBrowserWebuiSession', () => ({
   syncBrowserWebuiSessionToDesktop: (...args: unknown[]) => syncBrowserWebuiSessionToDesktopMock(...args),
+  getDesktopWebuiBearerToken: vi.fn(() => null),
 }));
 
 vi.mock('@/renderer/utils/enterpriseJoinApi', () => ({
@@ -184,8 +188,8 @@ describe('WebuiEnterpriseModeProvider', () => {
     expect(refreshMock).not.toHaveBeenCalled();
   });
 
-  it('opens admin console through the login route in browser', async () => {
-    getWebuiApiBaseUrlMock.mockResolvedValue('http://127.0.0.1:25809');
+  it('opens admin console on the dedicated admin port', async () => {
+    getWebuiAdminBrowserOriginMock.mockResolvedValue('http://127.0.0.1:25810');
 
     const wrapper = ({ children }: React.PropsWithChildren) => (
       <WebuiEnterpriseModeProvider>{children}</WebuiEnterpriseModeProvider>
@@ -197,7 +201,7 @@ describe('WebuiEnterpriseModeProvider', () => {
 
     await expect(result.current.openEnterpriseAdminInBrowser()).resolves.toBe('opened');
     expect(openExternalUrlMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:25809/#/login?redirect=%2Fenterprise%2Fauth&mode=enterprise'
+      'http://127.0.0.1:25810/#/login?redirect=%2Fenterprise%2Fauth&mode=admin'
     );
   });
 });

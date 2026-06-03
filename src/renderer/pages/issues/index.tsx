@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Empty, Input, Result, Spin, Tag, Typography } from '@arco-design/web-react';
+import { Alert, Button, Card, Empty, Input, Spin, Tag, Typography } from '@arco-design/web-react';
 import { EveryUser, Plus, Right, Search } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -7,7 +7,15 @@ import AppLoader from '@/renderer/components/layout/AppLoader';
 import PageContentShell from '@/renderer/components/layout/PageContentShell';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
+import {
+  formatEnterpriseRuntimeIssue,
+  normalizeEnterpriseApiError,
+  type EnterpriseRuntimeIssue,
+} from '@/renderer/utils/enterpriseApi/error';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { ensureDesktopWebuiRunning } from '@/renderer/utils/ensureDesktopWebui';
+import { getWebuiApiBaseUrl } from '@/renderer/utils/webuiApiBase';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import type { RequirementRecord, RequirementStatus } from '@/renderer/utils/enterpriseApi/modules';
 import { listRequirementsTree } from '@/renderer/utils/enterpriseApi/modules';
 import {
@@ -19,7 +27,6 @@ import {
   type IssueListItem,
 } from './issueUtils';
 import CreateIssueModal from './components/CreateIssueModal';
-import { useIssueEnterpriseGate } from './useIssueEnterpriseGate';
 
 const TasksPage = React.lazy(() => import('@/renderer/pages/tasks'));
 
@@ -42,39 +49,63 @@ const IssuesPage: React.FC = () => {
   const location = useLocation();
   const auth = useAuth();
   const enterpriseMode = useWebuiEnterpriseMode();
-  const { ensureEnterpriseLogin } = useIssueEnterpriseGate();
-  const { hasJoinedEnterprise, tenantLabel } = useEditionFeatures();
+  const { hasInstanceEnterprise, hasJoinedEnterprise, isEnterpriseEdition, showTeamsFeature, tenantLabel } =
+    useEditionFeatures();
   const viewTab = useMemo(() => resolveIssuesViewTab(location.search), [location.search]);
+  const effectiveViewTab = !showTeamsFeature && viewTab === 'tasks' ? 'board' : viewTab;
   const [loading, setLoading] = useState(true);
   const [tree, setTree] = useState<RequirementRecord[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<IssueFilter>('open');
   const [createVisible, setCreateVisible] = useState(false);
+  const [loadIssue, setLoadIssue] = useState<EnterpriseRuntimeIssue | null>(null);
 
   useEffect(() => {
     let disposed = false;
     setLoading(true);
-    void listRequirementsTree()
-      .then((data) => {
-        if (!disposed) {
-          setTree(data ?? []);
-        }
-      })
-      .catch(() => {
+    setLoadIssue(null);
+    void (async () => {
+      try {
+        await ensureDesktopWebuiRunning();
+      } catch {
+        // fall through to base URL check with a clear message
+      }
+      const base = await getWebuiApiBaseUrl();
+      if (!base) {
         if (!disposed) {
           setTree([]);
+          setLoadIssue({
+            code: 'webui_unavailable',
+            message: isElectronDesktop()
+              ? 'WebUI 未启动。请在 设置 → WebUI 中启动本机服务后重试。'
+              : 'WebUI 服务不可用，请刷新页面或联系管理员。',
+          });
+          setLoading(false);
         }
-      })
-      .finally(() => {
+        return;
+      }
+      try {
+        const data = await listRequirementsTree();
+        if (!disposed) {
+          setTree(data ?? []);
+          setLoadIssue(null);
+        }
+      } catch (error) {
+        if (!disposed) {
+          setTree([]);
+          setLoadIssue(normalizeEnterpriseApiError(error));
+        }
+      } finally {
         if (!disposed) {
           setLoading(false);
         }
-      });
+      }
+    })();
 
     return () => {
       disposed = true;
     };
-  }, []);
+  }, [auth.status, auth.user?.id]);
 
   const issues = useMemo(() => flattenIssues(tree), [tree]);
   const searchLower = search.trim().toLowerCase();
@@ -113,23 +144,6 @@ const IssuesPage: React.FC = () => {
     [issues]
   );
 
-  if (!hasJoinedEnterprise) {
-    return (
-      <Result
-        status='403'
-        title={t('common.issues.joinRequiredTitle', { defaultValue: '加入企业后可使用 Issues' })}
-        subTitle={t('common.issues.joinRequiredDesc', {
-          defaultValue: 'Issues 会复用企业需求树、团队协作和超级助手能力，请先加入企业组织。',
-        })}
-        extra={
-          <Button type='primary' onClick={() => navigate('/sessions')}>
-            {t('common.issues.backToWorkspace', { defaultValue: '返回主工作台' })}
-          </Button>
-        }
-      />
-    );
-  }
-
   return (
     <PageContentShell className='issues-page-shell' contentClassName='max-w-1400px pb-40px'>
       <div className='flex items-start justify-between gap-16px flex-wrap'>
@@ -158,9 +172,7 @@ const IssuesPage: React.FC = () => {
             type='primary'
             icon={<Plus theme='outline' size='14' />}
             onClick={() => {
-              if (ensureEnterpriseLogin('create')) {
-                setCreateVisible(true);
-              }
+              setCreateVisible(true);
             }}
           >
             {t('common.issues.createButton', { defaultValue: '新建 Issue' })}
@@ -168,7 +180,7 @@ const IssuesPage: React.FC = () => {
           <Button size='small' type='outline' onClick={() => navigate('/super-assistant')}>
             {t('common.issues.openAssistant', { defaultValue: '打开 Agent 助手' })}
           </Button>
-          <Button size='small' onClick={() => navigate('/enterprise/cteam')}>
+          <Button size='small' disabled={!showTeamsFeature} onClick={() => navigate('/enterprise/cteam')}>
             {t('common.issues.openPlanningBoard', { defaultValue: '打开规划看板' })}
           </Button>
         </div>
@@ -183,7 +195,8 @@ const IssuesPage: React.FC = () => {
             <Button
               key={tab}
               size='small'
-              type={viewTab === tab ? 'primary' : 'outline'}
+              type={effectiveViewTab === tab ? 'primary' : 'outline'}
+              disabled={tab === 'tasks' && !showTeamsFeature}
               onClick={() => navigate(tab === 'tasks' ? '/issues?tab=tasks' : '/issues')}
             >
               {label}
@@ -192,7 +205,7 @@ const IssuesPage: React.FC = () => {
         </div>
       </Card>
 
-      {viewTab === 'tasks' ? (
+      {effectiveViewTab === 'tasks' && showTeamsFeature ? (
         <div className='mt-16px'>
           <Suspense fallback={<AppLoader />}>
             <TasksPage />
@@ -200,7 +213,7 @@ const IssuesPage: React.FC = () => {
         </div>
       ) : null}
 
-      {viewTab === 'board' ? (
+      {effectiveViewTab === 'board' ? (
         <>
       <div className='mt-16px grid gap-12px md:grid-cols-2 xl:grid-cols-4'>
         <Card>
@@ -253,7 +266,20 @@ const IssuesPage: React.FC = () => {
         </div>
       </Card>
 
-      {auth.status !== 'authenticated' ? (
+      {loadIssue ? (
+        <Alert
+          className='mt-16px'
+          type='error'
+          content={formatEnterpriseRuntimeIssue(loadIssue, {
+            webui_unavailable: 'WebUI 未启动。请在设置中启动 WebUI 后重试。',
+            not_authenticated: '请先登录后再加载 Issues（个人版本机访客可直接使用，无需企业账号）。',
+            forbidden: '当前无权访问 Issues，请确认 WebUI 已启动且使用本机访问。',
+            network: '无法连接本机 WebUI，请在设置中启动 WebUI 或检查端口是否被占用。',
+          })}
+        />
+      ) : null}
+
+      {hasInstanceEnterprise && isEnterpriseEdition && !hasJoinedEnterprise ? (
         <Alert
           className='mt-16px'
           type='warning'

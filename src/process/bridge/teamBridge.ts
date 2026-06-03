@@ -39,57 +39,63 @@ export function initTeamBridge(teamSessionService: TeamSessionService): void {
   );
 
   ipcBridge.team.list.provider(
-    safeProvider(async ({ userId }) => {
-      return teamSessionService.listTeams(userId);
+    safeProvider(async ({ userId, tenantId }) => {
+      return teamSessionService.listTeams(userId, tenantId);
     })
   );
 
   ipcBridge.team.get.provider(
-    safeProvider(async ({ id }) => {
-      return teamSessionService.getTeam(id);
+    safeProvider(async ({ id, tenantId }) => {
+      return teamSessionService.getTeam(id, tenantId);
     })
   );
 
   ipcBridge.team.remove.provider(
-    safeProvider(async ({ id }) => {
-      await teamSessionService.deleteTeam(id);
+    safeProvider(async ({ id, tenantId }) => {
+      await teamSessionService.deleteTeam(id, tenantId);
     })
   );
 
   ipcBridge.team.addAgent.provider(
-    safeProvider(async ({ teamId, agent }) => {
-      return teamSessionService.addAgent(teamId, agent);
+    safeProvider(async ({ teamId, tenantId, agent }) => {
+      return teamSessionService.addAgent(teamId, agent, tenantId);
     })
   );
 
   ipcBridge.team.removeAgent.provider(
-    safeProvider(async ({ teamId, slotId }) => {
-      await teamSessionService.removeAgent(teamId, slotId);
+    safeProvider(async ({ teamId, tenantId, slotId }) => {
+      await teamSessionService.removeAgent(teamId, slotId, tenantId);
     })
   );
 
   ipcBridge.team.renameAgent.provider(
-    safeProvider(async ({ teamId, slotId, newName }) => {
-      await teamSessionService.renameAgent(teamId, slotId, newName);
+    safeProvider(async ({ teamId, tenantId, slotId, newName }) => {
+      await teamSessionService.renameAgent(teamId, slotId, newName, tenantId);
+    })
+  );
+
+  ipcBridge.team.updateAgentSkillIds.provider(
+    safeProvider(async ({ teamId, tenantId, slotId, skillIds }) => {
+      await teamSessionService.updateAgentSkillIds(teamId, slotId, skillIds, tenantId);
     })
   );
 
   ipcBridge.team.renameTeam.provider(
-    safeProvider(async ({ id, name }) => {
-      await teamSessionService.renameTeam(id, name);
+    safeProvider(async ({ id, tenantId, name }) => {
+      await teamSessionService.renameTeam(id, name, tenantId);
     })
   );
 
   ipcBridge.team.sendMessage.provider(
-    safeProvider(async ({ teamId, content }) => {
-      const session = await teamSessionService.getOrStartSession(teamId);
+    safeProvider(async ({ teamId, tenantId, content }) => {
+      const session = await teamSessionService.getOrStartSession(teamId, tenantId);
       await session.sendMessage(content);
     })
   );
 
   ipcBridge.team.sendMessageToAgent.provider(
-    safeProvider(async ({ teamId, slotId, content }) => {
-      const session = await teamSessionService.getOrStartSession(teamId);
+    safeProvider(async ({ teamId, tenantId, slotId, content }) => {
+      const session = await teamSessionService.getOrStartSession(teamId, tenantId);
       await session.sendMessageToAgent(slotId, content);
     })
   );
@@ -101,14 +107,14 @@ export function initTeamBridge(teamSessionService: TeamSessionService): void {
   );
 
   ipcBridge.team.ensureSession.provider(
-    safeProvider(async ({ teamId }) => {
+    safeProvider(async ({ teamId, tenantId }) => {
       try {
-        await teamSessionService.getOrStartSession(teamId);
+        await teamSessionService.getOrStartSession(teamId, tenantId);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error('[teamBridge] ensureSession failed:', message, error);
         try {
-          const team = await teamSessionService.getTeam(teamId);
+          const team = await teamSessionService.getTeam(teamId, tenantId);
           for (const agent of team.agents) {
             ipcBridge.team.agentStatusChanged.emit({
               teamId,

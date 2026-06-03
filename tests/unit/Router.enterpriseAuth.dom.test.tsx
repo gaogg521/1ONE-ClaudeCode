@@ -127,7 +127,7 @@ describe('Router enterprise auth redirect', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('login-page')).toHaveTextContent(
-        '#/login?redirect=%2Fenterprise%2Fauth&mode=enterprise'
+        '#/login?redirect=%2Fenterprise%2Fauth&mode=admin&intent=webui-admin'
       );
     });
 
@@ -179,7 +179,7 @@ describe('Router enterprise auth redirect', () => {
     render(<Router />);
 
     await waitFor(() => {
-      expect(window.location.hash).toBe('#/super-assistant?tab=workspace');
+      expect(window.location.hash).toBe('#/super-assistant?tab=overview');
     });
   });
 });

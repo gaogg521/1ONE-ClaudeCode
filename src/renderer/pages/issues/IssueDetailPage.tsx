@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Empty, Message, Result, Select, Space, Spin, Tag, Typography } from '@arco-design/web-react';
+import { Button, Card, Empty, Message, Select, Space, Spin, Tag, Typography } from '@arco-design/web-react';
 import { Plus } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -18,29 +18,34 @@ import {
   listRequirementsTree,
   updateRequirement,
 } from '@/renderer/utils/enterpriseApi/modules';
-import { useTeamList } from '@/renderer/pages/team/hooks/useTeamList';
 import CreateIssueModal from './components/CreateIssueModal';
-import { useIssueEnterpriseGate } from './useIssueEnterpriseGate';
 import IssueActivityTimeline, { buildIssueActivityItems } from './components/IssueActivityTimeline';
 import IssueAutomationCard from './components/IssueAutomationCard';
 import IssueCommentComposer from './components/IssueCommentComposer';
 import {
+  buildIssueAssistantPath,
+  buildIssuePlanningPath,
+} from './issueCollaborationRouting';
+import {
   countNestedChildren,
   findRequirementById,
+  formatCreatorDisplayName,
   formatPriorityLabel,
   formatStatusLabel,
   ISSUE_STATUS_ORDER,
   priorityTagColor,
 } from './issueUtils';
+import { useIssueAssigneeOptions } from './hooks/useIssueAssigneeOptions';
 
 const IssueDetailPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { issueId } = useParams<{ issueId: string }>();
   const auth = useAuth();
-  const { hasJoinedEnterprise } = useEditionFeatures();
-  const { teams } = useTeamList();
-  const { ensureEnterpriseLogin } = useIssueEnterpriseGate();
+  const { showTeamsFeature } = useEditionFeatures();
+  const { options: assigneeOptions, loading: assigneesLoading, resolveLabel } = useIssueAssigneeOptions(
+    showTeamsFeature
+  );
   const [loading, setLoading] = useState(true);
   const [tree, setTree] = useState<RequirementRecord[]>([]);
   const [comments, setComments] = useState<RequirementCommentRecord[]>([]);
@@ -82,16 +87,22 @@ const IssueDetailPage: React.FC = () => {
   );
 
   const childCount = countNestedChildren(currentIssue);
-  const primaryTeam = teams[0] ?? null;
-  const leadAgent = primaryTeam?.agents.find((agent) => agent.slotId === primaryTeam.leadAgentId) ?? primaryTeam?.agents[0] ?? null;
 
   const activityItems = useMemo(
-    () => (currentIssue ? buildIssueActivityItems(currentIssue, comments, t) : []),
-    [comments, currentIssue, t]
+    () =>
+      currentIssue
+        ? buildIssueActivityItems(
+            currentIssue,
+            comments,
+            t,
+            formatCreatorDisplayName(currentIssue, auth.user)
+          )
+        : [],
+    [auth.user, comments, currentIssue, t]
   );
 
   const patchIssue = async (payload: Record<string, unknown>) => {
-    if (!currentIssue || !ensureEnterpriseLogin('update')) {
+    if (!currentIssue) {
       return;
     }
     setSavingField(true);
@@ -106,23 +117,6 @@ const IssueDetailPage: React.FC = () => {
       setSavingField(false);
     }
   };
-
-  if (!hasJoinedEnterprise) {
-    return (
-      <Result
-        status='403'
-        title={t('common.issues.joinRequiredTitle', { defaultValue: '加入企业后可使用 Issues' })}
-        subTitle={t('common.issues.joinRequiredDesc', {
-          defaultValue: 'Issues 会复用企业需求树、团队协作和超级助手能力，请先加入企业组织。',
-        })}
-        extra={
-          <Button type='primary' onClick={() => navigate('/sessions')}>
-            {t('common.issues.backToWorkspace', { defaultValue: '返回主工作台' })}
-          </Button>
-        }
-      />
-    );
-  }
 
   return (
     <PageContentShell className='issue-detail-shell' contentClassName='max-w-1400px pb-40px'>
@@ -165,13 +159,29 @@ const IssueDetailPage: React.FC = () => {
                   <Space wrap>
                     <Button
                       type='primary'
-                      onClick={() => navigate(`/super-assistant?issueId=${encodeURIComponent(currentIssue.id)}`)}
+                      onClick={() => navigate(buildIssueAssistantPath(currentIssue.id))}
                     >
                       {t('common.issues.startWithAssistant', { defaultValue: '交给 Agent 助手处理' })}
                     </Button>
-                    <Button onClick={() => navigate(`/enterprise/cteam?issueId=${encodeURIComponent(currentIssue.id)}&issueSubject=${encodeURIComponent(currentIssue.subject)}`)}>
-                      {t('common.issues.openPlanningBoard', { defaultValue: '打开规划看板' })}
-                    </Button>
+                    {showTeamsFeature ? (
+                      <Button
+                        onClick={() =>
+                          navigate(
+                            buildIssuePlanningPath({
+                              issueId: currentIssue.id,
+                              issueSubject: currentIssue.subject,
+                              teamsCollaborationEnabled: showTeamsFeature,
+                            })
+                          )
+                        }
+                      >
+                        {t('common.issues.openPlanningBoard', { defaultValue: '打开规划看板' })}
+                      </Button>
+                    ) : (
+                      <Button onClick={() => setCreateChildVisible(true)}>
+                        {t('common.issues.addSubIssue', { defaultValue: '添加子 Issue' })}
+                      </Button>
+                    )}
                   </Space>
                 </div>
               </Card>
@@ -184,9 +194,7 @@ const IssueDetailPage: React.FC = () => {
                     type='text'
                     icon={<Plus theme='outline' size='14' />}
                     onClick={() => {
-                      if (ensureEnterpriseLogin('create')) {
-                        setCreateChildVisible(true);
-                      }
+                      setCreateChildVisible(true);
                     }}
                   >
                     {t('common.issues.addSubIssue', { defaultValue: '添加' })}
@@ -265,10 +273,31 @@ const IssueDetailPage: React.FC = () => {
                     </Select>
                   </div>
                   <div>
-                    <div className='text-t-tertiary'>{t('common.issues.propertyAssignee', { defaultValue: '负责人' })}</div>
-                    <div className='mt-4px text-t-primary'>
-                      {currentIssue.assigned_to || auth.user?.username || t('common.issues.unassigned', { defaultValue: '未分配' })}
-                    </div>
+                    <div className='text-t-tertiary mb-6px'>{t('common.issues.propertyAssignee', { defaultValue: '负责人' })}</div>
+                    {showTeamsFeature && assigneeOptions.length > 0 ? (
+                      <Select
+                        allowClear
+                        loading={assigneesLoading}
+                        value={currentIssue.assigned_to ?? undefined}
+                        placeholder={t('common.issues.unassigned', { defaultValue: '未分配' })}
+                        disabled={savingField}
+                        onChange={(value) =>
+                          void patchIssue({ assigned_to: value ? String(value) : null })
+                        }
+                      >
+                        {assigneeOptions.map((member) => (
+                          <Select.Option key={member.userId} value={member.userId}>
+                            {member.label}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    ) : (
+                      <div className='text-t-primary'>
+                        {resolveLabel(currentIssue.assigned_to) ??
+                          currentIssue.assigned_to ??
+                          t('common.issues.unassigned', { defaultValue: '未分配' })}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className='text-t-tertiary'>{t('common.issues.propertyId', { defaultValue: 'ID' })}</div>
@@ -292,8 +321,6 @@ const IssueDetailPage: React.FC = () => {
               <IssueAutomationCard
                 issueId={currentIssue.id}
                 issueSubject={currentIssue.subject}
-                teamId={primaryTeam?.id}
-                leadAgent={leadAgent}
               />
             </div>
           </div>

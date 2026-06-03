@@ -12,9 +12,13 @@ import fs from 'node:fs/promises';
 import mammoth from 'mammoth';
 import { readFile } from 'node:fs/promises';
 import { TokenMiddleware } from '../auth/middleware/TokenMiddleware';
+import { AuthService } from '../auth/service/AuthService';
+import { UserRepository } from '../auth/repository/UserRepository';
 import { apiRateLimiter } from '../middleware/security';
 import { AuthProviderRepository } from '../auth/repository/AuthProviderRepository';
 import { getDatabase } from '@process/services/database';
+import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
+import { canUseAnonymousLocalDevops } from '@/common/config/localDevopsAccess';
 import { isEnterpriseAdminRole } from '../auth/enterpriseRoles';
 import { RAGService } from '@process/services/rag/RAGService';
 import {
@@ -58,6 +62,74 @@ function requireAdmin(req: Request, res: Response, next: NextFunction): void {
  */
 function resolveTenantId(req: Request): string {
   return (req.user?.tenant_id ?? 'default').trim() || 'default';
+}
+
+function resolvePersonalResourceOwnerId(req: Request): string {
+  return req.user?.id ?? DESKTOP_OPERATOR_USER_ID;
+}
+
+function resolvePersonalResourceOwnerName(req: Request): string {
+  return resolveCreatorDisplayName(resolvePersonalResourceOwnerId(req), req.user?.username);
+}
+
+/** 列表/树接口 JOIN 出的 creator_name 与评论 author_name 统一可读展示名 */
+function resolveCreatorDisplayName(creatorId: string, joinedName?: string | null): string {
+  if (creatorId === DESKTOP_OPERATOR_USER_ID) {
+    return '本地用户';
+  }
+  const trimmed = joinedName?.trim();
+  if (trimmed && trimmed !== creatorId) {
+    return trimmed;
+  }
+  return trimmed || creatorId;
+}
+
+function canUseAnonymousDesktopDevops(req: Request): boolean {
+  return canUseAnonymousLocalDevops(req);
+}
+
+async function optionalAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const token = TokenMiddleware.extractToken(req);
+  if (!token) {
+    if (canUseAnonymousDesktopDevops(req)) {
+      next();
+      return;
+    }
+    res.status(401).json({ success: false, message: 'Authentication required' });
+    return;
+  }
+  const decoded = await AuthService.verifyToken(token);
+  if (!decoded) {
+    if (canUseAnonymousDesktopDevops(req)) {
+      next();
+      return;
+    }
+    res.status(401).json({ success: false, message: 'Authentication required' });
+    return;
+  }
+  const user = await UserRepository.findById(decoded.userId);
+  if (!user) {
+    if (canUseAnonymousDesktopDevops(req)) {
+      next();
+      return;
+    }
+    res.status(401).json({ success: false, message: 'Authentication required' });
+    return;
+  }
+  const role = user.role === 'admin'
+    ? 'system_admin'
+    : user.role === 'user'
+      ? 'member'
+      : user.role === 'system_admin' || user.role === 'org_admin' || user.role === 'member'
+        ? user.role
+        : 'member';
+  req.user = {
+    id: user.id,
+    username: user.username,
+    role,
+    tenant_id: (user as { tenant_id?: string | null }).tenant_id ?? 'default',
+  };
+  next();
 }
 
 function isScopeError(value: ResolvedResourceScope | ResourceScopeError): value is ResourceScopeError {
@@ -320,7 +392,7 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // GET /api/admin/requirements/tree — 以树形层级列出所有需求
-  app.get('/api/admin/requirements/tree', apiRateLimiter, auth, async (req, res) => {
+  app.get('/api/admin/requirements/tree', apiRateLimiter, optionalAuth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const db = await getDatabase();
@@ -329,10 +401,13 @@ export function registerDevOpsRoutes(app: Express): void {
       // 查询所有需求记录
       const rows = driver
         .prepare(
-          `SELECT id, tenant_id, parent_id, type, subject, description, status, priority, assigned_to, milestone_id, creator_id, created_at, updated_at
-           FROM requirements
-           WHERE tenant_id = ?
-           ORDER BY created_at ASC`
+          `SELECT r.id, r.tenant_id, r.parent_id, r.type, r.subject, r.description, r.status, r.priority,
+                  r.assigned_to, r.milestone_id, r.creator_id, r.created_at, r.updated_at,
+                  COALESCE(u.username, r.creator_id) AS creator_name
+           FROM requirements r
+           LEFT JOIN users u ON u.id = r.creator_id
+           WHERE r.tenant_id = ?
+           ORDER BY r.created_at ASC`
         )
         .all(tenantId) as any[];
 
@@ -341,7 +416,11 @@ export function registerDevOpsRoutes(app: Express): void {
       const rootItems: any[] = [];
 
       for (const row of rows) {
-        itemMap.set(row.id, { ...row, children: [] });
+        itemMap.set(row.id, {
+          ...row,
+          creator_name: resolveCreatorDisplayName(row.creator_id, row.creator_name),
+          children: [],
+        });
       }
 
       for (const item of itemMap.values()) {
@@ -360,7 +439,7 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // POST /api/admin/requirements — 创建需求卡片
-  app.post('/api/admin/requirements', apiRateLimiter, auth, async (req, res) => {
+  app.post('/api/admin/requirements', apiRateLimiter, optionalAuth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const { parent_id, type, subject, description, status, priority, assigned_to, milestone_id } = req.body;
@@ -407,7 +486,7 @@ export function registerDevOpsRoutes(app: Express): void {
           priority || 'medium',
           assigned_to || null,
           type === 'epic' && milestone_id ? String(milestone_id) : null,
-          req.user!.id,
+          resolvePersonalResourceOwnerId(req),
           now,
           now
         );
@@ -420,7 +499,7 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // PATCH /api/admin/requirements/:id — 更新需求状态、优先级、指派人
-  app.patch('/api/admin/requirements/:id', apiRateLimiter, auth, async (req, res) => {
+  app.patch('/api/admin/requirements/:id', apiRateLimiter, optionalAuth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const id = String(req.params.id);
@@ -557,7 +636,7 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // POST /api/admin/requirements/:id/comments — 用户 / Agent 发表评论
-  app.post('/api/admin/requirements/:id/comments', apiRateLimiter, auth, async (req, res) => {
+  app.post('/api/admin/requirements/:id/comments', apiRateLimiter, optionalAuth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const requirementId = String(req.params.id);
@@ -582,8 +661,8 @@ export function registerDevOpsRoutes(app: Express): void {
         tenantId,
         requirementId,
         authorType: 'user',
-        authorId: req.user!.id,
-        authorName: req.user!.username,
+        authorId: resolvePersonalResourceOwnerId(req),
+        authorName: resolvePersonalResourceOwnerName(req),
         body,
       });
 
@@ -595,7 +674,7 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // GET /api/admin/requirements/:id/comments — Issue 评论（含 Autopilot 回写）
-  app.get('/api/admin/requirements/:id/comments', apiRateLimiter, auth, async (req, res) => {
+  app.get('/api/admin/requirements/:id/comments', apiRateLimiter, optionalAuth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const requirementId = String(req.params.id);
@@ -633,6 +712,10 @@ export function registerDevOpsRoutes(app: Express): void {
       res.json(
         rows.map((row) => ({
           ...row,
+          author_name:
+            row.author_id != null
+              ? resolveCreatorDisplayName(row.author_id, row.author_name)
+              : row.author_name,
           author_type: row.author_type as 'user' | 'agent' | 'autopilot',
           metadata: row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : null,
         }))

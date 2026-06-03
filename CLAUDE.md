@@ -18,8 +18,10 @@ These principles apply to every project session:
 ```bash
 # Development
 npm start                    # Dev mode (electron-vite dev), hot reload
-npm run restart              # Kill existing instance + clear lockfile + restart
-npm run restart:webui        # Build out/ + restart with --webui (use after renderer/WebUI changes)
+npm run restart              # Full desktop: clean vite → build → MCP → Electron window (+ WebUI auto-restore)
+npm run restart:fast         # Fast: stop → dev only (HMR, no clean/build)
+npm run restart:webui        # Headless WebUI only (no desktop window; use browser)
+npm run restart:webui:remote # Headless WebUI + --remote (LAN)
 npm run webui:prod           # WebUI mode (browser access at localhost:25809)
 
 # Build
@@ -34,9 +36,9 @@ npm run lint                 # oxlint
 npm run lint:fix             # Auto-fix lint issues
 ```
 
-**Important**: Always use `npm run restart` (not `npm start`) when an instance is already running — it handles the lockfile at `%APPDATA%\1OneClaudeCode-Dev\lockfile`.
+**Important**: Always use `npm run restart` (not `npm start`) when an instance is already running — it kills Electron, electron-vite, and dev ports (5173–5185, 9230, 25809), then clears the lockfile at `%APPDATA%\1OneClaudeCode-Dev\lockfile`. **Ctrl+C** in the restart terminal stops the whole dev tree. If the terminal is stuck, open another window and run `npm run stop:dev`.
 
-**WebUI / LAN browser testing**: Non-localhost URLs (e.g. `http://192.168.x.x:25809`) serve **built** assets from `out/renderer/`, not Vite HMR. After changing `src/renderer/**`, `src/common/adapter/browser.ts`, or WebUI auth/routes, agents **must** run `npm run build:webui` or `npm run restart:webui` before asking the user to verify in the browser. `npm run restart` alone does not rebuild `out/`.
+**WebUI / LAN browser testing**: LAN serves **built** assets from `out/renderer/`. **`npm run restart`** rebuilds `out/` and opens the **desktop app**; WebUI HTTP restores from settings. Use **`npm run restart:webui`** for headless server only (no window). Use **`npm run restart:fast`** for quick HMR only.
 
 ## Architecture
 

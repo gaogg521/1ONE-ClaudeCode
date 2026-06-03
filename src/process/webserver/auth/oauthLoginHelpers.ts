@@ -11,7 +11,7 @@ import { isElectronDesktopWebuiRequest } from '@/common/config/webuiClientHeader
 import { AuthService } from '@process/webserver/auth/service/AuthService';
 import { UserRepository, type AuthUser } from '@process/webserver/auth/repository/UserRepository';
 import { AUTH_CONFIG, getCookieOptions } from '@process/webserver/config/constants';
-import { resolvePostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
+import { resolveOAuthPostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
 import { registerBrowserWebuiLoginSession } from '@process/webserver/auth/registerBrowserWebuiLoginSession';
 import { refreshUserAfterEnterpriseAutoJoin } from '@process/webserver/auth/enterpriseAutoJoin';
 
@@ -58,11 +58,10 @@ export async function finalizeOAuthBrowserLogin(
     maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,
   });
   registerBrowserWebuiLoginSession(req, authUser, sessionToken, authUser.role);
-  const target = resolvePostLoginRedirectPath(
+  const target = resolveOAuthPostLoginRedirectPath(
     input.redirectTarget,
     authUser.role,
-    authUser.tenant_id,
-    false
+    authUser.tenant_id
   );
   res.redirect(`/#${target}`);
 }

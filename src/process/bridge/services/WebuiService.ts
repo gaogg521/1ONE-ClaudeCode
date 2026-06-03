@@ -109,6 +109,16 @@ export class WebuiService {
     return adminUser;
   }
 
+  /** Prefer the latest browser WebUI login; fall back to the built-in system user. */
+  static async resolveWorkspaceProfileUserId(): Promise<string> {
+    const synced = await this.syncBrowserWebuiSession();
+    if (synced?.userId) {
+      return synced.userId;
+    }
+    const adminUser = await this.getAdminUser();
+    return adminUser.id;
+  }
+
   private static maskEmail(email: string): string {
     const [name, domain] = email.split('@');
     if (!name || !domain) return email;
@@ -219,12 +229,21 @@ export class WebuiService {
     const lanIP = this.getLanIP();
     const networkUrl = allowRemote && lanIP ? `http://${lanIP}:${port}` : undefined;
 
+    const { getAdminWebListenPort } = await import('@process/webserver/index');
+    const adminPort = running ? getAdminWebListenPort() : null;
+    const adminLocalUrl = adminPort ? `http://localhost:${adminPort}` : undefined;
+    const adminNetworkUrl =
+      adminPort && allowRemote && lanIP ? `http://${lanIP}:${adminPort}` : undefined;
+
     return {
       running,
       port,
       allowRemote,
       localUrl,
       networkUrl,
+      adminPort: adminPort ?? undefined,
+      adminLocalUrl,
+      adminNetworkUrl,
       lanIP: lanIP ?? undefined,
       adminUsername: adminUser?.username ?? AUTH_CONFIG.DEFAULT_USER.USERNAME,
       adminEmail: adminUser?.email ?? undefined,
@@ -395,34 +414,46 @@ export class WebuiService {
       return null;
     }
 
-    const url = `http://127.0.0.1:${instance.port}`;
-    try {
-      const cookies = await session.defaultSession.cookies.get({
-        url,
-        name: AUTH_CONFIG.COOKIE.NAME,
-      });
-      const cookieToken = cookies[0]?.value;
-      if (!cookieToken) {
-        return null;
+    const lanIP = this.getLanIP();
+    const networkUrl = instance.allowRemote && lanIP ? `http://${lanIP}:${instance.port}` : undefined;
+    const { buildWebuiSessionCookieUrls } = await import('@/common/config/webuiApiBaseCandidates');
+    const cookieUrls = buildWebuiSessionCookieUrls({
+      port: instance.port,
+      localUrl: `http://localhost:${instance.port}`,
+      networkUrl,
+      lanIP: lanIP ?? undefined,
+    });
+
+    for (const url of cookieUrls) {
+      try {
+        const cookies = await session.defaultSession.cookies.get({
+          url,
+          name: AUTH_CONFIG.COOKIE.NAME,
+        });
+        const cookieToken = cookies[0]?.value;
+        if (!cookieToken) {
+          continue;
+        }
+        const decoded = await AuthService.verifyToken(cookieToken);
+        if (!decoded) {
+          continue;
+        }
+        const user = await UserRepository.findById(decoded.userId);
+        if (!user) {
+          continue;
+        }
+        return {
+          userId: user.id,
+          username: user.username,
+          role: user.role ?? 'member',
+          token: cookieToken,
+          updatedAt: Date.now(),
+        };
+      } catch {
+        // try next host (127.0.0.1 vs LAN IP cookie jars)
       }
-      const decoded = await AuthService.verifyToken(cookieToken);
-      if (!decoded) {
-        return null;
-      }
-      const user = await UserRepository.findById(decoded.userId);
-      if (!user) {
-        return null;
-      }
-      return {
-        userId: user.id,
-        username: user.username,
-        role: user.role ?? 'member',
-        token: cookieToken,
-        updatedAt: Date.now(),
-      };
-    } catch {
-      return null;
     }
+    return null;
   }
 
   static async previewEnterpriseInvite(code: string) {

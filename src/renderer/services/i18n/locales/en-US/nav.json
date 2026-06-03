@@ -7,7 +7,7 @@
   "admin": "Admin",
   "enterpriseConsole": "Enterprise admin",
   "superAssistant": "Super Assistant",
-  "agentAssistant": "Agent Assistant",
+  "agentAssistant": "Super Assistant",
   "skills": "Skills",
   "enterpriseAdmin": "Admin console",
   "hooks": "Hooks",

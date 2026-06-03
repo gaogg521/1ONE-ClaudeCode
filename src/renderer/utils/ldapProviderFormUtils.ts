@@ -17,6 +17,26 @@ export type LdapConnectionFields = {
   useTls: boolean;
 };
 
+/** Strip accidental scheme/port suffixes from the host field. */
+export function normalizeLdapHostInput(host: string): string {
+  let value = host.trim();
+  value = value.replace(/^ldaps?:\/\//i, '');
+  const slashIndex = value.indexOf('/');
+  if (slashIndex >= 0) {
+    value = value.slice(0, slashIndex);
+  }
+  const colonIndex = value.indexOf(':');
+  if (colonIndex >= 0) {
+    value = value.slice(0, colonIndex);
+  }
+  return value.trim();
+}
+
+export function looksLikeMisplacedLdapsHostname(host: string): boolean {
+  const normalized = normalizeLdapHostInput(host).toLowerCase();
+  return normalized.startsWith('ldaps.') && !normalized.includes('://');
+}
+
 /** Parse persisted `url` into host / port / TLS mode. */
 export function parseLdapUrl(url: string): LdapConnectionFields {
   const trimmed = url.trim();
@@ -49,7 +69,7 @@ export function parseLdapUrl(url: string): LdapConnectionFields {
 
 /** Build `ldap://` or `ldaps://` URL stored in provider config. */
 export function buildLdapUrl(fields: LdapConnectionFields): string {
-  const host = fields.host.trim();
+  const host = normalizeLdapHostInput(fields.host);
   if (!host) return '';
 
   const useTls = fields.useTls;

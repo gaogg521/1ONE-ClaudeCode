@@ -89,8 +89,9 @@ const AcpSendBox: React.FC<{
   cachedConfigOptions?: import('@/common/types/acpTypes').AcpSessionConfigOption[];
   agentName?: string;
   teamId?: string;
+  tenantId?: string;
   agentSlotId?: string;
-}> = ({ conversation_id, backend, sessionMode, cachedConfigOptions, agentName, teamId, agentSlotId }) => {
+}> = ({ conversation_id, backend, sessionMode, cachedConfigOptions, agentName, teamId, tenantId, agentSlotId }) => {
   const {
     running,
     hasHydratedRunningState,
@@ -169,6 +170,7 @@ const AcpSendBox: React.FC<{
           if (agentSlotId) {
             const result = await ipcBridge.team.sendMessageToAgent.invoke({
               teamId,
+              tenantId,
               slotId: agentSlotId,
               content: input,
             });
@@ -177,7 +179,7 @@ const AcpSendBox: React.FC<{
               throw new Error(maybeError.message || 'Failed to send message to agent');
             }
           } else {
-            const result = await ipcBridge.team.sendMessage.invoke({ teamId, content: input });
+            const result = await ipcBridge.team.sendMessage.invoke({ teamId, tenantId, content: input });
             const maybeError = result as unknown as { __bridgeError?: boolean; message?: string };
             if (maybeError.__bridgeError) {
               throw new Error(maybeError.message || 'Failed to send message to team');
@@ -227,7 +229,7 @@ Please check your local CLI tool authentication status`,
         emitter.emit('acp.workspace.refresh');
       }
     },
-    [agentSlotId, backend, checkAndUpdateTitle, conversation_id, setAiProcessing, t, teamId]
+    [agentSlotId, backend, checkAndUpdateTitle, conversation_id, setAiProcessing, t, teamId, tenantId]
   );
 
   const {

@@ -17,8 +17,8 @@ import { WebuiService } from './services/WebuiService';
 export function initWorkspaceProfileBridge(): void {
   workspaceProfile.get.provider(async () => {
     return WebuiService.handleAsync(async () => {
-      const adminUser = await WebuiService.getAdminUser();
-      const profile = await getWorkspaceUserProfile(adminUser.id);
+      const userId = await WebuiService.resolveWorkspaceProfileUserId();
+      const profile = await getWorkspaceUserProfile(userId);
       if (!profile) {
         throw new Error('User not found');
       }
@@ -28,9 +28,9 @@ export function initWorkspaceProfileBridge(): void {
 
   workspaceProfile.uploadAvatar.provider(async ({ mimeType, data }) => {
     return WebuiService.handleAsync(async () => {
-      const adminUser = await WebuiService.getAdminUser();
+      const userId = await WebuiService.resolveWorkspaceProfileUserId();
       const profile = await updateUserAvatar({
-        userId: adminUser.id,
+        userId,
         buffer: normalizeIpcBuffer(data),
         mimeType,
       });
@@ -40,8 +40,8 @@ export function initWorkspaceProfileBridge(): void {
 
   workspaceProfile.readAvatarBuffer.provider(async () => {
     return WebuiService.handleAsync(async () => {
-      const adminUser = await WebuiService.getAdminUser();
-      const resolved = await resolveUserAvatarFile(adminUser.id);
+      const userId = await WebuiService.resolveWorkspaceProfileUserId();
+      const resolved = await resolveUserAvatarFile(userId);
       if (!resolved) {
         throw new Error('Avatar not found');
       }

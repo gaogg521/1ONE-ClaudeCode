@@ -13,6 +13,7 @@ import { getPlatformServices } from '@/common/platform';
 import { TokenMiddleware } from '@process/webserver/auth/middleware/TokenMiddleware';
 import { AUTH_CONFIG } from '../config/constants';
 import { createRateLimiter } from '../middleware/security';
+import { resolveDevViteHost } from '@/common/config/devRendererUrl';
 
 /**
  * Vite dev server port — read from ELECTRON_RENDERER_URL when available
@@ -29,6 +30,8 @@ const VITE_DEV_PORT = (() => {
   }
   return 5173;
 })();
+
+const VITE_DEV_HOST = resolveDevViteHost(process.env['ELECTRON_RENDERER_URL']);
 
 /**
  * Try to resolve built renderer assets path, return null if not found
@@ -83,13 +86,13 @@ function createViteDevProxy(): (req: Request, res: Response) => void {
     res.removeHeader('X-XSS-Protection');
 
     const options: http.RequestOptions = {
-      hostname: 'localhost',
+      hostname: VITE_DEV_HOST,
       port: VITE_DEV_PORT,
       path: req.url,
       method: req.method,
       headers: {
         ...req.headers,
-        host: `localhost:${VITE_DEV_PORT}`,
+        host: `${VITE_DEV_HOST}:${VITE_DEV_PORT}`,
       },
     };
 
@@ -111,7 +114,7 @@ function createViteDevProxy(): (req: Request, res: Response) => void {
     proxyReq.on('error', (err) => {
       console.error(`[ViteProxy] Error proxying ${req.method} ${req.url}: ${err.message}`);
       if (!res.headersSent) {
-        res.status(502).send(`[WebUI] Vite dev server (localhost:${VITE_DEV_PORT}) unavailable: ${err.message}`);
+        res.status(502).send(`[WebUI] Vite dev server (${VITE_DEV_HOST}:${VITE_DEV_PORT}) unavailable: ${err.message}`);
       }
     });
 
@@ -148,6 +151,15 @@ function registerProductionStaticRoutes(expressApp: Express, staticRoot: string,
       res.send(htmlContent);
     } catch (error) {
       console.error('Error serving index.html:', error);
+      const missingIndex = error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT';
+      if (missingIndex) {
+        res
+          .status(500)
+          .send(
+            'WebUI renderer is not built. Run "npm run build:webui" on the server, then reload this page (Ctrl+F5).'
+          );
+        return;
+      }
       res.status(500).send('Internal Server Error');
     }
   };

@@ -492,5 +492,34 @@ export async function testLdapConnection(config: LdapProviderConfig): Promise<vo
   }
 }
 
+export function formatLdapConnectionError(
+  error: unknown,
+  config?: Pick<LdapProviderConfig, 'url'>
+): string {
+  const err = error as { code?: string; message?: string };
+  const code = String(err?.code ?? '').toUpperCase();
+  const message = error instanceof Error ? error.message : String(error);
+  let hostname = '';
+  if (config?.url) {
+    try {
+      hostname = new URL(config.url).hostname;
+    } catch {
+      hostname = '';
+    }
+  }
+  if (code === 'ENOTFOUND' || message.toLowerCase().includes('enotfound')) {
+    return hostname
+      ? `无法解析 LDAP 主机「${hostname}」。请确认域控地址、VPN/内网 DNS 是否正常；主机名应填写实际 FQDN（如 intranet.example.com），不要把 ldaps:// 写进主机框。`
+      : '无法解析 LDAP 主机名，请检查域控地址、VPN/内网 DNS。';
+  }
+  if (code === 'ECONNREFUSED' || message.toLowerCase().includes('connection refused')) {
+    return '无法连接 LDAP 服务，请检查端口与是否启用 TLS（389/636）。';
+  }
+  if (code === 'ETIMEDOUT' || message.toLowerCase().includes('timeout')) {
+    return '连接 LDAP 超时，请检查网络或防火墙。';
+  }
+  return message;
+}
+
 export { decodeLdapEscapedUtf8, parseCnFromDn, ldapEntryToDirectoryRow };
 

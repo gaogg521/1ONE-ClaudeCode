@@ -33,6 +33,15 @@
     "cardTitle": "Sign in to WebUI",
     "cardSubtitle": "Username and password are in Settings → Remote → WebUI"
   },
+  "admin": {
+    "heroBadge": "Instance admin",
+    "heroTitle": "Team edition admin console",
+    "brandDesc": "Sign in with the local WebUI admin account to configure auth, invites, tenants, and governance—separate from the member sign-in entry.",
+    "introTitle": "Instance governance",
+    "introText": "For system and org admins: manage LDAP/Feishu, member invites, edition switches, and admin modules—not for everyday employee use.",
+    "cardTitle": "Team edition admin console",
+    "cardSubtitle": "Use the local admin account from Settings → Remote → WebUI"
+  },
   "enterprise": {
     "tag": "1ONE Code",
     "heroBadge": "1ONE Code Enterprise",

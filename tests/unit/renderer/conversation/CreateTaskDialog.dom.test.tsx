@@ -594,8 +594,8 @@ describe('CreateTaskDialog - schedule preset definitions', () => {
     });
 
     const callArgs = mockAddJob.mock.calls[0][0];
-    expect(callArgs.schedule.expr).toBe('');
-    expect(callArgs.schedule.description).toContain('Manual');
+    expect(callArgs.schedule.expr).toBe('0 9 * * MON');
+    expect(callArgs.schedule.description).toContain('Weekly on Monday at 09:00');
   });
 
   // Test schedule preset definitions by verifying edit mode correctly reconstructs them

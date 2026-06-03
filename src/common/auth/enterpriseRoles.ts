@@ -113,3 +113,20 @@ export function resolvePostLoginRedirectPath(
   }
   return rawTarget;
 }
+
+/** OAuth 登录后安全落点：避免回到 settings/login 等易触发未构建静态资源的页面。 */
+export function resolveOAuthPostLoginRedirectPath(
+  rawTarget: string,
+  role: string | undefined,
+  tenantId: string | undefined
+): string {
+  const target = resolvePostLoginRedirectPath(rawTarget, role, tenantId, false);
+  if (
+    target.startsWith('/settings') ||
+    target.startsWith('/login') ||
+    target === '/enterprise/auth'
+  ) {
+    return hasEnterpriseTenant(tenantId) ? ENTERPRISE_WORKSPACE_PATH : '/sessions';
+  }
+  return target;
+}

@@ -475,9 +475,11 @@ jobs:
           Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -NoNewWindow
 
           $candidates = @(
+            "$env:LOCALAPPDATA\\Programs\\1ONE Code\\1onecode.exe",
+            "$env:ProgramFiles\\1ONE Code\\1onecode.exe",
+            "$env:ProgramFiles(x86)\\1ONE Code\\1onecode.exe",
             "$env:LOCALAPPDATA\\Programs\\1ONE Code\\1OneClaudeCode.exe",
-            "$env:ProgramFiles\\1ONE Code\\1OneClaudeCode.exe",
-            "$env:ProgramFiles(x86)\\1ONE Code\\1OneClaudeCode.exe"
+            "$env:ProgramFiles\\1ONE Code\\1OneClaudeCode.exe"
           )
 
           $installedExe = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
@@ -515,7 +517,10 @@ jobs:
           hdiutil detach "$MOUNT_POINT"
 
           APP_PATH=$(ls -d "$APP_DIR"/*.app | head -n 1)
-          APP_BIN="$APP_PATH/Contents/MacOS/1OneClaudeCode"
+          APP_BIN="$APP_PATH/Contents/MacOS/1onecode"
+          if [ ! -x "$APP_BIN" ]; then
+            APP_BIN="$APP_PATH/Contents/MacOS/1OneClaudeCode"
+          fi
 
           test -x "$APP_BIN"
           "$APP_BIN" --version || true

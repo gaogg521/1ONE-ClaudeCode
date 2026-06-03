@@ -26,6 +26,7 @@ const AcpChat: React.FC<{
   cronJobId?: string;
   hideSendBox?: boolean;
   teamId?: string;
+  tenantId?: string;
   agentSlotId?: string;
   stretchLayout?: boolean;
 }> = ({
@@ -38,6 +39,7 @@ const AcpChat: React.FC<{
   cronJobId,
   hideSendBox,
   teamId,
+  tenantId,
   agentSlotId,
   stretchLayout,
 }) => {
@@ -64,6 +66,7 @@ const AcpChat: React.FC<{
               cachedConfigOptions={cachedConfigOptions}
               agentName={agentName}
               teamId={teamId}
+              tenantId={tenantId}
               agentSlotId={agentSlotId}
             ></AcpSendBox>
           </ConversationChatConfirm>

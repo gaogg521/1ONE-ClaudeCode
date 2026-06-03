@@ -14,6 +14,10 @@ export const BUILTIN_CODEGRAPH_ID = 'builtin-codegraph';
 export const BUILTIN_CODEGRAPH_NAME = 'codegraph';
 export const BUILTIN_CODEGRAPH_PACKAGE = '@colbymchenry/codegraph';
 
+export const BUILTIN_WEB_TOOLS_ID = 'builtin-web-tools';
+export const BUILTIN_WEB_TOOLS_NAME = 'one-web-tools';
+export const BUILTIN_WEB_TOOLS_LEGACY_NAMES = ['1ONE Web Tools', BUILTIN_WEB_TOOLS_ID] as const;
+
 export function isBuiltinImageGenName(name?: string | null): boolean {
   if (!name) return false;
   return (
@@ -37,6 +41,27 @@ export function isBuiltinImageGenTransport(transport?: {
 export function isBuiltinCodegraphName(name?: string | null): boolean {
   if (!name) return false;
   return name === BUILTIN_CODEGRAPH_NAME || name === BUILTIN_CODEGRAPH_ID;
+}
+
+export function isBuiltinWebToolsName(name?: string | null): boolean {
+  if (!name) return false;
+  return (
+    name === BUILTIN_WEB_TOOLS_NAME ||
+    BUILTIN_WEB_TOOLS_LEGACY_NAMES.includes(name as (typeof BUILTIN_WEB_TOOLS_LEGACY_NAMES)[number])
+  );
+}
+
+export function isBuiltinWebToolsTransport(transport?: {
+  type?: string;
+  command?: string;
+  args?: string[] | null;
+}): boolean {
+  if (!transport || transport.type !== 'stdio' || transport.command !== 'node') {
+    return false;
+  }
+  return (transport.args || []).some(
+    (arg) => typeof arg === 'string' && arg.includes('builtin-mcp-web-tools.js')
+  );
 }
 
 export function isBuiltinCodegraphTransport(transport?: {

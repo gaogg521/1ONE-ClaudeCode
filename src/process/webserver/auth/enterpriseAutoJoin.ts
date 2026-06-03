@@ -17,10 +17,10 @@ import { UserRepository, type AuthUser } from '@process/webserver/auth/repositor
 export async function resolveDefaultEnterpriseTenantId(): Promise<string | null> {
   const driver = (await getDatabase()).getDriver();
   const row = driver
-    .prepare('SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1')
+    .prepare("SELECT id FROM tenants WHERE id <> 'default' ORDER BY created_at ASC LIMIT 1")
     .get() as { id?: string } | undefined;
   const id = typeof row?.id === 'string' ? row.id.trim() : '';
-  return id || null;
+  return isEnterpriseTenantId(id) ? id : null;
 }
 
 /**

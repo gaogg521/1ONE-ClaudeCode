@@ -24,27 +24,10 @@ import {
   LlmRole,
 } from '@office-ai/aioncli-core';
 import { getResponseText } from './utils';
-import { convert } from 'html-to-text';
+import { fetchPageHtml, htmlToPlainText, normalizeFetchUrl, PAGE_FETCH_TIMEOUT_MS } from '@/common/web/pageTools';
+import { normalizeWebFetchToolParams } from './web-fetch-params';
 
-const URL_FETCH_TIMEOUT_MS = 10000;
 const MAX_CONTENT_LENGTH = 100000;
-
-async function fetchWithTimeout(url: string, timeout: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    return response;
-  } catch (error) {
-    if (controller.signal.aborted) {
-      throw new Error(`Request timeout after ${timeout}ms`, { cause: error });
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
 
 /**
  * Parameters for the WebFetch tool
@@ -96,13 +79,20 @@ export class WebFetchTool extends BaseDeclarativeTool<WebFetchToolParams, ToolRe
   }
 
   public override validateToolParams(params: WebFetchToolParams): string | null {
-    if (!params.url || params.url.trim() === '') {
-      return "The 'url' parameter cannot be empty.";
+    const resolved = normalizeWebFetchToolParams(params as unknown as Record<string, unknown>);
+    const url = typeof resolved.url === 'string' ? resolved.url : '';
+    const prompt = typeof resolved.prompt === 'string' ? resolved.prompt : '';
+
+    if (!url || url.trim() === '') {
+      return (
+        "The 'url' parameter is required. Pass a full https:// URL and a 'prompt' describing what to extract. " +
+        'Some models omit tool arguments; retry or ask the user to repeat the URL in the message.'
+      );
     }
-    if (!params.url.startsWith('http://') && !params.url.startsWith('https://')) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
       return "The 'url' must start with http:// or https://.";
     }
-    if (!params.prompt || params.prompt.trim() === '') {
+    if (!prompt || prompt.trim() === '') {
       return "The 'prompt' parameter cannot be empty.";
     }
     return null;
@@ -114,7 +104,10 @@ export class WebFetchTool extends BaseDeclarativeTool<WebFetchToolParams, ToolRe
     _toolName?: string,
     _toolDisplayName?: string
   ): ToolInvocation<WebFetchToolParams, ToolResult> {
-    return new WebFetchInvocation(this.geminiClient, params, messageBus, _toolName, _toolDisplayName);
+    const resolved = normalizeWebFetchToolParams(
+      params as unknown as Record<string, unknown>
+    ) as WebFetchToolParams;
+    return new WebFetchInvocation(this.geminiClient, resolved, messageBus, _toolName, _toolDisplayName);
   }
 }
 
@@ -145,35 +138,11 @@ class WebFetchInvocation extends BaseToolInvocation<WebFetchToolParams, ToolResu
   }
 
   private async executeFetch(signal: AbortSignal): Promise<ToolResult> {
-    let url = this.params.url;
-
-    // Convert GitHub blob URL to raw URL - using secure URL parsing
-    try {
-      const parsedUrl = new URL(url);
-      if (
-        (parsedUrl.hostname === 'github.com' || parsedUrl.hostname === 'www.github.com') &&
-        parsedUrl.pathname.includes('/blob/')
-      ) {
-        url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
-      }
-    } catch (e) {
-      // Invalid URL format - will be handled by the fetch attempt below
-      // No need to transform the URL if it's malformed
-    }
+    const url = normalizeFetchUrl(this.params.url);
 
     try {
-      const response = await fetchWithTimeout(url, URL_FETCH_TIMEOUT_MS);
-      if (!response.ok) {
-        throw new Error(`Request failed with status code ${response.status} ${response.statusText}`);
-      }
-      const html = await response.text();
-      const textContent = convert(html, {
-        wordwrap: false,
-        selectors: [
-          { selector: 'a', options: { ignoreHref: true } },
-          { selector: 'img', format: 'skip' },
-        ],
-      }).substring(0, MAX_CONTENT_LENGTH);
+      const html = await fetchPageHtml(url, PAGE_FETCH_TIMEOUT_MS);
+      const textContent = htmlToPlainText(html, MAX_CONTENT_LENGTH);
 
       const processPrompt = `The user requested the following: "${this.params.prompt}".
 

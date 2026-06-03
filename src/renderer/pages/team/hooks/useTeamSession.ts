@@ -59,8 +59,8 @@ function clearFailedAgent(teamId: string, slotId: string): void {
 }
 
 export function useTeamSession(team: TTeam) {
-  const { mutate: mutateTeam } = useSWR(team.id ? `team/${team.id}` : null, () =>
-    ipcBridge.team.get.invoke({ id: team.id })
+  const { mutate: mutateTeam } = useSWR(team.id ? `team/${team.tenantId}/${team.id}` : null, () =>
+    ipcBridge.team.get.invoke({ id: team.id, tenantId: team.tenantId })
   );
 
   // Initialize statusMap: restore 'failed' from localStorage for agents still in the team
@@ -79,7 +79,7 @@ export function useTeamSession(team: TTeam) {
   );
 
   useEffect(() => {
-    void ipcBridge.team.ensureSession.invoke({ teamId: team.id });
+    void ipcBridge.team.ensureSession.invoke({ teamId: team.id, tenantId: team.tenantId });
 
     const unsubStatus = ipcBridge.team.agentStatusChanged.on((event: ITeamAgentStatusEvent) => {
       if (event.teamId !== team.id) return;
@@ -133,39 +133,39 @@ export function useTeamSession(team: TTeam) {
       unsubRemoved();
       unsubRenamed();
     };
-  }, [team.id, mutateTeam]);
+  }, [team.id, team.tenantId, mutateTeam]);
 
   const sendMessage = useCallback(
     async (content: string) => {
-      await ipcBridge.team.sendMessage.invoke({ teamId: team.id, content });
+      await ipcBridge.team.sendMessage.invoke({ teamId: team.id, tenantId: team.tenantId, content });
     },
-    [team.id]
+    [team.id, team.tenantId]
   );
 
   const addAgent = useCallback(
     async (agent: Omit<TeamAgent, 'slotId'>) => {
-      await ipcBridge.team.addAgent.invoke({ teamId: team.id, agent });
+      await ipcBridge.team.addAgent.invoke({ teamId: team.id, tenantId: team.tenantId, agent });
       // Refresh team data after agent is added so that UI gets the new agent's conversationId
       await mutateTeam();
     },
-    [team.id, mutateTeam]
+    [team.id, team.tenantId, mutateTeam]
   );
 
   const renameAgent = useCallback(
     async (slotId: string, newName: string) => {
-      await ipcBridge.team.renameAgent.invoke({ teamId: team.id, slotId, newName });
+      await ipcBridge.team.renameAgent.invoke({ teamId: team.id, tenantId: team.tenantId, slotId, newName });
       await mutateTeam();
     },
-    [team.id, mutateTeam]
+    [team.id, team.tenantId, mutateTeam]
   );
 
   const removeAgent = useCallback(
     async (slotId: string) => {
       clearFailedAgent(team.id, slotId);
-      await ipcBridge.team.removeAgent.invoke({ teamId: team.id, slotId });
+      await ipcBridge.team.removeAgent.invoke({ teamId: team.id, tenantId: team.tenantId, slotId });
       await mutateTeam();
     },
-    [team.id, mutateTeam]
+    [team.id, team.tenantId, mutateTeam]
   );
 
   return { statusMap, messages, sendMessage, addAgent, renameAgent, removeAgent, mutateTeam };

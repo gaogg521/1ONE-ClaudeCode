@@ -28,6 +28,7 @@ import { initGeminiConversationBridge } from './geminiConversationBridge';
 import { initMcpBridge } from './mcpBridge';
 import { initModelBridge } from './modelBridge';
 import { initPreviewHistoryBridge } from './previewHistoryBridge';
+import { initPersonalAgentBridge } from './personalAgentBridge';
 import { initShellBridge } from './shellBridge';
 import { initStarOfficeBridge } from './starOfficeBridge';
 import { initSpeechToTextBridge } from './speechToTextBridge';
@@ -46,6 +47,7 @@ import { initWorkspaceSnapshotBridge } from './workspaceSnapshotBridge';
 import { initRemoteAgentBridge } from './remoteAgentBridge';
 import { initHubBridge } from './hubBridge';
 import { initTeamBridge } from './teamBridge';
+import { initTeamRuntimeBridge } from './teamRuntimeBridge';
 import type { TeamSessionService } from '@process/team/TeamSessionService';
 
 export interface BridgeDependencies {
@@ -97,7 +99,9 @@ export function initAllBridges(deps: BridgeDependencies): void {
   initWorkspaceSnapshotBridge();
   initRemoteAgentBridge();
   initHubBridge();
+  initPersonalAgentBridge();
   initTeamBridge(deps.teamSessionService);
+  initTeamRuntimeBridge();
 }
 
 /**
@@ -143,6 +147,7 @@ export {
   initWebuiBridge,
   initRemoteAgentBridge,
   initHubBridge,
+  initPersonalAgentBridge,
   initTeamBridge,
   initWindowControlsBridge,
   initWeixinLoginBridge,

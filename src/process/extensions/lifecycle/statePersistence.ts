@@ -10,11 +10,14 @@ import type { ExtensionState } from '../types';
 import { extensionEventBus, ExtensionSystemEvents } from './ExtensionEventBus';
 import { getDataPath } from '@process/utils';
 
-const EXTENSION_STATES_FILE_ENV = '1one_EXTENSION_STATES_FILE';
+const EXTENSION_STATES_FILE_ENV = 'ONE_EXTENSION_STATES_FILE';
+const LEGACY_EXTENSION_STATES_FILE_ENV = '1one_EXTENSION_STATES_FILE';
 const DEFAULT_STATES_FILE = 'extension-states.json';
 
 function resolveStatesFile(): string {
-  const override = process.env[EXTENSION_STATES_FILE_ENV]?.trim();
+  const override =
+    process.env[EXTENSION_STATES_FILE_ENV]?.trim() ||
+    process.env[LEGACY_EXTENSION_STATES_FILE_ENV]?.trim();
   if (override) {
     return path.resolve(override);
   }

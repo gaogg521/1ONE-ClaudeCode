@@ -12,6 +12,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { cleanupSiderTooltips, type SiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import { getSidebarNavItems, isNavItemActive } from '@/renderer/components/layout/sidebarNav';
+import { appNavigate } from '@/renderer/utils/appNavigate';
 import styles from './Sider.module.css';
 
 type SidebarModuleNavProps = {
@@ -30,18 +31,21 @@ const SidebarModuleNav: React.FC<SidebarModuleNavProps> = ({
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
-  const { hasJoinedEnterprise, isEnterpriseEdition } = useEditionFeatures();
-  const items = getSidebarNavItems(hasJoinedEnterprise, isEnterpriseEdition);
+  const { gate } = useEditionFeatures();
+  const items = getSidebarNavItems(gate);
   const iconOnly = collapsed && !isMobile;
   const tooltipEnabled = iconOnly;
 
   const handleNavigate = useCallback(
     (path: string) => {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[nav] sidebar click', { from: location.pathname, to: path });
+      }
       cleanupSiderTooltips();
-      void navigate(path);
+      appNavigate(navigate, path);
       onNavigate?.();
     },
-    [navigate, onNavigate]
+    [location.pathname, navigate, onNavigate]
   );
 
   return (
@@ -53,23 +57,16 @@ const SidebarModuleNav: React.FC<SidebarModuleNavProps> = ({
         const active = isNavItemActive(location.pathname, item);
         const label = t(item.labelKey, { defaultValue: item.labelDefault });
         const row = (
-          <div
-            role='button'
-            tabIndex={0}
+          <button
+            type='button'
             className={classNames(styles.moduleNavItem, active && styles.moduleNavItemActive)}
             onClick={() => handleNavigate(item.path)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                handleNavigate(item.path);
-              }
-            }}
           >
             <span className={styles.moduleNavIcon}>{item.icon}</span>
             {!iconOnly ? (
               <span className={classNames('collapsed-hidden', styles.moduleNavLabel)}>{label}</span>
             ) : null}
-          </div>
+          </button>
         );
 
         if (!tooltipEnabled) {

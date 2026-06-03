@@ -66,7 +66,7 @@ describe('profileRoutes', () => {
     const handler = getRouteHandler(app, 'get', '/api/auth/workspace-profile');
     const res = createResponseMock();
 
-    await handler({ user: { id: 'user-1' } } as any, res);
+    await handler({ user: { id: 'user-1' }, headers: {} } as any, res);
 
     expect(getWorkspaceUserProfileMock).toHaveBeenCalledWith('user-1');
     expect(res.json).toHaveBeenCalledWith({ success: true, data: profile });
@@ -77,7 +77,7 @@ describe('profileRoutes', () => {
     const handler = getRouteHandler(app, 'get', '/api/auth/workspace-profile');
     const res = createResponseMock();
 
-    await handler({ user: { id: 'user-1' } } as any, res);
+    await handler({ user: { id: 'user-1' }, headers: {} } as any, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ success: false, message: 'User not found' });
@@ -92,7 +92,7 @@ describe('profileRoutes', () => {
     const handler = getRouteHandler(app, 'get', '/api/auth/profile/avatar');
     const res = createResponseMock();
 
-    await handler({ user: { id: 'user-1' } } as any, res);
+    await handler({ user: { id: 'user-1' }, headers: {} } as any, res);
 
     expect(resolveUserAvatarFileMock).toHaveBeenCalledWith('user-1');
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/png');
@@ -108,6 +108,7 @@ describe('profileRoutes', () => {
     await handler(
       {
         user: { id: 'user-1' },
+        headers: {},
         file: { buffer: Buffer.from('avatar'), mimetype: 'image/png' },
       } as any,
       res
@@ -125,7 +126,7 @@ describe('profileRoutes', () => {
     const handler = getRouteHandler(app, 'post', '/api/auth/profile/avatar');
     const res = createResponseMock();
 
-    await handler({ user: { id: 'user-1' }, file: undefined } as any, res);
+    await handler({ user: { id: 'user-1' }, headers: {}, file: undefined } as any, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ success: false, message: 'Avatar file is required' });

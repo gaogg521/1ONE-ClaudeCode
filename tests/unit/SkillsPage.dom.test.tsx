@@ -132,6 +132,7 @@ describe('SkillsPage', () => {
     messageErrorMock.mockReset();
     editionFeaturesMock.mockReturnValue({
       hasJoinedEnterprise: true,
+      can: (capability: string) => capability === 'skills.local' || capability === 'skills.org',
     });
     listAvailableSkillsInvokeMock.mockResolvedValue([
       {
@@ -180,16 +181,18 @@ describe('SkillsPage', () => {
     });
   });
 
-  it('shows enterprise gate when user has not joined enterprise', () => {
+  it('keeps local skills available when user has not joined enterprise', async () => {
     editionFeaturesMock.mockReturnValue({
       hasJoinedEnterprise: false,
+      can: (capability: string) => capability === 'skills.local',
     });
 
     render(<SkillsPage />);
-    expect(screen.getByText('加入企业后可使用 Skills')).toBeInTheDocument();
+    expect(await screen.findByText('repo-debug')).toBeInTheDocument();
+    expect(screen.queryByText('team-oncall')).not.toBeInTheDocument();
+    expect(screen.queryByText('打开团队技能后台')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('返回主工作台'));
-    expect(navigateMock).toHaveBeenCalledWith('/sessions');
+    expect(listSkillsMock).not.toHaveBeenCalled();
   });
 
   it('renders local and team skills and navigates to detail/admin pages', async () => {

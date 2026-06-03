@@ -76,21 +76,25 @@ const AgentsTab: React.FC<AgentsTabProps> = ({
 
   return (
     <div className='space-y-12px'>
-      <Card title={t('common.superAssistant.agentsExecutionTitle', { defaultValue: '团队智能体' })}>
+      <Card title={t('common.superAssistant.agentsExecutionTitle', { defaultValue: '数字员工' })}>
         <div className='text-12px text-t-tertiary'>
           {t('common.superAssistant.agentsExecutionDesc', {
             defaultValue:
-              '在每个智能体卡片上可直接编辑、立即执行或配置定时自动化，实现 7×24 持续跟进 Issues。',
+              '在每个数字员工卡片上可直接编辑、立即执行或配置定时任务，实现 7×24 持续跟进 Issues。',
           })}
         </div>
         <div className='mt-12px'>
           <Button type='primary' size='small' icon={<Plus theme='outline' size='14' />} onClick={() => onCreateAgent?.()}>
-            {t('common.superAssistant.createAgentTitle', { defaultValue: '创建智能体' })}
+            {t('common.superAssistant.createDigitalEmployeeTitle', { defaultValue: '创建数字员工' })}
           </Button>
         </div>
       </Card>
       {executionGroups.length === 0 ? (
-        <Empty description={t('common.superAssistant.noTeams', { defaultValue: '还没有团队' })} />
+        <Empty
+          description={t('common.superAssistant.noDigitalEmployees', {
+            defaultValue: '还没有数字员工。个人版可直接创建；加入协同团队后可创建工作区数字员工。',
+          })}
+        />
       ) : (
         <div className='space-y-12px'>
           {executionGroups.map((group) => (

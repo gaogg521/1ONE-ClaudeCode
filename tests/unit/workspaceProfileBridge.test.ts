@@ -48,6 +48,10 @@ vi.mock('@process/bridge/services/WebuiService', () => ({
   WebuiService: {
     handleAsync: async (handler: () => Promise<unknown>) => handler(),
     getAdminUser: (...args: unknown[]) => getAdminUserMock(...args),
+    resolveWorkspaceProfileUserId: async () => {
+      const user = await getAdminUserMock();
+      return user?.id ?? 'admin-1';
+    },
   },
 }));
 

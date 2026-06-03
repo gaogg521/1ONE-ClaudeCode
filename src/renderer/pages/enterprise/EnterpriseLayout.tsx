@@ -11,7 +11,6 @@ import {
   Card,
   Space,
   Spin,
-  Tag,
   Typography,
 } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
@@ -36,8 +35,10 @@ import EnterpriseRouteErrorBoundary from '@/renderer/pages/enterprise/components
 import DesktopEnterprisePlaceholder from '@/renderer/pages/enterprise/components/DesktopEnterprisePlaceholder';
 import { ENTERPRISE_HOME_PATH } from '@/common/auth/enterpriseRoutes';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { buildEnterpriseRouteLoginPath } from '@/renderer/utils/enterpriseLoginNavigation';
 import '@/renderer/styles/enterprise-theme.css';
 import styles from '@/renderer/pages/enterprise/EnterpriseLayout.module.css';
+import TeamRuntimeAdminSyncMount from '@/renderer/components/enterprise/TeamRuntimeAdminSyncMount';
 
 const EnterpriseLayoutContent: React.FC = () => {
   const { t } = useTranslation();
@@ -108,7 +109,7 @@ const EnterpriseLayoutContent: React.FC = () => {
           {runtime.status === 'not_authenticated' ? (
             <Button
               type='primary'
-              onClick={() => void navigate(`/login?redirect=${encodeURIComponent(location.pathname)}`)}
+              onClick={() => void navigate(buildEnterpriseRouteLoginPath(location.pathname))}
             >
               {t('settings.enterpriseConsole.goSignIn', { defaultValue: '前往登录' })}
             </Button>
@@ -195,7 +196,7 @@ const EnterpriseLayout: React.FC = () => {
       enterpriseContext?.tenantName
     );
     const enterpriseBrowserUrl = webuiApiBase
-      ? `${webuiApiBase}/#/login?redirect=%2Fenterprise%2Fauth&mode=enterprise`
+      ? `${webuiApiBase}/#${buildEnterpriseRouteLoginPath('/enterprise/auth')}`
       : '';
 
     return (
@@ -235,6 +236,7 @@ const EnterpriseLayout: React.FC = () => {
 
   return (
     <EnterpriseRuntimeProvider pathname={location.pathname}>
+      <TeamRuntimeAdminSyncMount />
       <EnterpriseLayoutContent />
     </EnterpriseRuntimeProvider>
   );

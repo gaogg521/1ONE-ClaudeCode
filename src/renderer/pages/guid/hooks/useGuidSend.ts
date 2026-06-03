@@ -123,8 +123,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
 
     const { agentType: effectiveAgentType } = getEffectiveAgentType(agentInfo);
 
-    const { rules: presetRules } = await resolvePresetRulesAndSkills(agentInfo);
-    const enabledSkills = resolveEnabledSkills(agentInfo);
+    const { rules: presetRules } = isPreset ? await resolvePresetRulesAndSkills(agentInfo) : {};
+    const enabledSkills = isPreset ? resolveEnabledSkills(agentInfo) : undefined;
 
     let finalEffectiveAgentType = effectiveAgentType;
     if (isPreset && !isMainAgentAvailable(effectiveAgentType)) {
