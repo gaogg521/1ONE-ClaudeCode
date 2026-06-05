@@ -29,13 +29,13 @@ function isBetterSqliteAvailable(): boolean {
   }
 }
 
-const SECURITY_EXPERT = {
-  name: '游戏安全情报官',
-  description: '主攻游戏行业漏洞与威胁情报',
-  instructions: `你是信息安全专家，主攻游戏方向的信息安全漏洞与情报搜集。
-关注手游/端游反作弊、账号与支付链路、外挂与 CVE。
-先列情报来源，再给出验证步骤与风险等级（Markdown）。`,
-};
+import {
+  GAME_SECURITY_DAILY_CRON_PROMPT,
+  GAME_SECURITY_EXPERT_DESCRIPTION,
+  GAME_SECURITY_EXPERT_INSTRUCTIONS,
+  GAME_SECURITY_EXPERT_NAME,
+} from '@/common/digitalEmployee/presets/gameSecurityDailyReport';
+import { buildPersonalDigitalEmployeeCronPrompt } from '@/renderer/pages/superAssistant/utils/autopilotDefaults';
 
 describe.skipIf(!isBetterSqliteAvailable())('digital employee security expert regression', () => {
   let tmpDir = '';
@@ -58,29 +58,35 @@ describe.skipIf(!isBetterSqliteAvailable())('digital employee security expert re
     const created = await repo.create({
       ownerUserId: 'operator-1',
       tenantId: 'default',
-      name: SECURITY_EXPERT.name,
-      description: SECURITY_EXPERT.description,
+      name: GAME_SECURITY_EXPERT_NAME,
+      description: GAME_SECURITY_EXPERT_DESCRIPTION,
       agentType: 'claude',
       conversationType: 'acp',
       automationConfig: {
-        instructions: SECURITY_EXPERT.instructions,
+        instructions: GAME_SECURITY_EXPERT_INSTRUCTIONS,
         preferredModelId: 'claude-sonnet-4-20250514',
         skillIds: [],
       },
     });
 
     const loaded = await repo.findById(created.id, 'operator-1');
-    expect(loaded?.automationConfig.instructions).toContain('游戏方向');
+    expect(loaded?.automationConfig.instructions).toContain('不写外挂');
 
     const preset = mapPersonalAgentToPreset(loaded!);
     expect(preset.preferredModelId).toBe('claude-sonnet-4-20250514');
-    expect(preset.presetContext).toContain('信息安全专家');
+    expect(preset.presetContext).toContain('游戏安全专家');
+    expect(preset.presetContext).toContain('当日风险汇总');
+    expect(preset.presetContext).toContain('次日整改建议');
 
-    const firstTurn = await prepareFirstMessage('扫描本周某 MOBA 手游公开漏洞情报', {
+    const cronPrompt = buildPersonalDigitalEmployeeCronPrompt(loaded!);
+    expect(cronPrompt).toContain('当日风险汇总');
+    expect(cronPrompt).toContain('外挂&黑产动态');
+
+    const firstTurn = await prepareFirstMessage(GAME_SECURITY_DAILY_CRON_PROMPT, {
       presetContext: preset.presetContext,
     });
     expect(firstTurn).toContain('[Assistant Rules');
-    expect(firstTurn).toContain('情报来源');
-    expect(firstTurn).toContain('扫描本周某 MOBA 手游公开漏洞情报');
+    expect(firstTurn).toContain('外挂&黑产动态');
+    expect(firstTurn).toContain(GAME_SECURITY_DAILY_CRON_PROMPT);
   });
 });

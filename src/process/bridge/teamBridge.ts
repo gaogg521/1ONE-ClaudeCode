@@ -106,6 +106,12 @@ export function initTeamBridge(teamSessionService: TeamSessionService): void {
     })
   );
 
+  ipcBridge.team.runDigitalEmployeeNow.provider(
+    safeProvider(async ({ teamId, tenantId, slotId, issue }) => {
+      return teamSessionService.runDigitalEmployeeNow({ teamId, tenantId, slotId, issue });
+    })
+  );
+
   ipcBridge.team.ensureSession.provider(
     safeProvider(async ({ teamId, tenantId }) => {
       try {

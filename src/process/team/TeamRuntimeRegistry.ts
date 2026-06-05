@@ -109,8 +109,13 @@ async function detectInstalledAgents(): Promise<TeamRuntimeInstalledAgent[]> {
 }
 
 export class TeamRuntimeRegistry {
-  upsertNode(input: UpsertTeamRuntimeNodeInput): TeamRuntimeNode {
-    const db = getDatabase().getDb();
+  private async getDriver() {
+    const db = await getDatabase();
+    return db.getDriver();
+  }
+
+  async upsertNode(input: UpsertTeamRuntimeNodeInput): Promise<TeamRuntimeNode> {
+    const db = await this.getDriver();
     const now = Date.now();
     const id = `${input.tenantId}:${input.userId}:${input.machineId}`;
     db.prepare(
@@ -146,7 +151,7 @@ export class TeamRuntimeRegistry {
   async publishLocalNode(params: { tenantId: string; userId: string }): Promise<TeamRuntimeNode> {
     const machineId = await resolveStableMachineId();
     const hostname = os.hostname();
-    return this.upsertNode({
+    return await this.upsertNode({
       tenantId: params.tenantId,
       userId: params.userId,
       machineId,
@@ -157,8 +162,8 @@ export class TeamRuntimeRegistry {
     });
   }
 
-  listNodes(input: ListTeamRuntimeNodesInput): TeamRuntimeNode[] {
-    const db = getDatabase().getDb();
+  async listNodes(input: ListTeamRuntimeNodesInput): Promise<TeamRuntimeNode[]> {
+    const db = await this.getDriver();
     const now = Date.now();
     let userFilter: string[] | null = null;
 

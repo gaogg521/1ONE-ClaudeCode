@@ -38,3 +38,37 @@ export function isEnterpriseTenantId(tenantId: string | null | undefined): boole
   const tid = (tenantId ?? DEFAULT_TENANT_ID).trim();
   return tid !== '' && tid !== DEFAULT_TENANT_ID;
 }
+
+/** Browser WebUI: avoid blocking on ConfigStorage/WebSocket before session exists. */
+export function readBrowserWebuiManagementMode(): WebuiManagementMode | undefined {
+  if (typeof window === 'undefined') {
+    return undefined;
+  }
+  try {
+    const raw =
+      window.sessionStorage.getItem(WEBUI_MANAGEMENT_MODE_KEY) ??
+      window.localStorage.getItem(WEBUI_MANAGEMENT_MODE_KEY);
+    return raw ? normalizeWebuiManagementMode(raw) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function writeBrowserWebuiManagementMode(mode: WebuiManagementMode): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    window.sessionStorage.setItem(WEBUI_MANAGEMENT_MODE_KEY, mode);
+    window.localStorage.setItem(WEBUI_MANAGEMENT_MODE_KEY, mode);
+  } catch {
+    // ignore quota / privacy mode
+  }
+}
+
+export function hasWebuiSessionCookie(): boolean {
+  if (typeof document === 'undefined') {
+    return false;
+  }
+  return /(?:^|;\s*)one-session=/.test(document.cookie);
+}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Empty, Input, Message, Select, Spin, Tag } from '@arco-design/web-react';
+import { Button, Empty, Input, Message, Popconfirm, Select, Spin, Tag } from '@arco-design/web-react';
 import {
   useBindableSkillOptions,
   type BindableSkillOption,
@@ -35,6 +35,7 @@ type ManageWorkspaceAgentModalProps = {
   onSaveSkillIds?: (skillIds: string[]) => Promise<void>;
   onOpenExecutionModules?: () => void;
   onOpenDispatchView?: () => void;
+  onDelete?: (agent: ManagedAgentRef) => Promise<void>;
 };
 
 const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
@@ -50,6 +51,7 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
   onSaveSkillIds,
   onOpenExecutionModules,
   onOpenDispatchView,
+  onDelete,
 }) => {
   const { t } = useTranslation();
   const { jobs, loading, refetch } = useAllCronJobs();
@@ -59,6 +61,7 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
   const [skillIds, setSkillIds] = useState<string[]>(initialSkillIds);
   const { options: skillOptions, loading: skillsLoading } = useBindableSkillOptions(visible);
   const [savingSkills, setSavingSkills] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const prevVisibleRef = useRef(false);
 
   useEffect(() => {
@@ -127,11 +130,40 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
       header={t('common.superAssistant.editAgentTitle', { defaultValue: '管理数字员工' })}
       size='medium'
       footer={
-        <div className='flex justify-end gap-8px pt-4px'>
-          <Button onClick={onClose}>{t('common.cancel', { defaultValue: '取消' })}</Button>
-          <Button type='primary' loading={saving} onClick={() => void handleSave()}>
-            {t('common.save', { defaultValue: '保存' })}
-          </Button>
+        <div className='flex items-center justify-between gap-8px pt-4px w-full'>
+          {onDelete ? (
+            <Popconfirm
+              title={t('common.superAssistant.deleteAgentConfirmTitle', {
+                defaultValue: '删除数字员工？',
+              })}
+              content={t('common.superAssistant.deleteAgentConfirmDesc', {
+                defaultValue:
+                  '将删除该数字员工及其关联的定时任务，且不可恢复。进行中的会话不会被自动删除。',
+                agent: agent.agentName,
+              })}
+              okButtonProps={{ status: 'danger' }}
+              onOk={async () => {
+                setDeleting(true);
+                try {
+                  await onDelete(agent);
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+            >
+              <Button status='danger' loading={deleting}>
+                {t('common.delete', { defaultValue: '删除' })}
+              </Button>
+            </Popconfirm>
+          ) : (
+            <span />
+          )}
+          <div className='flex gap-8px'>
+            <Button onClick={onClose}>{t('common.cancel', { defaultValue: '取消' })}</Button>
+            <Button type='primary' loading={saving} onClick={() => void handleSave()}>
+              {t('common.save', { defaultValue: '保存' })}
+            </Button>
+          </div>
         </div>
       }
     >
@@ -157,7 +189,8 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
           </div>
           <div className='mt-6px text-12px text-t-tertiary'>
             {t('common.superAssistant.agentSkillsSectionDesc', {
-              defaultValue: '为数字员工绑定 Skills，在跟进 Issue 时自动复用流程与工具链。',
+              defaultValue:
+                '可选：绑定 Skills 注入专项流程。未绑定时仍使用内置基础 Skills 与全局 MCP（设置 → MCP）。',
             })}
           </div>
           <Select
@@ -209,16 +242,16 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
 
         <div className='rd-10px border border-solid border-[var(--color-border-2)] p-12px'>
           <div className='text-14px font-600 text-t-primary'>
-            {t('common.superAssistant.executionModulesSection', { defaultValue: '执行模块' })}
+            {t('common.superAssistant.executionModulesSection', { defaultValue: '组织节点' })}
           </div>
           <div className='mt-6px text-12px text-t-tertiary'>
             {t('common.superAssistant.executionModulesDesc', {
-              defaultValue: '在「执行模块」标签查看运行状态；在「调度视图」分派 Issue 给数字员工。',
+              defaultValue: '在侧栏「组织节点」查看同组织成员机器与 Agent；在「调度视图」分派 Issue 给数字员工。',
             })}
           </div>
           <div className='mt-10px flex gap-8px flex-wrap'>
             <Button size='mini' type='outline' onClick={() => onOpenExecutionModules?.()}>
-              {t('common.superAssistant.openExecutionModules', { defaultValue: '打开执行模块' })}
+              {t('common.superAssistant.openExecutionModules', { defaultValue: '打开组织节点' })}
             </Button>
             <Button size='mini' type='outline' onClick={() => onOpenDispatchView?.()}>
               {t('common.superAssistant.openDispatchView', { defaultValue: '打开调度视图' })}

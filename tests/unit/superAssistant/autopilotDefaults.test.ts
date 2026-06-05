@@ -1,59 +1,44 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildIssueAssignmentPrompt,
-  buildSuperAssistantAutopilotDefaults,
-  resolveTeamAgentCronKey,
+  buildAutopilotForPersonalAgent,
+  buildPersonalDigitalEmployeeCronPrompt,
 } from '@/renderer/pages/superAssistant/utils/autopilotDefaults';
+import type { PersonalAgent } from '@/common/types/personalAgentTypes';
 
-describe('superAssistant autopilotDefaults', () => {
-  it('resolveTeamAgentCronKey prefers preset custom agent id', () => {
-    expect(
-      resolveTeamAgentCronKey({
-        slotId: 'dev',
-        conversationId: 'conv-1',
-        role: 'teammate',
-        agentType: 'claude',
-        agentName: 'Dev Agent',
-        conversationType: 'acp',
-        status: 'idle',
-        customAgentId: 'preset-1',
-      })
-    ).toBe('preset:preset-1');
-  });
+const personalAgent: PersonalAgent = {
+  id: 'pa-1',
+  ownerUserId: 'user-1',
+  tenantId: 'default',
+  name: '游戏行业安全工程师',
+  agentType: 'claude',
+  conversationType: 'acp',
+  customAgentId: 'preset-sec',
+  automationConfig: {
+    instructions: '主攻游戏漏洞与情报搜集',
+    skillIds: ['skill-a'],
+    preferredModelId: 'model-x',
+  },
+  createdAt: 1,
+  updatedAt: 1,
+};
 
-  it('buildSuperAssistantAutopilotDefaults binds team, issue, and skills', () => {
-    const defaults = buildSuperAssistantAutopilotDefaults({
-      teamId: 'team-1',
-      leadAgent: {
-        slotId: 'leader',
-        conversationId: 'conv-1',
-        role: 'lead',
-        agentType: 'claude',
-        agentName: 'Leader',
-        conversationType: 'acp',
-        status: 'idle',
-      },
-      requirementId: 'story-1',
-      skillNames: ['PR Review', 'Deploy Bot'],
-      mentionUserIds: ['user-1', 'user-2'],
+describe('buildAutopilotForPersonalAgent', () => {
+  it('binds cron to personal teamId and personalAgentId', () => {
+    const defaults = buildAutopilotForPersonalAgent(personalAgent, { requirementId: 'req-1' });
+    expect(defaults?.initialAgentKey).toBe('preset:preset-sec');
+    expect(defaults?.autopilotContext).toMatchObject({
+      teamId: 'personal',
+      agentSlotId: 'pa-1',
+      personalAgentId: 'pa-1',
+      ownerUserId: 'user-1',
+      requirementId: 'req-1',
+      postBackToIssue: true,
     });
-
-    expect(defaults?.initialAgentKey).toBe('cli:claude');
-    expect(defaults?.autopilotContext.teamId).toBe('team-1');
-    expect(defaults?.autopilotContext.requirementId).toBe('story-1');
-    expect(defaults?.autopilotContext.postBackToIssue).toBe(true);
-    expect(defaults?.autopilotContext.skillNames).toEqual(['PR Review', 'Deploy Bot']);
   });
 
-  it('buildIssueAssignmentPrompt includes issue subject and execution rules', () => {
-    const prompt = buildIssueAssignmentPrompt(
-      { id: 'story-1', subject: '修复登录', description: 'LDAP 超时' },
-      '开发 Agent'
-    );
-    expect(prompt).toContain('修复登录');
-    expect(prompt).toContain('LDAP 超时');
-    expect(prompt).toContain('开发 Agent');
-    expect(prompt).toContain('story-1');
-    expect(prompt).toContain('team_issue_escalate');
+  it('uses digital employee instructions in cron prompt', () => {
+    const prompt = buildPersonalDigitalEmployeeCronPrompt(personalAgent, null);
+    expect(prompt).toContain('游戏行业安全工程师');
+    expect(prompt).toContain('主攻游戏漏洞与情报搜集');
   });
 });

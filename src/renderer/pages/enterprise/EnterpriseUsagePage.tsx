@@ -11,11 +11,13 @@ import AdminPageWrapper from '@/renderer/pages/admin/components/AdminPageWrapper
 import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
 import ModulePageHeader from '@/renderer/pages/admin/components/ModulePageHeader';
 import {
+  listAgentTokenUsage,
   listMemberDashboard,
   listMcpRegistry,
   listPipelines,
   listRagDocuments,
   listSkills,
+  type AgentTokenUsageRecord,
   type MemberDashboardRecord,
 } from '@/renderer/utils/enterpriseApi/modules';
 
@@ -61,6 +63,12 @@ const EnterpriseUsagePage: React.FC = () => {
     listMemberDashboard,
     [],
     t('admin.usage.memberLoadFailed', { defaultValue: '加载成员状态失败' })
+  );
+
+  const agentUsageState = useEnterpriseAsyncData(
+    () => (isAdmin ? listAgentTokenUsage(30) : Promise.resolve({ days: 30, totalTokens: 0, agents: [] })),
+    { days: 30, totalTokens: 0, agents: [] as AgentTokenUsageRecord[] },
+    t('admin.usage.agentTokensLoadFailed', { defaultValue: '加载 Agent Token 统计失败' })
   );
 
   const statCards = [
@@ -234,6 +242,73 @@ const EnterpriseUsagePage: React.FC = () => {
             />
           </ModuleDataState>
         </Card>
+
+        {isAdmin ? (
+          <Card
+            bordered={false}
+            className='rd-12px'
+            title={t('admin.usage.agentTokenBoard', { defaultValue: '数字员工 Token 排行' })}
+          >
+            <Typography.Paragraph type='secondary' className='text-12px mt-0 mb-12px'>
+              {t('admin.usage.agentTokenBoardHint', {
+                defaultValue:
+                  '按近 {{days}} 天会话汇总（基于会话 extra.lastTokenUsage 快照；未单独计费）。参考产品「用量」页的 Agent 排行榜。',
+                days: agentUsageState.data.days,
+              })}
+            </Typography.Paragraph>
+            <ModuleDataState
+              loading={agentUsageState.loading}
+              error={agentUsageState.error}
+              empty={agentUsageState.data.agents.length === 0}
+              emptyDescription={t('admin.usage.agentTokenEmpty', {
+                defaultValue: '暂无数字员工会话 Token 记录。请先让成员创建数字员工并执行「立即执行」或定时任务。',
+              })}
+            >
+              <div className='mb-12px'>
+                <Statistic
+                  title={t('admin.usage.agentTokenTotal', { defaultValue: '合计 Token（估算）' })}
+                  value={agentUsageState.data.totalTokens}
+                  groupSeparator
+                />
+              </div>
+              <Table
+                data={agentUsageState.data.agents}
+                rowKey='agentKey'
+                size='small'
+                border={false}
+                pagination={{ pageSize: 10, showTotal: true }}
+                columns={[
+                  {
+                    title: t('admin.usage.agentTokenName', { defaultValue: '智能体' }),
+                    dataIndex: 'agentName',
+                  },
+                  {
+                    title: t('admin.usage.agentTokenSource', { defaultValue: '类型' }),
+                    dataIndex: 'source',
+                    render: (value: AgentTokenUsageRecord['source']) => (
+                      <Tag size='small' color={value === 'personal' ? 'arcoblue' : 'purple'}>
+                        {value === 'personal'
+                          ? t('admin.usage.agentTokenPersonal', { defaultValue: '个人数字员工' })
+                          : value === 'team'
+                            ? t('admin.usage.agentTokenTeam', { defaultValue: '团队 Agent' })
+                            : t('admin.usage.agentTokenSession', { defaultValue: '会话' })}
+                      </Tag>
+                    ),
+                  },
+                  {
+                    title: t('admin.usage.agentTokenConversations', { defaultValue: '会话数' }),
+                    dataIndex: 'conversationCount',
+                  },
+                  {
+                    title: t('admin.usage.agentTokenTotalCol', { defaultValue: 'Token' }),
+                    dataIndex: 'totalTokens',
+                    render: (value: number) => value.toLocaleString(),
+                  },
+                ]}
+              />
+            </ModuleDataState>
+          </Card>
+        ) : null}
       </div>
     </AdminPageWrapper>
   );

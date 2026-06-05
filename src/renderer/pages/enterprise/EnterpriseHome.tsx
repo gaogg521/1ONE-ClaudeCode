@@ -17,6 +17,7 @@ import {
   Peoples,
   Plug,
   Right,
+  Server,
   Thunderbolt,
   TicketOne,
 } from '@icon-park/react';
@@ -68,6 +69,7 @@ const CARD_ICONS: Record<EnterpriseNavKey, React.ReactNode> = {
   settings: <Lock theme='outline' size={18} />,
   users: <EveryUser theme='outline' size={18} />,
   teams: <Peoples theme='outline' size={18} />,
+  runtimes: <Server theme='outline' size={18} />,
   auth: <Mail theme='outline' size={18} />,
   invites: <TicketOne theme='outline' size={18} />,
   cteam: <Peoples theme='outline' size={18} />,

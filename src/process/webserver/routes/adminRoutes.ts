@@ -26,6 +26,7 @@ import { resolvedSmtpFromConfig } from '../auth/smtpConfig';
 import { isEnterpriseAdminRole, isSystemAdminRole, isWebuiBuiltinAdministrator } from '../auth/enterpriseRoles';
 import { DEFAULT_TENANT_ID, isEnterpriseTenantId } from '@/common/config/webuiEnterpriseConfig';
 import { getTeamPeerUserIds } from './resourceScope';
+import { aggregateAgentTokenUsageForTenant } from '@process/services/usage/agentTokenUsage';
 import {
   EnterpriseJoinError,
   createEnterpriseInvite,
@@ -474,6 +475,33 @@ export function registerAdminRoutes(app: Express): void {
       });
     } catch (err) {
       console.error('[AdminRoute] member-dashboard error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // GET /api/admin/agent-token-usage — per digital employee / agent session token totals (admin only)
+  app.get('/api/admin/agent-token-usage', apiRateLimiter, auth, async (req, res) => {
+    try {
+      if (!isEnterpriseAdminRole(req.user!.role)) {
+        res.status(403).json({ success: false, message: 'Admin only' });
+        return;
+      }
+      const tenantId = resolveAdminTenantId(req);
+      const daysRaw = Number(req.query.days);
+      const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 90) : 30;
+      const sinceMs = Date.now() - days * 24 * 60 * 60 * 1000;
+      const rows = await aggregateAgentTokenUsageForTenant(tenantId, { sinceMs });
+      const totalTokens = rows.reduce((sum, row) => sum + row.totalTokens, 0);
+      res.json({
+        success: true,
+        data: {
+          days,
+          totalTokens,
+          agents: rows,
+        },
+      });
+    } catch (err) {
+      console.error('[AdminRoute] agent-token-usage error:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });

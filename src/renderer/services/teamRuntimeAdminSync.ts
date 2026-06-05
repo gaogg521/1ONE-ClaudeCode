@@ -6,7 +6,8 @@
  * 统一 C/S + B/S → 超级管理员后台（组织 WebUI API）同步入口。
  */
 
-import { ipcBridge, webui } from '@/common';
+import { ipcBridge } from '@/common';
+import { webui } from '@/common/adapter/ipcBridge';
 import type { TeamRuntimeInstalledAgent, TeamRuntimeNode } from '@/common/types/teamRuntimeTypes';
 import { shouldSyncWithEnterpriseApi } from '@/common/config/enterpriseApiOrigins';
 import {

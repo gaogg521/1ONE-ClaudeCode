@@ -39,7 +39,7 @@ const DEV_LISTEN_PORTS = [
 
 let devChild = null;
 let shuttingDown = false;
-let projectRoot = '';
+const projectRoot = path.join(__dirname, '..');
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -84,16 +84,21 @@ function killElectron() {
   }
 }
 
-/** Kill node processes left by prior electron-vite / dev helper runs (not this script). */
+function escapePsSingleQuoted(value) {
+  return value.replace(/'/g, "''");
+}
+
+/** Kill node/npm trees tied to this repo (electron-vite, restart, MCP build, etc.). */
 function killNodeDevScripts() {
   const selfPid = process.pid;
   if (process.platform === 'win32') {
+    const rootEscaped = escapePsSingleQuoted(projectRoot);
     spawnSync(
       'powershell',
       [
         '-NoProfile',
         '-Command',
-        `$exclude = ${selfPid}; Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.ProcessId -ne $exclude -and $_.CommandLine -and ($_.CommandLine -like '*electron-vite*' -or $_.CommandLine -like '*ensure-mcp-after-dev*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`,
+        `$exclude = @(${selfPid}); $root = '${rootEscaped}'; $targets = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $exclude -notcontains $_.ProcessId -and ( $_.CommandLine -like "*$root*" -or $_.CommandLine -like '*electron-vite*' -or $_.CommandLine -like '*restart-dev.mjs*' -or $_.CommandLine -like '*ensure-mcp-after-dev*' -or $_.CommandLine -like '*build-mcp-servers*' ) }; foreach ($p in $targets) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }`,
       ],
       { stdio: 'ignore' }
     );
@@ -101,9 +106,29 @@ function killNodeDevScripts() {
   }
   try {
     spawnSync('pkill', ['-f', 'electron-vite'], { stdio: 'ignore' });
+    spawnSync('pkill', ['-f', 'restart-dev.mjs'], { stdio: 'ignore' });
+    spawnSync('pkill', ['-f', projectRoot], { stdio: 'ignore' });
   } catch {
     // ignore
   }
+}
+
+function reportDevProcessStatus() {
+  if (process.platform !== 'win32') {
+    return;
+  }
+  const rootEscaped = escapePsSingleQuoted(projectRoot);
+  const portList = DEV_LISTEN_PORTS.join(',');
+  const psVerify = [
+    `$root = '${rootEscaped}'`,
+    `$ports = @(${portList})`,
+    `$electron = @(Get-Process electron -ErrorAction SilentlyContinue).Count`,
+    `$listen = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $ports -contains $_.LocalPort }).Count`,
+    `$repoNodes = @(Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine -like "*$root*" })`,
+    `Write-Host "[stop] verify: electron=$electron dev_listen_ports=$listen repo_node=$($repoNodes.Count)"`,
+    `if ($repoNodes.Count -gt 0) { Write-Host '[stop] remaining repo node (should be 0):'; $repoNodes | ForEach-Object { Write-Host ('  PID ' + $_.ProcessId + ' ' + $_.CommandLine.Substring(0, [Math]::Min(120, $_.CommandLine.Length))) } } else { Write-Host '[stop] repo dev stack stopped. Task Manager may still show Cursor/CodeGraph/other Node - that is normal.' }`,
+  ].join('; ');
+  spawnSync('powershell', ['-NoProfile', '-Command', psVerify], { stdio: 'inherit' });
 }
 
 /** Free stale Vite/WebUI/CDP listeners so the new instance gets 5173 and a single Electron window. */
@@ -134,6 +159,9 @@ function killDevListenPorts() {
 function killStaleDevProcesses() {
   console.log('[restart] Stopping Electron + stale dev processes...');
   killElectron();
+  killNodeDevScripts();
+  killDevListenPorts();
+  // Second pass: child node processes often outlive the parent on Windows.
   killNodeDevScripts();
   killDevListenPorts();
 }
@@ -253,7 +281,6 @@ function startElectronViteDev(root, env, devArgs) {
 }
 
 async function main() {
-  projectRoot = path.join(__dirname, '..');
   registerShutdownHooks();
 
   const root = projectRoot;
@@ -262,10 +289,12 @@ async function main() {
   const env = {
     ...process.env,
     PATH: `${localBin}${sep}${process.env.PATH || ''}`,
+    // Dev desktop: auto-open DevTools so white-screen / Vite errors are visible without Settings UI.
+    ONE_OPEN_DEVTOOLS: process.env.ONE_OPEN_DEVTOOLS ?? '1',
   };
 
   if (stopOnly) {
-    console.log('[restart] stop-only: killing Electron / electron-vite / dev ports');
+    console.log('[stop] stop-only: killing Electron / electron-vite / dev ports (will NOT start dev)');
   } else if (isFull) {
     if (useWebuiOnly) {
       console.log(
@@ -283,7 +312,7 @@ async function main() {
   }
 
   killStaleDevProcesses();
-  await sleep(500);
+  await sleep(800);
 
   const lockfilePath = getLockfilePath();
   if (lockfilePath) {
@@ -291,7 +320,8 @@ async function main() {
   }
 
   if (stopOnly) {
-    console.log('[restart] stop-only: dev processes released. You can close this terminal.');
+    reportDevProcessStatus();
+    console.log('[stop] done: no dev server started. Use ONE terminal: npm run restart');
     return;
   }
 
@@ -299,6 +329,11 @@ async function main() {
     runDevCacheClean(root, env, { vite: true, electron: true });
     runFullBuild(root, env);
     runMcpBundles(root, env);
+    if (!useWebuiOnly) {
+      // Full restart already built out/renderer — load it directly to avoid Vite cold-compile white screen.
+      env.ONE_DEV_LOAD_BUILT_RENDERER = '1';
+      console.log('[restart] Desktop will load out/renderer (ONE_DEV_LOAD_BUILT_RENDERER=1, skips Vite for UI)');
+    }
   } else {
     runDevCacheClean(root, env, { vite: true, electron: true });
     const mcpBuildScript = path.join(root, 'scripts', 'build-mcp-servers.js');
@@ -318,8 +353,8 @@ async function main() {
   console.log(`[restart] Starting electron-vite ${devArgs.join(' ')} ...`);
   if (isFull && !useWebuiOnly) {
     console.log('[restart] Electron 桌面窗口即将弹出；请保持本终端不关（日志在此输出）。');
-    console.log('[restart] 日志中应出现 [1ONE] Creating main window 与 [1ONE] Showing main window');
-    console.log('[restart] 若端口被占用，Vite 会改用 5174+；以日志里的 Loading renderer URL 为准');
+    console.log('[restart] 日志中应出现 [1ONE] Dev using prebuilt renderer 与 [1ONE] Showing main window');
+    console.log('[restart] 改 UI 请再跑 restart，或 npm run restart:fast 走 Vite HMR');
     console.log('[restart] WebUI 将按设置自动恢复（成员 http://localhost:25809，管理员 http://localhost:25810）');
   } else if (useWebuiOnly) {
     console.log('[restart] 无桌面窗口；浏览器访问 http://localhost:25809（或日志中的端口）');

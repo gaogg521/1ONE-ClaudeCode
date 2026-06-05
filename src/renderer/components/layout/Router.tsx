@@ -60,6 +60,7 @@ const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/Schedul
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
 const TeamIndex = React.lazy(() => import('@renderer/pages/team'));
 const SuperAssistantPage = React.lazy(() => import('@renderer/pages/superAssistant'));
+const AgentFleetPage = React.lazy(() => import('@renderer/pages/agentFleet'));
 const IssuesPage = React.lazy(() => import('@renderer/pages/issues'));
 const IssueDetailPage = React.lazy(() => import('@renderer/pages/issues/IssueDetailPage'));
 const SkillsPage = React.lazy(() => import('@renderer/pages/skills'));
@@ -196,6 +197,7 @@ const PanelRoute: React.FC = () => {
           <Route path='/issues/:issueId' element={withRouteFallback(IssueDetailPage)} />
           <Route path='/tasks' element={<Navigate to='/issues?tab=tasks' replace />} />
           <Route path='/super-assistant' element={withRouteFallback(SuperAssistantPage)} />
+          <Route path='/agent-fleet' element={withRouteFallback(AgentFleetPage)} />
           <Route path='/skills' element={withRouteFallback(SkillsPage)} />
           <Route path='/skills/:skillKey' element={withRouteFallback(SkillDetailPage)} />
           <Route path='/hooks' element={withRouteFallback(HooksPage)} />

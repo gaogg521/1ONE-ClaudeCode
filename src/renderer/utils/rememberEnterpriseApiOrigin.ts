@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { webui } from '@/common';
+import { webui } from '@/common/adapter/ipcBridge';
 import { ConfigStorage } from '@/common/config/storage';
 import {
   ENTERPRISE_API_ORIGINS_KEY,

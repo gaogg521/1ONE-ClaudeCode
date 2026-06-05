@@ -24,15 +24,31 @@ import os from 'os';
 import fs from 'fs/promises';
 import path from 'path';
 import { resolveLocaleKey } from '@/common/utils';
+import {
+  TeamDigitalEmployeeRunService,
+  type TeamDigitalEmployeeRunNowInput,
+  type TeamDigitalEmployeeRunNowResult,
+} from '@process/digitalEmployee/TeamDigitalEmployeeRunService';
 
 export class TeamSessionService {
   private readonly sessions: Map<string, TeamSession> = new Map();
+  private readonly teamDigitalEmployeeRun: TeamDigitalEmployeeRunService;
 
   constructor(
     private readonly repo: ITeamRepository,
     private readonly workerTaskManager: IWorkerTaskManager,
     private readonly conversationService: IConversationService
-  ) {}
+  ) {
+    this.teamDigitalEmployeeRun = new TeamDigitalEmployeeRunService((teamId, tenantId) =>
+      this.getOrStartSession(teamId, tenantId)
+    );
+  }
+
+  async runDigitalEmployeeNow(
+    input: TeamDigitalEmployeeRunNowInput
+  ): Promise<TeamDigitalEmployeeRunNowResult> {
+    return this.teamDigitalEmployeeRun.runNow(input);
+  }
 
   /**
    * Returns the workspace path as-is, or empty string when not specified.

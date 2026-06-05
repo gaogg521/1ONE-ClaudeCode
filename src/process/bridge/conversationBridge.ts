@@ -32,6 +32,7 @@ import fs from 'fs';
 import path from 'path';
 import { migrateConversationToDatabase } from './migrationUtils';
 import { ConversationSideQuestionService } from './services/ConversationSideQuestionService';
+import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 import { resolvePersonalAgentPreset } from '@process/digitalEmployee/resolvePersonalAgentPreset';
 
 const refreshTrayMenuSafely = async (): Promise<void> => {
@@ -175,7 +176,11 @@ export function initConversationBridge(
           : params;
       const personalAgentId = createParams.extra?.personalAgentId;
       if (personalAgentId) {
-        const preset = await resolvePersonalAgentPreset(personalAgentId);
+        const ownerUserId =
+          typeof createParams.extra?.ownerUserId === 'string'
+            ? createParams.extra.ownerUserId
+            : DESKTOP_OPERATOR_USER_ID;
+        const preset = await resolvePersonalAgentPreset(personalAgentId, ownerUserId);
         if (preset) {
           createParams = {
             ...createParams,

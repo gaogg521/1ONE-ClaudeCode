@@ -9,6 +9,7 @@ import { Button, Card, Form, Input, Message, Modal, Popconfirm, Space, Switch, T
 import { Delete, Edit, Plus, Refresh } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
@@ -28,8 +29,12 @@ import { useTeamNameMap } from '@/renderer/hooks/enterprise/useTeamNameMap';
 
 const AdminSkills: React.FC = () => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const { effectiveRole } = useWebuiEnterpriseMode();
-  const isAdmin = isEnterpriseAdminRole(effectiveRole);
+  const role = effectiveRole ?? user?.role;
+  const isAdmin = isEnterpriseAdminRole(role);
+  const canManageSkill = (record: SkillRecord) =>
+    isEnterpriseAdminRole(role) || (user?.id != null && record.created_by === user.id);
   const [modalVisible, setModalVisible] = useState(false);
   const [batchVisible, setBatchVisible] = useState(false);
   const [batchJson, setBatchJson] = useState('');
@@ -124,16 +129,43 @@ const AdminSkills: React.FC = () => {
     },
     {
       title: t('admin.skills.enabled', { defaultValue: '启用' }), dataIndex: 'enabled',
-      render: (_: unknown, r: SkillRecord) => <Switch size='small' checked={r.enabled === 1} onChange={async (v) => { try { await saveSkill({ id: r.id, name: r.name, description: r.description, content: r.content, enabled: v, scope: r.scope, ...(r.team_id ? { team_id: r.team_id } : {}) }); await rowsState.reload(); } catch (error) { Message.error(getEnterpriseActionError(error, t('admin.skills.saveFailed', { defaultValue: '保存失败' }))); } }} />
+      render: (_: unknown, r: SkillRecord) => (
+        canManageSkill(r) ? (
+          <Switch
+            size='small'
+            checked={r.enabled === 1}
+            onChange={async (v) => {
+              try {
+                await saveSkill({
+                  id: r.id,
+                  name: r.name,
+                  description: r.description,
+                  content: r.content,
+                  enabled: v,
+                  scope: r.scope,
+                  ...(r.team_id ? { team_id: r.team_id } : {}),
+                });
+                await rowsState.reload();
+              } catch (error) {
+                Message.error(getEnterpriseActionError(error, t('admin.skills.saveFailed', { defaultValue: '保存失败' })));
+              }
+            }}
+          />
+        ) : (
+          <Switch size='small' checked={r.enabled === 1} disabled />
+        )
+      ),
     },
     {
       title: t('admin.skills.actions', { defaultValue: '操作' }),
       render: (_: unknown, r: SkillRecord) => (
         <Space size='mini'>
-          <Button size='mini' icon={<Edit />} onClick={() => openEdit(r)} />
-          <Popconfirm title={t('admin.skills.confirmDelete', { defaultValue: '确定删除？' })} onOk={() => void handleDelete(r.id)}>
-            <Button size='mini' status='danger' icon={<Delete />} />
-          </Popconfirm>
+          {canManageSkill(r) ? <Button size='mini' icon={<Edit />} onClick={() => openEdit(r)} /> : null}
+          {canManageSkill(r) ? (
+            <Popconfirm title={t('admin.skills.confirmDelete', { defaultValue: '确定删除？' })} onOk={() => void handleDelete(r.id)}>
+              <Button size='mini' status='danger' icon={<Delete />} />
+            </Popconfirm>
+          ) : null}
         </Space>
       ),
     },

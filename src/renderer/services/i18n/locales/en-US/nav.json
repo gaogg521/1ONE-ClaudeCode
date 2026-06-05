@@ -8,6 +8,7 @@
   "enterpriseConsole": "Enterprise admin",
   "superAssistant": "Super Assistant",
   "agentAssistant": "Super Assistant",
+  "agentFleet": "Org nodes",
   "skills": "Skills",
   "enterpriseAdmin": "Admin console",
   "hooks": "Hooks",

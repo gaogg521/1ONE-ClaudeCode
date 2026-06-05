@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Empty, Typography } from '@arco-design/web-react';
 import { Right, Setting } from '@icon-park/react';
@@ -7,6 +7,8 @@ import { useConversationHistoryContext } from '@/renderer/hooks/context/Conversa
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { getActivityTime } from '@/renderer/utils/chat/timeline';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
+import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { openAdminConsole } from '@/renderer/utils/openAdminConsole';
 import PageContentShell from '@/renderer/components/layout/PageContentShell';
 import { getProjectDisplayName, readPinnedProjects } from '@/renderer/utils/workspace/pinnedProjects';
 
@@ -75,13 +77,29 @@ const WorkspacePage: React.FC = () => {
   const auth = useAuth();
   const { groupedHistory, conversations } = useConversationHistoryContext();
   const {
-    hasJoinedEnterprise,
     showTeamsFeature,
     showEnterpriseAdminNav,
     showEnterpriseWorkspaceHub,
     tenantLabel,
   } = useEditionFeatures();
+  const { openEnterpriseAdminInBrowser } = useWebuiEnterpriseMode();
   const lastActiveTeamScope = useMemo(() => readLastActiveTeamScope(), []);
+
+  const handleEnterpriseCardClick = useCallback(
+    (card: { key: string; path: string }) => {
+      if (card.key === 'admin') {
+        void openAdminConsole({
+          navigate: (path) => {
+            void navigate(path);
+          },
+          openEnterpriseAdminInBrowser,
+        });
+        return;
+      }
+      void navigate(card.path);
+    },
+    [navigate, openEnterpriseAdminInBrowser]
+  );
 
   const workspaceEntries = useMemo<WorkspaceEntry[]>(() => {
     const map = new Map<string, WorkspaceEntry>();
@@ -268,7 +286,7 @@ const WorkspacePage: React.FC = () => {
                 bodyStyle={{ padding: 16 }}
                 hoverable
                 onClick={() => {
-                  void navigate(card.path);
+                  handleEnterpriseCardClick(card);
                 }}
               >
                 <div className='flex h-full flex-col gap-10px'>
@@ -282,7 +300,7 @@ const WorkspacePage: React.FC = () => {
                       size='small'
                       onClick={(event) => {
                         event.stopPropagation();
-                        void navigate(card.path);
+                        handleEnterpriseCardClick(card);
                       }}
                     >
                       {t('common.workspace.hub.openEnterpriseCard', { defaultValue: '进入' })}

@@ -116,6 +116,23 @@ export function initWebuiBridge(): void {
     }, 'Set enterprise API origins');
   });
 
+  webui.invokeLoopbackRequest.provider(async ({ path, method, headers, body }) => {
+    return WebuiService.handleAsync(async () => {
+      if (!webServerInstance?.port) {
+        throw new Error('WEBUI_NOT_RUNNING');
+      }
+      const { invokeLoopbackRequest } = await import('@process/webserver/localLoopbackRequest');
+      const data = await invokeLoopbackRequest({
+        port: webServerInstance.port,
+        path,
+        method,
+        headers,
+        body,
+      });
+      return { success: true, data };
+    }, 'Invoke loopback WebUI request');
+  });
+
   // 启动 WebUI / Start WebUI
   webui.start.provider(async ({ port: requestedPort, allowRemote }) => {
     try {

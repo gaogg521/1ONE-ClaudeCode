@@ -867,6 +867,20 @@ export const webui = {
   setEnterpriseApiOrigins: bridge.buildProvider<IBridgeResponse<{ ok: true }>, { origins: string[] }>(
     'webui.set-enterprise-api-origins'
   ),
+  invokeLoopbackRequest: bridge.buildProvider<
+    IBridgeResponse<{
+      ok: boolean;
+      status: number;
+      headers: Record<string, string>;
+      bodyText: string;
+    }>,
+    {
+      path: string;
+      method?: string;
+      headers?: Record<string, string>;
+      body?: string;
+    }
+  >('webui.invoke-loopback-request'),
   // 启动 WebUI / Start WebUI
   start: bridge.buildProvider<
     IBridgeResponse<{
@@ -1099,6 +1113,8 @@ export interface ICreateConversationParams {
     tenantId?: string;
     /** Personal agent that spawned this conversation */
     personalAgentId?: string;
+    /** Owner of the personal agent (for preset resolution) */
+    ownerUserId?: string;
   };
 }
 interface IResetConversationParams {
@@ -1431,6 +1447,15 @@ export const team = {
   sendMessageToAgent: bridge.buildProvider<void, { teamId: string; tenantId?: string; slotId: string; content: string }>(
     'team.send-message-to-agent'
   ),
+  runDigitalEmployeeNow: bridge.buildProvider<
+    { runId: string; conversationId: string },
+    {
+      teamId: string;
+      tenantId?: string;
+      slotId: string;
+      issue?: { id: string; subject: string; description?: string | null };
+    }
+  >('team.run-digital-employee-now'),
   stop: bridge.buildProvider<void, { teamId: string }>('team.stop'),
   ensureSession: bridge.buildProvider<void, { teamId: string; tenantId?: string }>('team.ensure-session'),
   renameAgent: bridge.buildProvider<void, { teamId: string; tenantId?: string; slotId: string; newName: string }>('team.rename-agent'),
@@ -1483,6 +1508,14 @@ export const personalAgent = {
     { id: string; ownerUserId: string; updates: import('@/common/types/personalAgentTypes').UpdatePersonalAgentInput }
   >('personal-agent.update'),
   remove: bridge.buildProvider<void, { id: string; ownerUserId: string }>('personal-agent.remove'),
+  runNow: bridge.buildProvider<
+    { runId: string; conversationId: string },
+    {
+      agentId: string;
+      ownerUserId: string;
+      issue?: { id: string; subject: string; description?: string | null };
+    }
+  >('personal-agent.run-now'),
 };
 
 // ─── Hooks Bridge ─────────────────────────────────────────────────────────────

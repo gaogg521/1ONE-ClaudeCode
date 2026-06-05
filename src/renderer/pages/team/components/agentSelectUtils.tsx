@@ -39,6 +39,23 @@ export function filterTeamSupportedAgents(agents: AvailableAgent[]): AvailableAg
   });
 }
 
+export type DigitalEmployeeAgentVisibility = 'personal' | 'workspace';
+
+/**
+ * Digital employee runtime picker:
+ * - personal: all detected CLI agents (same pool as conversation tab)
+ * - workspace: team-verified backends only (MCP injection in team sessions)
+ */
+export function filterDigitalEmployeeRuntimeAgents(
+  agents: AvailableAgent[],
+  visibility: DigitalEmployeeAgentVisibility = 'personal'
+): AvailableAgent[] {
+  if (visibility === 'workspace') {
+    return filterTeamSupportedAgents(agents);
+  }
+  return agents;
+}
+
 export function resolveConversationType(
   backend: string
 ): 'gemini' | 'acp' | 'aionrs' | 'codex' | 'openclaw-gateway' | 'nanobot' | 'remote' {

@@ -23,6 +23,8 @@ import {
   WEBUI_MANAGEMENT_MODE_KEY,
   WEBUI_USER_CHOSE_STANDALONE_KEY,
   normalizeWebuiManagementMode,
+  readBrowserWebuiManagementMode,
+  writeBrowserWebuiManagementMode,
 } from '@/common/config/webuiEnterpriseConfig';
 import { isDesktopOperatorUser, useAuth } from '@/renderer/hooks/context/AuthContext';
 import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
@@ -138,9 +140,13 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   }, []);
 
   const loadPrefs = useCallback(async () => {
+    if (!isDesktop) {
+      setManagementModeState(readBrowserWebuiManagementMode() ?? DEFAULT_WEBUI_MANAGEMENT_MODE);
+      return;
+    }
     const stored = await ConfigStorage.get(WEBUI_MANAGEMENT_MODE_KEY).catch((): undefined => undefined);
     setManagementModeState(normalizeWebuiManagementMode(stored));
-  }, []);
+  }, [isDesktop]);
 
   const fetchBrowserEnterpriseContext = useCallback(async (): Promise<EnterpriseContextSnapshot | null> => {
     if (!getDesktopWebuiBearerToken()) {
@@ -381,6 +387,10 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
 
   const setManagementMode = useCallback(async (mode: WebuiManagementMode) => {
     setManagementModeState(mode);
+    if (!isDesktop) {
+      writeBrowserWebuiManagementMode(mode);
+      return;
+    }
     try {
       await ConfigStorage.set(WEBUI_MANAGEMENT_MODE_KEY, mode);
       await ConfigStorage.set(WEBUI_USER_CHOSE_STANDALONE_KEY, mode === 'standalone');
@@ -388,7 +398,7 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
       const stored = await ConfigStorage.get(WEBUI_MANAGEMENT_MODE_KEY).catch((): undefined => undefined);
       setManagementModeState(normalizeWebuiManagementMode(stored));
     }
-  }, []);
+  }, [isDesktop]);
 
   const openUrlInBrowser = useCallback(
     async (hashPath: string): Promise<'opened' | 'webui_not_running' | 'failed'> => {

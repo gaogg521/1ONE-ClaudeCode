@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getSidebarNavItems,
+  isNavItemActive,
   shouldShowSessionSidebarContent,
+  type NavItem,
 } from '@/renderer/components/layout/sidebarNav';
 
 describe('getSidebarNavItems', () => {
@@ -72,6 +74,41 @@ describe('getSidebarNavItems', () => {
 
     expect(items.some((item) => item.path === '/enterprise')).toBe(false);
   });
+
+  it('shows org nodes nav only when enterprise workspace is available', () => {
+    expect(getSidebarNavItems(personalGate).some((item) => item.path === '/agent-fleet')).toBe(
+      false
+    );
+    expect(getSidebarNavItems(teamGate).some((item) => item.path === '/agent-fleet')).toBe(true);
+  });
+});
+
+const skillsNavItem: NavItem = {
+  icon: null,
+  labelKey: 'nav.skills',
+  labelDefault: 'Skills',
+  path: '/skills',
+  paths: ['/enterprise/skills'],
+};
+
+const settingsNavItem: NavItem = {
+  icon: null,
+  labelKey: 'nav.globalSettings',
+  labelDefault: 'Settings',
+  path: '/settings',
+};
+
+describe('isNavItemActive', () => {
+  it('highlights settings but not skills on skills-hub settings tab', () => {
+    expect(isNavItemActive('/settings/skills-hub', settingsNavItem)).toBe(true);
+    expect(isNavItemActive('/settings/skills-hub', skillsNavItem)).toBe(false);
+  });
+
+  it('highlights skills on the skills module route', () => {
+    expect(isNavItemActive('/skills', skillsNavItem)).toBe(true);
+    expect(isNavItemActive('/skills/my-skill', skillsNavItem)).toBe(true);
+    expect(isNavItemActive('/settings/skills-hub', skillsNavItem)).toBe(false);
+  });
 });
 
 describe('shouldShowSessionSidebarContent', () => {
@@ -88,6 +125,7 @@ describe('shouldShowSessionSidebarContent', () => {
     expect(shouldShowSessionSidebarContent('/skills')).toBe(false);
     expect(shouldShowSessionSidebarContent('/sessions')).toBe(false);
     expect(shouldShowSessionSidebarContent('/scheduled')).toBe(false);
+    expect(shouldShowSessionSidebarContent('/agent-fleet')).toBe(false);
     expect(shouldShowSessionSidebarContent('/settings/agent')).toBe(false);
   });
 });

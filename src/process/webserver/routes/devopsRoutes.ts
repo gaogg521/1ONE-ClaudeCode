@@ -1122,7 +1122,26 @@ export function registerDevOpsRoutes(app: Express): void {
       const db = await getDatabase(); const driver = db.getDriver(); const now = Date.now();
       const stmt = driver.prepare(`INSERT OR IGNORE INTO skills_registry (id, tenant_id, name, description, content, enabled, scope, created_by, created_at, updated_at) VALUES (?,?,?,?,?,1,'personal',?,?,?)`);
       let count = 0;
-      driver.transaction(() => { for (const item of items) { if (item.name?.trim()) { stmt.run(randomUUID(), tenantId, item.name.trim(), item.description||'', item.content||'', userId, now, now); count++; } } })();
+      driver.transaction(() => {
+        for (const item of items) {
+          if (!item.name?.trim()) {
+            continue;
+          }
+          const result = stmt.run(
+            randomUUID(),
+            tenantId,
+            item.name.trim(),
+            item.description || '',
+            item.content || '',
+            userId,
+            now,
+            now
+          ) as { changes?: number };
+          if ((result.changes ?? 0) > 0) {
+            count++;
+          }
+        }
+      })();
       res.json({ success: true, data: { count } });
     } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
   });
@@ -1173,8 +1192,12 @@ export function registerDevOpsRoutes(app: Express): void {
       const now = Date.now();
       if (id) {
         const existing = getScopedResourceOrNull(driver, tenantId, 'skills_registry', id);
-        if (!existing || !canManageScopedResource(req, driver, tenantId, existing)) {
+        if (!existing) {
           res.status(404).json({ success: false, message: 'Skill not found' });
+          return;
+        }
+        if (!canManageScopedResource(req, driver, tenantId, existing)) {
+          res.status(403).json({ success: false, message: 'Forbidden' });
           return;
         }
         const resolvedScope = resolveResourceScope(req, driver, tenantId, { scope: scope ?? existing.scope, team_id: team_id ?? existing.team_id });
@@ -1209,12 +1232,21 @@ export function registerDevOpsRoutes(app: Express): void {
       const db = await getDatabase();
       const driver = db.getDriver();
       const resource = getScopedResourceOrNull(driver, tenantId, 'skills_registry', id);
-      if (!resource || !canManageScopedResource(req, driver, tenantId, resource)) {
+      if (!resource) {
         res.status(404).json({ success: false, message: 'Skill not found' });
         return;
       }
-      const result = driver.prepare(`DELETE FROM skills_registry WHERE id=? AND tenant_id=?`).run(id, tenantId);
-      if (result.changes === 0) { res.status(404).json({ success: false, message: 'Skill not found' }); return; }
+      if (!canManageScopedResource(req, driver, tenantId, resource)) {
+        res.status(403).json({ success: false, message: 'Forbidden' });
+        return;
+      }
+      const result = driver.prepare(`DELETE FROM skills_registry WHERE id=? AND tenant_id=?`).run(id, tenantId) as {
+        changes?: number;
+      };
+      if ((result.changes ?? 0) === 0) {
+        res.status(404).json({ success: false, message: 'Skill not found' });
+        return;
+      }
       res.json({ success: true });
     } catch (err) {
       console.error('[DevOpsRoute] delete skill error:', err);

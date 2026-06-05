@@ -1,7 +1,6 @@
 import React from 'react';
 import { Button, Card } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
-import TeamRuntimeFleetPanel from './TeamRuntimeFleetPanel';
 
 type RuntimesTabProps = {
   totalAgentCount: number;
@@ -9,8 +8,8 @@ type RuntimesTabProps = {
   enabledMcpCount: number;
   onOpenAgentSettings: () => void;
   onOpenModelSettings: () => void;
-  showTeamFleet?: boolean;
-  fleetTeamIds?: string[];
+  onOpenOrgNodes?: () => void;
+  showOrgNodesLink?: boolean;
 };
 
 const RuntimesTab: React.FC<RuntimesTabProps> = ({
@@ -19,24 +18,24 @@ const RuntimesTab: React.FC<RuntimesTabProps> = ({
   enabledMcpCount,
   onOpenAgentSettings,
   onOpenModelSettings,
-  showTeamFleet = false,
-  fleetTeamIds,
+  onOpenOrgNodes,
+  showOrgNodesLink = false,
 }) => {
   const { t } = useTranslation();
 
   return (
     <div className='space-y-12px'>
-      {showTeamFleet ? (
-        <Card
-          title={t('common.superAssistant.runtimeFleet.title', { defaultValue: '团队运行时' })}
-        >
+      {showOrgNodesLink ? (
+        <Card title={t('common.agentFleet.title', { defaultValue: '组织节点' })}>
           <div className='mb-10px text-12px text-t-tertiary'>
-            {t('common.superAssistant.runtimeFleet.desc', {
+            {t('common.agentFleet.desc', {
               defaultValue:
-                '加入同一组织（邀请码、邮箱邀请、LDAP/飞书等企业登录）后，成员机器会自动同步到组织服务器，可在此查看机器名、IP 与已安装的 Agent。',
+                '查看同组织成员在线的机器名、IP 与已安装 Agent。各端登录组织后会自动上报心跳。',
             })}
           </div>
-          <TeamRuntimeFleetPanel teamIds={fleetTeamIds} enabled={showTeamFleet} />
+          <Button size='small' type='outline' onClick={onOpenOrgNodes}>
+            {t('common.superAssistant.openOrgNodes', { defaultValue: '打开组织节点' })}
+          </Button>
         </Card>
       ) : null}
     <div className='grid gap-12px md:grid-cols-2'>

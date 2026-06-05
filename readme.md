@@ -1,8 +1,12 @@
 <h1 align="center">1ONE ClaudeCode</h1>
 
 <p align="center">
-  <strong>Claude Code 可视化控制面板 · AI Agent 协作指挥台</strong><br>
-  <em>免费开源 · 零门槛上手 · 支持任意模型 · 多 Agent 协作 · 远程访问 · 24/7 自动化</em>
+  <img src="./resources/brand-mark.png" alt="1ONE ClaudeCode" width="72">
+</p>
+
+<p align="center">
+  <strong>Claude Code 可视化指挥台 · 个人 AI 工作台 · 企业团队协同 · DevOps 平台</strong><br>
+  <em>开源免费 · 多 Agent 原生协作 · WebUI 远程 · 私有化部署 · 24/7 自动化</em>
 </p>
 
 <p align="center">
@@ -27,559 +31,533 @@
   </a>
 </p>
 
-<div align="center">
-  <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#22c55e;margin:0 4px;"></span>
-  <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#06b6d4;margin:0 4px;"></span>
-  <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#3b82f6;margin:0 4px;"></span>
-  <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#f59e0b;margin:0 4px;"></span>
-  <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:#ef4444;margin:0 4px;"></span>
-  <div style="margin-top:8px;font-size:12px;opacity:.8;">UI 主题强调：清爽高对比 · 绿色开关态 · 统一品牌高亮</div>
-</div>
+<p align="center">
+  <img src="./resources/APP首页展示.png" alt="1ONE ClaudeCode 首页" width="92%">
+</p>
 
 ---
 
-<details>
-  <summary><strong>📋 目录（点击展开）</strong></summary>
+<details open>
+  <summary><strong>📋 目录</strong></summary>
 
-- [为什么用它](#why)
-- [快速开始](#quickstart)
-  - [下载安装](#install)
-  - [macOS 安装步骤（Gatekeeper 放行）](#macos)
-  - [第一次使用（3 步上手）](#first-use)
-  - [源码运行（开发者）](#dev)
-- [功能概览](#features)
+- [产品定位：从个人版到企业团队版](#positioning)
+- [竞争优势对比](#comparison)
+- [系统架构](#architecture)
+- [三大入口：个人 / 企业团队 / 管理后台](#editions)
+- [功能模块全景](#modules)
 - [功能截图](#screenshots)
-- [企业版：加入企业与邀请码](#enterprise-join)
-- [最近优化（稳定性与体验）](#recent-improvements)
-- [配置与数据存储位置](#data-and-config)
-- [常见问题（FAQ）](#faq)
-- [技术栈](#tech-stack)
+- [快速开始](#quickstart)
+- [企业版接入](#enterprise)
+- [技术栈与数据存储](#tech)
+- [常见问题](#faq)
 - [参与贡献](#contribute)
-- [联系作者](#contact)
 
 </details>
 
 ---
 
-<a id="why"></a>
-## 为什么用它
+<a id="positioning"></a>
 
-你可以把它理解成 **Claude Code / 多 Agent 的“可视化控制中心”**：
+## 产品定位：从个人版到企业团队版
 
-- **不止一个 Agent**：Claude / OpenClaw / Gemini CLI / Cursor 等按场景切换
-- **不止一个模型**：支持任意 OpenAI-compatible / New-API / 自定义端点
-- **不止一台设备**：WebUI 远程访问 + 统一设置入口
-- **不止一次任务**：定时任务、Hook 监控、记忆中心，适合长期运行
+早期版本聚焦 **「个人 AI 工作台」**——把 Claude Code、Codex、Gemini CLI 等 Agent 装进一个可视化桌面壳，降低安装配置门槛。
 
-### 一句话，值回票价（甚至不用票价）
+**当前版本是一次架构级升级**：在同一套 UI 与工作流之上，叠加 **企业团队版** 与 **组织管理后台**，形成「个人创作 → 团队协作 → 组织治理 → DevOps 平台」的完整链路。
 
-**价格优势**：免费开源 + 开箱即用的内置工具/助手，尽量把你从“装环境、配插件、抄脚本、踩坑排障”里解放出来。
+| 阶段 | 能力重心 | 典型用户 |
+|------|----------|----------|
+| **个人版** | 本机 Agent、会话、工作区、技能/MCP、定时任务 | 开发者、创作者、独立使用者 |
+| **企业团队版** | 同一工作台 + 企业身份、Issues、团队任务、数字员工、共享协同 | 已加入企业的成员 |
+| **管理后台** | 成员/LDAP/飞书、邀请码、RAG/MCP/Skills 治理、CCI 流水线 | 组织管理员 |
 
-你是否也想过：
-
-1. **你想一句话做一个专属于自己的小游戏吗？**
-2. **你想一句话写出游戏的故事角色策划吗？**
-3. **你想一句话做一份牛逼的 PPT 吗？**
-4. **你不会代码，也能写出自己的软件吗？**
-5. **你想下班之后还能用微信和飞书管理自己的 AI 吗？**
-6. **你想多个人一起合作开发一个工具怎么办？**
-7. **Claude Code 的 UI 界面中国人用不了怎么办？**
-8. **写代码的人怎么管理自己安装的 N 个开发工具？**
-
-今天老赵（Allen）就来实现你们的愿望：**AI 神器 1ONE Code 来啦**。几十个已经写好的内置工具助手，开箱即用（团队版计划开发中，欢迎赞助！）
-
-<a id="features"></a>
-## ✨ 功能概览
-
-| 功能模块 | 说明 |
-|---|---|
-| 🧭 **统一入口（双视图）** | 一个入口聚合 Agent、模型、任务与扩展配置，支持总览与扩展视图快速切换 |
-| 🤖 **多 Agent 管理** | Claude Code、OpenClaw、Gemini CLI、Cursor Agent 等并存管理，按场景灵活切换 |
-| 🔧 **模型管理** | 图形化添加任意 API 模型，支持自定义端点、模型名与鉴权配置 |
-| 🔌 **MCP 管理与一键接入** | 提供 MCP 状态监控与可视化接入流程，降低配置门槛并提升排障效率 |
-| ⚡ **Hook 监控** | 可观测关键生命周期事件，便于构建通知、审计、自动化脚本链路 |
-| 🛍️ **技能市场** | 支持按需安装社区技能包，快速扩展 Agent 的专业能力边界 |
-| 👤 **自定义助手** | 创建专属助手角色，绑定提示词、技能与默认模型，沉淀团队工作流 |
-| 🔎 **历史会话搜索** | 全量历史可检索可回溯，快速定位过往结论与上下文 |
-| 🧠 **记忆中心** | 全局与项目记忆统一管理，跨会话保持上下文连续性 |
-| 🌐 **远程访问 WebUI** | 支持多设备浏览器访问，便于远程查看与操作任务 |
-| 🏢 **企业版（可选）** | 邀请码加入企业、企业后台（用户/LDAP/飞书/SMTP 等）；默认仍为单机 WebUI |
-| 💬 **通讯渠道控制** | 可对接 IM 渠道进行消息收发、触发任务与结果回传 |
-| ⏰ **定时任务（Cron）** | 按计划自动触发 Agent 流程，满足巡检、日报和批处理场景 |
-| 🎨 **主题切换** | 内置多套视觉主题，兼顾品牌表达与长期使用舒适度 |
-| 🗂️ **工作空间管理** | 支持按工作空间组织项目和配置，实现多项目隔离协作 |
-| 🌍 **开机启动与多语言** | 提供开机自启与多语言界面能力，适配国际化团队与长期运行场景 |
+> 切换「个人版 / 企业团队版」**不会**打开管理后台；管组织请走侧栏 **管理后台** 或工作区 **企业协同与平台能力** 入口。
 
 ---
 
-<a id="quickstart"></a>
-## 🚀 快速开始
+<a id="comparison"></a>
 
-<a id="install"></a>
-### 下载安装包（推荐）
+## 竞争优势对比
 
-前往 [Releases 页面](https://github.com/gaogg521/1ONE-Claude-Code/releases) 下载对应系统的安装包：
+与 **Cursor**、**GitHub Copilot**、**原生 Claude Code** 相比，1ONE ClaudeCode 的定位是：**开源可控的多 Agent 指挥台 + 可远程的 WebUI + 可扩展的企业协同平台**。
 
-| 系统 | 文件格式 |
-|---|---|
-| Windows | `.exe` 安装包 / `.zip` 便携版 |
-| macOS | `.dmg` / `.zip`（以 Releases 实际资产为准） |
-| Linux | `.deb` 安装包 |
+| 对比维度 | **1ONE ClaudeCode** | Cursor | GitHub Copilot | 原生 Claude Code |
+|----------|---------------------|--------|----------------|------------------|
+| **产品性质** | ✅ 开源免费 | 🔒 商业闭源 | 🔒 商业闭源 | 🔒 商业闭源 |
+| **多 Agent 支持** | ✅ 原生支持（Claude / Codex / Gemini / OpenClaw 等） | ⚠️ 有限 | ⚠️ 较弱 | ❌ 单一 Agent |
+| **开源可控** | ✅ 完全开源，可二次开发 | ❌ 闭源不可控 | ❌ 闭源不可控 | ❌ 闭源不可控 |
+| **WebUI 远程访问** | ✅ 原生支持（桌面 + 浏览器 + LAN/服务器） | ❌ 无独立 WebUI | ❌ 无 WebUI | ❌ 无独立 WebUI |
+| **团队协作能力** | ✅ 企业团队版（Issues / 团队任务 / 数字员工 / 组织资源） | 💰 商业付费版 | 💰 企业版 | ⚠️ 协作有限 |
+| **私有化部署** | ✅ 支持 Docker / 本机 WebUI / 服务器模式 | ❌ 不支持 | ⚠️ 企业版可选 | ⚠️ 大客户定制 |
+| **国内网络可用性** | ✅ 团队级系统部署，本地/内网运行 | ⚠️ 部分能力受限 | ✅ 连接较好 | ❌ 访问困难 |
+| **服务定价** | ✅ **完全免费** | 💰 $20–40/人/月 | 💰 $10–19/人/月 | 💰 $20+/月 |
 
-<a id="macos"></a>
-### macOS 安装步骤（Gatekeeper 放行）
+**一句话总结**：别人卖的是「单一 IDE 里的 AI 补全或聊天」；1ONE ClaudeCode 给的是 **可自托管、可编排、可协同、可自动化** 的 Agent 操作系统。
 
-> 摘自 `out/1OneClaudeCode  Mac安装步骤.docx`，用于解决 macOS 首次打开的系统安全限制提示。
+---
 
-1. **双击安装包**，向右拖动完成安装。
-2. 安装完成后，在 **应用程序（Applications）** 里找到 `1OneClaudeCode`，双击运行。
-3. 点击完成，先**忽略警告信息**。
-4. 打开 **系统设置 → 隐私与安全性**，点击 **仍要打开**（Allow/Open Anyway）。
-5. 输入解锁密码后即可成功运行。
+<a id="architecture"></a>
 
-<a id="first-use"></a>
-### 第一次使用（3 步上手）
+## 系统架构
 
-1. 打开应用后，点击左侧 **Agents** 选择你要使用的 AI Agent（推荐先用 **1ONE CODE**）
-2. 进入左侧 **Models/模型**，添加你的 API Key / Base URL / 模型名
-3. 回到 **新会话**，开始与 AI 对话（需要文件就上传/打开工作区）
+### 多进程模型
 
-<a id="dev"></a>
-### 源码运行（开发者）
+```mermaid
+flowchart TB
+  subgraph Desktop["Electron 桌面 / WebUI 浏览器"]
+    R["Renderer<br/>React UI"]
+  end
 
-**环境要求：** Node.js >= 22、Git
+  subgraph Main["Main Process"]
+    B["IPC Bridge<br/>统一 RPC 通道"]
+    DB["SQLite<br/>会话 / 消息 / 团队"]
+    WS["Express WebServer<br/>JWT + WebSocket"]
+  end
 
-> **关于 Bun（macOS 常见疑问）**：Bun **不是必须安装**。本项目本地 `postinstall` 会优先使用 `bunx`，若你的机器未安装 Bun，会自动回退到 `npx` 来执行 `electron-builder install-app-deps`，不影响安装依赖与启动。
+  subgraph Workers["Worker 子进程（按 Agent 类型隔离）"]
+    W1["Claude / ACP"]
+    W2["Gemini / Codex"]
+    W3["OpenClaw / Nanobot …"]
+  end
 
-> **关于 1ONE CODE（aionrs）与离线可用性**：发布版安装包会把 `aionrs` 预置进应用资源（`resources/bundled-aionrs/...`），**最终用户不需要访问 GitHub**。仓库维护者如需在本机重新生成该二进制，可在可联网环境临时设置 `AIONRS_ALLOW_DOWNLOAD=1` 运行 `scripts/prepareAionrs.js`（默认离线模式不会自动下载）。
-
-> **关于 Agent 工具包（CodeGraph / agent-browser）**：正式安装包会把 CLI 预置到 `resources/bundled-agent-toolkit/{平台-架构}/`（打包时自动执行）。运行时 **优先使用包内 CLI**（经 Electron 以 Node 模式启动），**仅当包内缺失时才回退 `npx`**。技能 Markdown（Superpowers、find-skills 等）随应用分发，无需用户单独安装。源码开发若也要本地走包内路径，可在安装依赖后执行一次：`npm run prepare:agent-toolkit`。
-
-```bash
-# 克隆项目
-git clone https://github.com/gaogg521/1ONE-Claude-Code.git
-cd 1ONE-Claude-Code
-
-# 安装依赖
-npm install
-
-# ⚠️ 重要：重新编译原生模块（针对 Electron，必须执行）
-npx electron-rebuild -f -w better-sqlite3
-
-# 启动开发模式
-npm run restart
+  R <-->|IPC / WebSocket| B
+  B --> DB
+  B --> WS
+  B --> Workers
 ```
 
-> **黑屏 / `NODE_MODULE_VERSION` 错误**：通常是 `better-sqlite3` 未按 Electron 版本重编译，执行 `npx electron-rebuild -f -w better-sqlite3` 后重启即可。
+| 进程 | 目录 | 职责 |
+|------|------|------|
+| **Main** | `src/process/` | 应用生命周期、数据库、Bridge 实现、WebUI 服务 |
+| **Renderer** | `src/renderer/` | React 界面，禁止直接访问 Node API |
+| **Worker** | `src/process/worker/` | 各 Agent 独立子进程，通过 pipe 通信 |
+
+所有跨进程调用统一走 **IPC Bridge**（`src/common/adapter/ipcBridge.ts` → `src/process/bridge/`）。WebUI 模式下，WebSocket 与 Electron IPC **复用同一套 Bridge 处理器**。
+
+### 身份与能力矩阵
+
+```mermaid
+flowchart LR
+  Auth["登录来源<br/>桌面 Operator / WebUI / 企业 SSO"]
+  Identity["IdentitySnapshot<br/>个人 / 企业成员 / 组织管理员"]
+  Gate["EditionGate<br/>能力开关"]
+  UI["路由 + 侧栏 + 功能模块"]
+  API["API 租户边界 + 资源 Scope"]
+
+  Auth --> Identity --> Gate --> UI
+  Gate --> API
+```
+
+| 能力域 | 个人版 | 企业团队版 | 管理后台 |
+|--------|--------|------------|----------|
+| 个人会话 / 工作区 / 本地 Agent | ✅ | ✅（企业身份） | — |
+| Issues / 团队任务 / 数字员工 | ✅ 个人 Issues | ✅ 团队协作 | — |
+| 组织成员 / LDAP / 飞书 / 邀请码 | — | — | ✅ 管理员 |
+| RAG / MCP / Skills 组织级配置 | 本地 | 团队 + 组织 | ✅ |
+| CCI 流水线 / CTeam 看板 / 制品库 | — | 按角色 | ✅ |
+
+详细规格见 [`docs/product/edition-and-identity-spec.md`](./docs/product/edition-and-identity-spec.md)。
+
+### 运行模式
+
+| 模式 | 命令 / 场景 | 说明 |
+|------|-------------|------|
+| **桌面开发** | `npm run restart` | Electron + Vite HMR |
+| **WebUI 生产** | `npm run webui:prod` | 浏览器访问，默认端口 25809（开发）/ 25808（安装包） |
+| **远程 LAN** | `npm run restart:webui` | 局域网 IP 访问需先 `npm run build:webui` |
+| **服务器部署** | 见 [`docs/SERVER_DEPLOY_GUIDE.md`](./docs/SERVER_DEPLOY_GUIDE.md) | Docker / 无界面 Node 服务 |
+
+---
+
+<a id="editions"></a>
+
+## 三大入口：个人 / 企业团队 / 管理后台
+
+<p align="center">
+  <img src="./resources/团队版工作区.png" alt="企业团队版工作区" width="92%">
+</p>
+
+| 入口 | 做什么 | 从哪进 |
+|------|--------|--------|
+| **个人版** | 本机身份聊天、创作、自动化 | 标题栏 → **个人版** |
+| **企业团队版** | 公司身份下的 **同一套** 工作台（Issues、团队协同、数字员工） | 标题栏 → **企业团队版** |
+| **管理后台** | 成员、认证、邀请码、组织资源、CCI 流水线 | 侧栏 **管理后台** / 工作区 **企业协同与平台能力** |
+
+<p align="center">
+  <img src="./resources/企业团队版的超级管理员后台.png" alt="组织管理后台" width="92%">
+</p>
+
+---
+
+<a id="modules"></a>
+
+## 功能模块全景
+
+### 一、个人工作台
+
+| 模块 | 说明 |
+|------|------|
+| **会话** | 多 Agent 并行会话、历史搜索、工作区绑定 |
+| **工作区（文件）** | 以项目/文件夹为中心；已加入企业时展示 **企业协同与平台能力** 快捷入口 |
+| **Issues** | 产品需求看板；个人版与企业团队版共用入口，按身份隔离数据 |
+| **任务** | 个人任务与团队任务（企业团队版） |
+| **Skills** | 技能市场、本地技能仓库、可绑定到 Agent |
+| **Hooks** | Agent 生命周期 Hook 监控与自动化 |
+| **MCP** | MCP 服务注册、一键接入、运行监控 |
+| **记忆** | 全局 / 项目记忆，跨会话上下文 |
+| **定时任务** | Cron 调度，24/7 无人值守执行 Agent |
+| **全局设置** | 模型、Agent、WebUI、主题、多语言、开机启动 |
+
+### 二、AI Agent 与助手
+
+| 模块 | 说明 |
+|------|------|
+| **多 Agent 管理** | Claude Code、Codex、Gemini、OpenClaw、Cursor Agent 等并存，按场景切换 |
+| **内置助手** | 数十个开箱即用助手（PPT、游戏、开发、文档等） |
+| **自定义助手** | 绑定提示词、技能、默认模型 |
+| **Agent 助手（CAgent）** | 企业知识 + 工具连接 + 交付流程的统一 AI 工作台 |
+| **数字员工 / Agent 舰队** | 个人智能体与企业团队数字员工；支持定时运行与文档交付 |
+| **模型管理** | 任意 OpenAI-compatible / New-API / 自定义端点 |
+
+### 三、连接与自动化
+
+| 模块 | 说明 |
+|------|------|
+| **WebUI 远程访问** | 浏览器、手机、平板访问同一套 UI；支持 LAN / Tailscale / 服务器 |
+| **通讯渠道** | 飞书、钉钉、微信等 IM 对接，消息触发 Agent、结果回传 |
+| **Hook + Cron** | 事件驱动 + 时间驱动，构建通知、审计、批处理链路 |
+
+### 四、企业团队协同
+
+| 模块 | 说明 |
+|------|------|
+| **Issues 协同** | 需求状态、AI 拆单、协作评论、关联 Agent 处理 |
+| **团队任务** | 跨角色任务看板与推进 |
+| **共享会话 / 任务** | 主工作台内团队 scope 直达 |
+| **团队 Skills 下发** | 组织级技能推送到成员 Agent |
+| **团队知识库（RAG）** | 文档上传、切片、向量检索 |
+| **团队 MCP** | 组织级外部工具代理与凭证管理 |
+
+### 五、组织管理后台（DevOps 平台）
+
+| 模块 | 说明 |
+|------|------|
+| **用户 / 团队** | 成员、角色、组织架构 |
+| **企业认证** | LDAP、飞书 SSO、钉钉、企微、SMTP |
+| **邀请码** | 成员自助加入企业 |
+| **CTeam 规划看板** | 需求协同、版本规划、泳道推进 |
+| **CCI 流水线** | 流水线编排、执行、质量闸口 |
+| **CPack 制品库** | 制品资产与分发 |
+| **CCode 代码库** | 代码资产接入与交付关联 |
+| **CMeas 效能洞察** | DORA 指标与交付分析 |
+| **CTest / CFlow** | 测试管理、价值流打点 |
+
+> 对标商业 DevOps+AI 平台的架构分析见 [`docs/product/cagent-vs-1one-architecture.md`](./docs/product/cagent-vs-1one-architecture.md)。
 
 ---
 
 <a id="screenshots"></a>
-## 🖼️ 功能截图
 
-### 0. 一句话搞定（价格优势 / 效率优势）
+## 功能截图
 
-<p align="center">
-  <img src="./resources/一句话做游戏.png" alt="一句话做游戏" width="90%">
-</p>
-
-<p align="center">
-  <img src="./resources/一句话做游戏2.png" alt="一句话做游戏（示例 2）" width="90%">
-</p>
-
-<p align="center">
-  <img src="./resources/一句话做游戏3.png" alt="一句话做游戏（示例 3）" width="90%">
-</p>
-
-<p align="center">
-  <img src="./resources/一句话创作.png" alt="一句话创作：故事/角色/策划" width="90%">
-</p>
-
-<p align="center">
-  <img src="./resources/一句话创作2.png" alt="一句话创作（示例 2）" width="90%">
-</p>
-
-<p align="center">
-  <img src="./resources/一句话做专业PPT.png" alt="一句话做专业 PPT" width="90%">
-</p>
-
-<p align="center">
-  <img src="./resources/一句话完成开发任务.png" alt="一句话完成开发任务" width="90%">
-</p>
-
-**图片说明：** 这组截图强调“少折腾/少配置/低成本”的体验：用更少的步骤，把创作、生产与开发任务跑起来。
-
----
-
-### 1. 统一入口（双图）
-
-<p align="center">
-  <img src="./resources/统一入口.png" alt="统一入口总览：本地 AI 开发工具统一入口" width="90%">
-</p>
-
-<p align="center">
-  <img src="./resources/统一入口2.png" alt="统一入口扩展视图" width="90%">
-</p>
-
-**图片说明：** 同一功能以双图展示：左图是“统一入口”总览（本地 Claude Code / OpenClaw / Google CLI / Cursor 等一处汇总、开箱即用），右图是扩展视图，突出统一调度与快速切换能力。
-
----
-
-### 1.1 APP 首页展示
-
-<p align="center">
-  <img src="./resources/APP首页展示.png" alt="APP 首页展示" width="90%">
-</p>
-
-**图片说明：** 首页聚合常用入口，降低新用户第一次上手的认知成本。
-
----
-
-### 2. 多 Agent 管理
-
-<p align="center">
-  <img src="./resources/AGENT搭配.png" alt="多 Agent 管理" width="90%">
-</p>
-
-**图片说明：** 支持多 Agent 并存与自由启停，可按任务类型选择不同 Agent 协作。
-
----
-
-### 3. 模型管理
-
-<p align="center">
-  <img src="./resources/模型添加1.png" alt="模型管理" width="90%">
-</p>
-
-**图片说明：** 图形化添加与管理模型配置，支持自定义 API 地址、模型名与鉴权信息。
-
----
-
-### 4. MCP 服务管理（双图）
-
-<p align="center">
-  <img src="./resources/MCP监控.png" alt="MCP 服务总览" width="90%">
-</p>
-
-<p align="center">
-  <img src="./resources/MCP监控1.png" alt="MCP 一键添加" width="90%">
-</p>
-
-**图片说明：** 同一功能双图展示：左图用于监控服务状态，右图用于演示服务接入流程。
-
----
-
-### 5. Hook 监控
-
-<p align="center">
-  <img src="./resources/HOOK监控.png" alt="Hook 监控" width="90%">
-</p>
-
-**图片说明：** 对关键生命周期 Hook 进行监控，方便追踪自动化流程是否按预期执行。
-
----
-
-### 6. 技能市场
-
-<p align="center">
-  <img src="./resources/技能.png" alt="技能市场" width="90%">
-</p>
-
-**图片说明：** 通过技能市场安装可复用能力模块，快速扩展 Agent 的任务边界。
-
----
-
-### 7. 自定义助手
-
-<p align="center">
-  <img src="./resources/助手1.png" alt="自定义助手" width="90%">
-</p>
-
-**图片说明：** 支持创建专属助手角色，配置提示词、技能绑定和默认模型。
-
----
-
-### 7.1 内置大量助手
-
-<p align="center">
-  <img src="./resources/内置大量助手.png" alt="内置大量助手" width="90%">
-</p>
-
-**图片说明：** 预置多类工具助手，开箱即用；后续也可按需增删与自定义。
-
----
-
-### 8. 历史会话搜索
-
-<p align="center">
-  <img src="./resources/历史会话搜索.png" alt="历史会话搜索" width="90%">
-</p>
-
-**图片说明：** 提供会话检索与历史定位能力，可快速回看关键上下文与结论。
-
----
-
-### 9. 记忆中心
-
-<p align="center">
-  <img src="./resources/记忆.png" alt="记忆中心" width="90%">
-</p>
-
-**图片说明：** 统一管理全局与项目记忆，帮助 Agent 在跨会话场景下保持上下文连续。
-
----
-
-### 9.1 记忆管理
-
-<p align="center">
-  <img src="./resources/记忆管理.png" alt="记忆管理" width="90%">
-</p>
-
-**图片说明：** 记忆可视化管理与回溯，更适合长期项目与持续迭代。
-
----
-
-### 10. 远程访问
-
-<p align="center">
-  <img src="./resources/远程访问.png" alt="远程访问" width="90%">
-</p>
-
-**图片说明：** 支持 WebUI 远程接入，让你在非本机设备上也能查看和操作任务。
-
-<a id="enterprise-join"></a>
-### 10.1 企业版：加入企业与邀请码
-
-1ONE 默认是 **单机 WebUI**（本机启用、端口、本地 `admin` 账号与密码）。**企业版**用于多用户与组织治理，二者入口分离，避免混淆：
-
-| 能力 | 入口 | 适用场景 |
-|---|---|---|
-| **单机 WebUI** | 设置 → **远程连接** → **WebUI** | 个人/单机：开关服务、端口、远程访问、本地管理员密码 |
-| **企业控制台** | 加入企业且切换到「企业版管理」后 → `/#/enterprise` | 独立后台：用户/团队、LDAP/飞书、邮件、邀请码等（与个人 `/sessions` 分离） |
-
-#### 加入企业（成员）
-
-1. 打开 **设置 → 远程连接 → WebUI**
-2. 在 **「加入企业（可选）」** 面板输入管理员发放的 **邀请码**（支持 `ABCD-EF12` 或 `ABCDEF12` 格式）
-3. 点击 **验证邀请码** 确认目标企业名称，再点击 **加入企业**
-4. 加入成功后，可在同一页将 **管理模式** 切换为 **企业版管理**，进入企业后台
-
-> **桌面端**：加入/创建企业需先 **启用 WebUI**；完整企业后台请在浏览器打开 WebUI 管理（桌面内仅提供快捷入口）。
-
-> **浏览器 WebUI**：需使用当前已登录的 WebUI 账号加入，加入后会刷新会话上下文。
-
-#### 创建企业（系统管理员）
-
-仅 **尚未加入任何企业** 的 **系统管理员**（`system_admin`）可创建：
-
-1. 在 **加入企业** 面板切换到 **「创建企业」** 标签
-2. 填写企业名称并 **创建并加入**
-3. 创建者自动成为该企业的 **组织管理员**（`org_admin`），可生成邀请码并管理企业后台
-
-#### 管理邀请码（企业管理员）
-
-1. 加入企业并切换到 **企业版管理**
-2. 打开 **企业后台 → 邀请码**
-3. 设置 **可用次数**、**有效天数**（可选），点击 **生成邀请码**
-4. 将邀请码发给成员；成员在 **远程连接 → WebUI** 中输入即可加入
-5. 可随时 **作废** 未使用的邀请码
-
-#### 常见问题（企业版）
-
-- **加入失败：邀请码无效/过期/已作废/已达上限** → 联系管理员重新发放
-- **加入失败：当前账号已加入企业** → 一个账号同一时间只能属于一个企业租户
-- **看不到「企业后台」菜单** → 需先加入企业，并把管理模式切到「企业版管理」（浏览器 WebUI；桌面端请用浏览器打开）
-- **桌面端为什么没有完整企业后台？** → 企业治理功能在 WebUI 浏览器中提供，桌面端专注本机会话与 Agent 使用
-
----
-
-### 11. 通讯渠道控制
-
-<p align="center">
-  <img src="./resources/通讯渠道控制2.png" alt="通讯渠道控制" width="90%">
-</p>
-
-**图片说明：** 支持将外部 IM 渠道接入工作流，实现消息通知、触发任务与结果回传。
-
----
-
-### 12. 定时任务
-
-<p align="center">
-  <img src="./resources/定时任务2.png" alt="定时任务" width="90%">
-</p>
-
-**图片说明：** 使用 Cron 计划任务让 Agent 自动执行固定流程，适合巡检与日报场景。
-
----
-
-### 12.1 团队任务（协作）
-
-<p align="center">
-  <img src="./resources/团队任务.png" alt="团队任务（协作）" width="90%">
-</p>
-
-**图片说明：** 多人协作场景下，把任务与产出结构化管理（团队版能力在规划中）。
-
----
-
-### 13. 主题切换
-
-<p align="center">
-  <img src="./resources/主题切换.png" alt="主题切换" width="90%">
-</p>
-
-**图片说明：** 内置多套 UI 主题，可按偏好切换视觉风格并提升长时间使用体验。
-
----
-
-### 14. 工作空间
+### 首页与工作区
 
 <p align="center">
   <img src="./resources/工作空间.png" alt="工作空间" width="90%">
 </p>
 
-**图片说明：** 提供工作空间维度的组织与隔离能力，便于多项目并行管理。
-
----
-
-### 15. 开机启动和多语言
-
 <p align="center">
-  <img src="./resources/开机启动和多语言.png" alt="开机启动和多语言" width="90%">
+  <img src="./resources/网页版展示效果.png" alt="WebUI 网页版" width="90%">
 </p>
 
-**图片说明：** 支持开机自启与多语言切换，满足跨地区团队和持续运行需求。
-
----
-
-### 16. 一键添加各种使用 MCP
+### 多 Agent 与模型
 
 <p align="center">
-  <img src="./resources/一键添加各种使用MCP.png" alt="一键添加各种使用 MCP" width="90%">
+  <img src="./resources/AGENT搭配.png" alt="多 Agent 搭配" width="90%">
 </p>
 
-**图片说明：** 在统一流程中完成能力接入与配置联动，减少跨页面来回切换。
+<p align="center">
+  <img src="./resources/模型管理.png" alt="模型管理" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/会话中修改模型.png" alt="会话中切换模型" width="90%">
+</p>
+
+### 助手与数字员工
+
+<p align="center">
+  <img src="./resources/内置大量助手.png" alt="内置助手" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/创建个人智能体.png" alt="创建个人智能体" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/团队版的超级助手.png" alt="企业超级助手" width="90%">
+</p>
+
+### MCP · Skills · Hook · 记忆
+
+<p align="center">
+  <img src="./resources/MCP服务.png" alt="MCP 服务" width="45%">
+  &nbsp;
+  <img src="./resources/MCP监控1.png" alt="MCP 监控" width="45%">
+</p>
+
+<p align="center">
+  <img src="./resources/一键添加各种使用MCP.png" alt="一键添加 MCP" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/技能.png" alt="技能" width="45%">
+  &nbsp;
+  <img src="./resources/skill仓库.png" alt="技能仓库" width="45%">
+</p>
+
+<p align="center">
+  <img src="./resources/HOOK监控.png" alt="Hook 监控" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/记忆.png" alt="记忆中心" width="45%">
+  &nbsp;
+  <img src="./resources/记忆管理.png" alt="记忆管理" width="45%">
+</p>
+
+### 会话历史与定时任务
+
+<p align="center">
+  <img src="./resources/历史会话搜索.png" alt="历史会话搜索" width="45%">
+  &nbsp;
+  <img src="./resources/历史会话记录.png" alt="历史会话记录" width="45%">
+</p>
+
+<p align="center">
+  <img src="./resources/定时任务.png" alt="定时任务" width="45%">
+  &nbsp;
+  <img src="./resources/定时任务2.png" alt="定时任务详情" width="45%">
+</p>
+
+### 远程访问与通讯渠道
+
+<p align="center">
+  <img src="./resources/远程访问.png" alt="远程访问" width="45%">
+  &nbsp;
+  <img src="./resources/远程访问设置.png" alt="远程访问设置" width="45%">
+</p>
+
+<p align="center">
+  <img src="./resources/通讯渠道控制2.png" alt="通讯渠道控制" width="90%">
+</p>
+
+### 企业团队协同
+
+<p align="center">
+  <img src="./resources/团队需求面板.png" alt="团队需求面板" width="45%">
+  &nbsp;
+  <img src="./resources/团队需求面板2.png" alt="团队需求面板详情" width="45%">
+</p>
+
+<p align="center">
+  <img src="./resources/团队任务.png" alt="团队任务" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/团队版技能下发.png" alt="团队技能下发" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/团队版的代码仓库.png" alt="团队代码仓库" width="90%">
+</p>
+
+### 组织管理后台
+
+<p align="center">
+  <img src="./resources/团队版后台功能预览.png" alt="企业后台功能预览" width="90%">
+</p>
+
+<p align="center">
+  <img src="./resources/企业版后台登录.png" alt="企业后台登录" width="45%">
+  &nbsp;
+  <img src="./resources/企业版后台登录上帝视角.png" alt="系统管理员视角" width="45%">
+</p>
+
+### 一句话创作（效率演示）
+
+<p align="center">
+  <img src="./resources/一句话做游戏.png" alt="一句话做游戏" width="45%">
+  &nbsp;
+  <img src="./resources/一句话做专业PPT.png" alt="一句话做 PPT" width="45%">
+</p>
+
+<p align="center">
+  <img src="./resources/一句话创作.png" alt="一句话创作" width="45%">
+  &nbsp;
+  <img src="./resources/一句话完成开发任务.png" alt="一句话完成开发任务" width="45%">
+</p>
+
+### 全局设置
+
+<p align="center">
+  <img src="./resources/全局设置.png" alt="全局设置" width="45%">
+  &nbsp;
+  <img src="./resources/开机启动和多语言.png" alt="开机启动与多语言" width="45%">
+</p>
 
 ---
 
-<a id="recent-improvements"></a>
-## ✅ 最近优化（稳定性与体验）
+<a id="quickstart"></a>
 
-下面这些是近期已经落地的体验优化（确保“开箱即用”，并减少新用户疑惑）：
+## 快速开始
 
-- **设置默认打开 Agents**：进入设置后默认落到本地 Agents 页面，而不是 Gemini CLI。
-- **新用户工作区空态更友好**：在 Workspace Hub 提供可执行的引导（去创建会话 / 项目设置）。
-- **Agents 支持启用/禁用开关**：禁用的本地 Agent 不会出现在“新建会话”的 Agent 选择框里。
-- **内置助手与源码同步**：源码删掉的内置助手，会自动从用户配置中清理，避免“幽灵助手”。
-- **全局 Switch 开启态为绿色**：统一视觉语义（开启=绿色，减少误读）。
-- **设置页切换更顺**：避免一次性挂载全部 Tab 内容，并在空闲时预加载常用设置页，降低首切卡顿。
-- **Agent 工具包开箱即用**：内置 CodeGraph MCP、Superpowers/find-skills 技能与 agent-browser；CodeGraph/agent-browser CLI **默认走安装包内资源**，找不到再 `npx`。
-- **WebUI 与企业后台分离**：远程连接 → WebUI 管单机；加入企业后可切企业版管理（用户/LDAP/飞书/邀请码等）。
-- **企业加入向导**：邀请码加入、系统管理员创建企业、企业后台生成/作废邀请码。
+### 下载安装（推荐）
+
+前往 [Releases](https://github.com/gaogg521/1ONE-Claude-Code/releases) 下载：
+
+| 系统 | 格式 |
+|------|------|
+| Windows | `.exe` / `.zip` |
+| macOS | `.dmg` / `.zip` |
+| Linux | `.deb` |
+
+### 第一次使用（3 步）
+
+1. 打开应用 → 侧栏 **会话** → 选择 Agent（推荐 **1ONE CODE**）
+2. **设置 → 模型** → 配置 API Key / Base URL
+3. 开始对话；需要项目上下文时绑定 **工作区**
+
+### 源码运行（开发者）
+
+**环境：** Node.js ≥ 22、Git
+
+```bash
+git clone https://github.com/gaogg521/1ONE-Claude-Code.git
+cd 1ONE-Claude-Code
+npm install
+npx electron-rebuild -f -w better-sqlite3
+npm run restart
+```
+
+| 命令 | 用途 |
+|------|------|
+| `npm run restart` | 开发模式（已有实例时优先用这个） |
+| `npm run restart:webui` | 构建 renderer + WebUI 模式 |
+| `npm run build:webui` | 仅构建 `out/renderer/`（LAN 浏览器访问前必须） |
+| `npm run webui:prod` | 生产 WebUI（`localhost:25809`） |
+| `npm run test` | 单元测试 |
+
+> **macOS Gatekeeper**：首次打开若被拦截，请到 **系统设置 → 隐私与安全性 → 仍要打开**。
+
+> **Bun**：非必须；`postinstall` 在无 Bun 时会回退 `npx`。
+
+> **Agent 工具包**：安装包内置 CodeGraph、agent-browser 等 CLI；源码开发可执行 `npm run prepare:agent-toolkit`。
 
 ---
 
-<a id="data-and-config"></a>
-## 📦 配置与数据存储位置
+<a id="enterprise"></a>
 
-以下路径用于排查问题/备份数据（不同系统路径会略有差异）：
+## 企业版接入
 
-- **数据库（会话/消息/团队）**：`%APPDATA%\1OneClaudeCode-Dev\1one\1one.db`
-- **配置（模型/MCP/Agents 等）**：`%APPDATA%\1OneClaudeCode-Dev\config\one-config.txt`（base64 编码 JSON）
-- **开发模式锁文件**：`%APPDATA%\1OneClaudeCode-Dev\lockfile`
+### 单机 WebUI vs 企业控制台
 
-> 如果你启动后发现窗口/实例异常，优先用 `npm run restart`（它会清理 lockfile 并重启）。
+| 能力 | 入口 | 场景 |
+|------|------|------|
+| **单机 WebUI** | 设置 → 远程连接 → WebUI | 本机服务、端口、远程访问、本地 admin |
+| **企业控制台** | 加入企业后 → `/#/enterprise` | 成员、LDAP/飞书、邀请码、CCI 等 |
+
+### 成员：邀请码加入
+
+1. 设置 → 远程连接 → WebUI → **加入企业**
+2. 输入管理员发放的邀请码 → 验证 → 加入
+3. 标题栏切换到 **企业团队版**，即可使用 Issues、团队协同、数字员工
+
+### 管理员：创建企业与发码
+
+1. 系统管理员在 **加入企业 → 创建企业** 创建组织
+2. 企业后台 → **邀请码** 生成并分发给成员
+3. 企业后台 → **企业认证** 配置 LDAP / 飞书 / SMTP
+
+> **桌面端**：完整组织治理建议在浏览器打开 WebUI 企业后台；桌面内提供快捷入口与占位引导。
+
+更多说明：[`docs/product/edition-personal-vs-enterprise.md`](./docs/product/edition-personal-vs-enterprise.md) · [`docs/WEBUI_GUIDE.md`](./docs/WEBUI_GUIDE.md)
+
+---
+
+<a id="tech"></a>
+
+## 技术栈与数据存储
+
+### 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 桌面壳 | Electron 37 |
+| 前端 | React 19 + TypeScript（strict） |
+| 构建 | Vite 6 + electron-vite |
+| UI | Arco Design + UnoCSS |
+| 终端 | node-pty + xterm.js |
+| 存储 | SQLite（better-sqlite3）+ ConfigStorage |
+| 协议 | MCP（Model Context Protocol） |
+| 后端 | Express + WebSocket + JWT |
+
+### 数据路径（Windows 示例）
+
+| 数据 | 路径 |
+|------|------|
+| 数据库 | `%APPDATA%\1OneClaudeCode-Dev\1one\1one.db` |
+| 配置 | `%APPDATA%\1OneClaudeCode-Dev\config\one-config.txt` |
+| 开发锁 | `%APPDATA%\1OneClaudeCode-Dev\lockfile` |
+
+架构详情：[`docs/tech/architecture.md`](./docs/tech/architecture.md)
 
 ---
 
 <a id="faq"></a>
-## ❓ 常见问题（FAQ）
 
-**1）为什么设置页打开很早时，本地 Agents 可能短暂为空？**  
-本地 Agent 识别是异步完成的，通常稍等片刻会自动出现；如果你刚启动就立刻打开设置，可能会看到短暂空列表。
+## 常见问题
 
-**2）为什么我禁用了某个 Agent 后，新建会话里看不到它？**  
-这是预期行为：禁用=不参与“新建会话”的候选列表，你可以随时在设置里重新开启。
+<details>
+<summary><strong>个人版和企业团队版界面一样吗？</strong></summary>
+一样。差别在身份、租户数据边界，以及企业团队版才开放的团队协作能力（团队页、团队任务 scope 等）。
+</details>
 
-**3）开发模式启动报 `NODE_MODULE_VERSION` / SQLite 相关错误？**  
-执行一次：
+<details>
+<summary><strong>为什么 LAN IP 访问 WebUI 样式不对？</strong></summary>
+非 localhost 访问的是 <code>out/renderer/</code> 预构建产物，不是 Vite HMR。修改 renderer 后请执行 <code>npm run build:webui</code> 并 Ctrl+F5 强刷。
+</details>
+
+<details>
+<summary><strong>启动报 NODE_MODULE_VERSION / SQLite 错误？</strong></summary>
 
 ```bash
 npx electron-rebuild -f -w better-sqlite3
-```
-
-然后用：
-
-```bash
 npm run restart
 ```
 
-**4）如何在浏览器远程访问 WebUI？**  
-在桌面端 **设置 → 远程连接 → WebUI** 启用服务后，用页面上的 **访问地址** 打开（未开「允许远程访问」时为 `http://localhost:端口`；开启后为本机局域网 IP）。开发模式默认端口 **25809**，正式安装包为 **25808**——这是本机 WebUI 服务端口，不是「跳转到别的系统」。登录页正确地址为 `http://localhost:端口/#/login`（若出现 `/login#/login` 请更新到最新版）。也可单独运行 `npm run webui:prod`。
+</details>
 
-**5）CodeGraph MCP 需要我自己 `npx` 安装吗？**  
-不需要（正式安装包）。应用会在 `设置 → 工具 → Agent 工具包` 中默认启用 CodeGraph MCP，并优先启动包内的 `codegraph` CLI。仅当包内资源缺失（例如源码开发未执行 `npm run prepare:agent-toolkit`）时才会回退到 `npx -y @colbymchenry/codegraph`。
+<details>
+<summary><strong>CodeGraph 需要手动 npx 吗？</strong></summary>
+正式安装包不需要，优先使用包内 CLI。仅源码开发且未执行 <code>npm run prepare:agent-toolkit</code> 时才可能回退 npx。
+</details>
 
-**6）单机 WebUI 和企业后台有什么区别？**  
-**WebUI**（设置 → 远程连接）只管本机：启用服务、端口、远程访问、本地 `admin` 密码。**企业控制台**在加入企业并切换到「企业版管理」后打开 `http://<host>:<port>/#/enterprise`，用于组织级用户、LDAP/飞书、SMTP、邀请码等，与个人会话页 `/sessions` 分离。详见上文 [企业版：加入企业与邀请码](#enterprise-join)。
-
-**7）如何用邀请码加入企业？**  
-管理员在 **企业后台 → 邀请码** 生成代码；成员在 **设置 → 远程连接 → WebUI → 加入企业** 中验证并加入。桌面端需先启用 WebUI；完整企业后台请在浏览器打开 WebUI。
-
----
-
-<a id="tech-stack"></a>
-## 🛠️ 技术栈
-
-| 层级 | 技术 |
-|---|---|
-| **桌面壳** | Electron 37 |
-| **前端框架** | React 19.1 + TypeScript（strict） |
-| **构建工具** | Vite 6 + electron-vite |
-| **UI 组件** | Arco Design + UnoCSS |
-| **终端集成** | node-pty + xterm.js |
-| **本地存储** | SQLite (better-sqlite3) |
-| **运行时** | Node.js（桌面端）；Bun（用于 CI/部分脚本与调试工具） |
-| **协议支持** | MCP (Model Context Protocol) |
+<details>
+<summary><strong>和 Cursor / Copilot 怎么配合？</strong></summary>
+1ONE 是<strong>指挥台</strong>：可挂载 Cursor Agent、Claude Code CLI 等作为子 Agent，并统一管理模型、MCP、技能、定时任务与企业协同；不是替代 IDE，而是把多个 AI 工具 orchestrate 在一起。
+</details>
 
 ---
 
 <a id="contribute"></a>
-## 🤝 参与贡献
 
-欢迎提交 Issue 和 Pull Request！
+## 参与贡献
 
-- 🐛 **Bug 反馈**：[提交 Issue](https://github.com/gaogg521/1ONE-Claude-Code/issues)
-- 💡 **功能建议**：[发起讨论](https://github.com/gaogg521/1ONE-Claude-Code/discussions)
-- 📖 **版本发布**：[Releases](https://github.com/gaogg521/1ONE-Claude-Code/releases)
+- 🐛 [提交 Issue](https://github.com/gaogg521/1ONE-Claude-Code/issues)
+- 💡 [发起讨论](https://github.com/gaogg521/1ONE-Claude-Code/discussions)
+- 📖 [版本发布](https://github.com/gaogg521/1ONE-Claude-Code/releases)
 
----
-
-<a id="contact"></a>
-## 📬 联系作者
-
-有问题、想交流、或者想一起共建？欢迎通过以下方式联系：
-
-<table align="center">
-  <tr>
-    <td align="center" width="300">
-      <strong>💬 QQ 技术交流群</strong><br>
-      <sub>oneclaw技术交流群 · 群号：2159069958</sub><br>
-      <sub>欢迎进群交流产品使用、插件能力和自动化实践</sub>
-      <br><br>
-      <img src="./resources/QQ.png" alt="QQ群二维码" width="220">
-    </td>
-    <td align="center" width="50"></td>
-    <td align="center" width="300">
-      <strong>💚 微信</strong><br>
-      <sub>Allen.赵 · 上海浦东</sub><br>
-      <sub>可用于问题反馈、合作与生态共建沟通</sub>
-      <br><br>
-      <img src="./resources/微信.png" alt="微信二维码" width="220">
-    </td>
-  </tr>
-</table>
+开发规范见 [`AGENTS.md`](./AGENTS.md) · [`docs/conventions/file-structure.md`](./docs/conventions/file-structure.md)
 
 ---
 

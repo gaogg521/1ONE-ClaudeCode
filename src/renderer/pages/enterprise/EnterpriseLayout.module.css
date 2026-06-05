@@ -36,7 +36,7 @@
 }
 
 .sidebar :global(.arco-menu-item.arco-menu-selected) {
-  background: rgba(var(--ep-brand-6), 0.12) !important;
+  background: color-mix(in srgb, var(--ep-brand-6) 12%, transparent) !important;
   color: var(--ep-brand-6) !important;
   font-weight: 600;
 }

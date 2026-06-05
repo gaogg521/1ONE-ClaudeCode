@@ -5,6 +5,7 @@
  */
 
 import { captureCsrfTokenFromResponse, getCsrfToken, withCsrfHeader } from '@process/webserver/middleware/csrfClient';
+import { CSRF_HEADER_NAME } from '@process/webserver/config/constants';
 import { webui } from '@/common/adapter/ipcBridge';
 import {
   buildWebuiApiBaseCandidates,
@@ -74,7 +75,8 @@ export async function getWebuiApiBaseCandidates(): Promise<string[]> {
   if (!status?.port) {
     return stored;
   }
-  return mergeEnterpriseApiOrigins(stored, buildWebuiApiBaseCandidates(status));
+  // Prefer the running local WebUI over remembered remote org origins (desktop personal Issues).
+  return mergeEnterpriseApiOrigins(buildWebuiApiBaseCandidates(status), stored);
 }
 
 /**
@@ -156,6 +158,23 @@ function withCsrfFormData(body: BodyInit | null | undefined): BodyInit | null | 
   return body;
 }
 
+async function headersInitToRecord(headers: HeadersInit | undefined): Promise<Record<string, string>> {
+  const merged = new Headers(headers ?? {});
+  return Object.fromEntries(merged.entries());
+}
+
+function captureCsrfTokenFromLoopbackHeaders(headers: Record<string, string>): void {
+  const token = headers[CSRF_HEADER_NAME] ?? headers[CSRF_HEADER_NAME.toLowerCase()];
+  if (!token) {
+    return;
+  }
+  captureCsrfTokenFromResponse(
+    new Response(null, {
+      headers: new Headers({ [CSRF_HEADER_NAME]: token }),
+    })
+  );
+}
+
 async function ensureCsrfTokenForMutation(
   bases: string[],
   authHeaders: HeadersInit | undefined
@@ -180,7 +199,84 @@ async function ensureCsrfTokenForMutation(
   throw lastError instanceof Error ? lastError : new Error('WEBUI_NOT_RUNNING');
 }
 
+async function ensureCsrfTokenViaLoopback(
+  port: number,
+  authHeaders: HeadersInit | undefined
+): Promise<void> {
+  if (getCsrfToken()) {
+    return;
+  }
+  const result = await webui.invokeLoopbackRequest.invoke({
+    path: '/api/auth/login-ui',
+    method: 'GET',
+    headers: await headersInitToRecord(authHeaders),
+  });
+  if (!result.success || !result.data) {
+    throw new Error('WEBUI_NOT_RUNNING');
+  }
+  captureCsrfTokenFromLoopbackHeaders(result.data.headers);
+  if (!getCsrfToken()) {
+    throw new Error('WEBUI_NOT_RUNNING');
+  }
+}
+
+async function fetchWebuiApiViaLoopbackIpc(
+  port: number,
+  path: string,
+  init?: RequestInit
+): Promise<Response> {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const authHeaders = await getDesktopWebuiAuthHeaders(init?.headers);
+  const isMutation = method !== 'GET' && method !== 'HEAD';
+  if (isMutation) {
+    await ensureCsrfTokenViaLoopback(port, authHeaders);
+  }
+  const headers = isMutation
+    ? await headersInitToRecord(withCsrfHeader(authHeaders))
+    : await headersInitToRecord(authHeaders);
+  const body = isMutation ? withCsrfFormData(init?.body ?? null) : init?.body;
+  const bodyText = typeof body === 'string' ? body : undefined;
+
+  const result = await webui.invokeLoopbackRequest.invoke({
+    path,
+    method,
+    headers,
+    body: bodyText,
+  });
+  if (!result.success || !result.data) {
+    throw new Error(result.msg ?? 'WEBUI_NOT_RUNNING');
+  }
+
+  captureCsrfTokenFromLoopbackHeaders(result.data.headers);
+  if (path === '/api/auth/user') {
+    if (result.data.status === 401 || result.data.status === 403) {
+      markAuthUserRequestFailureBackoff();
+    } else if (result.data.ok) {
+      clearAuthUserRequestBackoff();
+    }
+  }
+  if (result.data.ok) {
+    void rememberEnterpriseApiOrigin(`http://127.0.0.1:${port}`);
+  }
+
+  return new Response(result.data.bodyText, {
+    status: result.data.status,
+    headers: result.data.headers,
+  });
+}
+
 export async function fetchWebuiApi(path: string, init?: RequestInit): Promise<Response> {
+  if (isElectronDesktop()) {
+    const status = await readDesktopWebuiStatus();
+    if (status?.port) {
+      try {
+        return await fetchWebuiApiViaLoopbackIpc(status.port, path, init);
+      } catch {
+        // Fall back to renderer fetch when loopback IPC is unavailable.
+      }
+    }
+  }
+
   const bases = isElectronDesktop() ? await getWebuiApiBaseCandidates() : [window.location.origin];
   if (bases.length === 0) {
     throw new Error('WEBUI_NOT_RUNNING');

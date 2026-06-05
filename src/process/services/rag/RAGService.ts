@@ -76,7 +76,13 @@ export class RAGService {
           };
           const originalLoad = Module._load;
           Module._load = function (request: string, parent: unknown, isMain: boolean): unknown {
-            if (request === 'sharp') {
+            if (
+              request === 'sharp' ||
+              request.includes('sharp-win32') ||
+              request.includes('sharp-linux') ||
+              request.includes('sharp-darwin') ||
+              /(?:^|[\\/])sharp(?:[\\/]|$)/.test(request)
+            ) {
               return {};
             }
             return originalLoad.call(this, request, parent, isMain);

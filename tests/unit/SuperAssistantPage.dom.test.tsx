@@ -22,6 +22,8 @@ const conversationHistoryMock = vi.hoisted(() => vi.fn());
 const locationMock = vi.hoisted(() => ({ pathname: '/super-assistant', search: '' }));
 const ensureSessionMock = vi.hoisted(() => vi.fn());
 const sendMessageToAgentMock = vi.hoisted(() => vi.fn());
+const runDigitalEmployeeNowMock = vi.hoisted(() => vi.fn());
+const personalAgentRunNowMock = vi.hoisted(() => vi.fn());
 const createConversationMock = vi.hoisted(() => vi.fn());
 const buildCliAgentParamsMock = vi.hoisted(() => vi.fn());
 const requirementTreeState = vi.hoisted(() => ({
@@ -85,6 +87,12 @@ vi.mock('@/common', () => ({
       sendMessageToAgent: {
         invoke: sendMessageToAgentMock,
       },
+      runDigitalEmployeeNow: {
+        invoke: runDigitalEmployeeNowMock,
+      },
+      get: {
+        invoke: vi.fn().mockResolvedValue(null),
+      },
       agentStatusChanged: {
         on: vi.fn(
           (
@@ -107,6 +115,12 @@ vi.mock('@/common', () => ({
       },
       update: {
         invoke: vi.fn().mockResolvedValue({}),
+      },
+      get: {
+        invoke: vi.fn().mockResolvedValue(null),
+      },
+      runNow: {
+        invoke: personalAgentRunNowMock,
       },
     },
   },
@@ -226,6 +240,24 @@ vi.mock('@arco-design/web-react', () => ({
       </div>
     ) : null,
   Empty: ({ description }: { description?: React.ReactNode }) => <div>{description}</div>,
+  Alert: ({ content }: { content?: React.ReactNode }) => <div role='alert'>{content}</div>,
+  Popconfirm: ({
+    children,
+    onOk,
+  }: React.PropsWithChildren<{ onOk?: () => void }>) => (
+    <div data-testid='popconfirm' onClick={() => void onOk?.()}>
+      {children}
+    </div>
+  ),
+  Timeline: Object.assign(
+    ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+    { Item: ({ children, label }: React.PropsWithChildren<{ label?: React.ReactNode }>) => (
+      <div>
+        {label}
+        {children}
+      </div>
+    ) }
+  ),
   Spin: ({ children }: React.PropsWithChildren<{ loading?: boolean }>) => <div>{children}</div>,
   Input: Object.assign(
     ({
@@ -450,6 +482,17 @@ describe('SuperAssistantPage (refactored command center)', () => {
       hasJoinedEnterprise: true,
       tenantLabel: '欢乐互娱有限公司',
       showEnterpriseAdminNav: true,
+      showTeamsFeature: true,
+      identity: { userId: 'user-1', tenantId: 'default' },
+      can: () => false,
+    });
+    personalAgentRunNowMock.mockResolvedValue({
+      runId: 'run-personal',
+      conversationId: 'conv-personal-agent',
+    });
+    runDigitalEmployeeNowMock.mockResolvedValue({
+      runId: 'run-team',
+      conversationId: 'conv-team-dev',
     });
     webuiEnterpriseModeMock.mockReturnValue({
       openEnterpriseAdminInBrowser: vi.fn(),
@@ -495,7 +538,7 @@ describe('SuperAssistantPage (refactored command center)', () => {
     expect(await screen.findAllByText('本地个人 Issue')).not.toHaveLength(0);
   });
 
-  it('runs personal agents through personal conversation creation instead of team IPC', async () => {
+  it('runs personal agents in background via personalAgent.runNow without navigating to chat', async () => {
     vi.mocked(ipcBridge.personalAgent.list.invoke).mockResolvedValue([
       {
         id: 'personal-agent-1',
@@ -521,23 +564,38 @@ describe('SuperAssistantPage (refactored command center)', () => {
     fireEvent.click(runButtons[0]!);
 
     await waitFor(() => {
-      expect(buildCliAgentParamsMock).toHaveBeenCalledWith(
-        expect.objectContaining({ backend: 'codex', name: '个人执行 Agent' }),
-        ''
-      );
-      expect(createConversationMock).toHaveBeenCalledWith(
+      expect(personalAgentRunNowMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          name: '个人执行 Agent',
-          extra: expect.objectContaining({
-            personalAgentId: 'personal-agent-1',
-            tenantId: 'default',
-          }),
+          agentId: 'personal-agent-1',
+          ownerUserId: 'user-1',
         })
       );
     });
     expect(ensureSessionMock).not.toHaveBeenCalled();
     expect(sendMessageToAgentMock).not.toHaveBeenCalled();
-    expect(navigateMock).toHaveBeenCalledWith('/conversation/conv-personal-agent');
+    expect(createConversationMock).not.toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalledWith('/conversation/conv-personal-agent');
+  });
+
+  it('runs workspace agents in background via team.runDigitalEmployeeNow without navigating', async () => {
+    locationMock.search = '?tab=agents';
+    render(<SuperAssistantPage />);
+    const runButtons = await screen.findAllByRole('button', { name: '立即执行' });
+    personalAgentRunNowMock.mockClear();
+    runDigitalEmployeeNowMock.mockClear();
+    navigateMock.mockClear();
+    fireEvent.click(runButtons[1]!);
+
+    await waitFor(() => {
+      expect(runDigitalEmployeeNowMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          teamId: 'team-1',
+          slotId: 'dev',
+        })
+      );
+    });
+    expect(personalAgentRunNowMock).not.toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it('assigns issue to agent from command panel', async () => {
@@ -599,8 +657,8 @@ describe('SuperAssistantPage (refactored command center)', () => {
     expect(navigateMock).toHaveBeenCalled();
   });
 
-  it('shows runtime failure feedback in live execution panel', async () => {
-    locationMock.search = '?tab=runtimes';
+  it('shows runtime failure feedback on agents tab', async () => {
+    locationMock.search = '?tab=agents';
     render(<SuperAssistantPage />);
     expect(await screen.findByText('Alpha Team')).toBeInTheDocument();
     teamRuntimeState.agentStatusListener?.({
@@ -622,7 +680,7 @@ describe('SuperAssistantPage (refactored command center)', () => {
     isElectronDesktopMock.mockReturnValue(false);
     locationMock.search = '?tab=overview';
     render(<SuperAssistantPage />);
-    fireEvent.click(await screen.findByRole('button', { name: '智能体' }));
+    fireEvent.click(await screen.findByRole('button', { name: '数字员工' }));
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/super-assistant?tab=agents&issueId=story-1', { replace: true });
     });
@@ -632,10 +690,14 @@ describe('SuperAssistantPage (refactored command center)', () => {
     listRequirementsTreeMock.mockResolvedValue([]);
     useTeamListMock.mockReturnValue({ teams: [], mutate: vi.fn(), removeTeam: vi.fn() });
     render(<SuperAssistantPage />);
-    expect(await screen.findByText('还没有团队')).toBeInTheDocument();
+    expect(
+      await screen.findByText('还没有数字员工。个人版可直接创建；加入协同团队后可创建工作区数字员工。')
+    ).toBeInTheDocument();
     cleanup();
-    locationMock.search = '?tab=runtimes';
+    locationMock.search = '?tab=agents';
     render(<SuperAssistantPage />);
-    expect(await screen.findByText('还没有团队')).toBeInTheDocument();
+    expect(
+      await screen.findByText('还没有数字员工。个人版可直接创建；加入协同团队后可创建工作区数字员工。')
+    ).toBeInTheDocument();
   });
 });

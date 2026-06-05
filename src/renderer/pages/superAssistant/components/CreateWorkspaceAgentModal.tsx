@@ -4,9 +4,24 @@ import { useBindableSkillOptions, type BindableSkillOption } from '@/renderer/ho
 import { useTranslation } from 'react-i18next';
 import AionModal from '@/renderer/components/base/AionModal';
 import { useConversationAgents } from '@/renderer/pages/conversation/hooks/useConversationAgents';
-import { AgentOptionLabel, agentKey, filterTeamSupportedAgents } from '@/renderer/pages/team/components/agentSelectUtils';
+import {
+  AgentOptionLabel,
+  agentKey,
+  filterDigitalEmployeeRuntimeAgents,
+} from '@/renderer/pages/team/components/agentSelectUtils';
 import type { TTeam } from '@/common/types/teamTypes';
 import { useDigitalEmployeeModelOptions } from '../hooks/useDigitalEmployeeModelOptions';
+import {
+  DOCUMENT_DELIVERABLE_AGENT_NAME,
+  DOCUMENT_DELIVERABLE_DESCRIPTION,
+  DOCUMENT_DELIVERABLE_INSTRUCTIONS,
+  DOCUMENT_DELIVERABLE_SKILL_IDS,
+} from '@/common/digitalEmployee/presets/documentDeliverable';
+import {
+  GAME_SECURITY_EXPERT_DESCRIPTION,
+  GAME_SECURITY_EXPERT_INSTRUCTIONS,
+  GAME_SECURITY_EXPERT_NAME,
+} from '@/common/digitalEmployee/presets/gameSecurityDailyReport';
 
 export type WorkspaceAgentVisibility = 'workspace' | 'personal';
 
@@ -68,7 +83,10 @@ const CreateWorkspaceAgentModal: React.FC<CreateWorkspaceAgentModalProps> = ({
   const [saving, setSaving] = useState(false);
   const visibleRef = useRef(false);
 
-  const allAgents = useMemo(() => filterTeamSupportedAgents([...cliAgents]), [cliAgents]);
+  const allAgents = useMemo(
+    () => filterDigitalEmployeeRuntimeAgents([...cliAgents], visibility),
+    [cliAgents, visibility]
+  );
   const {
     options: modelOptions,
     loading: modelsLoading,
@@ -299,6 +317,14 @@ const CreateWorkspaceAgentModal: React.FC<CreateWorkspaceAgentModalProps> = ({
               </Select.Option>
             ))}
           </Select>
+          {visibility === 'workspace' && cliAgents.length > allAgents.length ? (
+            <div className='text-12px text-t-tertiary'>
+              {t('common.superAssistant.createAgentRuntimeTeamLimited', {
+                defaultValue:
+                  '工作区数字员工目前仅支持已在团队协作中验证的 Agent（如 Claude Code、Codex）。个人数字员工可使用全部已检测 Agent。',
+              })}
+            </div>
+          ) : null}
         </div>
         {supportsModelPick ? (
           <div className='flex flex-col gap-6px'>
@@ -323,9 +349,40 @@ const CreateWorkspaceAgentModal: React.FC<CreateWorkspaceAgentModalProps> = ({
           </div>
         ) : null}
         <div className='flex flex-col gap-6px'>
-          <label className='text-13px font-500 text-t-secondary'>
-            {t('common.superAssistant.createAgentInstructions', { defaultValue: '指令' })}
-          </label>
+          <div className='flex items-center justify-between gap-8px flex-wrap'>
+            <label className='text-13px font-500 text-t-secondary'>
+              {t('common.superAssistant.createAgentInstructions', { defaultValue: '指令' })}
+            </label>
+            <div className='flex items-center gap-6px flex-wrap'>
+              <Button
+                size='mini'
+                type='outline'
+                onClick={() => {
+                  setAgentName(DOCUMENT_DELIVERABLE_AGENT_NAME);
+                  setDescription(DOCUMENT_DELIVERABLE_DESCRIPTION);
+                  setInstructions(DOCUMENT_DELIVERABLE_INSTRUCTIONS);
+                  setSkillIds([...DOCUMENT_DELIVERABLE_SKILL_IDS]);
+                }}
+              >
+                {t('common.superAssistant.applyDocumentDeliverableTemplate', {
+                  defaultValue: '套用「文档产出专员」模板',
+                })}
+              </Button>
+              <Button
+                size='mini'
+                type='outline'
+                onClick={() => {
+                  setAgentName(GAME_SECURITY_EXPERT_NAME);
+                  setDescription(GAME_SECURITY_EXPERT_DESCRIPTION);
+                  setInstructions(GAME_SECURITY_EXPERT_INSTRUCTIONS);
+                }}
+              >
+                {t('common.superAssistant.applyGameSecurityTemplate', {
+                  defaultValue: '套用「游戏安全专家」模板',
+                })}
+              </Button>
+            </div>
+          </div>
           <Input.TextArea
             value={instructions}
             onChange={setInstructions}

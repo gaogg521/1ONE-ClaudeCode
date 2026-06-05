@@ -66,6 +66,11 @@ const TeamRuntimeFleetPanel: React.FC<TeamRuntimeFleetPanelProps> = ({
     });
   }, [keyword, nodes]);
 
+  const stats = useMemo(() => {
+    const online = nodes.filter((node) => node.status === 'online').length;
+    return { total: nodes.length, online, offline: nodes.length - online };
+  }, [nodes]);
+
   const { localNodes, remoteNodes } = useMemo(() => {
     const local: TeamRuntimeNode[] = [];
     const remote: TeamRuntimeNode[] = [];

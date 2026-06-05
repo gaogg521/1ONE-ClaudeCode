@@ -6,7 +6,28 @@ const navigateMock = vi.hoisted(() => vi.fn());
 const conversationHistoryMock = vi.hoisted(() => vi.fn());
 const editionFeaturesMock = vi.hoisted(() => vi.fn());
 const authMock = vi.hoisted(() => vi.fn());
+const openEnterpriseAdminInBrowserMock = vi.hoisted(() => vi.fn());
+const openAdminConsoleMock = vi.hoisted(() => vi.fn());
 const readPinnedProjectsMock = vi.hoisted(() => vi.fn(() => []));
+
+function buildEditionFeatures(
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  const merged = {
+    hasJoinedEnterprise: false,
+    hasInstanceEnterprise: false,
+    showEnterpriseAdminNav: false,
+    showTeamsFeature: false,
+    tenantLabel: null,
+    ...overrides,
+  };
+  return {
+    ...merged,
+    showEnterpriseWorkspaceHub:
+      overrides.showEnterpriseWorkspaceHub ??
+      Boolean(merged.hasJoinedEnterprise || merged.hasInstanceEnterprise || merged.showEnterpriseAdminNav),
+  };
+}
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -51,6 +72,16 @@ vi.mock('@/renderer/hooks/context/AuthContext', () => ({
   useAuth: () => authMock(),
 }));
 
+vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
+  useWebuiEnterpriseMode: () => ({
+    openEnterpriseAdminInBrowser: openEnterpriseAdminInBrowserMock,
+  }),
+}));
+
+vi.mock('@/renderer/utils/openAdminConsole', () => ({
+  openAdminConsole: (...args: unknown[]) => openAdminConsoleMock(...args),
+}));
+
 import WorkspacePage from '@/renderer/pages/workspace';
 
 describe('WorkspacePage', () => {
@@ -63,24 +94,26 @@ describe('WorkspacePage', () => {
       groupedHistory: { timelineSections: [] },
       conversations: [],
     });
-    editionFeaturesMock.mockReturnValue({
-      hasJoinedEnterprise: false,
-      showEnterpriseAdminNav: false,
-      tenantLabel: null,
-    });
+    editionFeaturesMock.mockReturnValue(buildEditionFeatures());
     authMock.mockReturnValue({
       status: 'authenticated',
       user: { id: 'user-1', role: 'org_admin' },
     });
+    openEnterpriseAdminInBrowserMock.mockReset();
+    openEnterpriseAdminInBrowserMock.mockResolvedValue('opened');
+    openAdminConsoleMock.mockReset();
+    openAdminConsoleMock.mockResolvedValue('navigated');
   });
 
   it('shows enterprise collaboration shortcuts inside the main workspace after joining an enterprise', () => {
-    editionFeaturesMock.mockReturnValue({
-      hasJoinedEnterprise: true,
-      showEnterpriseAdminNav: true,
-      showTeamsFeature: true,
-      tenantLabel: '欢乐互娱有限公司',
-    });
+    editionFeaturesMock.mockReturnValue(
+      buildEditionFeatures({
+        hasJoinedEnterprise: true,
+        showEnterpriseAdminNav: true,
+        showTeamsFeature: true,
+        tenantLabel: '欢乐互娱有限公司',
+      })
+    );
 
     render(<WorkspacePage />);
 
@@ -96,12 +129,14 @@ describe('WorkspacePage', () => {
   });
 
   it('navigates to shared sessions and tasks scopes from the workspace enterprise cards', () => {
-    editionFeaturesMock.mockReturnValue({
-      hasJoinedEnterprise: true,
-      showEnterpriseAdminNav: true,
-      showTeamsFeature: true,
-      tenantLabel: '欢乐互娱有限公司',
-    });
+    editionFeaturesMock.mockReturnValue(
+      buildEditionFeatures({
+        hasJoinedEnterprise: true,
+        showEnterpriseAdminNav: true,
+        showTeamsFeature: true,
+        tenantLabel: '欢乐互娱有限公司',
+      })
+    );
 
     render(<WorkspacePage />);
 
@@ -120,12 +155,14 @@ describe('WorkspacePage', () => {
   });
 
   it('prefers the latest active team scope for shared workspace enterprise cards', () => {
-    editionFeaturesMock.mockReturnValue({
-      hasJoinedEnterprise: true,
-      showEnterpriseAdminNav: true,
-      showTeamsFeature: true,
-      tenantLabel: '欢乐互娱有限公司',
-    });
+    editionFeaturesMock.mockReturnValue(
+      buildEditionFeatures({
+        hasJoinedEnterprise: true,
+        showEnterpriseAdminNav: true,
+        showTeamsFeature: true,
+        tenantLabel: '欢乐互娱有限公司',
+      })
+    );
     window.sessionStorage.setItem('workspace:last-active-team-scope', JSON.stringify({ teamId: 'team-1', teamName: 'Alpha Team' }));
 
     render(<WorkspacePage />);
@@ -204,11 +241,13 @@ describe('WorkspacePage', () => {
   });
 
   it('hides the admin-only CCI entry for enterprise members without admin navigation', () => {
-    editionFeaturesMock.mockReturnValue({
-      hasJoinedEnterprise: true,
-      showEnterpriseAdminNav: false,
-      tenantLabel: '欢乐互娱有限公司',
-    });
+    editionFeaturesMock.mockReturnValue(
+      buildEditionFeatures({
+        hasJoinedEnterprise: true,
+        showEnterpriseAdminNav: false,
+        tenantLabel: '欢乐互娱有限公司',
+      })
+    );
 
     render(<WorkspacePage />);
 
@@ -216,11 +255,13 @@ describe('WorkspacePage', () => {
   });
 
   it('makes the CCI enterprise card clickable as a whole for admins', () => {
-    editionFeaturesMock.mockReturnValue({
-      hasJoinedEnterprise: true,
-      showEnterpriseAdminNav: true,
-      tenantLabel: '欢乐互娱有限公司',
-    });
+    editionFeaturesMock.mockReturnValue(
+      buildEditionFeatures({
+        hasJoinedEnterprise: true,
+        showEnterpriseAdminNav: true,
+        tenantLabel: '欢乐互娱有限公司',
+      })
+    );
 
     render(<WorkspacePage />);
 
@@ -232,5 +273,67 @@ describe('WorkspacePage', () => {
     fireEvent.click(cciCard);
 
     expect(navigateMock).toHaveBeenCalledWith('/enterprise/pipeline-editor');
+  });
+
+  it('shows the four-card personal workspace hub for joined enterprise admins without team collaboration', () => {
+    editionFeaturesMock.mockReturnValue(
+      buildEditionFeatures({
+        hasJoinedEnterprise: true,
+        showEnterpriseAdminNav: true,
+        showTeamsFeature: false,
+        tenantLabel: '上海欢乐互娱网络科技有限公司',
+      })
+    );
+
+    render(<WorkspacePage />);
+
+    expect(screen.getByText('敏捷 Issues')).toBeInTheDocument();
+    expect(screen.getByText('Agent 助手')).toBeInTheDocument();
+    expect(screen.getByText('组织管理后台')).toBeInTheDocument();
+    expect(screen.getByText('CCI 流水线')).toBeInTheDocument();
+    expect(screen.queryByText('企业能力总览')).not.toBeInTheDocument();
+    expect(screen.queryByText('共享会话')).not.toBeInTheDocument();
+  });
+
+  it('navigates core enterprise cards to issues, assistant, and pipeline routes', () => {
+    editionFeaturesMock.mockReturnValue(
+      buildEditionFeatures({
+        hasJoinedEnterprise: true,
+        showEnterpriseAdminNav: true,
+        showTeamsFeature: false,
+        tenantLabel: '上海欢乐互娱网络科技有限公司',
+      })
+    );
+
+    render(<WorkspacePage />);
+
+    fireEvent.click(within(screen.getByText('敏捷 Issues').closest('section')!).getByText('进入'));
+    fireEvent.click(within(screen.getByText('Agent 助手').closest('section')!).getByText('进入'));
+    fireEvent.click(within(screen.getByText('CCI 流水线').closest('section')!).getByText('进入'));
+
+    expect(navigateMock).toHaveBeenNthCalledWith(1, '/issues');
+    expect(navigateMock).toHaveBeenNthCalledWith(2, '/super-assistant?tab=overview');
+    expect(navigateMock).toHaveBeenNthCalledWith(3, '/enterprise/pipeline-editor');
+  });
+
+  it('opens the admin console through the shared admin entry helper', () => {
+    editionFeaturesMock.mockReturnValue(
+      buildEditionFeatures({
+        hasJoinedEnterprise: true,
+        showEnterpriseAdminNav: true,
+        showTeamsFeature: false,
+        tenantLabel: '上海欢乐互娱网络科技有限公司',
+      })
+    );
+
+    render(<WorkspacePage />);
+
+    fireEvent.click(within(screen.getByText('组织管理后台').closest('section')!).getByText('进入'));
+
+    expect(openAdminConsoleMock).toHaveBeenCalledWith({
+      navigate: expect.any(Function),
+      openEnterpriseAdminInBrowser: openEnterpriseAdminInBrowserMock,
+    });
+    expect(navigateMock).not.toHaveBeenCalledWith('/enterprise/auth');
   });
 });

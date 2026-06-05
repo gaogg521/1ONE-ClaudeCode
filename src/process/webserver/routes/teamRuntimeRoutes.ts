@@ -36,7 +36,7 @@ export function registerTeamRuntimeRoutes(
   app: Express,
   authenticate: (req: Request, res: Response, next: NextFunction) => void
 ): void {
-  app.post('/api/team-runtime/heartbeat', authenticate, (req: Request, res: Response) => {
+  app.post('/api/team-runtime/heartbeat', authenticate, async (req: Request, res: Response) => {
     const tenantId = req.user?.tenant_id ?? 'default';
     const userId = req.user?.id;
     if (!userId) {
@@ -48,7 +48,7 @@ export function registerTeamRuntimeRoutes(
       res.status(400).json({ success: false, error: 'machineId and displayName are required' });
       return;
     }
-    const node = upsertTeamRuntimeNodeForApi({
+    const node = await upsertTeamRuntimeNodeForApi({
       tenantId,
       userId,
       machineId: String(body.machineId),
@@ -60,16 +60,16 @@ export function registerTeamRuntimeRoutes(
     res.json({ success: true, data: node });
   });
 
-  app.get('/api/team-runtime/nodes', authenticate, (req: Request, res: Response) => {
+  app.get('/api/team-runtime/nodes', authenticate, async (req: Request, res: Response) => {
     const tenantId = req.user?.tenant_id ?? 'default';
     const teamIds = parseTeamIds(req.query.teamIds);
     const includeOffline = req.query.includeOffline === '1' || req.query.includeOffline === 'true';
-    const nodes = listTeamRuntimeNodesForApi({ tenantId, teamIds, includeOffline });
+    const nodes = await listTeamRuntimeNodesForApi({ tenantId, teamIds, includeOffline });
     res.json({ success: true, data: nodes });
   });
 
   /** 超级管理员后台：查看本租户全部成员机器（C/S + B/S 上报） */
-  app.get(ADMIN_TEAM_RUNTIME_NODES_PATH, authenticate, requireEnterpriseAdmin, (req: Request, res: Response) => {
+  app.get(ADMIN_TEAM_RUNTIME_NODES_PATH, authenticate, requireEnterpriseAdmin, async (req: Request, res: Response) => {
     const tenantId = req.user?.tenant_id ?? 'default';
     if (!isEnterpriseTenantId(tenantId)) {
       res.json({ success: true, data: [] });
@@ -77,7 +77,7 @@ export function registerTeamRuntimeRoutes(
     }
     const teamIds = parseTeamIds(req.query.teamIds);
     const includeOffline = req.query.includeOffline === '1' || req.query.includeOffline === 'true';
-    const nodes = listTeamRuntimeNodesForApi({ tenantId, teamIds, includeOffline });
+    const nodes = await listTeamRuntimeNodesForApi({ tenantId, teamIds, includeOffline });
     res.json({ success: true, data: nodes });
   });
 }

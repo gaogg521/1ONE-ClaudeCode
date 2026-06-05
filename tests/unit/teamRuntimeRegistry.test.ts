@@ -57,8 +57,8 @@ const mockDb = vi.hoisted(() => {
 });
 
 vi.mock('@process/services/database', () => ({
-  getDatabase: () => ({
-    getDb: () => mockDb,
+  getDatabase: async () => ({
+    getDriver: () => mockDb,
   }),
 }));
 
@@ -82,9 +82,9 @@ describe('TeamRuntimeRegistry', () => {
     mockDb.rows.length = 0;
   });
 
-  it('upserts and lists runtime nodes for a tenant', () => {
+  it('upserts and lists runtime nodes for a tenant', async () => {
     const registry = new TeamRuntimeRegistry();
-    const node = registry.upsertNode({
+    const node = await registry.upsertNode({
       tenantId: 'tenant-1',
       userId: 'user-a',
       machineId: 'machine-a',
@@ -94,14 +94,14 @@ describe('TeamRuntimeRegistry', () => {
       installedAgents: [{ backend: 'claude', name: 'Claude' }],
     });
     expect(node.displayName).toBe('LT00278-ZG');
-    const listed = registry.listNodes({ tenantId: 'tenant-1', includeOffline: true });
+    const listed = await registry.listNodes({ tenantId: 'tenant-1', includeOffline: true });
     expect(listed).toHaveLength(1);
     expect(listed[0]?.installedAgents[0]?.backend).toBe('claude');
   });
 
-  it('filters nodes by team membership user ids', () => {
+  it('filters nodes by team membership user ids', async () => {
     const registry = new TeamRuntimeRegistry();
-    registry.upsertNode({
+    await registry.upsertNode({
       tenantId: 'tenant-1',
       userId: 'user-a',
       machineId: 'machine-a',
@@ -110,7 +110,7 @@ describe('TeamRuntimeRegistry', () => {
       ipAddresses: [],
       installedAgents: [],
     });
-    registry.upsertNode({
+    await registry.upsertNode({
       tenantId: 'tenant-1',
       userId: 'user-c',
       machineId: 'machine-c',
@@ -119,7 +119,7 @@ describe('TeamRuntimeRegistry', () => {
       ipAddresses: [],
       installedAgents: [],
     });
-    const listed = registry.listNodes({
+    const listed = await registry.listNodes({
       tenantId: 'tenant-1',
       teamIds: ['team-1'],
       includeOffline: true,

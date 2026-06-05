@@ -23,6 +23,7 @@ import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 import type { TeamAgent, TeammateStatus, TTeam } from '@/common/types/teamTypes';
 import type { PersonalAgent } from '@/common/types/personalAgentTypes';
+import type { DigitalEmployeeRunRecord } from '@/common/types/digitalEmployeeRunTypes';
 
 export type SuperAssistantBoardColumn = {
   key: 'unassigned' | 'active' | 'review' | 'done';
@@ -66,6 +67,8 @@ export type SuperAssistantAgentExecutionItem = {
   queuedIssueSubject: string | null;
   blockerMessage: string | null;
   dependencyNames: string[];
+  /** Personal digital employee background run (card + detail). */
+  digitalEmployeeRun?: DigitalEmployeeRunRecord;
 };
 
 export type SuperAssistantAgentExecutionGroup = {
@@ -458,6 +461,7 @@ export function useSuperAssistantData(
                     queuedIssueSubject: prioritizedOpenIssues[0]?.subject ?? null,
                     blockerMessage: null,
                     dependencyNames: [skills[0]?.name ?? '', enabledMcpNames[0] ?? ''].filter(Boolean),
+                    digitalEmployeeRun: agent.automationConfig?.lastRun,
                   })
                 ),
               } satisfies SuperAssistantAgentExecutionGroup,
@@ -528,6 +532,7 @@ export function useSuperAssistantData(
                 queuedIssueSubject: null,
                 blockerMessage: resolvedBlockerMessage,
                 dependencyNames,
+                digitalEmployeeRun: agent.lastRun,
               };
             }
 
@@ -549,6 +554,7 @@ export function useSuperAssistantData(
                 queuedIssueSubject: null,
                 blockerMessage: resolvedBlockerMessage,
                 dependencyNames,
+                digitalEmployeeRun: agent.lastRun,
               };
             }
 
@@ -569,6 +575,7 @@ export function useSuperAssistantData(
               queuedIssueSubject: queuedIssue?.subject ?? null,
               blockerMessage: resolvedBlockerMessage,
               dependencyNames,
+              digitalEmployeeRun: agent.lastRun,
             };
           }),
         } satisfies SuperAssistantAgentExecutionGroup;

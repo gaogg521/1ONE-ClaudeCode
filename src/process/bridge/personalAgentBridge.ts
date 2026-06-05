@@ -6,6 +6,8 @@
 
 import { ipcBridge } from '@/common';
 import { SqlitePersonalAgentRepository } from '@process/agent/personalAgentRepository';
+import { DigitalEmployeeRunService } from '@process/digitalEmployee/DigitalEmployeeRunService';
+import { workerTaskManager } from '@process/task/workerTaskManagerSingleton';
 
 function safeProvider<R, P>(fn: (params: P) => Promise<R>) {
   return async (params: P): Promise<R> => {
@@ -18,6 +20,8 @@ function safeProvider<R, P>(fn: (params: P) => Promise<R>) {
     }
   };
 }
+
+const digitalEmployeeRunService = new DigitalEmployeeRunService(workerTaskManager);
 
 export function initPersonalAgentBridge(
   repository = new SqlitePersonalAgentRepository()
@@ -38,5 +42,8 @@ export function initPersonalAgentBridge(
     safeProvider(async ({ id, ownerUserId }) => {
       await repository.delete(id, ownerUserId);
     })
+  );
+  ipcBridge.personalAgent.runNow.provider(
+    safeProvider(async (params) => digitalEmployeeRunService.runNow(params))
   );
 }

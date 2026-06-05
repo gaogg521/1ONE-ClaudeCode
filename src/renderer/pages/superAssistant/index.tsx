@@ -23,28 +23,34 @@ import CreateSharedTaskModal from './components/CreateSharedTaskModal';
 import SuperAssistantHeader from './components/SuperAssistantHeader';
 import IssuesWorkbench from './components/IssuesWorkbench';
 import AgentsTab, { type AgentCardRef } from './components/AgentsTab';
+import DigitalEmployeeDetailModal, {
+  type DigitalEmployeeDetailTarget,
+} from './components/DigitalEmployeeDetailModal';
 import CreateWorkspaceAgentModal from './components/CreateWorkspaceAgentModal';
 import ManageWorkspaceAgentModal, { type ManagedAgentRef } from './components/ManageWorkspaceAgentModal';
 import CreateTaskDialog from '@/renderer/pages/cron/ScheduledTasksPage/CreateTaskDialog';
 import { useAssistantCollaborationTeams } from './hooks/useAssistantCollaborationTeams';
 import { useConversationAgents } from '@/renderer/pages/conversation/hooks/useConversationAgents';
-import { buildDigitalEmployeePresetContext } from '@/common/digitalEmployee/presetContext';
-import { buildCliAgentParams } from '@/renderer/pages/conversation/utils/createConversationParams';
+import {
+  deletePersonalDigitalEmployee,
+  deleteTeamDigitalEmployee,
+} from './utils/deleteDigitalEmployee';
 import {
   agentFromKey,
   resolveConversationType,
   resolveTeamAgentType,
 } from '@/renderer/pages/team/components/agentSelectUtils';
-import type { AvailableAgent } from '@/renderer/utils/model/agentTypes';
 import SkillsTab from './components/SkillsTab';
 import RuntimesTab from './components/RuntimesTab';
-import TeamRuntimeFleetPanel from './components/TeamRuntimeFleetPanel';
 import SettingsTab from './components/SettingsTab';
 import type { SuperAssistantIssueAssignmentMap } from './hooks/useSuperAssistantData';
 import { pickEnterpriseCollaborationContext } from './hooks/useEnterpriseCollaborationContext';
 import { useSuperAssistantData } from './hooks/useSuperAssistantData';
+import type { SuperAssistantAutopilotDefaults } from './utils/autopilotDefaults';
 import {
+  buildAutopilotForPersonalAgent,
   buildIssueAssignmentPrompt,
+  buildPersonalDigitalEmployeeCronPrompt,
   buildSuperAssistantAutopilotDefaults,
 } from './utils/autopilotDefaults';
 import type { TeamAgent } from '@/common/types/teamTypes';
@@ -57,8 +63,9 @@ import {
   parseSuperAssistantTab,
   readStoredSuperAssistantTab,
   readSuperAssistantSearch,
-  readSuperAssistantTabFromLocation,
+  shouldRedirectLegacyRuntimesTab,
   storeSuperAssistantTab,
+  AGENT_FLEET_PATH,
   type SuperAssistantTab,
 } from './superAssistantTabRouting';
 
@@ -104,15 +111,6 @@ function resolveManagedAgent(
     agentName: ref.agentName,
     agentType: ref.agentType,
     teamAgent,
-  };
-}
-
-function personalAgentToAvailableAgent(agent: ManagedAgentRef): AvailableAgent {
-  return {
-    backend: agent.agentType as AvailableAgent['backend'],
-    name: agent.agentName,
-    cliPath: agent.teamAgent.cliPath,
-    customAgentId: agent.teamAgent.customAgentId,
   };
 }
 
@@ -266,8 +264,14 @@ const SuperAssistantPage: React.FC = () => {
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [sharedTaskVisible, setSharedTaskVisible] = useState(false);
   const [createDigitalEmployeeVisible, setCreateDigitalEmployeeVisible] = useState(false);
+  const [digitalEmployeeDetailTarget, setDigitalEmployeeDetailTarget] =
+    useState<DigitalEmployeeDetailTarget | null>(null);
   const [agentAutomationVisible, setAgentAutomationVisible] = useState(false);
   const [automationAgent, setAutomationAgent] = useState<ManagedAgentRef | null>(null);
+  const [agentAutopilotDefaults, setAgentAutopilotDefaults] = useState<SuperAssistantAutopilotDefaults | null>(
+    null
+  );
+  const [automationInitialPrompt, setAutomationInitialPrompt] = useState<string | undefined>(undefined);
   const [editingCronJob, setEditingCronJob] = useState<ICronJob | undefined>(undefined);
   const [managingAgent, setManagingAgent] = useState<ManagedAgentRef | null>(null);
   const {
@@ -304,6 +308,23 @@ const SuperAssistantPage: React.FC = () => {
     const nextTab = parseSuperAssistantTab(locationSearch);
     setActiveTab((prev) => (prev === nextTab ? prev : nextTab));
   }, [locationSearch]);
+
+  const openAgentFleet = useCallback(() => {
+    if (isElectronDesktop()) {
+      if (typeof window !== 'undefined' && window.location.hash !== `#${AGENT_FLEET_PATH}`) {
+        window.location.hash = `#${AGENT_FLEET_PATH}`;
+      }
+      return;
+    }
+    void navigate(AGENT_FLEET_PATH);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!shouldRedirectLegacyRuntimesTab(locationSearch)) {
+      return;
+    }
+    openAgentFleet();
+  }, [locationSearch, openAgentFleet]);
 
   const issueLookup = superAssistantData.issueLookup;
   const featuredIssueId = superAssistantData.featuredIssue?.id ?? null;
@@ -603,7 +624,7 @@ const SuperAssistantPage: React.FC = () => {
           ownerUserId: user?.id ?? DESKTOP_OPERATOR_USER_ID,
         });
         const automationConfig = {
-          ...(existing?.automationConfig ?? {}),
+          ...existing?.automationConfig,
           skillIds,
         };
         await ipcBridge.personalAgent.update.invoke({
@@ -657,24 +678,72 @@ const SuperAssistantPage: React.FC = () => {
     [buildAutopilotForTeamAgent, primaryLeadAgent, superAssistantData.primaryTeam?.id]
   );
 
-  const selectedAgentAutopilotDefaults = useMemo(() => {
-    if (!automationAgent) {
-      return autopilotDefaults;
-    }
-    return buildAutopilotForTeamAgent(automationAgent.teamId, automationAgent.teamAgent);
-  }, [automationAgent, autopilotDefaults, buildAutopilotForTeamAgent]);
+  const selectedAgentAutopilotDefaults = agentAutopilotDefaults ?? autopilotDefaults;
 
   const closeAgentAutomationDialog = useCallback(() => {
     setAgentAutomationVisible(false);
     setAutomationAgent(null);
+    setAgentAutopilotDefaults(null);
+    setAutomationInitialPrompt(undefined);
     setEditingCronJob(undefined);
   }, []);
 
-  const openAgentAutomationDialog = useCallback((managed: ManagedAgentRef, job?: ICronJob) => {
-    setAutomationAgent(managed);
-    setEditingCronJob(job);
-    setAgentAutomationVisible(true);
-  }, []);
+  const openAgentAutomationDialog = useCallback(
+    async (managed: ManagedAgentRef, job?: ICronJob) => {
+      setAutomationAgent(managed);
+      setEditingCronJob(job);
+      try {
+        if (managed.scope === 'personal') {
+          const record = await ipcBridge.personalAgent.get.invoke({
+            id: managed.slotId,
+            ownerUserId: user?.id ?? DESKTOP_OPERATOR_USER_ID,
+          });
+          if (!record) {
+            Message.warning(
+              t('common.superAssistant.agentNotFound', { defaultValue: '未找到该智能体' })
+            );
+            return;
+          }
+          const defaults = buildAutopilotForPersonalAgent(record, {
+            requirementId: currentIssue?.id,
+            skillNames: superAssistantData.skillNames,
+            mentionUserIds: superAssistantData.openAssigneeUserIds,
+            postBackToIssue: Boolean(currentIssue?.id),
+          });
+          if (!defaults) {
+            Message.error(
+              t('common.superAssistant.agentAutomationAgentMissing', {
+                defaultValue: '无法解析该数字员工的 Agent 类型，请先在编辑中配置 Agent',
+              })
+            );
+            return;
+          }
+          setAgentAutopilotDefaults(defaults);
+          setAutomationInitialPrompt(
+            job?.target.payload.text ?? buildPersonalDigitalEmployeeCronPrompt(record, currentIssue)
+          );
+        } else {
+          setAgentAutopilotDefaults(
+            buildAutopilotForTeamAgent(managed.teamId, managed.teamAgent) ?? null
+          );
+          setAutomationInitialPrompt(undefined);
+        }
+        setAgentAutomationVisible(true);
+      } catch (error) {
+        Message.error(getEnterpriseActionError(error, t('common.superAssistant.agentScheduleFailed', {
+          defaultValue: '打开定时任务失败',
+        })));
+      }
+    },
+    [
+      buildAutopilotForTeamAgent,
+      currentIssue,
+      superAssistantData.openAssigneeUserIds,
+      superAssistantData.skillNames,
+      t,
+      user?.id,
+    ]
+  );
 
   const handleManageAgent = useCallback(
     (ref: AgentCardRef) => {
@@ -712,24 +781,68 @@ const SuperAssistantPage: React.FC = () => {
       if (!managed) {
         return;
       }
-      openAgentAutomationDialog(managed);
+      void openAgentAutomationDialog(managed);
     },
     [openAgentAutomationDialog, superAssistantData.agentExecutionGroups, teams]
+  );
+
+  const buildDigitalEmployeeDetailTarget = useCallback(
+    (managed: ManagedAgentRef): DigitalEmployeeDetailTarget => {
+      if (managed.scope === 'personal') {
+        return {
+          scope: 'personal',
+          agentId: managed.slotId,
+          ownerUserId: user?.id ?? DESKTOP_OPERATOR_USER_ID,
+        };
+      }
+      return {
+        scope: 'team',
+        teamId: managed.teamId,
+        tenantId: managed.tenantId,
+        slotId: managed.slotId,
+      };
+    },
+    [user?.id]
   );
 
   const handleRunAutomationJob = useCallback(
     async (job: ICronJob) => {
       try {
-        const result = await ipcBridge.cron.runNow.invoke({ jobId: job.id });
-        Message.success(t('cron.runNowSuccess', { defaultValue: '已触发执行' }));
-        if (result?.conversationId) {
-          navigate(`/conversation/${result.conversationId}`);
+        const autopilot = job.metadata.agentConfig?.autopilotContext;
+        const isDigitalEmployeeCron =
+          autopilot?.source === 'super_assistant' && Boolean(autopilot.agentSlotId);
+        await ipcBridge.cron.runNow.invoke({ jobId: job.id });
+        if (isDigitalEmployeeCron) {
+          Message.success(
+            t('common.superAssistant.digitalEmployee.runStarted', {
+              defaultValue: '已在工作区后台开始执行，可在「查看详情」跟踪进度',
+            })
+          );
+          if (autopilot.teamId === 'personal') {
+            const agentId = autopilot.personalAgentId ?? autopilot.agentSlotId;
+            if (agentId) {
+              setDigitalEmployeeDetailTarget({
+                scope: 'personal',
+                agentId,
+                ownerUserId: autopilot.ownerUserId ?? user?.id ?? DESKTOP_OPERATOR_USER_ID,
+              });
+            }
+          } else if (autopilot.teamId) {
+            setDigitalEmployeeDetailTarget({
+              scope: 'team',
+              teamId: autopilot.teamId,
+              slotId: autopilot.agentSlotId,
+            });
+          }
+          void superAssistantData.refresh();
+          return;
         }
+        Message.success(t('cron.runNowSuccess', { defaultValue: '已触发执行' }));
       } catch (error) {
         Message.error(String(error));
       }
     },
-    [navigate, t]
+    [superAssistantData, t, user?.id]
   );
 
   const currentTab = activeTab;
@@ -754,6 +867,46 @@ const SuperAssistantPage: React.FC = () => {
     [teams]
   );
 
+  const handleDeleteAgent = useCallback(
+    async (managed: ManagedAgentRef) => {
+      const ownerUserId = user?.id ?? DESKTOP_OPERATOR_USER_ID;
+      try {
+        const result =
+          managed.scope === 'personal'
+            ? await deletePersonalDigitalEmployee({ id: managed.slotId, ownerUserId })
+            : await deleteTeamDigitalEmployee({
+                teamId: managed.teamId,
+                tenantId: managed.tenantId,
+                slotId: managed.slotId,
+              });
+        setManagingAgent(null);
+        await superAssistantData.refresh();
+        await refreshCollaborationTeams();
+        Message.success(
+          t('common.superAssistant.deleteAgentSuccess', {
+            defaultValue: '已删除数字员工{{cronHint}}',
+            cronHint:
+              result.removedCronJobs > 0
+                ? t('common.superAssistant.deleteAgentCronHint', {
+                    defaultValue: '（含 {{count}} 个定时任务）',
+                    count: result.removedCronJobs,
+                  })
+                : '',
+          })
+        );
+      } catch (error) {
+        Message.error(
+          getEnterpriseActionError(
+            error,
+            t('common.superAssistant.deleteAgentFailed', { defaultValue: '删除数字员工失败' })
+          )
+        );
+        throw error;
+      }
+    },
+    [refreshCollaborationTeams, superAssistantData, t, user?.id]
+  );
+
   const handleRunAgentNow = useCallback(
     async (ref: AgentCardRef | ManagedAgentRef): Promise<void> => {
       const managed = 'teamAgent' in ref ? ref : resolveManagedAgent(teams, superAssistantData.agentExecutionGroups, ref);
@@ -762,66 +915,84 @@ const SuperAssistantPage: React.FC = () => {
       }
       if (managed.scope === 'personal') {
         try {
-          const record = await ipcBridge.personalAgent.get.invoke({
-            id: managed.slotId,
-            ownerUserId: user?.id ?? DESKTOP_OPERATOR_USER_ID,
+          const ownerUserId = user?.id ?? DESKTOP_OPERATOR_USER_ID;
+          const issueContext = currentIssue
+            ? { id: currentIssue.id, subject: currentIssue.subject, description: currentIssue.description }
+            : undefined;
+          await ipcBridge.personalAgent.runNow.invoke({
+            agentId: managed.slotId,
+            ownerUserId,
+            issue: issueContext,
           });
-          const automation = record?.automationConfig;
-          const params = await buildCliAgentParams(personalAgentToAvailableAgent(managed), '');
-          const preferredModelId =
-            typeof automation?.preferredModelId === 'string' ? automation.preferredModelId : undefined;
-          const presetContext = buildDigitalEmployeePresetContext({
-            name: record?.name ?? managed.agentName,
-            description: record?.description,
-            instructions:
-              typeof automation?.instructions === 'string' ? automation.instructions : undefined,
-          });
-          const skillIds = Array.isArray(automation?.skillIds)
-            ? automation.skillIds.filter((id): id is string => typeof id === 'string')
-            : [];
-          const conversation = await ipcBridge.conversation.create.invoke({
-            ...params,
-            name: managed.agentName,
-            extra: {
-              ...params.extra,
-              personalAgentId: managed.slotId,
-              tenantId: record?.tenantId ?? 'default',
-              ...(preferredModelId ? { currentModelId: preferredModelId } : {}),
-              ...(presetContext
-                ? { presetContext, presetRules: presetContext }
-                : {}),
-              ...(skillIds.length > 0 ? { enabledSkills: skillIds } : {}),
-            },
-          });
-          Message.success(t('common.superAssistant.agentRunNowSuccess', { defaultValue: '已触发智能体执行' }));
-          navigate(`/conversation/${conversation.id}`);
+          Message.success(
+            t('common.superAssistant.digitalEmployee.runStarted', {
+              defaultValue: '已在工作区后台开始执行，可在「查看详情」跟踪进度',
+            })
+          );
+          setDigitalEmployeeDetailTarget(buildDigitalEmployeeDetailTarget(managed));
+          await superAssistantData.refresh();
         } catch (error) {
           Message.error(getEnterpriseActionError(error, t('common.superAssistant.agentRunNowFailed', { defaultValue: '启动智能体会话失败' })));
         }
         return;
       }
-      const ready = await ensureTeamSession(
-        managed.teamId,
-        t('common.superAssistant.agentRunNowFailed', { defaultValue: '启动智能体会话失败' })
-      );
-      if (!ready) {
+      try {
+        const issueContext = currentIssue
+          ? {
+              id: currentIssue.id,
+              subject: currentIssue.subject,
+              description: currentIssue.description,
+            }
+          : undefined;
+        await ipcBridge.team.runDigitalEmployeeNow.invoke({
+          teamId: managed.teamId,
+          tenantId: managed.tenantId,
+          slotId: managed.slotId,
+          issue: issueContext,
+        });
+        Message.success(
+          t('common.superAssistant.digitalEmployee.runStarted', {
+            defaultValue: '已在工作区后台开始执行，可在「查看详情」跟踪进度',
+          })
+        );
+        setDigitalEmployeeDetailTarget(buildDigitalEmployeeDetailTarget(managed));
+        await superAssistantData.refresh();
+        await refreshCollaborationTeams();
+      } catch (error) {
+        Message.error(getEnterpriseActionError(error, t('common.superAssistant.agentRunNowFailed', { defaultValue: '启动智能体会话失败' })));
+      }
+    },
+    [
+      buildDigitalEmployeeDetailTarget,
+      currentIssue,
+      refreshCollaborationTeams,
+      superAssistantData,
+      t,
+      teams,
+      user?.id,
+    ]
+  );
+
+  const handleViewDigitalEmployeeDetail = useCallback(
+    (ref: AgentCardRef) => {
+      const managed = resolveManagedAgent(teams, superAssistantData.agentExecutionGroups, ref);
+      if (!managed) {
         return;
       }
-      const issueContext = currentIssue ? { id: currentIssue.id, subject: currentIssue.subject } : null;
-      await ipcBridge.team.sendMessageToAgent.invoke({
-        teamId: managed.teamId,
-        tenantId: managed.tenantId,
-        slotId: managed.slotId,
-        content: t('common.superAssistant.agentRunNowPrompt', {
-          defaultValue:
-            '你是「{{agent}}」。请立即执行一轮团队 Issue 巡检：汇总未完成项、阻塞与建议下一步，输出 Markdown 摘要。',
-          agent: managed.agentName,
-        }),
-      });
-      Message.success(t('common.superAssistant.agentRunNowSuccess', { defaultValue: '已触发智能体执行' }));
-      navigate(buildTeamPath(managed.teamId, issueContext, managed.slotId));
+      setDigitalEmployeeDetailTarget(buildDigitalEmployeeDetailTarget(managed));
     },
-    [currentIssue, ensureTeamSession, navigate, superAssistantData.agentExecutionGroups, t, teams]
+    [buildDigitalEmployeeDetailTarget, superAssistantData.agentExecutionGroups, teams]
+  );
+
+  const handleCloseDigitalEmployeeDetail = useCallback(() => {
+    setDigitalEmployeeDetailTarget(null);
+  }, []);
+
+  const handleOpenDigitalEmployeeConversation = useCallback(
+    (conversationId: string) => {
+      navigate(`/conversation/${conversationId}`);
+    },
+    [navigate]
   );
 
   const handleOpenCreateDigitalEmployee = useCallback(() => {
@@ -836,8 +1007,25 @@ const SuperAssistantPage: React.FC = () => {
         void handleRunAgentNow(ref);
       },
       onScheduleAgent: handleScheduleAgent,
+      onViewDigitalEmployeeDetail: handleViewDigitalEmployeeDetail,
+      onDeleteAgent: async (ref: AgentCardRef) => {
+        const managed = resolveManagedAgent(teams, superAssistantData.agentExecutionGroups, ref);
+        if (!managed) {
+          return;
+        }
+        await handleDeleteAgent(managed);
+      },
     }),
-    [handleManageAgent, handleOpenCreateDigitalEmployee, handleRunAgentNow, handleScheduleAgent]
+    [
+      handleDeleteAgent,
+      handleManageAgent,
+      handleOpenCreateDigitalEmployee,
+      handleRunAgentNow,
+      handleScheduleAgent,
+      handleViewDigitalEmployeeDetail,
+      superAssistantData.agentExecutionGroups,
+      teams,
+    ]
   );
 
   const handleBreakdownIssue = () => {
@@ -1130,7 +1318,7 @@ const SuperAssistantPage: React.FC = () => {
     }
     if (primaryLeadAgent) {
       await handleAssignIssue(primaryLeadAgent.slotId, primaryLeadAgent.agentName, { navigateAfter: false });
-      handleSwitchTab('runtimes');
+      openAgentFleet();
       return;
     }
     await handleOpenTeamFlow();
@@ -1161,7 +1349,7 @@ const SuperAssistantPage: React.FC = () => {
         activeAgentCount={superAssistantData.activeAgentCount}
         skillCount={superAssistantData.skillCount}
         onStartCurrentIssue={() => void handleStartCurrentIssue()}
-        onOpenRecentRun={() => handleSwitchTab('runtimes')}
+        onOpenRecentRun={openAgentFleet}
         onOpenIssues={() => navigate('/issues')}
       />
       <div className='space-y-12px'>
@@ -1172,7 +1360,6 @@ const SuperAssistantPage: React.FC = () => {
               ['agents', t('common.superAssistant.tabs.agents', { defaultValue: '数字员工' })],
               ['issues', t('common.superAssistant.tabs.dispatch', { defaultValue: '调度视图' })],
               ['skills', t('common.superAssistant.tabs.skills', { defaultValue: 'Skills' })],
-              ['runtimes', t('common.superAssistant.tabs.runtimes', { defaultValue: '执行模块' })],
               ['settings', t('common.superAssistant.tabs.settings', { defaultValue: '设置' })],
             ] as const).map(([tab, label]) => (
               <Button
@@ -1213,8 +1400,8 @@ const SuperAssistantPage: React.FC = () => {
                 <Button size='small' type='primary' onClick={() => navigate('/issues')}>
                   {t('common.superAssistant.howToUseOpenIssues', { defaultValue: '去 Issues 选择任务' })}
                 </Button>
-                <Button size='small' type='outline' onClick={() => handleSwitchTab('runtimes')}>
-                  {t('common.superAssistant.howToUseViewRuns', { defaultValue: '查看运行时' })}
+                <Button size='small' type='outline' onClick={openAgentFleet}>
+                  {t('common.superAssistant.openOrgNodes', { defaultValue: '打开组织节点' })}
                 </Button>
               </div>
             </Card>
@@ -1294,8 +1481,8 @@ const SuperAssistantPage: React.FC = () => {
                       <div className='text-12px text-red-500'>{currentIssueActivityFeedback.blockerMessage}</div>
                     ) : null}
                     <div className='flex items-center gap-8px flex-wrap pt-4px'>
-                      <Button size='small' type='outline' onClick={() => handleSwitchTab('runtimes')}>
-                        {t('common.superAssistant.headerRecentRun', { defaultValue: '查看最近运行' })}
+                      <Button size='small' type='outline' onClick={openAgentFleet}>
+                        {t('common.superAssistant.headerRecentRun', { defaultValue: '查看组织节点' })}
                       </Button>
                       {currentIssueAssignment ? (
                         <Button size='small' onClick={() => void handleOpenAssignedAgent()}>
@@ -1404,32 +1591,10 @@ const SuperAssistantPage: React.FC = () => {
                 enabledMcpCount={superAssistantData.enabledMcpCount}
                 onOpenAgentSettings={handleOpenAgentSettings}
                 onOpenModelSettings={() => navigate('/settings/model')}
-                showTeamFleet={hasCollaborationTeam}
-                fleetTeamIds={teams.map((team) => team.id)}
+                showOrgNodesLink={hasCollaborationTeam}
+                onOpenOrgNodes={openAgentFleet}
               />
             </div>
-          </Card>
-        ) : null}
-        {currentTab === 'runtimes' ? (
-          <Card title={t('common.superAssistant.rebuild.liveExecutionTitle', { defaultValue: '实时执行面板' })}>
-            <div className='mb-10px text-12px text-t-tertiary'>
-              {t('common.superAssistant.rebuild.liveExecutionDesc', {
-                defaultValue: '这里聚合运行中的 Agent、执行状态和阻塞信号，便于从产品视角查看最近运行。',
-              })}
-            </div>
-            {hasCollaborationTeam ? (
-              <div className='mb-16px'>
-                <TeamRuntimeFleetPanel teamIds={teams.map((team) => team.id)} enabled />
-              </div>
-            ) : null}
-            <AgentsTab
-              executionGroups={superAssistantData.agentExecutionGroups}
-              {...agentTabHandlers}
-              onCreateAgent={() => {
-                handleSwitchTab('agents');
-                handleOpenCreateDigitalEmployee();
-              }}
-            />
           </Card>
         ) : null}
         {currentTab === 'settings' ? (
@@ -1464,6 +1629,12 @@ const SuperAssistantPage: React.FC = () => {
           }
         }}
       />
+      <DigitalEmployeeDetailModal
+        visible={Boolean(digitalEmployeeDetailTarget)}
+        target={digitalEmployeeDetailTarget}
+        onClose={handleCloseDigitalEmployeeDetail}
+        onOpenConversation={handleOpenDigitalEmployeeConversation}
+      />
       <ManageWorkspaceAgentModal
         visible={Boolean(managingAgent)}
         agent={managingAgent}
@@ -1480,19 +1651,20 @@ const SuperAssistantPage: React.FC = () => {
         }
         onOpenExecutionModules={() => {
           setManagingAgent(null);
-          handleSwitchTab('runtimes');
+          openAgentFleet();
         }}
         onOpenDispatchView={() => {
           setManagingAgent(null);
           handleSwitchTab('issues');
         }}
+        onDelete={handleDeleteAgent}
         onAddAutomation={(managed) => {
           setManagingAgent(null);
-          openAgentAutomationDialog(managed);
+          void openAgentAutomationDialog(managed);
         }}
         onEditAutomation={(managed, job) => {
           setManagingAgent(null);
-          openAgentAutomationDialog(managed, job);
+          void openAgentAutomationDialog(managed, job);
         }}
         onRunAutomation={handleRunAutomationJob}
       />
@@ -1518,15 +1690,18 @@ const SuperAssistantPage: React.FC = () => {
           }
           initialPrompt={
             editingCronJob?.target.payload.text ??
-            (currentIssue
-              ? t('common.issues.automationDefaultPrompt', {
-                  defaultValue:
-                    '你是 Issue「{{subject}}」的值班 Agent。请检查当前进展、阻塞项与下一步行动，输出简洁 Markdown 摘要。',
-                  subject: currentIssue.subject,
-                })
-              : t('common.superAssistant.agentAutomationDefaultPrompt', {
-                  defaultValue: '扫描团队未关闭 Issue 与阻塞项，输出摘要并 @ 相关负责人。',
-                }))
+            automationInitialPrompt ??
+            (automationAgent?.scope === 'personal'
+              ? undefined
+              : currentIssue
+                ? t('common.issues.automationDefaultPrompt', {
+                    defaultValue:
+                      '你是 Issue「{{subject}}」的值班 Agent。请检查当前进展、阻塞项与下一步行动，输出简洁 Markdown 摘要。',
+                    subject: currentIssue.subject,
+                  })
+                : t('common.superAssistant.agentAutomationDefaultPrompt', {
+                    defaultValue: '扫描团队未关闭 Issue 与阻塞项，输出摘要并 @ 相关负责人。',
+                  }))
           }
           initialFrequency='weekdays'
           initialAgentKey={selectedAgentAutopilotDefaults?.initialAgentKey}

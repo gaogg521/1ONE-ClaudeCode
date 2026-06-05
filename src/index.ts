@@ -85,23 +85,7 @@ if (!gotTheLock) {
     if (deepLinkUrl) {
       handleDeepLinkUrl(deepLinkUrl);
     }
-    // Focus existing window or recreate one if needed.
-    if (isWebUIMode || isResetPasswordMode) {
-      return;
-    }
-
-    // Skip window creation if app hasn't finished initializing
-    if (!appReadyDone) return;
-
-    if (app.isReady()) {
-      showOrCreateMainWindow({
-        mainWindow,
-        createWindow: () => {
-          console.log('[1ONE] second-instance received with no active main window, recreating main window');
-          createWindow();
-        },
-      });
-    }
+    focusMainWindowFromSecondInstance();
   });
 }
 
@@ -199,8 +183,27 @@ let isExplicitQuit = false;
 // causing the renderer to load and compete with initStorage on the serial configFile queue,
 // which blocks startup for 100-265 seconds.
 let appReadyDone = false;
+/** Second launch (e.g. double-click shortcut) before ready — focus once init completes. */
+let pendingSecondInstanceFocus = false;
 
 let mainWindow: BrowserWindow;
+
+const focusMainWindowFromSecondInstance = (): void => {
+  if (isWebUIMode || isResetPasswordMode) {
+    return;
+  }
+  if (!app.isReady()) {
+    pendingSecondInstanceFocus = true;
+    return;
+  }
+  showOrCreateMainWindow({
+    mainWindow,
+    createWindow: () => {
+      console.log('[1ONE] second-instance received with no active main window, recreating main window');
+      createWindow();
+    },
+  });
+};
 
 const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): void => {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -287,10 +290,10 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
     } else {
       setTimeout(() => {
         if (!mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-          console.warn('[1ONE] Dev force-show after 45s (check renderer load logs above)');
+          console.warn('[1ONE] Dev force-show after 20s (check renderer load logs above)');
           showWindow();
         }
-      }, 45_000);
+      }, 20_000);
     }
   } else if (process.platform === 'darwin' && app.dock) {
     void app.dock.hide();
@@ -331,11 +334,37 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   const rendererUrlRaw = process.env['ELECTRON_RENDERER_URL'];
   const rendererUrl = rendererUrlRaw ? resolveDevRendererUrl(rendererUrlRaw) : undefined;
   const fallbackFile = path.join(__dirname, '../renderer/index.html');
+  const preferBuiltRendererInDev =
+    !app.isPackaged &&
+    process.env.ONE_DEV_LOAD_BUILT_RENDERER === '1' &&
+    fs.existsSync(fallbackFile);
 
-  if (!app.isPackaged && rendererUrl) {
+  const loadPackagedOrBuiltFile = (label: string): void => {
+    console.log(`[1ONE] ${label}: ${fallbackFile}`);
+    mainWindow.webContents.on('did-finish-load', () => {
+      console.log('[1ONE] Renderer did-finish-load (file)', mainWindow.webContents.getURL());
+    });
+    if (process.env.ONE_OPEN_DEVTOOLS !== '0') {
+      mainWindow.webContents.once('dom-ready', () => {
+        mainWindow.webContents.openDevTools({ mode: 'detach' });
+        console.log('[1ONE] DevTools opened automatically (set ONE_OPEN_DEVTOOLS=0 to disable)');
+      });
+    }
+    mainWindow.loadFile(fallbackFile).catch((error) => {
+      console.error('[1ONE] loadFile failed:', error.message || error);
+    });
+  };
+
+  if (preferBuiltRendererInDev) {
+    loadPackagedOrBuiltFile('Dev using prebuilt renderer (npm run restart)');
+  } else if (!app.isPackaged && rendererUrl) {
     let devLoadAttempts = 0;
     let devNavigationSettled = false;
+    let devToolsAutoOpened = false;
     const maxDevLoadAttempts = 8;
+    const devRendererWatchdogMs = Number(process.env.ONE_DEV_RENDERER_WATCHDOG_MS) || 120_000;
+    const shouldAutoOpenDevTools = process.env.ONE_OPEN_DEVTOOLS !== '0';
+
     const markDevNavigationSettled = (reason: string): void => {
       if (devNavigationSettled) {
         return;
@@ -344,7 +373,23 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
       console.log(`[1ONE] Renderer did-finish-load (${reason})`, mainWindow.webContents.getURL());
     };
 
+    const maybeAutoOpenDevTools = (): void => {
+      if (devToolsAutoOpened || !shouldAutoOpenDevTools || mainWindow.isDestroyed()) {
+        return;
+      }
+      devToolsAutoOpened = true;
+      mainWindow.webContents.openDevTools({ mode: 'detach' });
+      console.log('[1ONE] DevTools opened automatically (set ONE_OPEN_DEVTOOLS=0 to disable)');
+    };
+
+    const stopInFlightNavigation = (): void => {
+      if (!mainWindow.isDestroyed() && mainWindow.webContents.isLoading()) {
+        mainWindow.webContents.stop();
+      }
+    };
+
     const loadDevBuiltFallback = (): void => {
+      stopInFlightNavigation();
       console.warn(`[1ONE] Loading built renderer fallback: ${fallbackFile}`);
       mainWindow.loadFile(fallbackFile).catch((error) => {
         console.error('[1ONE] loadFile fallback failed:', error.message || error);
@@ -360,13 +405,26 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
       devNavigationSettled = false;
       console.log(`[1ONE] Loading renderer URL (attempt ${devLoadAttempts}): ${rendererUrl}`);
       mainWindow.loadURL(rendererUrl).catch((error) => {
-        console.error('[1ONE] loadURL failed, falling back to built file:', error.message || error);
+        const message = error instanceof Error ? error.message : String(error);
+        if (devNavigationSettled || message.includes('ERR_ABORTED')) {
+          console.warn('[1ONE] loadURL aborted after renderer settled (ignored):', message);
+          return;
+        }
+        console.error('[1ONE] loadURL failed, falling back to built file:', message);
         loadDevBuiltFallback();
       });
     };
 
+    mainWindow.webContents.on('console-message', (event) => {
+      const { level, message, lineNumber, sourceId } = event;
+      const prefix =
+        level === 'error' ? '[Renderer:error]' : level === 'warning' ? '[Renderer:warn]' : '[Renderer:log]';
+      console.log(`${prefix} ${message} (${sourceId}:${lineNumber})`);
+    });
+
     mainWindow.webContents.on('dom-ready', () => {
       markDevNavigationSettled('dom-ready');
+      maybeAutoOpenDevTools();
     });
     mainWindow.webContents.on('did-finish-load', () => {
       markDevNavigationSettled('did-finish-load');
@@ -374,7 +432,11 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
 
     mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       console.error('[1ONE] did-fail-load:', { errorCode, errorDescription, validatedURL, isMainFrame });
-      if (!isMainFrame) {
+      if (!isMainFrame || devNavigationSettled) {
+        return;
+      }
+      // -3 ERR_ABORTED: superseded by a newer loadURL/stop(); not a real failure.
+      if (errorCode === -3) {
         return;
       }
       if (devLoadAttempts >= maxDevLoadAttempts) {
@@ -396,12 +458,23 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
         return;
       }
       const url = mainWindow.webContents.getURL();
-      console.warn('[1ONE] Vite load watchdog: navigation not settled', {
+      console.warn('[1ONE] Vite load watchdog: navigation not settled (first compile can take 1–2 min)', {
         url,
         isLoading: mainWindow.webContents.isLoading(),
+        watchdogMs: devRendererWatchdogMs,
       });
+      stopInFlightNavigation();
+      if (devLoadAttempts < maxDevLoadAttempts) {
+        void (async () => {
+          await waitForDevRendererUrl(rendererUrl, 30_000);
+          if (!mainWindow.isDestroyed()) {
+            loadDevRenderer();
+          }
+        })();
+        return;
+      }
       loadDevBuiltFallback();
-    }, 25_000);
+    }, devRendererWatchdogMs);
 
     void (async () => {
       console.log('[1ONE] Waiting for Vite dev server before first load...');
@@ -419,13 +492,7 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
       loadDevRenderer();
     })();
   } else {
-    console.log(`[1ONE] Loading renderer file: ${fallbackFile}`);
-    mainWindow.webContents.on('did-finish-load', () => {
-      console.log('[1ONE] Renderer did-finish-load');
-    });
-    mainWindow.loadFile(fallbackFile).catch((error) => {
-      console.error('[1ONE] loadFile failed:', error.message || error);
-    });
+    loadPackagedOrBuiltFile('Loading renderer file');
   }
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
@@ -457,8 +524,8 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
     console.log('[1ONE] Main window closed');
   });
 
-  // DevTools is no longer auto-opened at startup.
-  // Use the DevTools toggle in Settings > System (dev mode only) to open it.
+  // Dev: DevTools auto-opens on first dom-ready (ONE_OPEN_DEVTOOLS=0 to disable).
+  // Packaged app: use Settings > System or CDP http://127.0.0.1:9230
 
   // Listen to DevTools state changes and notify Renderer
   mainWindow.webContents.on('devtools-opened', () => {
@@ -633,6 +700,10 @@ const handleAppReady = async (): Promise<void> => {
 
     createWindow({ showOnReady: showMainWindowOnReady });
     appReadyDone = true;
+    if (pendingSecondInstanceFocus) {
+      pendingSecondInstanceFocus = false;
+      focusMainWindowFromSecondInstance();
+    }
     mark('createWindow');
 
     void initializeStorageDeferred()
@@ -771,7 +842,7 @@ app.on('open-url', (event, url) => {
     return;
   }
   // Focus existing window so user sees the result
-  showOrCreateMainWindow({ mainWindow, createWindow });
+  focusMainWindowFromSecondInstance();
 });
 
 // Ensure we don't miss the ready event when running in CLI/WebUI mode

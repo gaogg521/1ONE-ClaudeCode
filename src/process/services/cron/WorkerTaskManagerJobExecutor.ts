@@ -25,6 +25,8 @@ import type { ICronJobExecutor } from './ICronJobExecutor';
 import { addMessage } from '@process/utils/message';
 import { getCronSkillDir, hasCronSkillFile } from './cronSkillFile';
 import { enrichAutopilotPrompt } from './autopilotPostback';
+import { resolvePersonalAgentPreset } from '@process/digitalEmployee/resolvePersonalAgentPreset';
+import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 import { skillSuggestWatcher } from './SkillSuggestWatcher';
 
 /** Lazy-import to break circular dependency: cronServiceSingleton ↔ conversationServiceSingleton */
@@ -178,21 +180,45 @@ export class WorkerTaskManagerJobExecutor implements ICronJobExecutor {
     const hasSkill = await hasCronSkillFile(job.id);
     const cronSkillDir = getCronSkillDir(job.id);
 
+    const autopilot = config.autopilotContext;
+    const personalAgentId =
+      autopilot?.personalAgentId ??
+      (autopilot?.teamId === 'personal' && autopilot.agentSlotId ? autopilot.agentSlotId : undefined);
+
+    let extra: CreateConversationParams['extra'] = {
+      backend: config.backend,
+      agentName: config.name,
+      cliPath: config.cliPath,
+      customAgentId: config.customAgentId,
+      presetAssistantId: config.isPreset ? config.customAgentId : undefined,
+      cronJobId: job.id,
+      ...(hasSkill
+        ? { extraSkillPaths: [cronSkillDir], excludeBuiltinSkills: ['cron'] }
+        : { excludeBuiltinSkills: ['cron'] }),
+    };
+
+    if (personalAgentId) {
+      const preset = await resolvePersonalAgentPreset(
+        personalAgentId,
+        autopilot?.ownerUserId ?? DESKTOP_OPERATOR_USER_ID
+      );
+      extra = {
+        ...extra,
+        personalAgentId,
+        tenantId: 'default',
+        ...(preset?.presetContext
+          ? { presetContext: preset.presetContext, presetRules: preset.presetContext }
+          : {}),
+        ...(preset?.enabledSkills?.length ? { enabledSkills: preset.enabledSkills } : {}),
+        ...(preset?.preferredModelId ? { currentModelId: preset.preferredModelId } : {}),
+      };
+    }
+
     const params: CreateConversationParams = {
       type: agentType,
       name: convName,
       model,
-      extra: {
-        backend: config.backend,
-        agentName: config.name,
-        cliPath: config.cliPath,
-        customAgentId: config.customAgentId,
-        presetAssistantId: config.isPreset ? config.customAgentId : undefined,
-        cronJobId: job.id,
-        ...(hasSkill
-          ? { extraSkillPaths: [cronSkillDir], excludeBuiltinSkills: ['cron'] }
-          : { excludeBuiltinSkills: ['cron'] }),
-      },
+      extra,
     };
 
     const service = await getConversationService();

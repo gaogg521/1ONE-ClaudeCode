@@ -653,7 +653,39 @@ export class CronService {
    * Must be called BEFORE sendMessage to avoid race conditions.
    */
   private registerCompletionNotification(job: CronJob, conversationId: string): void {
+    const autopilot = job.metadata.agentConfig?.autopilotContext;
+    if (autopilot?.source === 'super_assistant' && autopilot.agentSlotId) {
+      void import('@process/digitalEmployee/digitalEmployeeCronRun').then(({ recordDigitalEmployeeCronRunStarted }) =>
+        recordDigitalEmployeeCronRunStarted(autopilot, conversationId)
+      );
+    }
+
     this.executor.onceIdle(conversationId, async () => {
+      if (autopilot?.source === 'super_assistant' && autopilot.agentSlotId) {
+        try {
+          const { recordDigitalEmployeeCronRunFinished } = await import(
+            '@process/digitalEmployee/digitalEmployeeCronRun'
+          );
+          const { extractLastAssistantReply } = await import('@process/services/cron/autopilotPostback');
+          const messagesResult = await this.conversationRepo.getMessages(conversationId, 0, 12, 'DESC');
+          const reply = extractLastAssistantReply(messagesResult.data);
+          const summary = reply ? (reply.length > 240 ? `${reply.slice(0, 237)}…` : reply) : undefined;
+          await recordDigitalEmployeeCronRunFinished(autopilot, conversationId, {
+            status: 'success',
+            summary,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const { recordDigitalEmployeeCronRunFinished } = await import(
+            '@process/digitalEmployee/digitalEmployeeCronRun'
+          );
+          await recordDigitalEmployeeCronRunFinished(autopilot, conversationId, {
+            status: 'failed',
+            error: message,
+          });
+        }
+      }
+
       try {
         await postAutopilotResultToIssue(job, conversationId, this.conversationRepo);
       } catch (error) {

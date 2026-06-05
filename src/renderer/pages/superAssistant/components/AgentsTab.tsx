@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { Button, Card, Empty, Tag } from '@arco-design/web-react';
-import { Edit, PlayOne, Plus, Time } from '@icon-park/react';
+import { Button, Card, Empty, Popconfirm, Tag } from '@arco-design/web-react';
+import { Delete, Edit, FileText, PlayOne, Plus, Time } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import type { ICronJob } from '@/common/adapter/ipcBridge';
 import { useAllCronJobs } from '@/renderer/pages/cron/useCronJobs';
@@ -21,6 +21,8 @@ type AgentsTabProps = {
   onManageAgent?: (agent: AgentCardRef) => void;
   onRunAgentNow?: (agent: AgentCardRef) => void;
   onScheduleAgent?: (agent: AgentCardRef) => void;
+  onViewDigitalEmployeeDetail?: (agent: AgentCardRef) => void;
+  onDeleteAgent?: (agent: AgentCardRef) => Promise<void>;
 };
 
 function getStatusMeta(
@@ -51,6 +53,8 @@ const AgentsTab: React.FC<AgentsTabProps> = ({
   onManageAgent,
   onRunAgentNow,
   onScheduleAgent,
+  onViewDigitalEmployeeDetail,
+  onDeleteAgent,
 }) => {
   const { t } = useTranslation();
   const { jobs } = useAllCronJobs();
@@ -121,6 +125,15 @@ const AgentsTab: React.FC<AgentsTabProps> = ({
                   const statusMeta = getStatusMeta(agent.status, t);
                   const agentRef = toAgentRef(group, agent);
                   const automationCount = automationCountByAgent.get(`${group.teamId}:${agent.slotId}`) ?? 0;
+                  const runMeta = agent.digitalEmployeeRun;
+                  const runStatusLabel =
+                    runMeta?.status === 'running'
+                      ? t('common.superAssistant.digitalEmployee.runStatus.running', { defaultValue: '运行中' })
+                      : runMeta?.status === 'success'
+                        ? t('common.superAssistant.digitalEmployee.runStatus.success', { defaultValue: '已完成' })
+                        : runMeta?.status === 'failed'
+                          ? t('common.superAssistant.digitalEmployee.runStatus.failed', { defaultValue: '失败' })
+                          : null;
                   const focusText =
                     agent.status === 'failed'
                       ? agent.blockerMessage
@@ -159,6 +172,20 @@ const AgentsTab: React.FC<AgentsTabProps> = ({
                       extra={<Tag color={statusMeta.color}>{statusMeta.label}</Tag>}
                     >
                       <div className='text-12px text-t-tertiary'>{focusText}</div>
+                      {runMeta ? (
+                        <div className='mt-8px text-12px text-t-secondary'>
+                          {runStatusLabel
+                            ? t('common.superAssistant.digitalEmployee.cardLastRun', {
+                                defaultValue: '上次运行：{{status}} · {{time}}',
+                                status: runStatusLabel,
+                                time: new Date(runMeta.startedAt).toLocaleString(),
+                              })
+                            : null}
+                          {runMeta.summary ? (
+                            <div className='mt-4px line-clamp-2 text-t-tertiary'>{runMeta.summary}</div>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <div className='mt-8px flex flex-wrap gap-6px'>
                         {automationCount > 0 ? (
                           <Tag color='purple' size='small'>
@@ -203,6 +230,36 @@ const AgentsTab: React.FC<AgentsTabProps> = ({
                         >
                           {t('common.superAssistant.agentSchedule', { defaultValue: '定时自动化' })}
                         </Button>
+                        {onViewDigitalEmployeeDetail ? (
+                          <Button
+                            size='mini'
+                            type='outline'
+                            icon={<FileText theme='outline' size='14' />}
+                            onClick={() => onViewDigitalEmployeeDetail(agentRef)}
+                          >
+                            {t('common.superAssistant.digitalEmployee.viewDetail', {
+                              defaultValue: '查看详情',
+                            })}
+                          </Button>
+                        ) : null}
+                        {onDeleteAgent ? (
+                          <Popconfirm
+                            title={t('common.superAssistant.deleteAgentConfirmTitle', {
+                              defaultValue: '删除数字员工？',
+                            })}
+                            content={t('common.superAssistant.deleteAgentConfirmDesc', {
+                              defaultValue:
+                                '将删除「{{agent}}」及其关联的定时任务，且不可恢复。',
+                              agent: agent.agentName,
+                            })}
+                            okButtonProps={{ status: 'danger' }}
+                            onOk={() => onDeleteAgent(agentRef)}
+                          >
+                            <Button size='mini' status='danger' icon={<Delete theme='outline' size='14' />}>
+                              {t('common.delete', { defaultValue: '删除' })}
+                            </Button>
+                          </Popconfirm>
+                        ) : null}
                       </div>
                     </Card>
                   );

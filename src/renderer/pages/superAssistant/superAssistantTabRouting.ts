@@ -5,15 +5,20 @@
  */
 
 import type { Location } from 'react-router-dom';
+import { AGENT_FLEET_PATH } from '@/renderer/pages/agentFleet/agentFleetRouting';
+
+export { AGENT_FLEET_PATH };
 
 export const SUPER_ASSISTANT_TABS = [
   'overview',
   'agents',
   'issues',
   'skills',
-  'runtimes',
   'settings',
 ] as const;
+
+/** Legacy super-assistant tab; fleet UI lives at {@link AGENT_FLEET_PATH}. */
+export const LEGACY_SUPER_ASSISTANT_RUNTIMES_TAB = 'runtimes';
 
 export type SuperAssistantTab = (typeof SUPER_ASSISTANT_TABS)[number];
 
@@ -42,10 +47,14 @@ export function readSuperAssistantSearch(location: Pick<Location, 'search'>): st
 
 export function parseSuperAssistantTab(search: string): SuperAssistantTab {
   const rawTab = new URLSearchParams(search).get('tab');
-  if (rawTab === 'workspace') {
+  if (rawTab === 'workspace' || rawTab === LEGACY_SUPER_ASSISTANT_RUNTIMES_TAB) {
     return 'overview';
   }
   return isSuperAssistantTab(rawTab) ? rawTab : 'overview';
+}
+
+export function shouldRedirectLegacyRuntimesTab(search: string): boolean {
+  return new URLSearchParams(search).get('tab') === LEGACY_SUPER_ASSISTANT_RUNTIMES_TAB;
 }
 
 export function readSuperAssistantTabFromLocation(location: Pick<Location, 'search'>): SuperAssistantTab {

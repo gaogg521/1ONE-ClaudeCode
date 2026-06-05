@@ -8,6 +8,9 @@
 export type AutopilotContext = {
   teamId?: string;
   agentSlotId?: string;
+  /** Set when teamId is `personal` — cron runs as this digital employee. */
+  personalAgentId?: string;
+  ownerUserId?: string;
   requirementId?: string;
   postBackToIssue?: boolean;
   mentionUserIds?: string[];

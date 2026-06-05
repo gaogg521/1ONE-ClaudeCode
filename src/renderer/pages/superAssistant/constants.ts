@@ -3,7 +3,6 @@ export const SUPER_ASSISTANT_TABS = [
   'issues',
   'agents',
   'skills',
-  'runtimes',
   'settings',
 ] as const;
 

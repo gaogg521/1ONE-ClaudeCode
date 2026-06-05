@@ -5,4 +5,4 @@
  */
 
 export * as ipcBridge from './adapter/ipcBridge';
-export { conversation } from './adapter/ipcBridge';
+export { conversation, webui } from './adapter/ipcBridge';

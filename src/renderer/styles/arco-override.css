@@ -280,8 +280,8 @@ body[arco-theme='dark'] .arco-message-error {
 }
 
 /* Menu: selected item text highlight */
-.arco-menu-item.arco-menu-item-selected,
-.arco-menu-item-selected {
+.arco-menu-item.arco-menu-selected,
+.arco-menu-selected {
   color: var(--one-active-highlight) !important;
   font-weight: 600;
 }

@@ -4,11 +4,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { DigitalEmployeeRunRecord } from '@/common/types/digitalEmployeeRunTypes';
+
 export type PersonalAgentAutomationConfig = {
   skillIds?: string[];
   preferredModelId?: string;
   providerModelKey?: string;
   instructions?: string;
+  /** Latest background run (card status + detail entry). */
+  lastRun?: DigitalEmployeeRunRecord;
+  /** Recent runs, newest first (capped in repository updates). */
+  runHistory?: DigitalEmployeeRunRecord[];
   [key: string]: unknown;
 };
 

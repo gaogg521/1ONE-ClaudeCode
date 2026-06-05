@@ -6,6 +6,7 @@
 
 import { bridge, logger } from '@office-ai/platform';
 import { WEBUI_DEFAULT_PORT } from '@/common/config/constants';
+import { hasWebuiSessionCookie } from '@/common/config/webuiEnterpriseConfig';
 import type { ElectronBridgeAPI } from '@/common/types/electron';
 
 interface CustomWindow extends Window {
@@ -55,6 +56,7 @@ if (win.electronAPI) {
   let connectionGeneration = 0;
 
   const messageQueue: QueuedMessage[] = [];
+  const canOpenWebSocket = () => hasWebuiSessionCookie();
 
   // 1.发送队列中积压的消息，确保在重新建立连接后不会丢事件
   const flushQueue = () => {
@@ -72,7 +74,7 @@ if (win.electronAPI) {
 
   // 2.简单的指数退避重连，等待服务端在登录成功后接受新连接
   const scheduleReconnect = () => {
-    if (reconnectTimer !== null || !shouldReconnect) {
+    if (reconnectTimer !== null || !shouldReconnect || !canOpenWebSocket()) {
       return;
     }
 
@@ -85,6 +87,9 @@ if (win.electronAPI) {
 
   // 3.建立 WebSocket 连接（或复用已有的 OPEN/CONNECTING 状态）
   const connect = () => {
+    if (!canOpenWebSocket()) {
+      return;
+    }
     if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
       return;
     }
@@ -210,8 +215,11 @@ if (win.electronAPI) {
     });
   };
 
-  // 4.确保在发送/订阅前已经发起连接
+  // 4.确保在发送/订阅前已经发起连接（未登录时不连 WS，避免 8s 重连风暴）
   const ensureSocket = () => {
+    if (!canOpenWebSocket()) {
+      return;
+    }
     if (!socket || socket.readyState === WebSocket.CLOSED || socket.readyState === WebSocket.CLOSING) {
       connect();
     }
@@ -248,7 +256,9 @@ if (win.electronAPI) {
     },
   });
 
-  connect();
+  if (canOpenWebSocket()) {
+    connect();
+  }
 
   // Expose reconnection control for login flow
   win.__websocketReconnect = () => {

@@ -381,6 +381,26 @@ export async function listMemberDashboard(): Promise<MemberDashboardRecord[]> {
   return enterpriseGet<MemberDashboardRecord[]>('/api/admin/member-dashboard');
 }
 
+export type AgentTokenUsageRecord = {
+  agentKey: string;
+  agentName: string;
+  source: 'personal' | 'team' | 'session';
+  ownerUserId?: string;
+  conversationCount: number;
+  totalTokens: number;
+  lastActivityAt: number;
+};
+
+export type AgentTokenUsageSummary = {
+  days: number;
+  totalTokens: number;
+  agents: AgentTokenUsageRecord[];
+};
+
+export async function listAgentTokenUsage(days = 30): Promise<AgentTokenUsageSummary> {
+  return enterpriseGet<AgentTokenUsageSummary>(`/api/admin/agent-token-usage?days=${days}`);
+}
+
 export async function listSkills(): Promise<SkillRecord[]> {
   return enterpriseGet<SkillRecord[]>('/api/admin/skills');
 }

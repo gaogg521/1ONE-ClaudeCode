@@ -1,13 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AGENT_FLEET_PATH,
   buildSuperAssistantPath,
   parseSuperAssistantTab,
   readSuperAssistantSearch,
+  shouldRedirectLegacyRuntimesTab,
 } from '@/renderer/pages/superAssistant/superAssistantTabRouting';
 
 describe('superAssistantTabRouting', () => {
   it('maps legacy workspace tab to overview', () => {
     expect(parseSuperAssistantTab('?tab=workspace')).toBe('overview');
+  });
+
+  it('maps legacy runtimes tab to overview and flags redirect', () => {
+    expect(parseSuperAssistantTab('?tab=runtimes')).toBe('overview');
+    expect(shouldRedirectLegacyRuntimesTab('?tab=runtimes')).toBe(true);
+    expect(shouldRedirectLegacyRuntimesTab('?tab=agents')).toBe(false);
+  });
+
+  it('exports agent fleet path for sidebar navigation', () => {
+    expect(AGENT_FLEET_PATH).toBe('/agent-fleet');
   });
 
   it('builds super assistant paths with issue context', () => {

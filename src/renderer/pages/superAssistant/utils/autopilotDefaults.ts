@@ -4,9 +4,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { buildPersonalAgentAutopilotContext } from '@/common/digitalEmployee/agentCronConfig';
+import {
+  buildIssueAssignmentPrompt,
+  buildPersonalDigitalEmployeeCronPrompt,
+} from '@/common/digitalEmployee/runPrompt';
 import type { AutopilotContext } from '@/common/types/autopilotContext';
-import { AGENT_BLOCKER_ESCALATION_INSTRUCTIONS } from '@/common/types/agentEscalationInstructions';
+import type { PersonalAgent } from '@/common/types/personalAgentTypes';
 import type { TeamAgent } from '@/common/types/teamTypes';
+
+export { buildIssueAssignmentPrompt, buildPersonalDigitalEmployeeCronPrompt };
 
 export type SuperAssistantAutopilotDefaults = {
   initialAgentKey?: string;
@@ -24,27 +31,34 @@ export function resolveTeamAgentCronKey(agent: TeamAgent): string | undefined {
   return `cli:${backend}`;
 }
 
-export function buildIssueAssignmentPrompt(
-  issue: { id: string; subject: string; description?: string | null },
-  agentName: string
-): string {
-  const description = issue.description?.trim();
-  return [
-    `你是「${agentName}」，请立即开始处理以下 Issue：`,
-    '',
-    `**${issue.subject}**`,
-    `Issue ID: \`${issue.id}\``,
-    description ? description : '',
-    '',
-    '要求：',
-    '1. 直接开始执行，不要反问澄清问题',
-    '2. 遇到阻塞请说明原因，并在回复中用 @用户名 提及需要介入的同事',
-    '3. 完成后输出可交付的 Markdown 摘要',
-    '',
-    AGENT_BLOCKER_ESCALATION_INSTRUCTIONS,
-  ]
-    .filter(Boolean)
-    .join('\n');
+export function buildAutopilotForPersonalAgent(
+  agent: PersonalAgent,
+  input: {
+    requirementId?: string;
+    skillNames?: string[];
+    mentionUserIds?: string[];
+    postBackToIssue?: boolean;
+  } = {}
+): SuperAssistantAutopilotDefaults | null {
+  const stubAgent: TeamAgent = {
+    slotId: agent.id,
+    conversationId: '',
+    role: 'teammate',
+    agentType: agent.agentType,
+    agentName: agent.name,
+    conversationType: agent.conversationType,
+    customAgentId: agent.customAgentId,
+    cliPath: agent.cliPath,
+    status: 'idle',
+  };
+  const initialAgentKey = resolveTeamAgentCronKey(stubAgent);
+  if (!initialAgentKey) {
+    return null;
+  }
+  return {
+    initialAgentKey,
+    autopilotContext: buildPersonalAgentAutopilotContext(agent, input),
+  };
 }
 
 export function buildSuperAssistantAutopilotDefaults(input: {

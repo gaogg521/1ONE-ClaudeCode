@@ -46,6 +46,7 @@ describe('enterprise paths', () => {
   it('filters nav items by current role', () => {
     expect(getVisibleEnterpriseNavItems('member', false).map((item) => item.key)).toEqual([
       'home',
+      'runtimes',
       'cteam',
       'rag',
       'mcp',

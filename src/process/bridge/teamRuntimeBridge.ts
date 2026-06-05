@@ -7,7 +7,7 @@
 import { ipcBridge } from '@/common';
 import type { TeamRuntimeNode, UpsertTeamRuntimeNodeInput } from '@/common/types/teamRuntimeTypes';
 import { publishTeamRuntimeToAdminBackend } from '@process/team/TeamRuntimeAdminPublisher';
-import { getTeamRuntimeRegistry } from '@process/team/TeamRuntimeRegistry';
+import { getTeamRuntimeRegistry, type TeamRuntimeRegistry } from '@process/team/TeamRuntimeRegistry';
 import { shouldSyncWithEnterpriseApi } from '@/common/config/enterpriseApiOrigins';
 
 const HEARTBEAT_INTERVAL_MS = 60_000;
@@ -64,11 +64,11 @@ export function initTeamRuntimeBridge(): void {
   });
 
   ipcBridge.teamRuntime.upsert.provider(async (params: UpsertTeamRuntimeNodeInput) => {
-    return getTeamRuntimeRegistry().upsertNode(params);
+    return await getTeamRuntimeRegistry().upsertNode(params);
   });
 
   ipcBridge.teamRuntime.list.provider(async (params) => {
-    return getTeamRuntimeRegistry().listNodes(params);
+    return await getTeamRuntimeRegistry().listNodes(params);
   });
 
   ipcBridge.teamRuntime.startHeartbeat.provider(async (params) => {
@@ -82,12 +82,14 @@ export function initTeamRuntimeBridge(): void {
   });
 }
 
-export function listTeamRuntimeNodesForApi(
-  input: Parameters<ReturnType<typeof getTeamRuntimeRegistry>['listNodes']>[0]
-): TeamRuntimeNode[] {
-  return getTeamRuntimeRegistry().listNodes(input);
+export async function listTeamRuntimeNodesForApi(
+  input: Parameters<TeamRuntimeRegistry['listNodes']>[0]
+): Promise<TeamRuntimeNode[]> {
+  return await getTeamRuntimeRegistry().listNodes(input);
 }
 
-export function upsertTeamRuntimeNodeForApi(input: UpsertTeamRuntimeNodeInput): TeamRuntimeNode {
-  return getTeamRuntimeRegistry().upsertNode(input);
+export async function upsertTeamRuntimeNodeForApi(
+  input: UpsertTeamRuntimeNodeInput
+): Promise<TeamRuntimeNode> {
+  return await getTeamRuntimeRegistry().upsertNode(input);
 }

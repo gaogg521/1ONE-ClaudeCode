@@ -441,6 +441,90 @@ describe('devopsRoutes', () => {
     });
   });
 
+  describe('企业 Skills 技能仓库 API', () => {
+    it('DELETE /api/admin/skills/:id — org_admin 可删除本租户技能', async () => {
+      mockGet.mockReturnValueOnce({
+        scope: 'personal',
+        team_id: null,
+        created_by: 'other-user',
+      });
+      mockRun.mockReturnValueOnce({ changes: 1 });
+
+      const handler = getRouteHandler(app, 'delete', '/api/admin/skills/:id');
+      const req = {
+        user: { id: 'test-user-id', tenant_id: 'tenant-123', role: 'org_admin' },
+        params: { id: 'skill-1' },
+      } as any;
+      const res = createResponseMock();
+
+      await handler(req, res, () => {});
+
+      expect(mockDriver.prepare).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE FROM skills_registry WHERE id=? AND tenant_id=?')
+      );
+      expect(res.json).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('DELETE /api/admin/skills/:id — 非创建者且无管理权限时返回 403', async () => {
+      mockGet.mockReturnValueOnce({
+        scope: 'personal',
+        team_id: null,
+        created_by: 'other-user',
+      });
+
+      const handler = getRouteHandler(app, 'delete', '/api/admin/skills/:id');
+      const req = {
+        user: { id: 'test-user-id', tenant_id: 'tenant-123', role: 'member' },
+        params: { id: 'skill-1' },
+      } as any;
+      const res = createResponseMock();
+
+      await handler(req, res, () => {});
+
+      expect(mockRun).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith({ success: false, message: 'Forbidden' });
+    });
+
+    it('DELETE /api/admin/skills/:id — 记录不存在时返回 404', async () => {
+      mockGet.mockReturnValueOnce(undefined);
+
+      const handler = getRouteHandler(app, 'delete', '/api/admin/skills/:id');
+      const req = {
+        user: { id: 'test-user-id', tenant_id: 'tenant-123', role: 'org_admin' },
+        params: { id: 'missing-skill' },
+      } as any;
+      const res = createResponseMock();
+
+      await handler(req, res, () => {});
+
+      expect(mockRun).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ success: false, message: 'Skill not found' });
+    });
+
+    it('POST /api/admin/skills — 无管理权限时更新返回 403 而非 404', async () => {
+      mockGet.mockReturnValueOnce({
+        scope: 'personal',
+        team_id: null,
+        created_by: 'other-user',
+      });
+
+      const handler = getRouteHandler(app, 'post', '/api/admin/skills');
+      const req = {
+        user: { id: 'test-user-id', tenant_id: 'tenant-123', role: 'member' },
+        body: { id: 'skill-1', name: 'Renamed', description: '', content: '', enabled: true },
+      } as any;
+      const res = createResponseMock();
+
+      await handler(req, res, () => {});
+
+      expect(mockRun).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith({ success: false, message: 'Forbidden' });
+    });
+  });
+
   describe('MCP 统一服务仓库', () => {
     it('GET /api/admin/mcp/registry - 获取列表并优雅脱敏敏感凭证信息', async () => {
       // 模拟数据库返回包含 env_json 的凭证

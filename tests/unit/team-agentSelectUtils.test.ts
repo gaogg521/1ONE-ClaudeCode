@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   resolveConversationType,
   isTeamSupportedBackend,
+  filterDigitalEmployeeRuntimeAgents,
   filterTeamSupportedAgents,
   agentKey,
   agentFromKey,
@@ -111,6 +112,38 @@ describe('filterTeamSupportedAgents', () => {
   it('returns all agents when all are verified', () => {
     const agents = [makeAgent('claude'), makeAgent('codex')];
     expect(filterTeamSupportedAgents(agents)).toHaveLength(2);
+  });
+});
+
+describe('filterDigitalEmployeeRuntimeAgents', () => {
+  const makeAgent = (backend: string, overrides?: Partial<AvailableAgent>): AvailableAgent =>
+    ({
+      backend,
+      name: backend,
+      conversationType: 'acp',
+      ...overrides,
+    }) as AvailableAgent;
+
+  it('keeps all detected CLI agents for personal digital employees', () => {
+    const agents = [
+      makeAgent('aionrs', { name: '1ONE CODE' }),
+      makeAgent('gemini', { name: 'Gemini CLI' }),
+      makeAgent('claude', { name: 'Claude Code' }),
+      makeAgent('openclaw-gateway', { name: 'OpenClaw' }),
+      makeAgent('cursor', { name: 'Cursor Agent' }),
+    ];
+    expect(filterDigitalEmployeeRuntimeAgents(agents, 'personal')).toHaveLength(5);
+  });
+
+  it('still limits workspace digital employees to team-verified backends', () => {
+    const agents = [
+      makeAgent('claude'),
+      makeAgent('cursor'),
+      makeAgent('aionrs'),
+    ];
+    expect(filterDigitalEmployeeRuntimeAgents(agents, 'workspace').map((a) => a.backend)).toEqual([
+      'claude',
+    ]);
   });
 });
 

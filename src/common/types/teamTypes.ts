@@ -2,6 +2,8 @@
 // Shared team types used by both main process and renderer.
 // Renderer code should import from here instead of @process/team/types.
 
+import type { DigitalEmployeeRunRecord } from '@/common/types/digitalEmployeeRunTypes';
+
 /** Role of a teammate within a team */
 export type TeammateRole = 'lead' | 'teammate';
 
@@ -28,6 +30,10 @@ export type TeamAgent = {
   preferredModelId?: string;
   /** Provider-backed model key for gemini/aionrs (`providerId::modelName`) */
   providerModelKey?: string;
+  /** Latest background run (super-assistant card + detail). */
+  lastRun?: DigitalEmployeeRunRecord;
+  /** Recent runs, newest first. */
+  runHistory?: DigitalEmployeeRunRecord[];
 };
 
 /** Persisted team record (stored in SQLite `teams` table) */
