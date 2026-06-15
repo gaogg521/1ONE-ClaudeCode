@@ -26,6 +26,7 @@ export async function syncBrowserWebuiSessionToDesktop(): Promise<WebuiDesktopSe
         userId: result.data.userId,
         username: result.data.username,
         role: result.data.role,
+        tenant_id: result.data.tenant_id,
         token: result.data.token,
       };
       setWebuiDesktopSession(next);

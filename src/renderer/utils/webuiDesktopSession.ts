@@ -15,6 +15,7 @@ export type WebuiDesktopSession = {
   userId: string;
   username: string;
   role: string;
+  tenant_id?: string;
   token: string;
 };
 

@@ -10,6 +10,7 @@ import { Menu, app } from 'electron';
 
 export function setupApplicationMenu(): void {
   const isMac = process.platform === 'darwin';
+  const isPackaged = app.isPackaged;
 
   const template: MenuItemConstructorOptions[] = [];
 
@@ -50,7 +51,7 @@ export function setupApplicationMenu(): void {
     submenu: [
       { role: 'reload' },
       { role: 'forceReload' },
-      { role: 'toggleDevTools' },
+      ...(isPackaged ? [] : ([{ role: 'toggleDevTools' }] as MenuItemConstructorOptions[])),
       { type: 'separator' },
       { role: 'resetZoom' },
       { role: 'zoomIn' },

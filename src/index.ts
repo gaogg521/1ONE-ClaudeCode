@@ -344,7 +344,7 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
     mainWindow.webContents.on('did-finish-load', () => {
       console.log('[1ONE] Renderer did-finish-load (file)', mainWindow.webContents.getURL());
     });
-    if (process.env.ONE_OPEN_DEVTOOLS !== '0') {
+    if (!app.isPackaged && process.env.ONE_OPEN_DEVTOOLS !== '0') {
       mainWindow.webContents.once('dom-ready', () => {
         mainWindow.webContents.openDevTools({ mode: 'detach' });
         console.log('[1ONE] DevTools opened automatically (set ONE_OPEN_DEVTOOLS=0 to disable)');
@@ -525,7 +525,7 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   });
 
   // Dev: DevTools auto-opens on first dom-ready (ONE_OPEN_DEVTOOLS=0 to disable).
-  // Packaged app: use Settings > System or CDP http://127.0.0.1:9230
+  // Packaged app: no auto-open; hidden 7-tap gesture in Layout or support builds only.
 
   // Listen to DevTools state changes and notify Renderer
   mainWindow.webContents.on('devtools-opened', () => {

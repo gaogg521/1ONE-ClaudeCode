@@ -119,9 +119,7 @@ export function useWorkspaceUserProfile() {
       return null;
     }
     const ctx = enterpriseMode.enterpriseContext;
-    const joined =
-      enterpriseMode.hasJoinedEnterprise ||
-      (isDesktopRuntime && enterpriseMode.hasInstanceEnterprise);
+    const joined = enterpriseMode.hasJoinedEnterprise;
     return {
       userId: auth.user.id,
       username: auth.user.username,

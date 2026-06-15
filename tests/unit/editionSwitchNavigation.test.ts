@@ -16,7 +16,21 @@ describe('navigateAfterEditionSwitch', () => {
     expect(navigate).toHaveBeenCalledWith('/sessions', undefined);
   });
 
-  it('routes unjoined desktop instance to join', () => {
+  it('routes unjoined desktop instance to join for regular members', () => {
+    const navigate = vi.fn();
+    navigateAfterEditionSwitch({
+      next: 'enterprise',
+      navigate,
+      isDesktop: true,
+      hasJoinedEnterprise: false,
+      hasInstanceEnterprise: true,
+      isAuthenticated: true,
+      isDesktopOperator: false,
+    });
+    expect(navigate).toHaveBeenCalledWith('/enterprise/join', undefined);
+  });
+
+  it('routes unjoined standalone desktop instance to join', () => {
     const navigate = vi.fn();
     navigateAfterEditionSwitch({
       next: 'enterprise',
@@ -25,7 +39,7 @@ describe('navigateAfterEditionSwitch', () => {
       hasJoinedEnterprise: false,
       hasInstanceEnterprise: false,
       isAuthenticated: true,
-      isDesktopOperator: true,
+      isDesktopOperator: false,
     });
     expect(navigate).toHaveBeenCalledWith('/enterprise/join', undefined);
   });

@@ -18,6 +18,7 @@ export type BrowserSessionSnapshot = {
   userId: string;
   username: string;
   role: string;
+  tenant_id: string;
   token: string;
   updatedAt: number;
 };
@@ -36,12 +37,14 @@ export function registerBrowserWebuiSession(input: {
   userId: string;
   username: string;
   role: string;
+  tenant_id?: string;
   token: string;
 }): void {
   const snapshot: BrowserSessionSnapshot = {
     userId: input.userId,
     username: input.username,
     role: input.role,
+    tenant_id: input.tenant_id ?? 'default',
     token: input.token,
     updatedAt: Date.now(),
   };

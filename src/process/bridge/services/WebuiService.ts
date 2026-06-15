@@ -446,6 +446,7 @@ export class WebuiService {
           userId: user.id,
           username: user.username,
           role: user.role ?? 'member',
+          tenant_id: user.tenant_id ?? 'default',
           token: cookieToken,
           updatedAt: Date.now(),
         };

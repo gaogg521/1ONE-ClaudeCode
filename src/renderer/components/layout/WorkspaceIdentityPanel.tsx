@@ -42,15 +42,27 @@ function resolveRoleLabel(role: string, t: (key: string, opts?: Record<string, u
 function buildOrgLine(
   profile: WorkspaceUserProfile,
   managementMode: WebuiManagementMode,
+  hasJoinedEnterprise: boolean,
+  hasInstanceEnterprise: boolean,
   t: (key: string, opts?: Record<string, unknown>) => string
 ): string {
-  if (!profile.joinedEnterprise) {
+  if (!hasJoinedEnterprise) {
+    if (managementMode === 'enterprise' && hasInstanceEnterprise) {
+      const tenant = profile.tenantName ?? profile.tenantId;
+      return t('settings.workspaceIdentity.enterprisePendingLoginEdition', {
+        defaultValue: '{{tenant}} · 请登录企业账号',
+        tenant:
+          tenant && tenant !== 'default'
+            ? tenant
+            : t('settings.edition.enterprise', { defaultValue: '企业组织' }),
+      });
+    }
     return t('settings.edition.personal', { defaultValue: '个人版' });
   }
   const tenant = profile.tenantName ?? profile.tenantId;
   const editionLabel =
     managementMode === 'enterprise'
-      ? t('settings.workspaceIdentity.editionEnterprise', { defaultValue: '1ONE Code 企业版' })
+      ? t('settings.workspaceIdentity.editionEnterprise', { defaultValue: '企业团队版' })
       : t('settings.workspaceIdentity.personalView', { defaultValue: '个人版视图' });
   return `${tenant} · ${editionLabel}`;
 }
@@ -120,10 +132,15 @@ const GuestProfileMenu: React.FC<{
 const ProfileMenu: React.FC<{
   profile: WorkspaceUserProfile;
   managementMode: WebuiManagementMode;
+  hasJoinedEnterprise: boolean;
+  hasInstanceEnterprise: boolean;
+  pendingEnterpriseLogin: boolean;
   onPickAvatar: () => void;
   onLogout: () => void;
   onSwitchPersonal: () => void;
   onSwitchEnterprise: () => void;
+  onGoJoinEnterprise: () => void;
+  onEnterpriseLogin: () => void;
   onOpenAdmin: () => void;
   showAdmin: boolean;
   canUploadAvatar: boolean;
@@ -131,10 +148,15 @@ const ProfileMenu: React.FC<{
 }> = ({
   profile,
   managementMode,
+  hasJoinedEnterprise,
+  hasInstanceEnterprise,
+  pendingEnterpriseLogin,
   onPickAvatar,
   onLogout,
   onSwitchPersonal,
   onSwitchEnterprise,
+  onGoJoinEnterprise,
+  onEnterpriseLogin,
   onOpenAdmin,
   showAdmin,
   canUploadAvatar,
@@ -152,7 +174,15 @@ const ProfileMenu: React.FC<{
       onSwitchPersonal();
       return;
     }
-    if (key === 'enterprise' || key === 'join') {
+    if (key === 'join') {
+      if (pendingEnterpriseLogin) {
+        onEnterpriseLogin();
+        return;
+      }
+      onGoJoinEnterprise();
+      return;
+    }
+    if (key === 'enterprise') {
       onSwitchEnterprise();
       return;
     }
@@ -175,7 +205,7 @@ const ProfileMenu: React.FC<{
           </Typography.Paragraph>
         ) : null}
         <Typography.Paragraph type='secondary' className={styles.menuSub}>
-          {buildOrgLine(profile, managementMode, t)}
+          {buildOrgLine(profile, managementMode, hasJoinedEnterprise, hasInstanceEnterprise, t)}
         </Typography.Paragraph>
         <Tag size='small'>{resolveRoleLabel(displayRole ?? profile.role, t)}</Tag>
       </div>
@@ -213,19 +243,21 @@ const ProfileMenu: React.FC<{
           {t('settings.workspaceIdentity.changeAvatar', { defaultValue: '更换头像' })}
         </Menu.Item>
       ) : null}
-      {profile.joinedEnterprise ? (
+      {hasJoinedEnterprise ? (
         isEnterpriseView ? (
           <Menu.Item key='personal'>
             {t('settings.workspaceIdentity.switchPersonal', { defaultValue: '切换到个人版' })}
           </Menu.Item>
         ) : (
           <Menu.Item key='enterprise'>
-            {t('settings.workspaceIdentity.switchEnterpriseEdition', { defaultValue: '切换到1ONE Code 企业版' })}
+            {t('settings.workspaceIdentity.switchEnterpriseEdition', { defaultValue: '切换到企业团队版' })}
           </Menu.Item>
         )
       ) : (
         <Menu.Item key='join'>
-          {t('settings.workspaceIdentity.switchEnterprise', { defaultValue: '加入 / 切换企业' })}
+          {pendingEnterpriseLogin
+            ? t('settings.edition.enterpriseLoginAction', { defaultValue: '登录企业账号' })
+            : t('settings.enterpriseConsole.goJoinEnterprise', { defaultValue: '前往加入企业' })}
         </Menu.Item>
       )}
       {showAdmin ? (
@@ -258,9 +290,26 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
 
   const avatarSrc = avatarDisplayUrl ?? undefined;
 
+  const pendingEnterpriseLogin =
+    isDesktop &&
+    isDesktopOperatorUser(auth.user) &&
+    enterpriseMode.hasInstanceEnterprise &&
+    !enterpriseMode.hasJoinedEnterprise;
+
+  const handleEnterpriseLogin = () => {
+    const returnTo =
+      location.pathname.startsWith('/login') || location.pathname.startsWith('/enterprise/join')
+        ? '/sessions'
+        : `${location.pathname}${location.search}`;
+    void enterpriseMode.startEnterpriseLogin((path) => appNavigate(navigate, path), returnTo);
+  };
+
   const switchEdition = useCallback(
     (next: WebuiManagementMode) => {
-      void enterpriseMode.setManagementMode(next).then(() => {
+      void enterpriseMode.setManagementMode(next).then(async () => {
+        if (isDesktop) {
+          await auth.refresh();
+        }
         navigateAfterEditionSwitch({
           next,
           navigate,
@@ -294,6 +343,7 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
       });
     },
     [
+      auth,
       auth.status,
       auth.user,
       enterpriseMode,
@@ -380,23 +430,18 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
     switchEdition('standalone');
   };
 
+  const handleGoJoinEnterprise = () => {
+    void enterpriseMode.setManagementMode('enterprise').then(() => {
+      appNavigate(navigate, '/enterprise/join');
+    });
+  };
+
   const handleSwitchEnterprise = () => {
-    if (profile.joinedEnterprise) {
+    if (enterpriseMode.hasJoinedEnterprise) {
       switchEdition('enterprise');
       return;
     }
-    void enterpriseMode.setManagementMode('enterprise').then(() => {
-      navigateAfterEditionSwitch({
-        next: 'enterprise',
-        navigate,
-        isDesktop,
-        hasJoinedEnterprise: enterpriseMode.hasJoinedEnterprise,
-        hasInstanceEnterprise: enterpriseMode.hasInstanceEnterprise,
-        isAuthenticated: auth.status === 'authenticated',
-        isDesktopOperator: isDesktopOperatorUser(auth.user),
-        currentPath: location.pathname,
-      });
-    });
+    handleGoJoinEnterprise();
   };
 
   const handleOpenAdmin = async () => {
@@ -418,7 +463,13 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
           tenant: enterpriseGuestTenantLabel,
         })
       : t('settings.workspaceIdentity.guestEdition', { defaultValue: '个人版 · 未登录' })
-    : buildOrgLine(profile, enterpriseMode.managementMode, t);
+    : buildOrgLine(
+        profile,
+        enterpriseMode.managementMode,
+        enterpriseMode.hasJoinedEnterprise,
+        enterpriseMode.hasInstanceEnterprise,
+        t
+      );
 
   const displayName = isGuest
     ? isEnterpriseGuest
@@ -426,7 +477,11 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
           defaultValue: '请登录企业账号',
         })
       : t('settings.workspaceIdentity.guestName', { defaultValue: '访客' })
-    : profile.username;
+    : pendingEnterpriseLogin
+      ? t('settings.workspaceIdentity.enterprisePendingLoginName', {
+          defaultValue: '请登录企业账号',
+        })
+      : profile.username;
 
   const avatarInitial = isGuest
     ? isEnterpriseGuest
@@ -446,10 +501,15 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
     <ProfileMenu
       profile={profile}
       managementMode={enterpriseMode.managementMode}
+      hasJoinedEnterprise={enterpriseMode.hasJoinedEnterprise}
+      hasInstanceEnterprise={enterpriseMode.hasInstanceEnterprise}
+      pendingEnterpriseLogin={pendingEnterpriseLogin}
       onPickAvatar={handleAvatarPick}
       onLogout={() => void handleLogout()}
       onSwitchPersonal={handleSwitchPersonal}
       onSwitchEnterprise={handleSwitchEnterprise}
+      onGoJoinEnterprise={handleGoJoinEnterprise}
+      onEnterpriseLogin={handleEnterpriseLogin}
       onOpenAdmin={() => void handleOpenAdmin()}
       showAdmin={showAdmin}
       canUploadAvatar={canUploadAvatar}

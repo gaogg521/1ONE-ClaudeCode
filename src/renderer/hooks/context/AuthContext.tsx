@@ -158,12 +158,37 @@ async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> 
   return null;
 }
 
+function persistDesktopSessionFromUser(user: AuthUser, token: string, fallbackRole?: string): void {
+  setWebuiDesktopSession({
+    userId: user.id,
+    username: user.username,
+    role: user.role ?? fallbackRole ?? 'member',
+    tenant_id: user.tenant_id,
+    token,
+  });
+}
+
 function authUserFromDesktopSession(session: WebuiDesktopSession): AuthUser {
   return {
     id: session.userId,
     username: session.username,
+    tenant_id: session.tenant_id,
     role: (session.role as AuthUser['role']) ?? 'member',
   };
+}
+
+async function parseAuthUserResponse(response: Response): Promise<AuthUser | null> {
+  if (!response.ok) {
+    return null;
+  }
+  const data = (await response.json().catch((): null => null)) as {
+    success?: boolean;
+    user?: AuthUser;
+  };
+  if (data?.success && data.user) {
+    return data.user;
+  }
+  return null;
 }
 
 async function loginViaWebui(path: string, body: Record<string, unknown>): Promise<LoginResult> {
@@ -222,12 +247,7 @@ async function loginViaWebui(path: string, body: Record<string, unknown>): Promi
 
   if (data.user) {
     if (data.token) {
-      setWebuiDesktopSession({
-        userId: data.user.id,
-        username: data.user.username,
-        role: data.user.role ?? 'member',
-        token: data.token,
-      });
+      persistDesktopSessionFromUser(data.user, data.token);
     } else {
       console.warn('[Auth] WebUI login succeeded without JWT token; desktop session may not persist across refresh');
     }
@@ -260,24 +280,15 @@ async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
         throw new Error('AUTH_USER_BACKOFF');
       }
       const response = await fetchWebuiApi('/api/auth/user');
-      if (response.ok) {
-        const data = (await response.json()) as {
-          success?: boolean;
-          user?: AuthUser;
-        };
-        if (data.success && data.user) {
-          const session = getWebuiDesktopSession();
-          if (session?.token) {
-            setWebuiDesktopSession({
-              userId: data.user.id,
-              username: data.user.username,
-              role: data.user.role ?? session.role ?? 'member',
-              token: session.token,
-            });
-          }
-          return data.user;
+      const apiUser = await parseAuthUserResponse(response);
+      if (apiUser) {
+        const session = getWebuiDesktopSession();
+        if (session?.token) {
+          persistDesktopSessionFromUser(apiUser, session.token, session.role);
         }
-      } else if (response.status === 401 || response.status === 403) {
+        return apiUser;
+      }
+      if (response.status === 401 || response.status === 403) {
         setWebuiDesktopSession(null);
         clearAuthCache();
       }
@@ -286,12 +297,16 @@ async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
     }
 
     const session = getWebuiDesktopSession();
-    if (session?.token && !shouldSkipAuthUserRequest()) {
-      const verified = await fetchWebuiApi('/api/auth/user').catch(() => null);
-      if (verified?.ok) {
-        return authUserFromDesktopSession(session);
+    if (session?.token && session.userId !== DESKTOP_OPERATOR_USER_ID) {
+      if (!shouldSkipAuthUserRequest()) {
+        const verified = await fetchWebuiApi('/api/auth/user').catch(() => null);
+        const apiUser = verified ? await parseAuthUserResponse(verified) : null;
+        if (apiUser) {
+          persistDesktopSessionFromUser(apiUser, session.token, session.role);
+          return apiUser;
+        }
       }
-      setWebuiDesktopSession(null);
+      return authUserFromDesktopSession(session);
     }
 
     return buildDesktopOperatorUser(statusResult.data.adminUsername);
@@ -492,12 +507,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       setReady(true);
       clearAuthUserRequestBackoff();
       if (data.token) {
-        setWebuiDesktopSession({
-          userId: data.user.id,
-          username: data.user.username,
-          role: data.user.role ?? 'member',
-          token: data.token,
-        });
+        persistDesktopSessionFromUser(data.user, data.token);
       }
       dispatchWebuiConfigRefresh();
       window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));

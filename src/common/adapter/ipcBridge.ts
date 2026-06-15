@@ -56,7 +56,10 @@ export const conversation = {
   reset: bridge.buildProvider<void, IResetConversationParams>('reset-conversation'), // 重置对话
   warmup: bridge.buildProvider<void, { conversation_id: string }>('conversation.warmup'), // 预热对话 bootstrap
   stop: bridge.buildProvider<IBridgeResponse<{}>, { conversation_id: string }>('chat.stop.stream'), // 停止会话
-  sendMessage: bridge.buildProvider<IBridgeResponse<{}>, ISendMessageParams>('chat.send.message'), // 发送消息（统一接口）
+  sendMessage: bridge.buildProvider<
+    IBridgeResponse<{ input?: string; files?: string[] }>,
+    ISendMessageParams
+  >('chat.send.message'), // 发送消息（统一接口）
   getSlashCommands: bridge.buildProvider<
     IBridgeResponse<{ commands: SlashCommandItem[] }>,
     { conversation_id: string }
@@ -846,6 +849,7 @@ export const webui = {
       userId: string;
       username: string;
       role: string;
+      tenant_id: string;
       token: string;
     }>,
     void

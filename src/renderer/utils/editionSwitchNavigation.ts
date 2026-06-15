@@ -20,8 +20,10 @@ export function navigateAfterEditionSwitch(input: {
   onAlreadyAtTarget?: (path: string) => void;
 }): void {
   const targetPath =
-    input.next === 'enterprise' && !input.hasJoinedEnterprise && !input.hasInstanceEnterprise
-      ? '/enterprise/join'
+    input.next === 'enterprise' && !input.hasJoinedEnterprise
+      ? input.isDesktopOperator && input.hasInstanceEnterprise
+        ? '/sessions'
+        : '/enterprise/join'
       : '/sessions';
   if (input.currentPath === targetPath) {
     input.onAlreadyAtTarget?.(targetPath);

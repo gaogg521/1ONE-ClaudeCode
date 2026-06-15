@@ -15,6 +15,7 @@ import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpris
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { openAdminConsole as openAdminConsoleRoute } from '@/renderer/utils/openAdminConsole';
 import { navigateAfterEditionSwitch } from '@/renderer/utils/editionSwitchNavigation';
+import { syncBrowserWebuiSessionToDesktop } from '@/renderer/utils/syncBrowserWebuiSession';
 import styles from '@/renderer/components/layout/EditionModeSwitcher.module.css';
 
 type EditionModeSwitcherProps = {
@@ -66,7 +67,11 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
       if (next === 'enterprise' && !canUseEnterpriseEditionSwitcher) {
         return;
       }
-      void setManagementMode(next).then(() => {
+      void setManagementMode(next).then(async () => {
+        if (isDesktop) {
+          await syncBrowserWebuiSessionToDesktop().catch(() => null);
+          window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+        }
         navigateAfterEditionSwitch({
           next,
           navigate,

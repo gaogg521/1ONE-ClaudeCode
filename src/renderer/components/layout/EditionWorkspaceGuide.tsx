@@ -9,7 +9,8 @@ import { Alert, Button } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
-import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { isDesktopOperatorUser, useAuth } from '@/renderer/hooks/context/AuthContext';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { openAdminConsole } from '@/renderer/utils/openAdminConsole';
 import styles from '@/renderer/components/layout/EditionWorkspaceGuide.module.css';
@@ -120,12 +121,33 @@ const EditionWorkspaceGuide: React.FC = () => {
       };
     }
     if (!hasJoinedEnterprise) {
+      const pendingDesktopEnterpriseLogin =
+        isElectronDesktop() &&
+        isDesktopOperatorUser(user) &&
+        hasInstanceEnterprise &&
+        managementMode === 'enterprise';
       return {
         type: 'warning' as const,
-        line: t('settings.edition.guideEnterprisePendingLine', {
-          defaultValue: '尚未加入组织，请先登录或输入邀请码加入。',
-        }),
-        action: (
+        line: pendingDesktopEnterpriseLogin
+          ? t('settings.edition.guideEnterpriseGuestLine', {
+              defaultValue: '当前实例已接入 {{tenant}}，但你尚未登录企业账号。',
+              tenant: tenantLabel,
+            })
+          : t('settings.edition.guideEnterprisePendingLine', {
+              defaultValue: '尚未加入组织，请先登录或输入邀请码加入。',
+            }),
+        action: pendingDesktopEnterpriseLogin ? (
+          <Button
+            size='mini'
+            type='text'
+            onClick={() => {
+              const returnTo = `${location.pathname}${location.search}` || '/sessions';
+              void startEnterpriseLogin((path) => navigate(path), returnTo);
+            }}
+          >
+            {t('settings.edition.guideGoEnterpriseLogin', { defaultValue: '登录企业账号' })}
+          </Button>
+        ) : (
           <Button size='mini' type='text' onClick={() => void navigate('/enterprise/join')}>
             {t('settings.edition.guideGoJoin', { defaultValue: '前往加入企业' })}
           </Button>
@@ -159,6 +181,7 @@ const EditionWorkspaceGuide: React.FC = () => {
     hasJoinedEnterprise,
     isAdmin,
     managementMode,
+    user,
     location.pathname,
     location.search,
     navigate,

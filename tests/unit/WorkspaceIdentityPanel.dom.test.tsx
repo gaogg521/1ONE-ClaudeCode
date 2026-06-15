@@ -88,7 +88,12 @@ vi.mock('@icon-park/react', () => ({
 vi.mock('@arco-design/web-react', () => ({
   Avatar: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   Divider: () => <hr />,
-  Dropdown: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Dropdown: ({ children, droplist }: { children?: React.ReactNode; droplist?: React.ReactNode }) => (
+    <div>
+      {children}
+      <div data-testid='profile-menu'>{droplist}</div>
+    </div>
+  ),
   Menu: Object.assign(
     ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     {
@@ -112,7 +117,7 @@ describe('WorkspaceIdentityPanel', () => {
     authState.user = { id: 'user-1', username: 'alice', role: 'member' };
     enterpriseModeState.effectiveRole = 'member';
     enterpriseModeState.showEnterpriseAdminNav = false;
-    enterpriseModeState.hasJoinedEnterprise = false;
+    enterpriseModeState.hasJoinedEnterprise = true;
     enterpriseModeState.hasInstanceEnterprise = true;
     enterpriseModeState.managementMode = 'enterprise';
     enterpriseModeState.enterpriseContext = { tenantId: 'tenant-1', tenantName: 'Acme Corp' };
@@ -136,15 +141,16 @@ describe('WorkspaceIdentityPanel', () => {
 
   it('renders username and organization in titlebar trigger', () => {
     render(<WorkspaceIdentityPanel />);
-    expect(screen.getByText('alice')).toBeTruthy();
-    expect(screen.getByText('Acme Corp · 1ONE Code 企业版')).toBeTruthy();
-    expect(screen.getByText('研发中心 / 平台组')).toBeTruthy();
+    expect(screen.getAllByText('alice').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Acme Corp · 企业团队版').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('研发中心 / 平台组').length).toBeGreaterThan(0);
+    expect(screen.getByText('切换到个人版')).toBeTruthy();
   });
 
   it('renders compact mode with avatar trigger only', () => {
     render(<WorkspaceIdentityPanel compact />);
-    expect(screen.queryByText('alice')).toBeNull();
-    expect(screen.queryByText('Acme Corp')).toBeNull();
+    expect(screen.getByLabelText('账户与组织').textContent).not.toContain('alice');
+    expect(screen.getByLabelText('账户与组织').textContent).not.toContain('Acme Corp');
     expect(screen.getByLabelText('账户与组织')).toBeTruthy();
   });
 
@@ -170,8 +176,30 @@ describe('WorkspaceIdentityPanel', () => {
     };
 
     render(<WorkspaceIdentityPanel />);
-    expect(screen.getByText('请登录企业账号')).toBeTruthy();
+    expect(screen.getAllByText('请登录企业账号').length).toBeGreaterThan(0);
     expect(screen.getByText('Acme Corp · 登录后显示姓名与组织架构')).toBeTruthy();
+  });
+
+  it('shows join enterprise entry when user has not joined yet', () => {
+    enterpriseModeState.hasJoinedEnterprise = false;
+    enterpriseModeState.managementMode = 'standalone';
+    profileState.profile = {
+      userId: 'user-1',
+      username: 'alice',
+      email: null,
+      role: 'member',
+      tenantId: 'default',
+      tenantName: null,
+      joinedEnterprise: false,
+      avatarUrl: null,
+      orgUnitPath: null,
+      teams: [],
+      updatedAt: Date.now(),
+    };
+
+    render(<WorkspaceIdentityPanel />);
+    expect(screen.getByText('前往加入企业')).toBeTruthy();
+    expect(screen.queryByText('切换到企业团队版')).toBeNull();
   });
 
   it('keeps personal guest identity in personal edition even when instance is connected to enterprise', () => {

@@ -21,6 +21,7 @@ describe('browserSessionBridge', () => {
       userId: 'u1',
       username: 'alice',
       role: 'member',
+      tenant_id: 'tenant-a',
       token: 'token-a',
     });
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -34,5 +35,6 @@ describe('browserSessionBridge', () => {
     const latest = getLatestBrowserWebuiSession();
     expect(latest?.username).toBe('bob');
     expect(latest?.token).toBe('token-b');
+    expect(latest?.tenant_id).toBe('default');
   });
 });
