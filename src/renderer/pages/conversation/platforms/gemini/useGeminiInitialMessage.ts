@@ -4,6 +4,7 @@ import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
 import { useLatestRef } from '@/renderer/hooks/ui/useLatestRef';
 import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
 import { assertBridgeSuccess } from '@/renderer/pages/conversation/platforms/assertBridgeSuccess';
+import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
 import { emitter } from '@/renderer/utils/emitter';
 import { useEffect } from 'react';
 
@@ -99,6 +100,7 @@ export const useGeminiInitialMessage = ({
           files: files || [],
         });
         assertBridgeSuccess(result, 'Failed to send initial message to Gemini');
+        patchSentMessageContent(addOrUpdateMessage, conversationId, msg_id, result);
 
         emitter.emit('chat.history.refresh');
         if (files && files.length > 0) {

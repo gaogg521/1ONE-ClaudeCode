@@ -15,6 +15,18 @@ vi.mock('@process/utils/initStorage', () => ({
   getBuiltinSkillsCopyDir: () => path.join('/tmp/1one-claudecode-test', 'builtin-skills'),
 }));
 
+vi.mock('@process/extensions', () => ({
+  ExtensionRegistry: {
+    getInstance: vi.fn(() => ({
+      getExtensions: vi.fn(() => []),
+    })),
+  },
+}));
+
+vi.mock('@process/extensions/resolvers/utils/skillMetadata', () => ({
+  readSkillMetadata: vi.fn(() => null),
+}));
+
 /**
  * Skills Market feature tests
  *
@@ -137,6 +149,7 @@ describe('Skills Market - Enable/Disable flow', () => {
 describe('Skills Market - AcpSkillManager integration', () => {
   it('resetInstance clears the singleton so new discoveries happen', async () => {
     const { AcpSkillManager } = await import('../../src/process/task/AcpSkillManager');
+    AcpSkillManager.resetInstance();
 
     // Get an instance (creates singleton)
     const instance1 = AcpSkillManager.getInstance();

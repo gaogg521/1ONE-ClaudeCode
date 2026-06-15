@@ -311,7 +311,12 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     await super.stop();
   }
 
-  async sendMessage(data: { input: string; msg_id: string; files?: string[] }) {
+  async sendMessage(data: {
+    input: string;
+    agentPrompt?: string;
+    msg_id: string;
+    files?: string[];
+  }) {
     const originalInput = data.input;
 
     // Detect model switches even when the worker is NOT rebuilt (some flows can update model routing without restart).
@@ -350,7 +355,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
         `When the user asks which model you are using, answer in Chinese in this exact format: "${productLine} / ${modelId}".\n` +
         `Do not answer with only a product family name; always include the exact model id.\n` +
         `</system-reminder>\n\n`;
-      data = { ...data, input: notice + (data.input || '') };
+      data = { ...data, input: notice + (data.agentPrompt ?? (data.input || '')) };
       // Identity-question path already carries the needed instruction; avoid stacking a second reminder.
       this.pendingModelIdentityNotice = null;
     } else if (this.pendingModelIdentityNotice) {
@@ -368,8 +373,10 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
         `- Exact model id: answer exactly "${modelId}".\n` +
         `Example: "${productLine} / ${modelId}"\n` +
         `</system-reminder>\n\n`;
-      data = { ...data, input: notice + (data.input || '') };
+      data = { ...data, input: notice + (data.agentPrompt ?? (data.input || '')) };
       this.pendingModelIdentityNotice = null;
+    } else if (data.agentPrompt) {
+      data = { ...data, input: data.agentPrompt };
     }
 
     const message: TMessage = {

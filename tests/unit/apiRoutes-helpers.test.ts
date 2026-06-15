@@ -20,11 +20,16 @@ vi.mock('@process/utils/initStorage', () => ({
   },
 }));
 
-vi.mock('@process/webserver/auth/middleware/TokenMiddleware', () => ({
-  TokenMiddleware: {
-    validateToken: vi.fn().mockReturnValue((req: any, res: any, next: any) => next()),
-  },
-}));
+vi.mock('@process/webserver/auth/middleware/TokenMiddleware', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@process/webserver/auth/middleware/TokenMiddleware')>();
+  return {
+    ...actual,
+    TokenMiddleware: {
+      ...actual.TokenMiddleware,
+      validateToken: vi.fn().mockReturnValue((_req: unknown, _res: unknown, next: () => void) => next()),
+    },
+  };
+});
 
 vi.mock('@process/extensions', () => ({
   ExtensionRegistry: {

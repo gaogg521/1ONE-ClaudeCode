@@ -32,6 +32,6 @@ describe('mergeTeamRuntimeNodes', () => {
       [node({ id: 'a', userId: 'user-a' })],
       [node({ id: 'b', userId: 'user-b', displayName: 'mac-b' })]
     );
-    expect(merged.map((item) => item.id).sort()).toEqual(['a', 'b']);
+    expect(merged.map((item) => item.id).toSorted()).toEqual(['a', 'b']);
   });
 });

@@ -25,7 +25,9 @@ import { mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
 import { Message, Tag } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiveWorkspace';
 import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
+import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
 import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import FilePreview from '@/renderer/components/media/FilePreview';
 import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
@@ -57,9 +59,9 @@ const EMPTY_AT_PATH: Array<string | FileOrFolderItem> = [];
 const EMPTY_UPLOAD_FILES: string[] = [];
 
 const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id }) => {
-  const [workspacePath, setWorkspacePath] = useState('');
   const { t } = useTranslation();
   const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
+  const effectiveWorkspace = useEffectiveWorkspace(conversation_id);
   const { checkAndUpdateTitle } = useAutoTitle();
   const slashCommands = useSlashCommands(conversation_id);
   const isCommandQueueEnabled = useCommandQueueEnabled();
@@ -241,7 +243,7 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
   const executeCommand = useCallback(
     async ({ input, files }: Pick<ConversationCommandQueueItem, 'input' | 'files'>) => {
       const msg_id = uuid();
-      const displayMessage = buildDisplayMessage(input, files, workspacePath);
+      const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
 
       const userMessage: TMessage = {
         id: msg_id,
@@ -263,6 +265,7 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
           files,
         });
         assertBridgeSuccess(result, 'Failed to send message to Nanobot');
+        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
         emitter.emit('chat.history.refresh');
       } catch (error) {
         removeMessageByMsgId(msg_id);
@@ -270,7 +273,7 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
         throw error;
       }
     },
-    [addOrUpdateMessage, checkAndUpdateTitle, conversation_id, removeMessageByMsgId, workspacePath]
+    [addOrUpdateMessage, checkAndUpdateTitle, conversation_id, effectiveWorkspace, removeMessageByMsgId]
   );
 
   const {
@@ -348,8 +351,7 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
         setAiProcessing(true);
         const { input, files = [] } = JSON.parse(stored) as { input: string; files?: string[] };
         const res = await ipcBridge.conversation.get.invoke({ id: conversation_id });
-        const resolvedWorkspace = res?.extra?.workspace ?? '';
-        setWorkspacePath(resolvedWorkspace);
+        const resolvedWorkspace = res?.extra?.workspace ?? effectiveWorkspace;
         const msg_id = `initial_${conversation_id}_${Date.now()}`;
         const initialDisplayMessage = buildDisplayMessage(input, files, resolvedWorkspace);
 
@@ -374,6 +376,7 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
           files,
         });
         assertBridgeSuccess(result, 'Failed to send initial message to Nanobot');
+        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
         emitter.emit('chat.history.refresh');
         sessionStorage.removeItem(storageKey);
       } catch {

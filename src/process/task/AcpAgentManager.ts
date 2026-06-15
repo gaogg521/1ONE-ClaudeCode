@@ -684,6 +684,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
 
   async sendMessage(data: {
     content: string;
+    agentPrompt?: string;
     files?: string[];
     msg_id?: string;
     cronMeta?: CronMessageMeta;
@@ -777,7 +778,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
 
         const result = await this.agent.sendMessage({
           ...data,
-          content: contentToSend,
+          content: data.agentPrompt ?? contentToSend,
         });
         // 首条消息发送后标记，无论是否有 presetContext
         if (this.isFirstMessage) {
@@ -796,7 +797,10 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
 
       await this.initAgent(this.options);
       const agentSendStart = Date.now();
-      const result = await this.agent.sendMessage(data);
+      const result = await this.agent.sendMessage({
+        ...data,
+        content: data.agentPrompt ?? data.content,
+      });
       if (ACP_PERF_LOG)
         console.log(
           `[ACP-PERF] manager: agent.sendMessage completed ${Date.now() - agentSendStart}ms (total manager.sendMessage: ${Date.now() - managerSendStart}ms)`

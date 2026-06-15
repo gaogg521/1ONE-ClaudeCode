@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback } from 'react';
-import { Card } from '@arco-design/web-react';
+import { Card, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import AdminPageWrapper from './components/AdminPageWrapper';
 import TeamRuntimeFleetPanel from '@/renderer/pages/superAssistant/components/TeamRuntimeFleetPanel';
@@ -42,13 +42,18 @@ const AdminTeamRuntimes: React.FC = () => {
   }, [mutate]);
 
   return (
-    <AdminPageWrapper
-      title={t('admin.teamRuntimes.title', { defaultValue: '团队运行时' })}
-      description={t('admin.teamRuntimes.desc', {
-        defaultValue:
-          '汇总 C/S 桌面端与 B/S 浏览器端上报的机器名、IP 与已安装 Agent，数据与超级管理员后台同步。',
-      })}
-    >
+    <AdminPageWrapper>
+      <div className='mb-16px'>
+        <Typography.Title heading={5} style={{ margin: 0 }}>
+          {t('admin.teamRuntimes.title', { defaultValue: '团队运行时' })}
+        </Typography.Title>
+        <Typography.Paragraph type='secondary' style={{ margin: '8px 0 0' }}>
+          {t('admin.teamRuntimes.desc', {
+            defaultValue:
+              '汇总 C/S 桌面端与 B/S 浏览器端上报的机器名、IP 与已安装 Agent，数据与超级管理员后台同步。',
+          })}
+        </Typography.Paragraph>
+      </div>
       <Card loading={isLoading}>
         <TeamRuntimeFleetPanel
           enabled

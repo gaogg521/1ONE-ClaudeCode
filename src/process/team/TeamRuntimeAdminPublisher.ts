@@ -16,7 +16,7 @@ import { ONE_WEBUI_CLIENT_DESKTOP, ONE_WEBUI_CLIENT_HEADER } from '@/common/conf
 
 async function readOrgApiOrigins(): Promise<string[]> {
   const stored =
-    ((await ProcessConfig.get('webui.enterpriseApiOrigins').catch(() => [])) as string[] | undefined) ?? [];
+    ((await ProcessConfig.get('webui.enterpriseApiOrigins').catch((): string[] => [])) as string[] | undefined) ?? [];
   const local: string[] = [];
   const status = await WebuiService.getStatus(getWebServerInstance());
   if (status.port) {
@@ -67,7 +67,7 @@ export async function publishTeamRuntimeToAdminBackend(
         },
         body: JSON.stringify(payload),
       });
-      const body = (await response.json().catch(() => null)) as {
+      const body = (await response.json().catch((): null => null)) as {
         success?: boolean;
         data?: TeamRuntimeNode;
       } | null;

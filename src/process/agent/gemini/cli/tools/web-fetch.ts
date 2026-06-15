@@ -104,10 +104,14 @@ export class WebFetchTool extends BaseDeclarativeTool<WebFetchToolParams, ToolRe
     _toolName?: string,
     _toolDisplayName?: string
   ): ToolInvocation<WebFetchToolParams, ToolResult> {
-    const resolved = normalizeWebFetchToolParams(
-      params as unknown as Record<string, unknown>
-    ) as WebFetchToolParams;
-    return new WebFetchInvocation(this.geminiClient, resolved, messageBus, _toolName, _toolDisplayName);
+    const resolved = normalizeWebFetchToolParams(params as unknown as Record<string, unknown>);
+    return new WebFetchInvocation(
+      this.geminiClient,
+      resolved as unknown as WebFetchToolParams,
+      messageBus,
+      _toolName,
+      _toolDisplayName
+    );
   }
 }
 

@@ -69,7 +69,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
       }
       void setManagementMode(next).then(async () => {
         if (isDesktop) {
-          await syncBrowserWebuiSessionToDesktop().catch(() => null);
+          await syncBrowserWebuiSessionToDesktop().catch((): null => null);
           window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
         }
         navigateAfterEditionSwitch({

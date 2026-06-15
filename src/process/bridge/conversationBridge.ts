@@ -32,8 +32,15 @@ import fs from 'fs';
 import path from 'path';
 import { migrateConversationToDatabase } from './migrationUtils';
 import { ConversationSideQuestionService } from './services/ConversationSideQuestionService';
+import {
+  buildDisplayMessage,
+  isCacheTempFilePath,
+  isImageFilePath,
+  stripFilesMarker,
+} from '@/common/chat/messageFiles';
 import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 import { resolvePersonalAgentPreset } from '@process/digitalEmployee/resolvePersonalAgentPreset';
+import { buildPromptAugmentationPrefix, composeAgentPrompt } from '@process/services/promptAugmentation';
 
 const refreshTrayMenuSafely = async (): Promise<void> => {
   try {
@@ -553,25 +560,32 @@ export function initConversationBridge(
     let workspaceFiles: string[];
     const isGeminiAgent = task.type === 'gemini';
     const isAionrsAgent = task.type === 'aionrs';
+    const cacheDir = getSystemDir().cacheDir;
+    const hasTempUploads = (files ?? []).some((filePath) => isCacheTempFilePath(filePath, cacheDir));
 
-    if (isGeminiAgent || isAionrsAgent) {
-      // Copy files to workspace (required for gemini CLI; prevents aionrs from reading binary files as text)
+    if (isGeminiAgent || isAionrsAgent || hasTempUploads) {
+      // Copy files to workspace (required for gemini/aionrs; WebUI temp uploads for all agent types)
       try {
-        workspaceFiles = await copyFilesToDirectory(task.workspace, files, false, getSystemDir().cacheDir);
+        workspaceFiles = await copyFilesToDirectory(task.workspace, files, false, cacheDir);
       } catch (error) {
         console.error('[conversationBridge] sendMessage: failed to copy files to workspace:', error);
         workspaceFiles = [];
       }
     } else {
-      // Non-binary agents (ACP, Codex, NanoBot, OpenClaw, Remote): Use cache directory paths directly
-      // Filter to only include absolute paths that exist
+      // Non-temp attachments: use absolute paths directly
       workspaceFiles = (files ?? []).filter((f) => path.isAbsolute(f));
     }
+
+    const textOnly = stripFilesMarker(other.input);
+    const resolvedInput =
+      workspaceFiles.length > 0
+        ? buildDisplayMessage(textOnly, workspaceFiles, task.workspace)
+        : textOnly;
 
     // Precompute agent content with optional skill injection.
     // OpenClaw uses full-content mode: inject full skill text rather than index paths,
     // because the CLI may not proactively read SKILL.md files the way ACP agents do.
-    let agentContent = other.input;
+    let agentContent = resolvedInput;
     if (other.injectSkills?.length) {
       agentContent = await prepareFirstMessage(other.input, {
         enabledSkills: other.injectSkills,
@@ -586,15 +600,24 @@ export function initConversationBridge(
       );
     }
 
+    const augmentationPrefix = await buildPromptAugmentationPrefix({
+      displayContent: agentContent,
+      files: workspaceFiles,
+    });
+    const agentPrompt = composeAgentPrompt(agentContent, augmentationPrefix);
+
     try {
       // Pass unified data — each agent reads the fields it needs from the unknown payload.
       // `content` aliases `input` for ACP/Codex/NanoBot/OpenClaw agents.
       // `agentContent` carries the skill-injected text for OpenClaw (equals `input` when no skills).
+      // `agentPrompt` adds hidden attachment/web context without polluting user-visible history.
       await task.sendMessage({
         ...other,
-        content: other.input,
-        files: workspaceFiles,
+        input: resolvedInput,
+        content: resolvedInput,
         agentContent,
+        agentPrompt,
+        files: workspaceFiles,
       });
 
       // Defer cleanup until after Gemini worker finishes processing the files.
@@ -611,6 +634,9 @@ export function initConversationBridge(
             if (data.type !== 'finish') return;
             geminiTask.off('gemini.message', handleMessage);
             for (const filePath of filesToCleanup) {
+              if (isImageFilePath(filePath)) {
+                continue;
+              }
               const resolvedFile = path.resolve(filePath);
               if (resolvedFile.startsWith(resolvedWorkspace + path.sep)) {
                 fs.promises.unlink(filePath).catch((cleanupError) => {
@@ -623,7 +649,7 @@ export function initConversationBridge(
         }
       }
 
-      return { success: true };
+      return { success: true, data: { input: resolvedInput, files: workspaceFiles } };
     } catch (err: unknown) {
       return {
         success: false,

@@ -641,7 +641,7 @@ export class AcpAgent {
   }
 
   // 发送消息到ACP服务器
-  async sendMessage(data: { content: string; files?: string[]; msg_id?: string }): Promise<AcpResult> {
+  async sendMessage(data: { content: string; agentPrompt?: string; files?: string[]; msg_id?: string }): Promise<AcpResult> {
     const sendStart = Date.now();
     try {
       this.turnHasThought = false;
@@ -673,7 +673,7 @@ export class AcpAgent {
 
       this.adapter.resetMessageTracking();
       this.adapter.resetPlanTracking();
-      let processedContent = data.content;
+      let processedContent = data.agentPrompt ?? data.content;
 
       // Add @ prefix to ALL uploaded files (including images) with FULL PATH
       // Claude CLI needs full path to read files
@@ -736,7 +736,7 @@ export class AcpAgent {
       }
 
       let webPrefetchApplied = false;
-      if (shouldPrefetchWebContext(processedContent)) {
+      if (!data.agentPrompt && shouldPrefetchWebContext(processedContent)) {
         const prefetchStart = Date.now();
         try {
           const prefetch = await prefetchWebContextForUserMessage(processedContent);

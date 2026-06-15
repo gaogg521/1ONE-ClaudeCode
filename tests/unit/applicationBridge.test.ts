@@ -244,6 +244,7 @@ describe('CDP configuration functions', () => {
           getStartOnBootStatus: { provider: vi.fn(), emit: vi.fn(), invoke: vi.fn() },
           setStartOnBoot: { provider: vi.fn(), emit: vi.fn(), invoke: vi.fn() },
           restoreHiddenBuiltinAssistants: { provider: vi.fn(), emit: vi.fn(), invoke: vi.fn() },
+          clearRendererHttpCache: { provider: vi.fn(), emit: vi.fn(), invoke: vi.fn() },
         },
       },
     }));

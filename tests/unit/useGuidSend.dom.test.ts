@@ -169,27 +169,30 @@ describe('useGuidSend', () => {
       expect(deps.navigate).toHaveBeenCalledWith('/conversation/new-conv');
     });
 
-    it('handles null conversation result gracefully', async () => {
+    it('rejects when conversation result is null', async () => {
       mockCreate.mockResolvedValueOnce(null);
       const deps = makeDeps();
       const { result } = renderHook(() => useGuidSend(deps));
 
-      await act(async () => {
-        await result.current.handleSend();
-      });
+      await expect(
+        act(async () => {
+          await result.current.handleSend();
+        })
+      ).rejects.toThrow('conversation.createFailed');
 
-      // Should not navigate or throw
       expect(deps.navigate).not.toHaveBeenCalled();
     });
 
-    it('handles conversation missing id gracefully', async () => {
+    it('rejects when conversation is missing id', async () => {
       mockCreate.mockResolvedValueOnce({ extra: {} });
       const deps = makeDeps();
       const { result } = renderHook(() => useGuidSend(deps));
 
-      await act(async () => {
-        await result.current.handleSend();
-      });
+      await expect(
+        act(async () => {
+          await result.current.handleSend();
+        })
+      ).rejects.toThrow('conversation.createFailed');
 
       expect(deps.navigate).not.toHaveBeenCalled();
     });

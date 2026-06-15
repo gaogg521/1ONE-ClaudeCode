@@ -38,7 +38,7 @@ export async function getFeishuTenantAccessToken(): Promise<{ token: string; rec
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
   });
-  const json = (await res.json().catch(() => null)) as FeishuApiResponse<{ tenant_access_token?: string }> | null;
+  const json = (await res.json().catch((): null => null)) as FeishuApiResponse<{ tenant_access_token?: string }> | null;
   if (!res.ok || !json || json.code !== 0 || !json.data?.tenant_access_token) {
     return null;
   }
@@ -69,7 +69,7 @@ export async function sendFeishuTextMessage(input: {
     }),
   });
 
-  const json = (await res.json().catch(() => null)) as FeishuApiResponse<unknown> | null;
+  const json = (await res.json().catch((): null => null)) as FeishuApiResponse<unknown> | null;
   if (!res.ok || !json || json.code !== 0) {
     console.warn('[FeishuIM] send message failed:', json?.msg ?? res.status);
     return false;

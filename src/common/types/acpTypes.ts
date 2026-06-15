@@ -722,7 +722,7 @@ export interface ToolCallUpdate extends BaseSessionUpdate {
     toolCallId: string;
     status: 'pending' | 'in_progress' | 'completed' | 'failed';
     title: string;
-    kind: 'read' | 'edit' | 'execute';
+    kind: 'read' | 'edit' | 'execute' | 'search' | 'fetch';
     rawInput?: Record<string, unknown>;
     content?: ToolCallContentItem[];
     locations?: ToolCallLocationItem[];

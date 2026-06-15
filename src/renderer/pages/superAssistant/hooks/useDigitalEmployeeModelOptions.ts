@@ -91,10 +91,11 @@ export function useDigitalEmployeeModelOptions(
           probedRef.current.delete(backend);
           return;
         }
-        const cached = (await ConfigStorage.get('acp.cachedModels').catch(() => ({}))) || {};
+        const cached =
+          (await ConfigStorage.get('acp.cachedModels').catch((): Record<string, AcpModelInfo> => ({}))) || {};
         const nextCached = { ...cached, [backend]: modelInfo };
         setAcpCachedModels(nextCached);
-        await ConfigStorage.set('acp.cachedModels', nextCached).catch(() => undefined);
+        await ConfigStorage.set('acp.cachedModels', nextCached).catch((): undefined => undefined);
       })
       .finally(() => {
         if (!cancelled) {

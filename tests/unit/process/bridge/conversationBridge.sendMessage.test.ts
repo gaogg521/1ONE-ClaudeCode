@@ -158,7 +158,10 @@ describe('conversationBridge.sendMessage', () => {
       msg_id: 'msg-1',
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({
+      success: true,
+      data: { input: 'hello', files: [] },
+    });
     expect(task.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         content: 'hello',

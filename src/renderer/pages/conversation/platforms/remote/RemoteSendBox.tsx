@@ -17,7 +17,9 @@ import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiveWorkspace';
 import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
+import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
 import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import FilePreview from '@/renderer/components/media/FilePreview';
 import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
@@ -47,9 +49,9 @@ const EMPTY_AT_PATH: Array<string | FileOrFolderItem> = [];
 const EMPTY_UPLOAD_FILES: string[] = [];
 
 const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id }) => {
-  const [workspacePath, setWorkspacePath] = useState('');
   const { t } = useTranslation();
   const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
+  const effectiveWorkspace = useEffectiveWorkspace(conversation_id);
   const { checkAndUpdateTitle } = useAutoTitle();
   const addOrUpdateMessage = useAddOrUpdateMessage();
   const { setSendBoxHandler } = usePreviewContext();
@@ -215,7 +217,6 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
 
   useEffect(() => {
     void ipcBridge.conversation.get.invoke({ id: conversation_id }).then(async (res) => {
-      if (res?.extra?.workspace) setWorkspacePath(res.extra.workspace);
       const extra = res?.extra as { remoteAgentId?: string } | undefined;
       if (extra?.remoteAgentId) {
         const agent = await ipcBridge.remoteAgent.get.invoke({ id: extra.remoteAgentId });
@@ -238,7 +239,7 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
         sessionStorage.setItem(processedKey, 'true');
         const { input, files = [] } = JSON.parse(stored) as { input: string; files?: string[] };
         const msg_id = `initial_${conversation_id}_${Date.now()}`;
-        const initialDisplayMessage = buildDisplayMessage(input, files, workspacePath);
+        const initialDisplayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
 
         const userMessage: TMessage = {
           id: msg_id,
@@ -254,12 +255,13 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
         aiProcessingRef.current = true;
 
         void checkAndUpdateTitle(conversation_id, input);
-        await ipcBridge.conversation.sendMessage.invoke({
+        const result = await ipcBridge.conversation.sendMessage.invoke({
           input: initialDisplayMessage,
           msg_id,
           conversation_id,
           files,
         });
+        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
         emitter.emit('chat.history.refresh');
         sessionStorage.removeItem(storageKey);
       } catch {
@@ -272,7 +274,7 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
     // Small delay to let the component mount and response stream listener attach
     const timer = setTimeout(() => void processInitialMessage(), 300);
     return () => clearTimeout(timer);
-  }, [conversation_id, workspacePath, addOrUpdateMessage, checkAndUpdateTitle]);
+  }, [conversation_id, effectiveWorkspace, addOrUpdateMessage, checkAndUpdateTitle]);
 
   const handleFilesAdded = useCallback(
     (pastedFiles: FileMetadata[]) => {
@@ -310,7 +312,7 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
         ...currentUploadFile,
         ...currentAtPath.map((item) => (typeof item === 'string' ? item : item.path)),
       ];
-      const displayMessage = buildDisplayMessage(message, filePaths, workspacePath);
+      const displayMessage = buildDisplayMessage(message, filePaths, effectiveWorkspace);
 
       const userMessage: TMessage = {
         id: msg_id,
@@ -327,12 +329,13 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
       try {
         void checkAndUpdateTitle(conversation_id, message);
         const atPathStrings = currentAtPath.map((item) => (typeof item === 'string' ? item : item.path));
-        await ipcBridge.conversation.sendMessage.invoke({
+        const result = await ipcBridge.conversation.sendMessage.invoke({
           input: displayMessage,
           msg_id,
           conversation_id,
           files: [...currentUploadFile, ...atPathStrings],
         });
+        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
         emitter.emit('chat.history.refresh');
       } catch {
         setAiProcessing(false);
@@ -343,7 +346,7 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
       conversation_id,
       atPath,
       uploadFile,
-      workspacePath,
+      effectiveWorkspace,
       addOrUpdateMessage,
       checkAndUpdateTitle,
       setAtPath,

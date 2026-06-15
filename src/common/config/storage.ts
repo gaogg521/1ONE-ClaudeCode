@@ -85,6 +85,12 @@ export interface IConfigStorageRefer {
   'webui.managementMode'?: 'standalone' | 'enterprise';
   /** 桌面模式下 WebUI 端口 / WebUI port in desktop mode */
   'webui.desktop.port'?: number;
+  /** User explicitly chose standalone WebUI mode (skip enterprise auto-redirect). */
+  'webui.userChoseStandalone'?: boolean;
+  /** Remembered enterprise WebUI API origins for desktop offline routing. */
+  'webui.enterpriseApiOrigins'?: string[];
+  /** Stable machine id for team runtime node registry. */
+  'teamRuntime.machineId'?: string;
   customCss: string; // 自定义 CSS 样式
   /**
    * CCI 流水线编辑器：用户自定义 Stage 模板

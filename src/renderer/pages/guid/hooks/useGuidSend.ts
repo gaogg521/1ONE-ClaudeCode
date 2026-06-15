@@ -441,8 +441,11 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
 
         const conversation = await ipcBridge.conversation.create.invoke(agentConversationParams);
         if (!conversation || !conversation.id) {
-          console.error('Failed to create ACP conversation - conversation object is null or missing id');
-          return;
+          const errorMessage = t('conversation.createFailed', {
+            defaultValue: 'Failed to create conversation. Please check agent configuration and try again.',
+          });
+          Message.error(errorMessage);
+          throw new Error(errorMessage);
         }
 
         if (isCustomWorkspace) {

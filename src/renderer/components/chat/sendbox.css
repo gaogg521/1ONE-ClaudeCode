@@ -23,15 +23,30 @@
    a white/opaque box inside the sendbox panel when switching themes. */
 .sendbox-panel .arco-input-inner-wrapper,
 .sendbox-panel .arco-input,
-.sendbox-panel .arco-textarea {
+.sendbox-panel .arco-textarea,
+.sendbox-panel .arco-textarea-wrapper {
   background: transparent !important;
-  color: var(--text-primary) !important;
+}
+
+/* Target the native textarea — wrapper-level color rules miss typed text on some Arco builds. */
+.sendbox-panel textarea,
+.sendbox-panel .arco-textarea-wrapper textarea,
+.guid-input-card-shell textarea,
+.guid-input-card-shell .arco-textarea-wrapper textarea {
+  color: var(--color-text-1, var(--text-primary)) !important;
+  caret-color: var(--color-text-1, var(--text-primary)) !important;
+  -webkit-text-fill-color: var(--color-text-1, var(--text-primary)) !important;
+  background: transparent !important;
 }
 
 /* Explicit placeholder override for sendbox — prevent color inheritance from parent color rule */
 .sendbox-panel .arco-input::placeholder,
-.sendbox-panel .arco-textarea::placeholder {
+.sendbox-panel .arco-textarea::placeholder,
+.sendbox-panel textarea::placeholder,
+.guid-input-card-shell textarea::placeholder {
   color: var(--color-text-4) !important;
+  -webkit-text-fill-color: var(--color-text-4) !important;
+  opacity: 1 !important;
 }
 
 /* Sendbox tools buttons - prevent layout jitter from theme hover transforms (#1075) */

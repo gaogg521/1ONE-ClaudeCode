@@ -42,7 +42,7 @@ export async function getOrgEditionSettings(): Promise<OrgEditionSettings> {
 export async function setOrgEditionSettings(next: OrgEditionSettings): Promise<void> {
   const existing = await AuthProviderRepository.getProvider('local');
   const config = {
-    ...(existing?.config ?? {}),
+    ...existing?.config,
     editionSwitcherEnabled: next.editionSwitcherEnabled,
   };
   await AuthProviderRepository.setProvider('local', next.editionSwitcherEnabled, config);

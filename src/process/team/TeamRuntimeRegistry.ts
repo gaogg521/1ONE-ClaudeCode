@@ -83,18 +83,18 @@ function collectIpv4Addresses(): string[] {
 }
 
 async function resolveStableMachineId(): Promise<string> {
-  const existing = await ProcessConfig.get(MACHINE_ID_CONFIG_KEY).catch(() => undefined);
+  const existing = await ProcessConfig.get(MACHINE_ID_CONFIG_KEY).catch((): undefined => undefined);
   if (typeof existing === 'string' && existing.trim().length > 0) {
     return existing.trim();
   }
   const machineId = `${os.hostname()}-${process.platform}-${Date.now().toString(36)}`;
-  await ProcessConfig.set(MACHINE_ID_CONFIG_KEY, machineId).catch(() => undefined);
+  await ProcessConfig.set(MACHINE_ID_CONFIG_KEY, machineId).catch((): undefined => undefined);
   return machineId;
 }
 
 async function detectInstalledAgents(): Promise<TeamRuntimeInstalledAgent[]> {
   const disabledDetectedAgents =
-    ((await ProcessConfig.get('acp.disabledDetectedAgents').catch(() => [])) as string[]) || [];
+    ((await ProcessConfig.get('acp.disabledDetectedAgents').catch((): string[] => [])) as string[]) || [];
   const agents = acpDetector
     .getDetectedAgents()
     .filter((agent) => !disabledDetectedAgents.includes(agent.backend))

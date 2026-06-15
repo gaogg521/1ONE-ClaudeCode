@@ -58,7 +58,7 @@ export async function invokeLoopbackRequest(input: LoopbackRequestInput): Promis
     body: method === 'GET' || method === 'HEAD' ? undefined : input.body,
     bypassCustomProtocolHandlers: true,
     session: session.defaultSession,
-  });
+  } as RequestInit & { bypassCustomProtocolHandlers?: boolean; session?: Electron.Session });
 
   const bodyText = await response.text();
   const headerRecord = headersToRecord(response.headers);

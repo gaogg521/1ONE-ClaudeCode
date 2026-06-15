@@ -186,9 +186,7 @@ export class OneWebSearchTool extends BaseDeclarativeTool<OneWebSearchToolParams
   }
 
   public override validateToolParams(params: OneWebSearchToolParams): string | null {
-    const resolved = normalizeOneWebSearchToolParams(
-      params as unknown as Record<string, unknown>
-    ) as OneWebSearchToolParams;
+    const resolved = normalizeOneWebSearchToolParams(params as unknown as Record<string, unknown>);
     const query = typeof resolved.query === 'string' ? resolved.query.trim() : '';
     if (!query) {
       return (
@@ -205,10 +203,14 @@ export class OneWebSearchTool extends BaseDeclarativeTool<OneWebSearchToolParams
     _toolName?: string,
     _toolDisplayName?: string
   ): ToolInvocation<OneWebSearchToolParams, ToolResult> {
-    const resolved = normalizeOneWebSearchToolParams(
-      params as unknown as Record<string, unknown>
-    ) as OneWebSearchToolParams;
-    return new OneWebSearchInvocation(this.geminiClient, resolved, messageBus, _toolName, _toolDisplayName);
+    const resolved = normalizeOneWebSearchToolParams(params as unknown as Record<string, unknown>);
+    return new OneWebSearchInvocation(
+      this.geminiClient,
+      resolved as unknown as OneWebSearchToolParams,
+      messageBus,
+      _toolName,
+      _toolDisplayName
+    );
   }
 }
 

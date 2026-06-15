@@ -31,6 +31,8 @@
   ],
   "exclude": [
     "src/process/services/database/drivers/BunSqliteDriver.ts",
-    "src/process/services/database/drivers/BunSqliteDriver.bun.test.ts"
+    "src/process/services/database/drivers/BunSqliteDriver.bun.test.ts",
+    "src/process/resources/skills/_vendor-cache/**",
+    "src/process/resources/skills/**/condition-based-waiting-example.ts"
   ]
 }

@@ -186,9 +186,7 @@ export const getSendBoxDraftHook = <K extends TChatConversation['type']>(
     );
 
     return {
-      get data() {
-        return swrRet.data;
-      },
+      data: swrRet.data,
       mutate: mutateDraft,
     };
   }

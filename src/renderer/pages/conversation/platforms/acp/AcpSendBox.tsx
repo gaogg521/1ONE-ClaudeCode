@@ -38,6 +38,9 @@ import { useSlashCommands } from '@/renderer/hooks/chat/useSlashCommands';
 import { useAcpMessage } from './useAcpMessage';
 import { useAcpInitialMessage } from './useAcpInitialMessage';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiveWorkspace';
+import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
+import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
 import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 
 const useAcpSendBoxDraft = getSendBoxDraftHook('acp', {
@@ -106,6 +109,7 @@ const AcpSendBox: React.FC<{
   const { t } = useTranslation();
   const teamPermission = useTeamPermission();
   const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
+  const effectiveWorkspace = useEffectiveWorkspace(conversation_id);
   const isCommandQueueEnabled = useCommandQueueEnabled();
   // In team mode, only the lead agent shows the permission mode selector
   const showModeSelector = !teamPermission || conversation_id === teamPermission.leadConversationId;
@@ -186,13 +190,16 @@ const AcpSendBox: React.FC<{
             }
           }
         } else {
+          const displayMessage =
+            files.length > 0 ? buildDisplayMessage(input, files, effectiveWorkspace) : input;
           const result = await ipcBridge.acpConversation.sendMessage.invoke({
-            input,
+            input: displayMessage,
             msg_id,
             conversation_id,
             files,
           });
           assertBridgeSuccess(result, `Failed to send message to ${backend}`);
+          patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
         }
         emitter.emit('chat.history.refresh');
       } catch (error: unknown) {
@@ -229,7 +236,18 @@ Please check your local CLI tool authentication status`,
         emitter.emit('acp.workspace.refresh');
       }
     },
-    [agentSlotId, backend, checkAndUpdateTitle, conversation_id, setAiProcessing, t, teamId, tenantId]
+    [
+      addOrUpdateMessage,
+      agentSlotId,
+      backend,
+      checkAndUpdateTitle,
+      conversation_id,
+      effectiveWorkspace,
+      setAiProcessing,
+      t,
+      teamId,
+      tenantId,
+    ]
   );
 
   const {

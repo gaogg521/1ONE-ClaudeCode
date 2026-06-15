@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express';
 import express from 'express';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // 1. Mock 验证中间件，自动放行并注入模拟的用户上下文
 vi.mock('@process/webserver/auth/middleware/TokenMiddleware', () => ({
@@ -102,15 +102,22 @@ async function runRouteStack(app: express.Express, method: string, path: string,
 
 describe('devopsRoutes', () => {
   let app: express.Express;
+  let registerDevOpsRoutes: (app: express.Express) => void;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
+    ({ registerDevOpsRoutes } = await import('@process/webserver/routes/devopsRoutes'));
+  });
+
+  beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
     app = express();
     app.use(express.json());
-
-    const { registerDevOpsRoutes } = await import('@process/webserver/routes/devopsRoutes');
     registerDevOpsRoutes(app);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   describe('CTeam 敏捷看板 API', () => {

@@ -5,31 +5,37 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
+import {
+  buildDisplayMessage,
+  isCacheTempFilePath,
+  isImageFilePath,
+  stripFilesMarker,
+} from '@/common/chat/messageFiles';
+import { ONE_FILES_MARKER } from '@/common/config/constants';
 
 describe('buildDisplayMessage', () => {
   const workspace = '/tmp/aion/workspace-1';
 
-  it('preserves uploads/ subdirectory for files inside workspace', () => {
+  it('preserves absolute workspace paths for preview loading', () => {
     const files = [`${workspace}/uploads/photo.jpg`];
     const result = buildDisplayMessage('hello', files, workspace);
     expect(result).toContain(`${workspace}/uploads/photo.jpg`);
   });
 
-  it('preserves nested subdirectories inside workspace', () => {
-    const files = [`${workspace}/uploads/subdir/doc.pdf`];
+  it('keeps ONE timestamp suffixes so FilePreview can resolve the real file', () => {
+    const files = [`${workspace}/uploads/photo_ONE_1234567890123.jpg`];
     const result = buildDisplayMessage('hello', files, workspace);
-    expect(result).toContain(`${workspace}/uploads/subdir/doc.pdf`);
+    expect(result).toContain(`${workspace}/uploads/photo_ONE_1234567890123.jpg`);
+    expect(result).not.toContain(`${workspace}/uploads/photo.jpg`);
   });
 
-  it('uses basename for absolute paths outside workspace', () => {
-    const files = ['/other/path/external.txt'];
-    const result = buildDisplayMessage('hello', files, workspace);
-    expect(result).toContain(`${workspace}/external.txt`);
-    expect(result).not.toContain('/other/path');
+  it('keeps external absolute paths when workspace is missing', () => {
+    const files = ['C:/cache/temp/pasted_image.png'];
+    const result = buildDisplayMessage('hello', files, '');
+    expect(result).toContain('C:/cache/temp/pasted_image.png');
   });
 
-  it('passes relative paths through unchanged', () => {
+  it('joins relative paths under workspace', () => {
     const files = ['relative/file.txt'];
     const result = buildDisplayMessage('hello', files, workspace);
     expect(result).toContain(`${workspace}/relative/file.txt`);
@@ -39,10 +45,23 @@ describe('buildDisplayMessage', () => {
     const result = buildDisplayMessage('hello', [], workspace);
     expect(result).toBe('hello');
   });
+});
 
-  it('strips ONE timestamp separators from filenames', () => {
-    const files = [`${workspace}/uploads/photo_1one-claudecode_1234567890123.jpg`];
-    const result = buildDisplayMessage('hello', files, workspace);
-    expect(result).toContain(`${workspace}/uploads/photo.jpg`);
+describe('path helpers', () => {
+  it('detects cache temp uploads', () => {
+    expect(isCacheTempFilePath('C:/app/config/temp/pasted.png', 'C:/app/config')).toBe(true);
+    expect(isCacheTempFilePath('C:/app/workspace/pasted.png', 'C:/app/config')).toBe(false);
+  });
+
+  it('detects image file extensions', () => {
+    expect(isImageFilePath('photo.JPG')).toBe(true);
+    expect(isImageFilePath('notes.pdf')).toBe(false);
+  });
+});
+
+describe('stripFilesMarker', () => {
+  it('removes embedded file paths from the message body', () => {
+    const body = `hello\n\n${ONE_FILES_MARKER}\n/tmp/a.png`;
+    expect(stripFilesMarker(body)).toBe('hello');
   });
 });

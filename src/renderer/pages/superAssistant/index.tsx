@@ -76,6 +76,7 @@ function buildManagedTeamAgentFromRef(ref: AgentCardRef): TeamAgent {
     role: 'teammate',
     agentType: ref.agentType,
     agentName: ref.agentName,
+    conversationType: ref.agentType,
     status: 'idle',
   };
 }

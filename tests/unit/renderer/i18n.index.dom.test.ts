@@ -87,15 +87,14 @@ describe('renderer i18n localStorage guards', () => {
 
   it('initializes without localStorage and still loads the saved language', async () => {
     await import('@/renderer/services/i18n');
-    await Promise.resolve();
-    await Promise.resolve();
-
+    await vi.waitFor(() => {
+      expect(mockI18n.changeLanguage).toHaveBeenCalledWith('ja-JP');
+    });
     expect(mockI18n.init).toHaveBeenCalledWith(
       expect.objectContaining({
         lng: 'zh-CN',
       })
     );
-    expect(mockI18n.changeLanguage).toHaveBeenCalledWith('ja-JP');
   });
 
   it('updates language from the main-process broadcast without touching localStorage', async () => {

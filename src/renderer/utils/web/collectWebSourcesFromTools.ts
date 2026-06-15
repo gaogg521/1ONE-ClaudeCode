@@ -125,10 +125,13 @@ function collectFromGeminiToolGroup(message: IMessageToolGroup, ordered: WebSour
     if (!isWebGeminiTool(tool.name)) {
       continue;
     }
-    if (tool.status !== 'Success' && tool.status !== 'success') {
+    if (tool.status !== 'Success') {
       continue;
     }
-    collectFromArgs(tool.args, ordered, seen);
+    const toolArgs = (tool as { args?: unknown }).args;
+    if (toolArgs !== undefined) {
+      collectFromArgs(toolArgs, ordered, seen);
+    }
     if (typeof tool.description === 'string') {
       for (const url of extractUrlsFromText(tool.description)) {
         addUrl(ordered, seen, url);

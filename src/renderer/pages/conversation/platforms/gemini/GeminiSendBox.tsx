@@ -25,7 +25,9 @@ import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import { allSupportedExts } from '@/renderer/services/FileService';
 import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
+import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiveWorkspace';
 import { buildDisplayMessage, collectSelectedFiles } from '@/renderer/utils/file/messageFiles';
+import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
 import { getModelContextLimit } from '@/renderer/utils/model/modelContextLimits';
 import { Message, Tag } from '@arco-design/web-react';
 import { Shield } from '@icon-park/react';
@@ -90,10 +92,11 @@ const GeminiSendBox: React.FC<{
   conversation_id: string;
   modelSelection: GeminiModelSelection;
 }> = ({ conversation_id, modelSelection }) => {
-  const [workspacePath, setWorkspacePath] = useState('');
   const { t } = useTranslation();
   const teamPermission = useTeamPermission();
-  const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
+  const conversationContext = useConversationContextSafe();
+  const stretchLayout = Boolean(conversationContext?.stretchLayout);
+  const effectiveWorkspace = useEffectiveWorkspace(conversation_id);
   const isCommandQueueEnabled = useCommandQueueEnabled();
   const showModeSelector = !teamPermission || teamPermission.isLeadAgent;
   const { checkAndUpdateTitle } = useAutoTitle();
@@ -156,13 +159,6 @@ const GeminiSendBox: React.FC<{
     setShowSetupCard,
     performFullCheck,
   });
-
-  useEffect(() => {
-    void ipcBridge.conversation.get.invoke({ id: conversation_id }).then((res) => {
-      if (!res?.extra?.workspace) return;
-      setWorkspacePath(res.extra.workspace);
-    });
-  }, [conversation_id]);
 
   // Reset conversation state (detection only triggers on new message, not on mount/tab-switch)
   useEffect(() => {
@@ -237,7 +233,7 @@ const GeminiSendBox: React.FC<{
       setActiveMsgId(msg_id);
       setWaitingResponse(true);
 
-      const displayMessage = buildDisplayMessage(input, files, workspacePath);
+      const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
       addOrUpdateMessage(
         {
           id: msg_id,
@@ -261,6 +257,7 @@ const GeminiSendBox: React.FC<{
           files,
         });
         assertBridgeSuccess(result, 'Failed to send message to Gemini');
+        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
         emitter.emit('chat.history.refresh');
         if (files.length > 0) {
           emitter.emit('gemini.workspace.refresh');
@@ -278,7 +275,7 @@ const GeminiSendBox: React.FC<{
       setActiveMsgId,
       removeMessageByMsgId,
       setWaitingResponse,
-      workspacePath,
+      effectiveWorkspace,
     ]
   );
 

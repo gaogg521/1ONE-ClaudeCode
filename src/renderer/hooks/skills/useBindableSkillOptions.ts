@@ -70,7 +70,7 @@ export async function loadBindableSkillOptions(canUseOrgSkills: boolean): Promis
     })),
   ];
 
-  return options.sort((a, b) => {
+  return options.toSorted((a, b) => {
     if (a.source !== b.source) {
       return a.source === 'local' ? -1 : 1;
     }

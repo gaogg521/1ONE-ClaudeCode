@@ -299,7 +299,7 @@ async function fetchDesktopCurrentUser(): Promise<AuthUser | null> {
     const session = getWebuiDesktopSession();
     if (session?.token && session.userId !== DESKTOP_OPERATOR_USER_ID) {
       if (!shouldSkipAuthUserRequest()) {
-        const verified = await fetchWebuiApi('/api/auth/user').catch(() => null);
+        const verified = await fetchWebuiApi('/api/auth/user').catch((): null => null);
         const apiUser = verified ? await parseAuthUserResponse(verified) : null;
         if (apiUser) {
           persistDesktopSessionFromUser(apiUser, session.token, session.role);

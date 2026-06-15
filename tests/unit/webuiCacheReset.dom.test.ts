@@ -5,6 +5,16 @@ import {
   resetWebuiClientCaches,
 } from '@/renderer/services/webuiCacheReset';
 
+vi.mock('@/common', () => ({
+  ipcBridge: {
+    application: {
+      clearRendererHttpCache: {
+        invoke: vi.fn().mockResolvedValue(undefined),
+      },
+    },
+  },
+}));
+
 afterEach(() => {
   Reflect.deleteProperty(window, 'caches');
   Reflect.deleteProperty(navigator, 'serviceWorker');

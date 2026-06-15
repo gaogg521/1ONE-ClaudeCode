@@ -7,9 +7,11 @@
 import { Close } from '@icon-park/react';
 import React, { useEffect, useState } from 'react';
 import { getFileExtension } from '@/renderer/services/FileService';
+import { extname } from '@/common/chat/pathUtils';
 import { ipcBridge } from '@/common';
 import { Image } from '@arco-design/web-react';
 import fileIcon from '@/renderer/assets/icons/file-icon.svg';
+import InlinePdfPreview from '@/renderer/components/media/InlinePdfPreview';
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']);
 
@@ -47,6 +49,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
   }
 
   const isImage = isImageFile(path);
+  const isPdf = extname(path) === '.pdf';
   // 直接从路径中提取文件名，不清理时间戳后缀
   // Extract filename directly from path without cleaning timestamp suffix
   const fileName = path.split(/[\\/]/).pop() || '';
@@ -106,6 +109,14 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
     e.stopPropagation();
     onRemove();
   };
+
+  if (isPdf && readonly) {
+    return (
+      <div className='relative inline-block'>
+        <InlinePdfPreview path={path} fileName={fileName} />
+      </div>
+    );
+  }
 
   if (isImage) {
     return (

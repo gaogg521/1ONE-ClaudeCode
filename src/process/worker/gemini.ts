@@ -64,8 +64,8 @@ export default forkTask(({ data }, pipe) => {
   pipe.on('init.history', (event: { text: string }, deferred) => {
     deferred.with(agent.injectConversationHistory(event.text));
   });
-  pipe.on('send.message', (event: { input: string; msg_id: string; files?: string[] }, deferred) => {
-    deferred.with(agent.send(event.input, event.msg_id, event.files));
+  pipe.on('send.message', (event: { input: string; agentPrompt?: string; msg_id: string; files?: string[] }, deferred) => {
+    deferred.with(agent.send(event.agentPrompt ?? event.input, event.msg_id, event.files));
   });
 
   return agent.bootstrap;

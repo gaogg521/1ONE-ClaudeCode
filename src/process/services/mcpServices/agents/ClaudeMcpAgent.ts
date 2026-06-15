@@ -49,7 +49,7 @@ export function normalizeClaudeStdioTransport(transport: Extract<IMcpServer['tra
 } {
   const args = [...(transport.args ?? [])];
   let command = transport.command;
-  let env = { ...(transport.env ?? {}) };
+  let env = { ...transport.env };
 
   if (looksLikeScriptPath(command) && !args.includes(command)) {
     command = resolveNodeRunnerCommand();

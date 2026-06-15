@@ -75,5 +75,5 @@ export function mergeTeamRuntimeNodes(local: TeamRuntimeNode[], remote: TeamRunt
       map.set(node.id, node);
     }
   }
-  return [...map.values()].sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+  return [...map.values()].toSorted((a, b) => b.lastSeenAt - a.lastSeenAt);
 }

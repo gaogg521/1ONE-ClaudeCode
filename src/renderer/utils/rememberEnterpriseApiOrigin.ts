@@ -18,18 +18,22 @@ export async function rememberEnterpriseApiOrigin(originOrUrl: string): Promise<
   if (!origin) {
     return;
   }
-  const stored = (await ConfigStorage.get(ENTERPRISE_API_ORIGINS_KEY).catch(() => [])) as string[] | undefined;
+  const stored = (await ConfigStorage.get(ENTERPRISE_API_ORIGINS_KEY).catch((): string[] => [])) as
+    | string[]
+    | undefined;
   const next = mergeEnterpriseApiOrigins(stored, [origin]);
   if (next.length === (stored?.length ?? 0) && stored?.includes(origin)) {
     return;
   }
-  await ConfigStorage.set(ENTERPRISE_API_ORIGINS_KEY, next).catch(() => undefined);
+  await ConfigStorage.set(ENTERPRISE_API_ORIGINS_KEY, next).catch((): undefined => undefined);
   if (isElectronDesktop()) {
-    await webui.setEnterpriseApiOrigins.invoke({ origins: next }).catch(() => undefined);
+    await webui.setEnterpriseApiOrigins.invoke({ origins: next }).catch((): undefined => undefined);
   }
 }
 
 export async function readEnterpriseApiOrigins(): Promise<string[]> {
-  const stored = (await ConfigStorage.get(ENTERPRISE_API_ORIGINS_KEY).catch(() => [])) as string[] | undefined;
+  const stored = (await ConfigStorage.get(ENTERPRISE_API_ORIGINS_KEY).catch((): string[] => [])) as
+    | string[]
+    | undefined;
   return mergeEnterpriseApiOrigins(stored, []);
 }

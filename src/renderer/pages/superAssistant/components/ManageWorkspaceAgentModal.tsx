@@ -206,7 +206,10 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
             disabled={(!skillsLoading && skillOptions.length === 0) || !onSaveSkillIds}
             showSearch
             filterOption={(input, option) => {
-              const label = String(option?.children ?? '').toLowerCase();
+              const optionProps = (option as React.ReactElement<{ value?: string }> | null | undefined)?.props;
+              const value = String(optionProps?.value ?? '');
+              const skill = skillOptions.find((item) => item.value === value);
+              const label = String(skill?.label ?? value).toLowerCase();
               return label.includes(input.trim().toLowerCase());
             }}
           >

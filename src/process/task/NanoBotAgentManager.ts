@@ -105,7 +105,14 @@ class NanoBotAgentManager extends BaseAgentManager<NanoBotAgentManagerData> {
     teamEventBus.emit('responseStream', msg);
   }
 
-  async sendMessage(data: { content: string; files?: string[]; msg_id?: string; hidden?: boolean; silent?: boolean }) {
+  async sendMessage(data: {
+    content: string;
+    agentPrompt?: string;
+    files?: string[];
+    msg_id?: string;
+    hidden?: boolean;
+    silent?: boolean;
+  }) {
     cronBusyGuard.setProcessing(this.conversation_id, true);
     try {
       await this.bootstrap;
@@ -125,7 +132,7 @@ class NanoBotAgentManager extends BaseAgentManager<NanoBotAgentManagerData> {
         addMessage(this.conversation_id, userMessage);
       }
 
-      let contentToSend = data.content;
+      let contentToSend = data.agentPrompt ?? data.content;
       if (this.isFirstMessage) {
         contentToSend = await applyAgentToolkitFirstMessage(
           contentToSend,

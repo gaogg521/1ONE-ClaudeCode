@@ -55,6 +55,7 @@ vi.mock('../../src/process/utils/initStorage', () => ({
   ProcessChat: { get: vi.fn(async () => []) },
   getSkillsDir: vi.fn(() => '/skills'),
   ProcessConfig: { get: vi.fn(async () => []) },
+  getSystemDir: vi.fn(() => ({ cacheDir: '/tmp/cache' })),
 }));
 
 vi.mock('../../src/process/bridge/migrationUtils', () => ({
@@ -260,6 +261,7 @@ describe('conversationBridge', () => {
       utilsMod.copyFilesToDirectory.mockRejectedValueOnce(new Error('ENOENT: no such file or directory, stat'));
 
       const mockTask = {
+        type: 'gemini',
         workspace: '/deleted/workspace',
         sendMessage: vi.fn().mockResolvedValue(undefined),
       };
@@ -275,7 +277,10 @@ describe('conversationBridge', () => {
         files: ['/some/file.txt'],
       });
 
-      expect(result).toEqual({ success: true });
+      expect(result).toEqual({
+        success: true,
+        data: { input: 'hello', files: [] },
+      });
       // sendMessage should still be called with empty files array
       expect(mockTask.sendMessage).toHaveBeenCalled();
     });

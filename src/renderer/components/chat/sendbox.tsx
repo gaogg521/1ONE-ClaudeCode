@@ -864,7 +864,7 @@ const SendBox: React.FC<{
             style={{
               width: isSingleLine ? 'auto' : '100%',
               flex: isSingleLine ? 1 : 'none',
-              minWidth: 0,
+              minWidth: isSingleLine ? '48px' : 0,
               maxWidth: '100%',
               marginLeft: 0,
               marginRight: 0,

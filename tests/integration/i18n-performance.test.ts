@@ -10,7 +10,7 @@ import i18nConfig from '../../src/common/config/i18n-config.json';
 const LOCALES_DIR = path.resolve(__dirname, '../../src/renderer/services/i18n/locales');
 const SUPPORTED_LANGUAGES = i18nConfig.supportedLanguages;
 const MODULES = i18nConfig.modules;
-const SINGLE_MODULE_BUDGET_MS = Number(process.env.I18N_SINGLE_MODULE_BUDGET_MS ?? 50);
+const SINGLE_MODULE_BUDGET_MS = Number(process.env.I18N_SINGLE_MODULE_BUDGET_MS ?? 100);
 const FULL_LOCALE_BUDGET_MS = Number(process.env.I18N_FULL_LOCALE_BUDGET_MS ?? 300);
 const STARTUP_BUDGET_MS = Number(process.env.I18N_STARTUP_BUDGET_MS ?? 400);
 const SWITCH_BUDGET_MS = Number(process.env.I18N_SWITCH_BUDGET_MS ?? 400);

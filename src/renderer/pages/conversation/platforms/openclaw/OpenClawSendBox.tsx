@@ -25,7 +25,9 @@ import { mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
 import { Message, Tag } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiveWorkspace';
 import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
+import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
 import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import FilePreview from '@/renderer/components/media/FilePreview';
 import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
@@ -117,9 +119,9 @@ const validateRuntimeMismatch = async (conversationId: string): Promise<boolean>
 const EMPTY_AT_PATH: Array<string | FileOrFolderItem> = [];
 const EMPTY_UPLOAD_FILES: string[] = [];
 const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id }) => {
-  const [workspacePath, setWorkspacePath] = useState('');
   const { t } = useTranslation();
   const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
+  const effectiveWorkspace = useEffectiveWorkspace(conversation_id);
   const { checkAndUpdateTitle } = useAutoTitle();
   const slashCommands = useSlashCommands(conversation_id);
   const isCommandQueueEnabled = useCommandQueueEnabled();
@@ -351,13 +353,6 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
     });
   }, [conversation_id, addOrUpdateMessage]);
 
-  useEffect(() => {
-    void ipcBridge.conversation.get.invoke({ id: conversation_id }).then((res) => {
-      if (!res?.extra?.workspace) return;
-      setWorkspacePath(res.extra.workspace);
-    });
-  }, [conversation_id]);
-
   useAddEventListener(
     'staroffice.install.request',
     ({ conversationId, text }) => {
@@ -424,7 +419,7 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
       }
 
       const msg_id = uuid();
-      const displayMessage = buildDisplayMessage(input, files, workspacePath);
+      const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
 
       const userMessage: TMessage = {
         id: msg_id,
@@ -447,6 +442,7 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
           files,
         });
         assertBridgeSuccess(result, 'Failed to send message to OpenClaw');
+        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
         emitter.emit('chat.history.refresh');
       } catch (error) {
         removeMessageByMsgId(msg_id);
@@ -455,7 +451,7 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
         throw error;
       }
     },
-    [addOrUpdateMessage, checkAndUpdateTitle, conversation_id, removeMessageByMsgId, workspacePath]
+    [addOrUpdateMessage, checkAndUpdateTitle, conversation_id, effectiveWorkspace, removeMessageByMsgId]
   );
 
   const {
@@ -546,7 +542,7 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
         const { input, files = [] } = JSON.parse(stored) as { input: string; files?: string[] };
         const msg_id = `initial_${conversation_id}_${Date.now()}`;
         const loading_id = uuid();
-        const initialDisplayMessage = buildDisplayMessage(input, files, workspacePath);
+        const initialDisplayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
 
         const userMessage: TMessage = {
           id: msg_id,
@@ -570,6 +566,7 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
           loading_id,
         });
         assertBridgeSuccess(result, 'Failed to send initial message to OpenClaw');
+        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
         emitter.emit('chat.history.refresh');
         sessionStorage.removeItem(storageKey);
       } catch {

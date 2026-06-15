@@ -17,7 +17,7 @@ import { TokenUtils } from '@process/webserver/auth/middleware/TokenMiddleware';
 import { createAppError } from '../middleware/errorHandler';
 import { authRateLimiter, authenticatedActionLimiter, apiRateLimiter } from '../middleware/security';
 import { verifyQRTokenDirect } from '@process/bridge/webuiQR';
-import { authenticateWithLdap, type LdapProviderConfig } from '../auth/providers/LdapAuthProvider';
+import { authenticateWithLdap, formatLdapConnectionError, type LdapProviderConfig } from '../auth/providers/LdapAuthProvider';
 import { resolveEnterpriseContext } from '../auth/enterpriseContext';
 import { getInstanceGovernance } from '../auth/instanceGovernance';
 import {
@@ -700,6 +700,7 @@ export function registerAuthRoutes(app: Express): void {
    * 说明：首次 LDAP 登录会自动 JIT 开通本地账号并绑定身份；重复登录走已绑定用户。
    */
   app.post('/api/auth/ldap/login', authRateLimiter, AuthMiddleware.validateLoginInput, async (req: Request, res: Response) => {
+    let ldapConfig: LdapProviderConfig | undefined;
     try {
       const { username, password } = req.body as { username: string; password: string };
       const provider: AuthProviderType = 'ldap';
@@ -709,13 +710,13 @@ export function registerAuthRoutes(app: Express): void {
         return;
       }
 
-      const cfg = providerRow.config as unknown as LdapProviderConfig;
-      if (!cfg?.url || !cfg?.baseDN) {
+      ldapConfig = providerRow.config as unknown as LdapProviderConfig;
+      if (!ldapConfig?.url || !ldapConfig?.baseDN) {
         res.status(500).json({ success: false, message: 'LDAP provider not configured' });
         return;
       }
 
-      const result = await authenticateWithLdap(username, password, cfg);
+      const result = await authenticateWithLdap(username, password, ldapConfig);
 
       const { user, isAdmin } = await resolveOrProvisionLdapUser(username, {
         externalId: result.externalId,
@@ -771,10 +772,9 @@ export function registerAuthRoutes(app: Express): void {
         code === 'ECONNRESET' ||
         code === 'ENOTFOUND'
       ) {
-        const { formatLdapConnectionError } = await import('../auth/providers/LdapAuthProvider');
         res.status(503).json({
           success: false,
-          message: formatLdapConnectionError(error, cfg),
+          message: formatLdapConnectionError(error, ldapConfig),
         });
         return;
       }

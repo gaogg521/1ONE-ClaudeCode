@@ -216,6 +216,7 @@ class OpenClawAgentManager extends BaseAgentManager<OpenClawAgentManagerData> {
   async sendMessage(data: {
     content: string;
     agentContent?: string;
+    agentPrompt?: string;
     files?: string[];
     msg_id?: string;
     hidden?: boolean;
@@ -242,8 +243,8 @@ class OpenClawAgentManager extends BaseAgentManager<OpenClawAgentManagerData> {
         addMessage(this.conversation_id, userMessage);
       }
 
-      let agentContent = data.agentContent || data.content;
-      if (this.isFirstMessage && !data.agentContent) {
+      let agentContent = data.agentPrompt ?? data.agentContent ?? data.content;
+      if (this.isFirstMessage && !data.agentContent && !data.agentPrompt) {
         agentContent = await applyAgentToolkitFirstMessage(
           data.content,
           {

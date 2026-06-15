@@ -71,6 +71,7 @@ export function initWebuiBridge(): void {
           userId: data.userId,
           username: data.username,
           role: data.role,
+          tenant_id: data.tenant_id,
           token: data.token,
         },
       };
@@ -110,7 +111,7 @@ export function initWebuiBridge(): void {
       const { ProcessConfig } = await import('@process/utils/initStorage');
       const { mergeEnterpriseApiOrigins } = await import('@/common/config/enterpriseApiOrigins');
       const stored =
-        ((await ProcessConfig.get('webui.enterpriseApiOrigins').catch(() => [])) as string[] | undefined) ?? [];
+        ((await ProcessConfig.get('webui.enterpriseApiOrigins').catch((): string[] => [])) as string[]) ?? [];
       await ProcessConfig.set('webui.enterpriseApiOrigins', mergeEnterpriseApiOrigins(stored, origins));
       return { success: true, data: { ok: true as const } };
     }, 'Set enterprise API origins');

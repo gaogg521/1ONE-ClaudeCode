@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
+import os from 'node:os';
 
 const aliases = {
   '@/': path.resolve(__dirname, './src') + '/',
@@ -17,7 +18,11 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    testTimeout: 10000,
+    // Heavy dynamic imports (devopsRoutes, i18n locales, AcpSkillManager) can exceed 10s under parallel load.
+    testTimeout: 20000,
+    hookTimeout: 20000,
+    // Limit worker count to reduce transform/import contention on Windows CI and local full-suite runs.
+    maxWorkers: process.env.CI ? 2 : Math.min(4, Math.max(1, Math.floor((os.cpus().length || 4) / 2))),
     // Use projects to run different environments (Vitest 4+)
     projects: [
       // Node environment tests (existing tests)

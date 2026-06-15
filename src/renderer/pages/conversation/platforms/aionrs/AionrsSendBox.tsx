@@ -29,7 +29,10 @@ import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import { allSupportedExts } from '@/renderer/services/FileService';
 import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiveWorkspace';
 import { buildDisplayMessage, collectSelectedFiles } from '@/renderer/utils/file/messageFiles';
+import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
 import { getModelContextLimit } from '@/renderer/utils/model/modelContextLimits';
 import { useCommandQueueEnabled } from '@/renderer/hooks/system/useCommandQueueEnabled';
 import { Message, Tag } from '@arco-design/web-react';
@@ -37,7 +40,6 @@ import { Shield } from '@icon-park/react';
 import { iconColors } from '@/renderer/styles/colors';
 import AgentModeSelector from '@/renderer/components/agent/AgentModeSelector';
 import ThoughtDisplay from '@/renderer/components/chat/ThoughtDisplay';
-import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -91,9 +93,10 @@ const AionrsSendBox: React.FC<{
   conversation_id: string;
   modelSelection: AionrsModelSelection;
 }> = ({ conversation_id, modelSelection }) => {
-  const [workspacePath, setWorkspacePath] = useState('');
+  const conversationContext = useConversationContextSafe();
+  const effectiveWorkspace = useEffectiveWorkspace(conversation_id);
   const { t } = useTranslation();
-  const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
+  const stretchLayout = Boolean(conversationContext?.stretchLayout);
   const { checkAndUpdateTitle } = useAutoTitle();
   const isCommandQueueEnabled = useCommandQueueEnabled();
 
@@ -103,13 +106,6 @@ const AionrsSendBox: React.FC<{
     useAionrsMessage(conversation_id);
 
   const { atPath, uploadFile, setAtPath, setUploadFile, content, setContent } = useSendBoxDraft(conversation_id);
-
-  useEffect(() => {
-    void ipcBridge.conversation.get.invoke({ id: conversation_id }).then((res) => {
-      if (!res?.extra?.workspace) return;
-      setWorkspacePath(res.extra.workspace);
-    });
-  }, [conversation_id]);
 
   const slashCommands = useSlashCommands(conversation_id);
 
@@ -158,7 +154,7 @@ const AionrsSendBox: React.FC<{
       setActiveMsgId(msg_id);
       setWaitingResponse(true);
 
-      const displayMessage = buildDisplayMessage(input, files, workspacePath);
+      const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
       addOrUpdateMessage(
         {
           id: msg_id,
@@ -182,6 +178,7 @@ const AionrsSendBox: React.FC<{
           files,
         });
         assertBridgeSuccess(result, 'Failed to send message to Aion CLI');
+        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
         emitter.emit('chat.history.refresh');
         if (files.length > 0) {
           emitter.emit('aionrs.workspace.refresh');
@@ -199,7 +196,7 @@ const AionrsSendBox: React.FC<{
       setActiveMsgId,
       removeMessageByMsgId,
       setWaitingResponse,
-      workspacePath,
+      effectiveWorkspace,
     ]
   );
 

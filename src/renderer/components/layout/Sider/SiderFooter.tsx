@@ -114,7 +114,8 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
   const handleLightDarkClick = useCallback(() => {
     const nextTheme: Theme = theme === 'dark' ? 'light' : 'dark';
     const nextPreset = resolvePresetForLightDarkToggle(currentTheme, nextTheme);
-    applySwatch(nextPreset);
+    const swatch = THEME_SWATCHES.find((item) => item.id === nextPreset.id) ?? THEME_SWATCHES[1];
+    applySwatch(swatch);
     onThemeToggle();
   }, [applySwatch, currentTheme, onThemeToggle, theme]);
 

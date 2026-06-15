@@ -136,7 +136,15 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
     <Menu
       className='min-w-200px'
       onClickMenuItem={(key) => {
-        if (key === 'file') {
+        if (key === 'file' || key === 'device') {
+          if (isWebUI) {
+            fileInputRef.current?.click();
+            return;
+          }
+          if (key === 'device') {
+            fileInputRef.current?.click();
+            return;
+          }
           ipcBridge.dialog.showOpen
             .invoke({ properties: ['openFile', 'multiSelections'] })
             .then((uploadedFiles) => {
@@ -147,9 +155,11 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
             .catch((error) => {
               console.error('Failed to open file dialog:', error);
             });
-        } else if (key === 'device') {
-          fileInputRef.current?.click();
         } else if (key === 'workspace') {
+          if (isWebUI) {
+            Message.info(t('conversation.welcome.webWorkspaceHint', { defaultValue: '浏览器模式将自动使用服务端工作区目录。' }));
+            return;
+          }
           ipcBridge.dialog.showOpen
             .invoke({ properties: ['openDirectory'] })
             .then((dirs) => {

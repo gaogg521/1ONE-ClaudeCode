@@ -137,9 +137,13 @@ vi.mock('@process/bridge/webuiQR', () => ({
   verifyQRTokenDirect: vi.fn(),
 }));
 
-vi.mock('@process/webserver/auth/providers/LdapAuthProvider', () => ({
-  authenticateWithLdap: mockAuthenticateWithLdap,
-}));
+vi.mock('@process/webserver/auth/providers/LdapAuthProvider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@process/webserver/auth/providers/LdapAuthProvider')>();
+  return {
+    ...actual,
+    authenticateWithLdap: mockAuthenticateWithLdap,
+  };
+});
 
 vi.mock('@process/services/user/userProfileService', () => ({
   updateUserOrgProfile: (...args: unknown[]) => mockUpdateUserOrgProfile(...args),
@@ -562,7 +566,7 @@ describe('registerAuthRoutes login endpoint', () => {
     expect((res as unknown as { status: ReturnType<typeof vi.fn> }).status).toHaveBeenCalledWith(503);
     expect((res as unknown as { json: ReturnType<typeof vi.fn> }).json).toHaveBeenCalledWith({
       success: false,
-      message: 'LDAP service unavailable. Please retry later.',
+      message: '连接 LDAP 超时，请检查网络或防火墙。',
     });
   });
 });

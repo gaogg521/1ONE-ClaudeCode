@@ -175,6 +175,7 @@ class RemoteAgentManager extends BaseAgentManager<RemoteAgentManagerData> {
   async sendMessage(data: {
     content: string;
     agentContent?: string;
+    agentPrompt?: string;
     files?: string[];
     msg_id?: string;
     hidden?: boolean;
@@ -200,7 +201,7 @@ class RemoteAgentManager extends BaseAgentManager<RemoteAgentManagerData> {
       }
 
       const result = await this.core.sendMessage({
-        content: data.agentContent || data.content,
+        content: data.agentPrompt || data.agentContent || data.content,
         files: data.files,
       });
 

@@ -27,7 +27,7 @@ export function useIssueAssigneeOptions(enabled: boolean) {
       setOptions(
         users
           .map((item) => ({ userId: item.id, label: item.username }))
-          .sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
+          .toSorted((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
       );
     } catch {
       setOptions([]);
