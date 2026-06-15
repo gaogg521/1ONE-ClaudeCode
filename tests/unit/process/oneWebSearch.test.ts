@@ -27,19 +27,13 @@ describe('normalizeOneWebSearchToolParams', () => {
   });
 
   it('uses fallbackText when args are empty', () => {
-    const result = normalizeOneWebSearchToolParams(
-      {},
-      { fallbackText: '百度搜索 最新 AI 新闻' }
-    );
+    const result = normalizeOneWebSearchToolParams({}, { fallbackText: '百度搜索 最新 AI 新闻' });
     expect(result.query).toBe('最新 AI 新闻');
     expect(result.engine).toBe('baidu');
   });
 
   it('does not treat bare URL fallback as search query', () => {
-    const result = normalizeOneWebSearchToolParams(
-      {},
-      { fallbackText: 'https://example.com/page' }
-    );
+    const result = normalizeOneWebSearchToolParams({}, { fallbackText: 'https://example.com/page' });
     expect(result.query).toBeUndefined();
   });
 });

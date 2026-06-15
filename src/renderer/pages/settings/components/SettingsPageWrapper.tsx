@@ -6,15 +6,7 @@ import { SettingsViewModeProvider } from '@/renderer/components/settings/Setting
 import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/platform';
 import type { IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
 import { useExtensionSettingsTabs } from '@/renderer/hooks/extensions/useExtensionSettingsTabs';
-import {
-  Communication,
-  Earth,
-  LinkCloud,
-  Puzzle,
-  Robot,
-  System,
-  Toolkit,
-} from '@icon-park/react';
+import { Communication, Earth, LinkCloud, Puzzle, Robot, System, Toolkit } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
@@ -177,7 +169,9 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
         }}
       >
         <span className={mobile ? 'settings-mobile-top-nav__icon' : 'settings-desktop-top-nav__icon'}>{item.icon}</span>
-        <span className={mobile ? 'settings-mobile-top-nav__label' : 'settings-desktop-top-nav__label'}>{item.label}</span>
+        <span className={mobile ? 'settings-mobile-top-nav__label' : 'settings-desktop-top-nav__label'}>
+          {item.label}
+        </span>
       </button>
     );
   };
@@ -200,9 +194,7 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         header={
           isMobile ? (
-            <div className='settings-mobile-top-nav'>
-              {menuItems.map((item) => renderTopNavItem(item, true))}
-            </div>
+            <div className='settings-mobile-top-nav'>{menuItems.map((item) => renderTopNavItem(item, true))}</div>
           ) : (
             <div className='settings-desktop-top-nav'>
               <div className='settings-desktop-top-nav__title'>

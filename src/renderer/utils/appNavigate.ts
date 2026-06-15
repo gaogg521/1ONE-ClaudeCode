@@ -11,11 +11,7 @@ import { isElectronDesktop } from '@/renderer/utils/platform';
  * HashRouter in Electron does not always apply navigate() for in-app hash updates.
  * Keep React Router and window.location.hash in sync on desktop.
  */
-export function appNavigate(
-  navigate: NavigateFunction,
-  path: string,
-  options?: NavigateOptions
-): void {
+export function appNavigate(navigate: NavigateFunction, path: string, options?: NavigateOptions): void {
   const normalized = path.startsWith('/') ? path : `/${path}`;
   if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
     console.warn('[nav] appNavigate', {

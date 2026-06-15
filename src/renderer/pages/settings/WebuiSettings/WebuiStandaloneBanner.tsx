@@ -20,13 +20,8 @@ const WebuiStandaloneBanner: React.FC = () => {
   const navigate = useNavigate();
   const isDesktop = isElectronDesktop();
   const { user } = useAuth();
-  const {
-    loading,
-    hasJoinedEnterprise,
-    effectiveRole,
-    setManagementMode,
-    openEnterpriseAdminInBrowser,
-  } = useWebuiEnterpriseMode();
+  const { loading, hasJoinedEnterprise, effectiveRole, setManagementMode, openEnterpriseAdminInBrowser } =
+    useWebuiEnterpriseMode();
 
   const handleOpenAdminConsole = useCallback(() => {
     void openAdminConsole({

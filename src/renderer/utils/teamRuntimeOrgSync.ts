@@ -25,10 +25,7 @@ function nodeToHeartbeatPayload(node: TeamRuntimeNode): UpsertTeamRuntimeNodeInp
  * Works when members joined the same org via invite code, email, LDAP, or Feishu SSO —
  * as long as they use the same organization server URL (remembered after login/join).
  */
-export async function syncTeamRuntimeNodeToOrg(
-  node: TeamRuntimeNode,
-  tenantId: string
-): Promise<void> {
+export async function syncTeamRuntimeNodeToOrg(node: TeamRuntimeNode, tenantId: string): Promise<void> {
   if (!shouldSyncWithEnterpriseApi(tenantId)) {
     return;
   }

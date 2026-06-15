@@ -43,9 +43,7 @@ export function registerKanbanRoutes(app: Express): void {
       const db = await getDatabase();
       const { id: userId, tenant_id } = req.user!;
       const tenantId = tenant_id ?? 'default';
-      const result = isPrivilegedRequest(req)
-        ? db.listPersonalTasks(tenantId)
-        : db.listPersonalTasks(tenantId, userId);
+      const result = isPrivilegedRequest(req) ? db.listPersonalTasks(tenantId) : db.listPersonalTasks(tenantId, userId);
       res.json({ success: true, data: result.data ?? [] });
     } catch (err) {
       console.error('[KanbanRoute] list error:', err);
@@ -92,19 +90,13 @@ export function registerKanbanRoutes(app: Express): void {
       const db = await getDatabase();
       const { id: userId } = req.user!;
       const taskId = String(req.params.id);
-      const existing = db.getPersonalTask(taskId) as
-        | ({ user_id: string; assigned_to?: string | null })
-        | null;
+      const existing = db.getPersonalTask(taskId) as { user_id: string; assigned_to?: string | null } | null;
       if (!existing) {
         res.status(404).json({ success: false, message: 'Task not found' });
         return;
       }
       // 非 admin 只能修改自己创建或分配给自己的任务
-      if (
-        !isPrivilegedRequest(req) &&
-        existing.user_id !== userId &&
-        existing.assigned_to !== userId
-      ) {
+      if (!isPrivilegedRequest(req) && existing.user_id !== userId && existing.assigned_to !== userId) {
         res.status(403).json({ success: false, message: 'Forbidden' });
         return;
       }
@@ -129,18 +121,12 @@ export function registerKanbanRoutes(app: Express): void {
       const db = await getDatabase();
       const { id: userId } = req.user!;
       const taskId = String(req.params.id);
-      const existing = db.getPersonalTask(taskId) as
-        | ({ user_id: string; assigned_to?: string | null })
-        | null;
+      const existing = db.getPersonalTask(taskId) as { user_id: string; assigned_to?: string | null } | null;
       if (!existing) {
         res.status(404).json({ success: false, message: 'Task not found' });
         return;
       }
-      if (
-        !isPrivilegedRequest(req) &&
-        existing.user_id !== userId &&
-        existing.assigned_to !== userId
-      ) {
+      if (!isPrivilegedRequest(req) && existing.user_id !== userId && existing.assigned_to !== userId) {
         res.status(403).json({ success: false, message: 'Forbidden' });
         return;
       }

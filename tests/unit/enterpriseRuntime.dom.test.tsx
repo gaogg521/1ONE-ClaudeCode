@@ -13,10 +13,7 @@ vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
   useWebuiEnterpriseMode: () => useWebuiEnterpriseModeMock(),
 }));
 
-import {
-  EnterpriseRuntimeProvider,
-  useEnterpriseRuntime,
-} from '@/renderer/hooks/enterprise/useEnterpriseRuntime';
+import { EnterpriseRuntimeProvider, useEnterpriseRuntime } from '@/renderer/hooks/enterprise/useEnterpriseRuntime';
 
 function enterpriseRuntimeWrapper({ children }: React.PropsWithChildren) {
   return <EnterpriseRuntimeProvider pathname='/enterprise/skills'>{children}</EnterpriseRuntimeProvider>;

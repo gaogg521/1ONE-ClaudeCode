@@ -203,19 +203,35 @@ body[arco-theme='dark'] .arco-message-error {
 }
 
 [data-color-scheme^='1one-']:not([data-color-scheme='1one-moonlight']) .arco-message-success {
-  background: linear-gradient(90deg, var(--color-bg-3) 0%, color-mix(in srgb, var(--color-success-6, #34d399) 15%, var(--color-bg-3)) 100%) !important;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-3) 0%,
+    color-mix(in srgb, var(--color-success-6, #34d399) 15%, var(--color-bg-3)) 100%
+  ) !important;
 }
 
 [data-color-scheme^='1one-']:not([data-color-scheme='1one-moonlight']) .arco-message-warning {
-  background: linear-gradient(90deg, var(--color-bg-3) 0%, color-mix(in srgb, var(--color-warning-6, #fbbf24) 15%, var(--color-bg-3)) 100%) !important;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-3) 0%,
+    color-mix(in srgb, var(--color-warning-6, #fbbf24) 15%, var(--color-bg-3)) 100%
+  ) !important;
 }
 
 [data-color-scheme^='1one-']:not([data-color-scheme='1one-moonlight']) .arco-message-info {
-  background: linear-gradient(90deg, var(--color-bg-3) 0%, color-mix(in srgb, var(--color-primary-6, #22d3ee) 18%, var(--color-bg-3)) 100%) !important;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-3) 0%,
+    color-mix(in srgb, var(--color-primary-6, #22d3ee) 18%, var(--color-bg-3)) 100%
+  ) !important;
 }
 
 [data-color-scheme^='1one-']:not([data-color-scheme='1one-moonlight']) .arco-message-error {
-  background: linear-gradient(90deg, var(--color-bg-3) 0%, color-mix(in srgb, var(--color-danger-6, #f87171) 15%, var(--color-bg-3)) 100%) !important;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-3) 0%,
+    color-mix(in srgb, var(--color-danger-6, #f87171) 15%, var(--color-bg-3)) 100%
+  ) !important;
 }
 
 /* Workspace tree selection styles - use text color instead of background */
@@ -381,7 +397,9 @@ body[arco-theme='dark'] .arco-message-error {
   background-color: var(--color-fill-2) !important;
 }
 
-[data-color-scheme^='1one-']:not([data-color-scheme='1one-moonlight']) .arco-input-number .arco-input-number-handler:hover {
+[data-color-scheme^='1one-']:not([data-color-scheme='1one-moonlight'])
+  .arco-input-number
+  .arco-input-number-handler:hover {
   background-color: var(--color-fill-3) !important;
   color: var(--color-text-1) !important;
 }

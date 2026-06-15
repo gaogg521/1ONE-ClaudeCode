@@ -32,13 +32,13 @@ function asFeishuResponse<T>(value: unknown): FeishuApiResponse<T> | null {
 }
 
 export function buildFeishuAuthorizeUrl(input: {
-    appId: string;
-    redirectUri: string;
-    state: string;
-    // QRConnect uses same authorize URL; the QR SDK will append tmp_code later.
-    // We keep the URL format stable for both flows.
-    base?: string;
-  }): string {
+  appId: string;
+  redirectUri: string;
+  state: string;
+  // QRConnect uses same authorize URL; the QR SDK will append tmp_code later.
+  // We keep the URL format stable for both flows.
+  base?: string;
+}): string {
   const base = input.base ?? 'https://passport.feishu.cn/suite/passport/oauth/authorize';
   const url = new URL(base);
   url.searchParams.set('client_id', input.appId);
@@ -48,11 +48,7 @@ export function buildFeishuAuthorizeUrl(input: {
   return url.toString();
 }
 
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  timeoutMs = FEISHU_HTTP_TIMEOUT_MS
-): Promise<Response> {
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = FEISHU_HTTP_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -68,58 +64,58 @@ async function fetchWithTimeout(
 }
 
 export async function exchangeFeishuCodeForUserAccessToken(params: {
-    appId: string;
-    appSecret: string;
-    code: string;
-    redirectUri?: string;
-  }): Promise<string> {
-    const res = await fetchWithTimeout('https://open.feishu.cn/open-apis/authen/v2/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        grant_type: 'authorization_code',
-        client_id: params.appId,
-        client_secret: params.appSecret,
-        code: params.code,
-        ...(params.redirectUri ? { redirect_uri: params.redirectUri } : {}),
-      }),
-    });
-    const data = (await res.json().catch((): null => null)) as unknown;
-    const obj = asFeishuResponse<{ access_token?: string }>(data);
-    if (!res.ok || !obj) {
-      throw new Error(`Feishu token exchange failed: HTTP ${res.status}`);
-    }
-    if (obj.code !== 0) {
-      throw new Error(`Feishu token exchange failed: ${obj.msg || 'unknown error'}`);
-    }
-    const topLevelToken =
-      typeof data === 'object' && data && typeof (data as { access_token?: unknown }).access_token === 'string'
-        ? (data as { access_token: string }).access_token
-        : undefined;
-    const token = obj.data?.access_token ?? topLevelToken;
-    if (typeof token !== 'string' || !token) {
-      throw new Error('Feishu token exchange failed: missing access_token');
-    }
-    return token;
+  appId: string;
+  appSecret: string;
+  code: string;
+  redirectUri?: string;
+}): Promise<string> {
+  const res = await fetchWithTimeout('https://open.feishu.cn/open-apis/authen/v2/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'authorization_code',
+      client_id: params.appId,
+      client_secret: params.appSecret,
+      code: params.code,
+      ...(params.redirectUri ? { redirect_uri: params.redirectUri } : {}),
+    }),
+  });
+  const data = (await res.json().catch((): null => null)) as unknown;
+  const obj = asFeishuResponse<{ access_token?: string }>(data);
+  if (!res.ok || !obj) {
+    throw new Error(`Feishu token exchange failed: HTTP ${res.status}`);
   }
+  if (obj.code !== 0) {
+    throw new Error(`Feishu token exchange failed: ${obj.msg || 'unknown error'}`);
+  }
+  const topLevelToken =
+    typeof data === 'object' && data && typeof (data as { access_token?: unknown }).access_token === 'string'
+      ? (data as { access_token: string }).access_token
+      : undefined;
+  const token = obj.data?.access_token ?? topLevelToken;
+  if (typeof token !== 'string' || !token) {
+    throw new Error('Feishu token exchange failed: missing access_token');
+  }
+  return token;
+}
 
 export async function fetchFeishuUserInfo(userAccessToken: string): Promise<FeishuUserInfo> {
-    const res = await fetchWithTimeout('https://open.feishu.cn/open-apis/authen/v1/user_info', {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${userAccessToken}`,
-      },
-    });
-    const data = (await res.json().catch((): null => null)) as unknown;
-    const obj = asFeishuResponse<FeishuUserInfo>(data);
-    if (!res.ok || !obj) {
-      throw new Error(`Feishu user_info failed: HTTP ${res.status}`);
-    }
-    if (obj.code !== 0) {
-      throw new Error(`Feishu user_info failed: ${obj.msg || 'unknown error'}`);
-    }
-    return obj.data ?? {};
+  const res = await fetchWithTimeout('https://open.feishu.cn/open-apis/authen/v1/user_info', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${userAccessToken}`,
+    },
+  });
+  const data = (await res.json().catch((): null => null)) as unknown;
+  const obj = asFeishuResponse<FeishuUserInfo>(data);
+  if (!res.ok || !obj) {
+    throw new Error(`Feishu user_info failed: HTTP ${res.status}`);
   }
+  if (obj.code !== 0) {
+    throw new Error(`Feishu user_info failed: ${obj.msg || 'unknown error'}`);
+  }
+  return obj.data ?? {};
+}
 
 export function resolveFeishuExternalId(
   info: FeishuUserInfo,
@@ -154,4 +150,3 @@ export async function testFeishuAppCredentials(appId: string, appSecret: string)
     throw new Error(obj.msg || 'Feishu tenant token request failed');
   }
 }
-

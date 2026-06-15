@@ -103,15 +103,16 @@ vi.mock('@/renderer/pages/conversation/platforms/aionrs/useAionrsModelSelection'
 
 vi.mock('@arco-design/web-react', () => ({
   Alert: ({ content }: { content?: React.ReactNode }) => <div>{content}</div>,
-  Button: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => <button onClick={onClick}>{children}</button>,
+  Button: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => (
+    <button onClick={onClick}>{children}</button>
+  ),
   Dropdown: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Message: {
     error: vi.fn(),
   },
-  Menu: Object.assign(
-    ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-    { Item: ({ children }: React.PropsWithChildren) => <div>{children}</div> }
-  ),
+  Menu: Object.assign(({ children }: React.PropsWithChildren) => <div>{children}</div>, {
+    Item: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  }),
   Spin: () => <div>loading</div>,
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Typography: {
@@ -189,15 +190,17 @@ describe('team chat stretch layout', () => {
   it('enables stretch layout for team chat conversations', async () => {
     render(
       <TeamChatView
-        conversation={{
-          id: 'conv-1',
-          type: 'acp',
-          status: 'finished',
-          createTime: 1,
-          modifyTime: 1,
-          name: 'Claude Code',
-          extra: { workspace: '/repo', backend: 'claude' },
-        } as never}
+        conversation={
+          {
+            id: 'conv-1',
+            type: 'acp',
+            status: 'finished',
+            createTime: 1,
+            modifyTime: 1,
+            name: 'Claude Code',
+            extra: { workspace: '/repo', backend: 'claude' },
+          } as never
+        }
         teamId='team-1'
       />
     );

@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export function resolveOAuthCallbackUri(configuredRedirectUri: string, callbackPath: string, requestOrigin: string): string {
+export function resolveOAuthCallbackUri(
+  configuredRedirectUri: string,
+  callbackPath: string,
+  requestOrigin: string
+): string {
   const configured = configuredRedirectUri.trim();
   if (configured) {
     return configured;

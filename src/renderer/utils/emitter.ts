@@ -46,6 +46,8 @@ interface EventTypes {
   'remote.selected.file.clear': void;
   'remote.workspace.refresh': void;
   'chat.history.refresh': void;
+  /** Reconcile in-memory message list with SQLite after a turn completes. */
+  'conversation.messages.sync': [{ conversationId: string }];
   // 会话删除事件 / Conversation deletion event
   'conversation.deleted': [string]; // conversationId
   // 预览面板事件 / Preview panel events

@@ -9,10 +9,7 @@ import { Alert, Card, Message, Switch, Typography } from '@arco-design/web-react
 import { useTranslation } from 'react-i18next';
 import { isSystemAdminRole } from '@/common/auth/enterpriseRoles';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
-import {
-  fetchOrgEditionAccess,
-  saveOrgEditionAccess,
-} from '@/renderer/utils/enterpriseApi/orgEditionAccess';
+import { fetchOrgEditionAccess, saveOrgEditionAccess } from '@/renderer/utils/enterpriseApi/orgEditionAccess';
 
 const EnterpriseEditionAccessPanel: React.FC = () => {
   const { t } = useTranslation();
@@ -84,8 +81,7 @@ const EnterpriseEditionAccessPanel: React.FC = () => {
         type='warning'
         className='mb-12px'
         content={t('settings.enterpriseConsole.editionAccessHint', {
-          defaultValue:
-            '请企业团队版成员慎重操作：此开关影响全员终端上的版本切换入口，与 SSO 登录渠道配置相互独立。',
+          defaultValue: '请企业团队版成员慎重操作：此开关影响全员终端上的版本切换入口，与 SSO 登录渠道配置相互独立。',
         })}
       />
       <div className='flex items-center justify-between gap-12px'>

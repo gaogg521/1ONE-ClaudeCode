@@ -56,17 +56,8 @@ export class CciService {
     });
   }
 
-  static async triggerPipelineRun(
-    pipelineId: string,
-    userId: string,
-    tenantId: string
-  ): Promise<{ runId: string }> {
-    const runId = await PipelineService.getInstance().triggerPipelineRun(
-      pipelineId,
-      userId,
-      'manual',
-      tenantId
-    );
+  static async triggerPipelineRun(pipelineId: string, userId: string, tenantId: string): Promise<{ runId: string }> {
+    const runId = await PipelineService.getInstance().triggerPipelineRun(pipelineId, userId, 'manual', tenantId);
     return { runId };
   }
 

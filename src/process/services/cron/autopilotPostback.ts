@@ -25,7 +25,11 @@ import type { AutopilotContext } from '@/common/types/autopilotContext';
 import { AGENT_BLOCKER_ESCALATION_INSTRUCTIONS } from '@/common/types/agentEscalationInstructions';
 import type { IConversationRepository } from '@process/services/database/IConversationRepository';
 import { getDatabase } from '@process/services/database';
-import { insertRequirementComment, formatMentionLine, resolveUsernames } from '@process/services/devops/requirementCommentService';
+import {
+  insertRequirementComment,
+  formatMentionLine,
+  resolveUsernames,
+} from '@process/services/devops/requirementCommentService';
 import type { CronJob } from './CronStore';
 
 /**
@@ -59,7 +63,9 @@ export async function postAutopilotResultToIssue(
     return;
   }
 
-  const mentionIds = [...new Set([...(autopilot.mentionUserIds ?? []), requirement.assigned_to].filter(Boolean))] as string[];
+  const mentionIds = [
+    ...new Set([...(autopilot.mentionUserIds ?? []), requirement.assigned_to].filter(Boolean)),
+  ] as string[];
   const users = await resolveUsernames(mentionIds);
   const mentionLine = formatMentionLine(mentionIds, users);
 

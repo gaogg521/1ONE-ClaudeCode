@@ -57,9 +57,11 @@ export async function startOAuthAuthorize(path: string): Promise<OAuthAuthorizeR
     const response = await requestOAuthAuthorize(path);
     const contentType = response.headers.get('content-type') ?? '';
     const body = contentType.includes('application/json')
-      ? ((await response.json().catch((): null => null)) as (OAuthErrorBody & {
-          data?: { goto?: string };
-        }) | null)
+      ? ((await response.json().catch((): null => null)) as
+          | (OAuthErrorBody & {
+              data?: { goto?: string };
+            })
+          | null)
       : null;
 
     const gotoUrl = typeof body?.data?.goto === 'string' ? body.data.goto.trim() : '';
@@ -134,13 +136,11 @@ export function formatOAuthAuthorizeError(
     }
     if (message.startsWith('WeCom')) {
       return t('login.errors.wecomNotConfigured', {
-        defaultValue:
-          '企业微信 SSO 尚未在「管理后台 → 认证与邮件 → 企业微信」中配置。',
+        defaultValue: '企业微信 SSO 尚未在「管理后台 → 认证与邮件 → 企业微信」中配置。',
       });
     }
     return t('login.errors.feishuNotConfigured', {
-      defaultValue:
-        '飞书 SSO 尚未在「管理后台 → 认证与邮件 → 飞书」中配置。注意：设置里的飞书频道机器人不是组织登录。',
+      defaultValue: '飞书 SSO 尚未在「管理后台 → 认证与邮件 → 飞书」中配置。注意：设置里的飞书频道机器人不是组织登录。',
     });
   }
   if (

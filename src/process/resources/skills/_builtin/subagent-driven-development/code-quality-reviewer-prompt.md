@@ -17,6 +17,7 @@ Task tool (general-purpose):
 ```
 
 **In addition to standard code quality concerns, the reviewer should check:**
+
 - Does each file have one clear responsibility with a well-defined interface?
 - Are units decomposed so they can be understood and tested independently?
 - Is the implementation following the file structure from the plan?

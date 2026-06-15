@@ -44,9 +44,7 @@ const AddCustomPathModal: React.FC<AddCustomPathModalProps> = ({
     >
       <div className='settings-modal-surface flex flex-col gap-16px p-16px'>
         <div>
-          <div className='settings-form-section-title mb-8px'>
-            {t('common.name', { defaultValue: 'Name' })}
-          </div>
+          <div className='settings-form-section-title mb-8px'>{t('common.name', { defaultValue: 'Name' })}</div>
           <Input
             placeholder={t('settings.skillsHub.customPathNamePlaceholder', { defaultValue: 'e.g. My Custom Skills' })}
             value={customPathName}

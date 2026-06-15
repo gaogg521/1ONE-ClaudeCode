@@ -174,17 +174,15 @@ async function getFeishuTenantAccessToken(config: Pick<FeishuProviderConfig, 'ap
     }),
   });
   const json = await parseFeishuJson(response, 'Failed to get Feishu tenant access token');
-  const token = json.tenant_access_token ?? (json.data as { tenant_access_token?: string } | undefined)?.tenant_access_token;
+  const token =
+    json.tenant_access_token ?? (json.data as { tenant_access_token?: string } | undefined)?.tenant_access_token;
   if (!token) {
     throw new Error('Failed to get Feishu tenant access token');
   }
   return token;
 }
 
-async function resolveFeishuDocumentId(
-  parsedUrl: ParsedFeishuDocumentUrl,
-  accessToken: string
-): Promise<string> {
+async function resolveFeishuDocumentId(parsedUrl: ParsedFeishuDocumentUrl, accessToken: string): Promise<string> {
   if (parsedUrl.kind === 'docx') {
     return parsedUrl.token;
   }

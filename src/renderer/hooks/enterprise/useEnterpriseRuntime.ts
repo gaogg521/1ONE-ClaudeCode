@@ -13,14 +13,8 @@ import {
   getEnterpriseNavItemByPath,
   getVisibleEnterpriseNavItems,
 } from '@/renderer/pages/enterprise/enterpriseNav';
-import {
-  normalizeEnterpriseApiError,
-  type EnterpriseRuntimeIssue,
-} from '@/renderer/utils/enterpriseApi/error';
-import {
-  canAccessEnterprisePlatform,
-  canAccessEnterpriseRouteRole,
-} from '@/common/auth/enterpriseRoutes';
+import { normalizeEnterpriseApiError, type EnterpriseRuntimeIssue } from '@/renderer/utils/enterpriseApi/error';
+import { canAccessEnterprisePlatform, canAccessEnterpriseRouteRole } from '@/common/auth/enterpriseRoutes';
 import { isEnterpriseAdminRole, isSystemAdminRole } from '@/common/auth/enterpriseRoles';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 
@@ -45,9 +39,10 @@ type EnterpriseRuntimeContextValue = {
 
 const EnterpriseRuntimeContext = createContext<EnterpriseRuntimeContextValue | undefined>(undefined);
 
-export const EnterpriseRuntimeProvider: React.FC<
-  React.PropsWithChildren<{ pathname: string }>
-> = ({ pathname, children }) => {
+export const EnterpriseRuntimeProvider: React.FC<React.PropsWithChildren<{ pathname: string }>> = ({
+  pathname,
+  children,
+}) => {
   const auth = useAuth();
   const enterpriseMode = useWebuiEnterpriseMode();
   const isDesktop = isElectronDesktop();
@@ -65,8 +60,7 @@ export const EnterpriseRuntimeProvider: React.FC<
   );
 
   const joined = enterpriseMode.hasJoinedEnterprise;
-  const loading =
-    enterpriseMode.loading || (auth.status === 'checking' && auth.user === null);
+  const loading = enterpriseMode.loading || (auth.status === 'checking' && auth.user === null);
 
   const refresh = useCallback(async () => {
     await Promise.all([auth.refresh(), enterpriseMode.refreshEnterpriseContext()]);
@@ -96,8 +90,7 @@ export const EnterpriseRuntimeProvider: React.FC<
       };
     }
     if (!canAccessEnterpriseRouteRole(activeNavItem.requiresRole, effectiveRole)) {
-      const needsSystemAdmin =
-        activeNavItem.requiresRole === 'system_admin' && !isSystemAdmin;
+      const needsSystemAdmin = activeNavItem.requiresRole === 'system_admin' && !isSystemAdmin;
       return {
         code: 'insufficient_role',
         message: needsSystemAdmin
@@ -126,12 +119,12 @@ export const EnterpriseRuntimeProvider: React.FC<
       ? 'webui_unavailable'
       : issue?.code === 'unsupported_platform'
         ? 'unsupported_platform'
-      : issue?.code === 'not_authenticated'
-        ? 'not_authenticated'
-        : issue?.code === 'not_joined'
-          ? 'not_joined'
-          : issue?.code === 'insufficient_role'
-            ? 'insufficient_role'
+        : issue?.code === 'not_authenticated'
+          ? 'not_authenticated'
+          : issue?.code === 'not_joined'
+            ? 'not_joined'
+            : issue?.code === 'insufficient_role'
+              ? 'insufficient_role'
               : 'ready';
 
   const value = useMemo<EnterpriseRuntimeContextValue>(
@@ -144,15 +137,7 @@ export const EnterpriseRuntimeProvider: React.FC<
       joined,
       refresh,
     }),
-    [
-      activeNavItem,
-      visibleNavItems,
-      issue,
-      joined,
-      loading,
-      refresh,
-      status,
-    ]
+    [activeNavItem, visibleNavItems, issue, joined, loading, refresh, status]
   );
 
   return React.createElement(EnterpriseRuntimeContext.Provider, { value }, children);

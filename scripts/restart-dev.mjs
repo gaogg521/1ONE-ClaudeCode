@@ -6,6 +6,7 @@
  *   node scripts/restart-dev.mjs --fast       # kill + dev only (npm run restart:fast)
  *   node scripts/restart-dev.mjs --webui      # headless: WebUI server only, no window
  *   node scripts/restart-dev.mjs --webui --remote   # headless + LAN (restart:webui:remote)
+ *   node scripts/restart-dev.mjs --start            # kill + dev only (npm run start)
  *   node scripts/restart-dev.mjs --stop-only        # kill zombies only (npm run stop:dev)
  *
  * Ctrl+C / SIGTERM kills the electron-vite process tree (Windows: taskkill /T).
@@ -21,17 +22,14 @@ import { killWindowsAppProcesses } from './packagedExecutable.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
 
-const isFast =
-  argv.includes('--fast') ||
-  argv.includes('--no-build') ||
-  process.env.ONE_RESTART_FAST === '1';
+const isFast = argv.includes('--fast') || argv.includes('--no-build') || process.env.ONE_RESTART_FAST === '1';
 const useWebuiOnly = argv.includes('--webui') || process.env.ONE_RESTART_WEBUI === '1';
-const useWebuiRemote =
-  argv.includes('--remote') || process.env.ONE_RESTART_WEBUI_REMOTE === '1';
+const useWebuiRemote = argv.includes('--remote') || process.env.ONE_RESTART_WEBUI_REMOTE === '1';
 const stopOnly = argv.includes('--stop-only') || process.env.ONE_STOP_DEV === '1';
+const isStartOnly = argv.includes('--start') || process.env.ONE_START_DEV === '1';
 
-/** Full restart: clean + build + desktop dev (window + auto WebUI restore). Fast: HMR dev only. */
-const isFull = !isFast;
+/** Full restart: clean + build + desktop dev. Fast: clean + dev. Start: kill + dev only. */
+const isFull = !isFast && !isStartOnly;
 
 const DEV_LISTEN_PORTS = [
   5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 5181, 5182, 5183, 5184, 5185, 9230, 25809, 25810,
@@ -289,17 +287,15 @@ async function main() {
   const env = {
     ...process.env,
     PATH: `${localBin}${sep}${process.env.PATH || ''}`,
-    // Dev desktop: auto-open DevTools so white-screen / Vite errors are visible without Settings UI.
-    ONE_OPEN_DEVTOOLS: process.env.ONE_OPEN_DEVTOOLS ?? '1',
   };
 
   if (stopOnly) {
     console.log('[stop] stop-only: killing Electron / electron-vite / dev ports (will NOT start dev)');
+  } else if (isStartOnly) {
+    console.log('[start] Kill stale Electron/Vite → electron-vite dev (no build/cache clean)');
   } else if (isFull) {
     if (useWebuiOnly) {
-      console.log(
-        '[restart] Full WebUI-only restart: no desktop window — open http://localhost:25809 in browser'
-      );
+      console.log('[restart] Full WebUI-only restart: no desktop window — open http://localhost:25809 in browser');
     } else {
       console.log('[restart] Full desktop restart: stop → clean vite cache → build → MCP → Electron window');
     }
@@ -308,7 +304,8 @@ async function main() {
   }
 
   if (!stopOnly) {
-    console.log('[restart] Ctrl+C 会结束 Electron、Vite 及 electron-vite 相关 node 进程');
+    const ctrlHint = isStartOnly ? '[start]' : '[restart]';
+    console.log(`${ctrlHint} Ctrl+C 会结束 Electron、Vite 及 electron-vite 相关 node 进程`);
   }
 
   killStaleDevProcesses();
@@ -334,7 +331,7 @@ async function main() {
       env.ONE_DEV_LOAD_BUILT_RENDERER = '1';
       console.log('[restart] Desktop will load out/renderer (ONE_DEV_LOAD_BUILT_RENDERER=1, skips Vite for UI)');
     }
-  } else {
+  } else if (!isStartOnly) {
     runDevCacheClean(root, env, { vite: true, electron: true });
     const mcpBuildScript = path.join(root, 'scripts', 'build-mcp-servers.js');
     if (fs.existsSync(mcpBuildScript)) {
@@ -350,24 +347,38 @@ async function main() {
     }
   }
 
-  console.log(`[restart] Starting electron-vite ${devArgs.join(' ')} ...`);
-  if (isFull && !useWebuiOnly) {
+  const repairScript = path.join(root, 'scripts', 'ensure-mcp-after-dev.mjs');
+  const spawnMcpRepairAfterDev = () => {
+    if (!fs.existsSync(repairScript)) {
+      return;
+    }
+    const repair = spawn(process.execPath, [repairScript], {
+      detached: true,
+      stdio: 'ignore',
+      cwd: root,
+      env,
+    });
+    repair.unref();
+  };
+
+  const logPrefix = isStartOnly ? '[start]' : '[restart]';
+  console.log(`${logPrefix} Starting electron-vite ${devArgs.join(' ')} ...`);
+  if (isStartOnly) {
+    console.log('[start] 会先清理僵尸 Electron/托盘，再启动；托盘无效时另开终端执行 npm run stop:dev');
+    console.log('[start] 日志中应出现 [1ONE] Creating main window 与 [1ONE] Showing main window');
+    console.log('[start] Ctrl+C 会结束 Electron、Vite 及 electron-vite 相关 node 进程');
+    spawnMcpRepairAfterDev();
+  } else if (isFull && !useWebuiOnly) {
     console.log('[restart] Electron 桌面窗口即将弹出；请保持本终端不关（日志在此输出）。');
     console.log('[restart] 日志中应出现 [1ONE] Dev using prebuilt renderer 与 [1ONE] Showing main window');
     console.log('[restart] 改 UI 请再跑 restart，或 npm run restart:fast 走 Vite HMR');
     console.log('[restart] WebUI 将按设置自动恢复（成员 http://localhost:25809，管理员 http://localhost:25810）');
+    spawnMcpRepairAfterDev();
   } else if (useWebuiOnly) {
     console.log('[restart] 无桌面窗口；浏览器访问 http://localhost:25809（或日志中的端口）');
-    const repairScript = path.join(root, 'scripts', 'ensure-mcp-after-dev.mjs');
-    if (fs.existsSync(repairScript)) {
-      const repair = spawn(process.execPath, [repairScript], {
-        detached: true,
-        stdio: 'ignore',
-        cwd: root,
-        env,
-      });
-      repair.unref();
-    }
+    spawnMcpRepairAfterDev();
+  } else if (!isStartOnly) {
+    spawnMcpRepairAfterDev();
   }
 
   startElectronViteDev(root, env, devArgs);

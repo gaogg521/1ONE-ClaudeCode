@@ -71,10 +71,7 @@ const CTestManagement: React.FC = () => {
   // 需求列表（用于关联下拉）
   const reqsState = useEnterpriseAsyncData(listRequirementsTree, [], '');
   const flatReqs = flattenReqs(reqsState.data as unknown[]);
-  const reqLabelById = useMemo(
-    () => new Map(flatReqs.map((req) => [req.id, req.subject])),
-    [flatReqs]
-  );
+  const reqLabelById = useMemo(() => new Map(flatReqs.map((req) => [req.id, req.subject])), [flatReqs]);
 
   // 首次加载后自动选中第一个计划，避免右侧长期空白
   useEffect(() => {
@@ -84,7 +81,10 @@ const CTestManagement: React.FC = () => {
   }, [plansState.data, plansState.loading, selectedPlan]);
 
   const handleCreatePlan = async () => {
-    if (!form.name.trim()) { Message.warning('名称不能为空'); return; }
+    if (!form.name.trim()) {
+      Message.warning('名称不能为空');
+      return;
+    }
     setSaving(true);
     try {
       await createTestPlan(form);
@@ -100,7 +100,10 @@ const CTestManagement: React.FC = () => {
   };
 
   const handleCreateCase = async () => {
-    if (!selectedPlan || !caseForm.subject.trim()) { Message.warning('标题不能为空'); return; }
+    if (!selectedPlan || !caseForm.subject.trim()) {
+      Message.warning('标题不能为空');
+      return;
+    }
     setSaving(true);
     try {
       await createTestCase({ ...caseForm, plan_id: selectedPlan.id });
@@ -146,7 +149,11 @@ const CTestManagement: React.FC = () => {
       width: 90,
       render: (v: string) => {
         const meta = STATUS_META[v] ?? STATUS_META.pending;
-        return <Tag size='small' color={meta.color}>{meta.label}</Tag>;
+        return (
+          <Tag size='small' color={meta.color}>
+            {meta.label}
+          </Tag>
+        );
       },
     },
     {
@@ -264,13 +271,21 @@ const CTestManagement: React.FC = () => {
                     <span>{selectedPlan.name}</span>
                     {planStats && (
                       <Space size={6}>
-                        <Tag size='small' color='green'>{planStats.passed} 通过</Tag>
-                        <Tag size='small' color='red'>{planStats.failed} 失败</Tag>
-                        <Tag size='small' color='gray'>{planStats.pending} 待执行</Tag>
+                        <Tag size='small' color='green'>
+                          {planStats.passed} 通过
+                        </Tag>
+                        <Tag size='small' color='red'>
+                          {planStats.failed} 失败
+                        </Tag>
+                        <Tag size='small' color='gray'>
+                          {planStats.pending} 待执行
+                        </Tag>
                       </Space>
                     )}
                   </div>
-                ) : t('admin.ctest.selectPlan', { defaultValue: '请选择测试计划' })
+                ) : (
+                  t('admin.ctest.selectPlan', { defaultValue: '请选择测试计划' })
+                )
               }
               extra={
                 selectedPlan && (
@@ -317,10 +332,18 @@ const CTestManagement: React.FC = () => {
         >
           <Form layout='vertical'>
             <Form.Item label={t('admin.ctest.planName', { defaultValue: '计划名称' })} required>
-              <Input value={form.name} onChange={(v) => setForm((s) => ({ ...s, name: v }))} placeholder='例如：v2.0 回归测试' />
+              <Input
+                value={form.name}
+                onChange={(v) => setForm((s) => ({ ...s, name: v }))}
+                placeholder='例如：v2.0 回归测试'
+              />
             </Form.Item>
             <Form.Item label={t('admin.ctest.planDesc', { defaultValue: '描述' })}>
-              <Input.TextArea value={form.description} onChange={(v) => setForm((s) => ({ ...s, description: v }))} autoSize />
+              <Input.TextArea
+                value={form.description}
+                onChange={(v) => setForm((s) => ({ ...s, description: v }))}
+                autoSize
+              />
             </Form.Item>
             <Form.Item label={t('admin.ctest.linkedReq', { defaultValue: '关联需求（可选）' })}>
               <Select
@@ -336,7 +359,9 @@ const CTestManagement: React.FC = () => {
                 }}
               >
                 {flatReqs.map((r) => (
-                  <Select.Option key={r.id} value={r.id}>{r.subject}</Select.Option>
+                  <Select.Option key={r.id} value={r.id}>
+                    {r.subject}
+                  </Select.Option>
                 ))}
               </Select>
             </Form.Item>
@@ -355,13 +380,26 @@ const CTestManagement: React.FC = () => {
         >
           <Form layout='vertical'>
             <Form.Item label={t('admin.ctest.caseSubject', { defaultValue: '用例标题' })} required>
-              <Input value={caseForm.subject} onChange={(v) => setCaseForm((s) => ({ ...s, subject: v }))} placeholder='例如：用户登录成功后跳转首页' />
+              <Input
+                value={caseForm.subject}
+                onChange={(v) => setCaseForm((s) => ({ ...s, subject: v }))}
+                placeholder='例如：用户登录成功后跳转首页'
+              />
             </Form.Item>
             <Form.Item label={t('admin.ctest.caseSteps', { defaultValue: '操作步骤' })}>
-              <Input.TextArea value={caseForm.steps} onChange={(v) => setCaseForm((s) => ({ ...s, steps: v }))} autoSize placeholder='1. 打开登录页&#10;2. 输入账号密码&#10;3. 点击登录' />
+              <Input.TextArea
+                value={caseForm.steps}
+                onChange={(v) => setCaseForm((s) => ({ ...s, steps: v }))}
+                autoSize
+                placeholder='1. 打开登录页&#10;2. 输入账号密码&#10;3. 点击登录'
+              />
             </Form.Item>
             <Form.Item label={t('admin.ctest.caseExpected', { defaultValue: '预期结果' })}>
-              <Input value={caseForm.expected} onChange={(v) => setCaseForm((s) => ({ ...s, expected: v }))} placeholder='跳转到首页，显示欢迎信息' />
+              <Input
+                value={caseForm.expected}
+                onChange={(v) => setCaseForm((s) => ({ ...s, expected: v }))}
+                placeholder='跳转到首页，显示欢迎信息'
+              />
             </Form.Item>
           </Form>
         </Modal>

@@ -112,26 +112,44 @@ export class TeamDigitalEmployeeRunService {
           const messagesResult = await repo.getMessages(conversationId, 0, 12, 'DESC');
           const reply = extractLastAssistantReply(messagesResult.data);
           const summary = reply ? (reply.length > 240 ? `${reply.slice(0, 237)}…` : reply) : undefined;
-          await this.finishRun(input.teamId, input.tenantId, input.slotId, { runId, conversationId }, {
-            status: 'success',
-            summary,
-          });
+          await this.finishRun(
+            input.teamId,
+            input.tenantId,
+            input.slotId,
+            { runId, conversationId },
+            {
+              status: 'success',
+              summary,
+            }
+          );
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          await this.finishRun(input.teamId, input.tenantId, input.slotId, { runId, conversationId }, {
-            status: 'failed',
-            error: message,
-          });
+          await this.finishRun(
+            input.teamId,
+            input.tenantId,
+            input.slotId,
+            { runId, conversationId },
+            {
+              status: 'failed',
+              error: message,
+            }
+          );
         }
       });
 
       await session.sendMessageToAgent(input.slotId, prompt);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await this.finishRun(input.teamId, input.tenantId, input.slotId, { runId, conversationId }, {
-        status: 'failed',
-        error: message,
-      });
+      await this.finishRun(
+        input.teamId,
+        input.tenantId,
+        input.slotId,
+        { runId, conversationId },
+        {
+          status: 'failed',
+          error: message,
+        }
+      );
       throw error;
     }
   }

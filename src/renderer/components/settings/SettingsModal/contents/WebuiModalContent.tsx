@@ -32,10 +32,7 @@ import WebuiStandaloneBanner from '@/renderer/pages/settings/WebuiSettings/Webui
 import { isSystemAdminRole } from '@/common/auth/enterpriseRoles';
 import { fetchWebuiApi } from '@/renderer/utils/webuiApiBase';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
-function resolveWebuiRoleLabel(
-  role: string,
-  t: (key: string, opts?: Record<string, unknown>) => string
-): string {
+function resolveWebuiRoleLabel(role: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
   if (role === 'system_admin') {
     return t('settings.users.roleSystemAdmin', { defaultValue: '系统管理员' });
   }
@@ -71,13 +68,8 @@ const WebuiUrlCopyRow: React.FC<{ url: string; onCopy: (text: string) => void }>
 
 const WebuiLoginRoleSection: React.FC<{ webuiRunning: boolean }> = ({ webuiRunning }) => {
   const { t } = useTranslation();
-  const {
-    effectiveRole,
-    showEnterpriseAdminNav,
-    openEnterpriseAdminInBrowser,
-    canClaimSystemAdmin,
-    claimSystemAdmin,
-  } = useWebuiEnterpriseMode();
+  const { effectiveRole, showEnterpriseAdminNav, openEnterpriseAdminInBrowser, canClaimSystemAdmin, claimSystemAdmin } =
+    useWebuiEnterpriseMode();
   const [fetchedRole, setFetchedRole] = useState<string | undefined>();
   const [roleLoading, setRoleLoading] = useState(false);
   const [claimLoading, setClaimLoading] = useState(false);
@@ -147,9 +139,17 @@ const WebuiLoginRoleSection: React.FC<{ webuiRunning: boolean }> = ({ webuiRunni
                   })}
                 </p>
                 <ol className='m-0 pl-18px'>
-                  <li>{t('settings.webui.postClaimStepAuth', { defaultValue: '认证与邮件：配置 LDAP / 飞书 / SMTP' })}</li>
-                  <li>{t('settings.webui.postClaimStepInvites', { defaultValue: '邀请码：生成企业邀请码供成员加入' })}</li>
-                  <li>{t('settings.webui.postClaimStepEdition', { defaultValue: '安全与审计：按需开放「企业团队版」切换' })}</li>
+                  <li>
+                    {t('settings.webui.postClaimStepAuth', { defaultValue: '认证与邮件：配置 LDAP / 飞书 / SMTP' })}
+                  </li>
+                  <li>
+                    {t('settings.webui.postClaimStepInvites', { defaultValue: '邀请码：生成企业邀请码供成员加入' })}
+                  </li>
+                  <li>
+                    {t('settings.webui.postClaimStepEdition', {
+                      defaultValue: '安全与审计：按需开放「企业团队版」切换',
+                    })}
+                  </li>
                 </ol>
               </div>
             ),
@@ -183,14 +183,12 @@ const WebuiLoginRoleSection: React.FC<{ webuiRunning: boolean }> = ({ webuiRunni
           <>
             <p className='m-0'>
               {t('settings.webui.systemAdminActiveHint', {
-                defaultValue:
-                  '您已是系统管理员。可在管理后台为用户开启/关闭「系统管理员」；至少保留一名系统管理员。',
+                defaultValue: '您已是系统管理员。可在管理后台为用户开启/关闭「系统管理员」；至少保留一名系统管理员。',
               })}
             </p>
             <p className='m-0'>
               {t('settings.webui.systemAdminGrantHint', {
-                defaultValue:
-                  '授予他人：企业团队版管理后台 → 用户管理 →「系统管理员」开关。',
+                defaultValue: '授予他人：企业团队版管理后台 → 用户管理 →「系统管理员」开关。',
               })}
             </p>
           </>
@@ -1003,9 +1001,7 @@ const WebuiModalContent: React.FC = () => {
                 <button
                   className='text-primary hover:underline cursor-pointer bg-transparent border-none p-0 text-12px'
                   onClick={() =>
-                    shell.openExternal
-                      .invoke('https://github.com/gaogg521/1ONE-ClaudeCode')
-                      .catch(console.error)
+                    shell.openExternal.invoke('https://github.com/gaogg521/1ONE-ClaudeCode').catch(console.error)
                   }
                 >
                   {t('settings.webui.viewGuide')}

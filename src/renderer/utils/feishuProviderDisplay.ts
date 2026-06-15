@@ -1,7 +1,4 @@
-export function resolveDisplayedFeishuRedirectUri(
-  configuredRedirectUri: string,
-  currentOrigin: string
-): string {
+export function resolveDisplayedFeishuRedirectUri(configuredRedirectUri: string, currentOrigin: string): string {
   const configured = configuredRedirectUri.trim();
   if (configured) {
     return configured;

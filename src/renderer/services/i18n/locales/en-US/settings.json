@@ -1348,8 +1348,7 @@
     "pendingTimeout": "Approval request expired (5 minutes). Please try again.",
     "pendingCancel": "Cancel",
     "pendingTimeRemaining": "Time remaining: {{time}}"
-  }
-  ,
+  },
   "custom": "Custom",
   "modelProtocolCustom": "Custom protocol/mode",
   "modelProtocolCustomTip": "Vendor/gateway specific mode string, e.g. compatible-mode. It will be resolved for routing and URL normalization.",

@@ -8,11 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { ArtifactRepository } from '@process/services/database/repositories/devops/artifactRepository';
 
 export class CpackService {
-  static async listRepos(input: {
-    tenantId: string;
-    userId: string;
-    isAdmin: boolean;
-  }): Promise<unknown[]> {
+  static async listRepos(input: { tenantId: string; userId: string; isAdmin: boolean }): Promise<unknown[]> {
     return ArtifactRepository.listRepos(input.tenantId, input.userId, input.isAdmin);
   }
 
@@ -48,11 +44,7 @@ export class CpackService {
     await ArtifactRepository.deleteRepo(id, tenantId);
   }
 
-  static async listArtifacts(input: {
-    tenantId: string;
-    userId: string;
-    isAdmin: boolean;
-  }): Promise<unknown[]> {
+  static async listArtifacts(input: { tenantId: string; userId: string; isAdmin: boolean }): Promise<unknown[]> {
     return ArtifactRepository.listArtifacts(input.tenantId, input.userId, input.isAdmin);
   }
 }

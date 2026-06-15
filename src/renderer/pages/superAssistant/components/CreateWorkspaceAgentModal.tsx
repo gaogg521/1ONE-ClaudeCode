@@ -148,9 +148,7 @@ const CreateWorkspaceAgentModal: React.FC<CreateWorkspaceAgentModalProps> = ({
         providerModelKey: selectedModelId,
         instructions: instructions.trim(),
       });
-      Message.success(
-        t('common.superAssistant.createDigitalEmployeeSuccess', { defaultValue: '数字员工已创建' })
-      );
+      Message.success(t('common.superAssistant.createDigitalEmployeeSuccess', { defaultValue: '数字员工已创建' }));
       handleClose();
     } catch (error) {
       Message.error(
@@ -229,7 +227,9 @@ const CreateWorkspaceAgentModal: React.FC<CreateWorkspaceAgentModalProps> = ({
           >
             <Radio value='personal'>
               <div>
-                <div className='font-600'>{t('common.superAssistant.visibilityPersonal', { defaultValue: '个人' })}</div>
+                <div className='font-600'>
+                  {t('common.superAssistant.visibilityPersonal', { defaultValue: '个人' })}
+                </div>
                 <div className='text-12px text-t-tertiary'>
                   {t('common.superAssistant.visibilityPersonalDesc', {
                     defaultValue: '仅你可管理，可绑定个人自动化',
@@ -239,7 +239,9 @@ const CreateWorkspaceAgentModal: React.FC<CreateWorkspaceAgentModalProps> = ({
             </Radio>
             <Radio value='workspace' disabled={!canUseWorkspaceVisibility}>
               <div>
-                <div className='font-600'>{t('common.superAssistant.visibilityWorkspace', { defaultValue: '工作区' })}</div>
+                <div className='font-600'>
+                  {t('common.superAssistant.visibilityWorkspace', { defaultValue: '工作区' })}
+                </div>
                 <div className='text-12px text-t-tertiary'>
                   {canUseWorkspaceVisibility
                     ? t('common.superAssistant.visibilityWorkspaceDesc', { defaultValue: '团队成员均可分配' })

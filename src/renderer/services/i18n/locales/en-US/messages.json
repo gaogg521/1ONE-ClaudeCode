@@ -47,8 +47,7 @@
   "permissionRequest": "Permission Request",
   "agentRequestingPermission": "The agent is requesting permission.",
   "command": "Command:",
-  "permissionWebFetchHint":
-    "Tip: use MCP tool one_web_fetch (one-web-tools) for URLs instead of curl. If you still approve curl, source links will appear after it completes.",
+  "permissionWebFetchHint": "Tip: use MCP tool one_web_fetch (one-web-tools) for URLs instead of curl. If you still approve curl, source links will appear after it completes.",
   "chooseAction": "Choose an action:",
   "option": "Option",
   "noOptionsAvailable": "No options available",

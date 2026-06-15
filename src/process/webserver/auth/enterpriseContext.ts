@@ -26,9 +26,7 @@ export async function resolveEnterpriseContext(
   let tenantName: string | null = null;
   try {
     const driver = (await getDatabase()).getDriver();
-    const row = driver
-      .prepare('SELECT name FROM tenants WHERE id = ?')
-      .get(tid) as { name?: string } | undefined;
+    const row = driver.prepare('SELECT name FROM tenants WHERE id = ?').get(tid) as { name?: string } | undefined;
     tenantName = typeof row?.name === 'string' ? row.name : null;
   } catch {
     tenantName = null;

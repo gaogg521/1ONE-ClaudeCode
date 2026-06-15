@@ -6,10 +6,7 @@
 
 import type { TFunction } from 'i18next';
 
-export function formatEnterpriseRole(
-  role: string | undefined,
-  t: TFunction
-): string {
+export function formatEnterpriseRole(role: string | undefined, t: TFunction): string {
   if (role === 'system_admin') {
     return t('settings.enterpriseConsole.roleSystemAdmin', { defaultValue: '系统管理员' });
   }

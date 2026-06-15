@@ -150,7 +150,10 @@ export class OneManager extends EventEmitter implements IAgentManager {
       const lines = data
         .filter((m) => m.type === 'text')
         .slice(-20)
-        .map((m) => `${m.position === 'right' ? 'User' : 'Assistant'}: ${(m as { content: { content?: string } }).content?.content || ''}`);
+        .map(
+          (m) =>
+            `${m.position === 'right' ? 'User' : 'Assistant'}: ${(m as { content: { content?: string } }).content?.content || ''}`
+        );
       const text = lines.join('\n').slice(-4000);
       if (text) {
         const cmd: AionrsCommand = {

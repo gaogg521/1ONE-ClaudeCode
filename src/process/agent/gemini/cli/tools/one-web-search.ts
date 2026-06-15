@@ -35,7 +35,17 @@ export { buildSearchEngineUrl, detectSearchEngineFromQuery } from '@/common/web/
 
 const ONE_WEB_SEARCH_TOOL_NAMES = new Set(['1one_web_search', 'WebSearch', 'web_search']);
 
-const QUERY_ALIAS_KEYS = ['query', 'Query', 'q', 'keyword', 'keywords', 'search', 'text', 'prompt', 'question'] as const;
+const QUERY_ALIAS_KEYS = [
+  'query',
+  'Query',
+  'q',
+  'keyword',
+  'keywords',
+  'search',
+  'text',
+  'prompt',
+  'question',
+] as const;
 
 const ENGINE_ALIAS_KEYS = ['engine', 'Engine', 'search_engine', 'searchEngine', 'provider'] as const;
 
@@ -49,10 +59,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function pickFirstNonEmptyString(
-  source: Record<string, unknown>,
-  keys: readonly string[]
-): string | undefined {
+function pickFirstNonEmptyString(source: Record<string, unknown>, keys: readonly string[]): string | undefined {
   for (const key of keys) {
     const value = source[key];
     if (typeof value === 'string' && value.trim().length > 0) {
@@ -240,8 +247,12 @@ class OneWebSearchInvocation extends BaseToolInvocation<OneWebSearchToolParams, 
 
   private async executeSearch(signal: AbortSignal): Promise<ToolResult> {
     const engine = this.params.engine ?? 'baidu';
-    const { searchUrl, text: textContent, query: resolvedQuery, resultLinks } =
-      await fetchSearchResultsAsPlainText(this.params.query, engine);
+    const {
+      searchUrl,
+      text: textContent,
+      query: resolvedQuery,
+      resultLinks,
+    } = await fetchSearchResultsAsPlainText(this.params.query, engine);
     const sourcesBlock = formatSourcesBlock(searchUrl, resultLinks);
     if (signal.aborted) {
       return {

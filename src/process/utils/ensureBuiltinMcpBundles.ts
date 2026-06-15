@@ -47,10 +47,7 @@ export function ensureBuiltinMcpBundles(): Promise<void> {
     execSync(`node "${buildScript}"`, { stdio: 'inherit', cwd: root });
   })().catch((error) => {
     ensurePromise = null;
-    console.warn(
-      '[MCP] Failed to ensure builtin MCP bundles:',
-      error instanceof Error ? error.message : String(error)
-    );
+    console.warn('[MCP] Failed to ensure builtin MCP bundles:', error instanceof Error ? error.message : String(error));
   });
 
   return ensurePromise;

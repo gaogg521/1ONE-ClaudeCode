@@ -270,9 +270,7 @@ export async function deleteMcpRegistry(id: string): Promise<void> {
   await enterpriseMutate(`/api/admin/mcp/registry/${id}`, 'DELETE', {});
 }
 
-export async function importMcpRegistryBatch(
-  items: Record<string, unknown>[]
-): Promise<{ count: number }> {
+export async function importMcpRegistryBatch(items: Record<string, unknown>[]): Promise<{ count: number }> {
   return enterpriseMutate<{ count: number }>('/api/admin/mcp/batch', 'POST', { items });
 }
 
@@ -299,21 +297,15 @@ export async function deleteRagDocument(id: string): Promise<void> {
   await enterpriseMutate(`/api/admin/rag/documents/${id}`, 'DELETE', {});
 }
 
-export async function queryRagDocuments(
-  payload: Record<string, unknown>
-): Promise<RagSearchResultRecord[]> {
+export async function queryRagDocuments(payload: Record<string, unknown>): Promise<RagSearchResultRecord[]> {
   return enterpriseMutate<RagSearchResultRecord[]>('/api/admin/rag/query', 'POST', payload);
 }
 
-export async function importRagUrl(
-  payload: Record<string, unknown>
-): Promise<{ id: string }> {
+export async function importRagUrl(payload: Record<string, unknown>): Promise<{ id: string }> {
   return enterpriseMutate<{ id: string }>('/api/admin/rag/import-url', 'POST', payload);
 }
 
-export async function importRagFeishuDocument(
-  payload: Record<string, unknown>
-): Promise<{ id: string }> {
+export async function importRagFeishuDocument(payload: Record<string, unknown>): Promise<{ id: string }> {
   return enterpriseMutate<{ id: string }>('/api/admin/rag/import-feishu', 'POST', payload);
 }
 
@@ -417,9 +409,7 @@ export async function deleteSkill(id: string): Promise<void> {
   await enterpriseMutate(`/api/admin/skills/${encodeURIComponent(id)}`, 'DELETE', {});
 }
 
-export async function importSkillsBatch(
-  items: Record<string, unknown>[]
-): Promise<{ count: number }> {
+export async function importSkillsBatch(items: Record<string, unknown>[]): Promise<{ count: number }> {
   return enterpriseMutate<{ count: number }>('/api/admin/skills/batch', 'POST', { items });
 }
 
@@ -440,38 +430,23 @@ export type MilestoneEpicRecord = {
 };
 
 export async function listMilestoneEpics(milestoneId: string): Promise<MilestoneEpicRecord[]> {
-  return enterpriseGet<MilestoneEpicRecord[]>(
-    `/api/admin/milestones/${encodeURIComponent(milestoneId)}/epics`
-  );
+  return enterpriseGet<MilestoneEpicRecord[]>(`/api/admin/milestones/${encodeURIComponent(milestoneId)}/epics`);
 }
 
 export async function listRequirementsTree(): Promise<RequirementRecord[]> {
   return enterpriseGet<RequirementRecord[]>('/api/admin/requirements/tree');
 }
 
-export async function createRequirement(
-  payload: Record<string, unknown>
-): Promise<{ id: string }> {
+export async function createRequirement(payload: Record<string, unknown>): Promise<{ id: string }> {
   return enterpriseMutate<{ id: string }>('/api/admin/requirements', 'POST', payload);
 }
 
-export async function updateRequirement(
-  requirementId: string,
-  payload: Record<string, unknown>
-): Promise<void> {
-  await enterpriseMutate(
-    `/api/admin/requirements/${encodeURIComponent(requirementId)}`,
-    'PATCH',
-    payload
-  );
+export async function updateRequirement(requirementId: string, payload: Record<string, unknown>): Promise<void> {
+  await enterpriseMutate(`/api/admin/requirements/${encodeURIComponent(requirementId)}`, 'PATCH', payload);
 }
 
 export async function deleteRequirement(requirementId: string): Promise<void> {
-  await enterpriseMutate(
-    `/api/admin/requirements/${encodeURIComponent(requirementId)}`,
-    'DELETE',
-    {}
-  );
+  await enterpriseMutate(`/api/admin/requirements/${encodeURIComponent(requirementId)}`, 'DELETE', {});
 }
 
 export type RequirementCommentRecord = {
@@ -492,10 +467,7 @@ export async function listRequirementComments(requirementId: string): Promise<Re
   );
 }
 
-export async function createRequirementComment(
-  requirementId: string,
-  body: string
-): Promise<{ id: string }> {
+export async function createRequirementComment(requirementId: string, body: string): Promise<{ id: string }> {
   return enterpriseMutate<{ id: string }>(
     `/api/admin/requirements/${encodeURIComponent(requirementId)}/comments`,
     'POST',
@@ -515,10 +487,7 @@ export async function listTeamMembers(teamId: string): Promise<TeamMemberRecord[
   return enterpriseGet<TeamMemberRecord[]>(`/api/admin/teams/${encodeURIComponent(teamId)}/members`);
 }
 
-export async function addTeamMember(
-  teamId: string,
-  payload: Record<string, unknown>
-): Promise<void> {
+export async function addTeamMember(teamId: string, payload: Record<string, unknown>): Promise<void> {
   await enterpriseMutate(`/api/admin/teams/${encodeURIComponent(teamId)}/members`, 'POST', payload);
 }
 
@@ -550,10 +519,7 @@ export async function createTeamTask(payload: Record<string, unknown>): Promise<
   await enterpriseMutate('/api/team-tasks', 'POST', payload);
 }
 
-export async function updateTeamTask(
-  taskId: string,
-  payload: Record<string, unknown>
-): Promise<void> {
+export async function updateTeamTask(taskId: string, payload: Record<string, unknown>): Promise<void> {
   await enterpriseMutate(`/api/team-tasks/${encodeURIComponent(taskId)}`, 'PATCH', payload);
 }
 
@@ -593,16 +559,11 @@ export async function savePipeline(payload: Record<string, unknown>): Promise<Pi
   return enterpriseMutate<PipelineListItem>('/api/admin/pipelines', 'POST', payload);
 }
 
-export async function updatePipeline(
-  pipelineId: string,
-  payload: Record<string, unknown>
-): Promise<PipelineListItem> {
+export async function updatePipeline(pipelineId: string, payload: Record<string, unknown>): Promise<PipelineListItem> {
   return enterpriseMutate<PipelineListItem>(`/api/admin/pipelines/${pipelineId}`, 'PATCH', payload);
 }
 
-export async function triggerPipelineRun(
-  pipelineId: string
-): Promise<{ runId: string }> {
+export async function triggerPipelineRun(pipelineId: string): Promise<{ runId: string }> {
   return enterpriseMutate<{ runId: string }>(`/api/admin/pipelines/run/${pipelineId}`, 'POST', {});
 }
 

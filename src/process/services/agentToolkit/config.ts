@@ -32,9 +32,7 @@ export function invalidateAgentToolkitConfigCache(): void {
   cached = null;
 }
 
-export async function setAgentToolkitConfig(
-  patch: Partial<AgentToolkitConfig>
-): Promise<AgentToolkitConfig> {
+export async function setAgentToolkitConfig(patch: Partial<AgentToolkitConfig>): Promise<AgentToolkitConfig> {
   const next = normalizeAgentToolkitConfig({
     ...(await getAgentToolkitConfig(true)),
     ...patch,

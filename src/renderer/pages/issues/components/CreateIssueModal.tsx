@@ -128,11 +128,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           field='type'
           rules={[{ required: true }]}
         >
-          <Select
-            renderFormat={(option) =>
-              formatTypeLabel((option?.value as RequirementType) ?? 'story', t)
-            }
-          >
+          <Select renderFormat={(option) => formatTypeLabel((option?.value as RequirementType) ?? 'story', t)}>
             {ISSUE_CREATE_TYPES.map((type) => (
               <Select.Option key={type} value={type}>
                 {formatTypeLabel(type, t)}
@@ -143,9 +139,13 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         <FormItem
           label={t('common.issues.createFieldSubject', { defaultValue: '标题' })}
           field='subject'
-          rules={[{ required: true, message: t('common.issues.createSubjectRequired', { defaultValue: '请填写标题' }) }]}
+          rules={[
+            { required: true, message: t('common.issues.createSubjectRequired', { defaultValue: '请填写标题' }) },
+          ]}
         >
-          <Input placeholder={t('common.issues.createSubjectPlaceholder', { defaultValue: '例如：竞品调研与方案输出' })} />
+          <Input
+            placeholder={t('common.issues.createSubjectPlaceholder', { defaultValue: '例如：竞品调研与方案输出' })}
+          />
         </FormItem>
         <FormItem label={t('common.issues.createFieldDescription', { defaultValue: '描述' })} field='description'>
           <TextArea
@@ -156,11 +156,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           />
         </FormItem>
         <FormItem label={t('common.issues.propertyStatus', { defaultValue: '状态' })} field='status'>
-          <Select
-            renderFormat={(option) =>
-              formatStatusLabel((option?.value as RequirementStatus) ?? 'backlog', t)
-            }
-          >
+          <Select renderFormat={(option) => formatStatusLabel((option?.value as RequirementStatus) ?? 'backlog', t)}>
             {ISSUE_STATUS_ORDER.map((status) => (
               <Select.Option key={status} value={status}>
                 {formatStatusLabel(status, t)}
@@ -169,11 +165,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           </Select>
         </FormItem>
         <FormItem label={t('common.issues.propertyPriority', { defaultValue: '优先级' })} field='priority'>
-          <Select
-            renderFormat={(option) =>
-              formatPriorityLabel((option?.value as RequirementPriority) ?? 'medium', t)
-            }
-          >
+          <Select renderFormat={(option) => formatPriorityLabel((option?.value as RequirementPriority) ?? 'medium', t)}>
             {ISSUE_PRIORITIES.map((priority) => (
               <Select.Option key={priority} value={priority}>
                 {formatPriorityLabel(priority, t)}

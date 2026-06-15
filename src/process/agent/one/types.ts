@@ -5,13 +5,7 @@
  */
 
 // Re-export protocol types from aionrs for compatibility
-export type {
-  AionrsEvent,
-  AionrsCommand,
-  ToolCategory,
-  ToolInfo,
-  TokenUsage,
-} from '../aionrs/protocol';
+export type { AionrsEvent, AionrsCommand, ToolCategory, ToolInfo, TokenUsage } from '../aionrs/protocol';
 
 // Re-export OneAgentOptions from OneAgent
 export type { OneAgentOptions } from './OneAgent';

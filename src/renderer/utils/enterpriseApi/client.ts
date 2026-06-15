@@ -6,11 +6,7 @@
 
 import { withCsrfToken } from '@process/webserver/middleware/csrfClient';
 import { fetchWebuiApiJson } from '@/renderer/utils/webuiApiBase';
-import {
-  formatEnterpriseRuntimeIssue,
-  normalizeEnterpriseApiError,
-  type EnterpriseRuntimeIssueCode,
-} from './error';
+import { formatEnterpriseRuntimeIssue, normalizeEnterpriseApiError, type EnterpriseRuntimeIssueCode } from './error';
 
 export async function enterpriseGet<T>(path: string): Promise<T> {
   return fetchWebuiApiJson<T>(path);

@@ -4,12 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type UserNotificationKind =
-  | 'issue_comment'
-  | 'issue_escalation'
-  | 'autopilot'
-  | 'task_assigned'
-  | 'lead_alert';
+export type UserNotificationKind = 'issue_comment' | 'issue_escalation' | 'autopilot' | 'task_assigned' | 'lead_alert';
 
 export type UserNotificationRecord = {
   id: string;

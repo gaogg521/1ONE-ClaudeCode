@@ -27,10 +27,7 @@ export function isOneMillionContextModel(modelName: string | undefined | null): 
  * Claude Code may report usage_update.size=200000 while the active model supports 1M;
  * prefer the larger of reported size and model-based lookup.
  */
-export function resolveAcpContextLimit(
-  reportedSize: number,
-  modelId?: string | null
-): number {
+export function resolveAcpContextLimit(reportedSize: number, modelId?: string | null): number {
   const modelLimit = modelId ? getModelContextLimit(modelId) : 0;
   const normalizedReported = reportedSize > 0 ? reportedSize : 0;
 

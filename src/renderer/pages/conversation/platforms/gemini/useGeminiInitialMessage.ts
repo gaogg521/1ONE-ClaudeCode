@@ -2,9 +2,13 @@ import { ipcBridge } from '@/common';
 import { uuid } from '@/common/utils';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
 import { useLatestRef } from '@/renderer/hooks/ui/useLatestRef';
-import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
+import { useAddOrUpdateMessage, useRemoveMessageByMsgId } from '@/renderer/pages/conversation/Messages/hooks';
 import { assertBridgeSuccess } from '@/renderer/pages/conversation/platforms/assertBridgeSuccess';
-import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
+import {
+  finalizeUserMessageAfterSend,
+  prepareUserMessageSend,
+  publishOptimisticUserMessage,
+} from '@/renderer/utils/file/sentMessageDisplay';
 import { emitter } from '@/renderer/utils/emitter';
 import { useEffect } from 'react';
 
@@ -13,6 +17,7 @@ type UseGeminiInitialMessageParams = {
   currentModelId: string | undefined;
   hasNoAuth: boolean;
   setContent: (content: string) => void;
+  setUploadFile: (files: string[] | ((prev: string[]) => string[])) => void;
   setActiveMsgId: (msgId: string | null) => void;
   setWaitingResponse: (waiting: boolean) => void;
   autoSwitchTriggeredRef: React.MutableRefObject<boolean>;
@@ -29,6 +34,7 @@ export const useGeminiInitialMessage = ({
   currentModelId,
   hasNoAuth,
   setContent,
+  setUploadFile,
   setActiveMsgId,
   setWaitingResponse,
   autoSwitchTriggeredRef,
@@ -37,6 +43,7 @@ export const useGeminiInitialMessage = ({
 }: UseGeminiInitialMessageParams): void => {
   const { checkAndUpdateTitle } = useAutoTitle();
   const addOrUpdateMessage = useAddOrUpdateMessage();
+  const removeMessageByMsgId = useRemoveMessageByMsgId();
   const performFullCheckRef = useLatestRef(performFullCheck);
 
   useEffect(() => {
@@ -45,16 +52,17 @@ export const useGeminiInitialMessage = ({
 
     if (!storedMessage) return;
 
-    // If no auth, store message in input box and trigger auto-detection from this new message point
     if (hasNoAuth) {
       try {
-        const { input } = JSON.parse(storedMessage) as { input: string };
+        const { input, files = [] } = JSON.parse(storedMessage) as { input: string; files?: string[] };
         setContent(input);
+        if (files.length > 0) {
+          setUploadFile(files);
+        }
         sessionStorage.removeItem(storageKey);
       } catch {
         // Ignore parse errors
       }
-      // Detection start point = new message: only trigger when there's an initial message to send
       if (!autoSwitchTriggeredRef.current) {
         autoSwitchTriggeredRef.current = true;
         setShowSetupCard(true);
@@ -65,49 +73,46 @@ export const useGeminiInitialMessage = ({
 
     if (!currentModelId) return;
 
-    // Clear immediately to prevent duplicate sends
     sessionStorage.removeItem(storageKey);
 
     const sendInitialMessage = async () => {
+      const msg_id = uuid();
+
       try {
-        const { input, files } = JSON.parse(storedMessage) as { input: string; files?: string[] };
+        const { input, files = [] } = JSON.parse(storedMessage) as { input: string; files?: string[] };
 
-        const msg_id = uuid();
         setActiveMsgId(msg_id);
-        setWaitingResponse(true); // Set waiting state immediately to show stop button
+        setWaitingResponse(true);
 
-        // Display user message immediately
-        addOrUpdateMessage(
-          {
-            id: msg_id,
-            type: 'text',
-            position: 'right',
-            conversation_id: conversationId,
-            content: {
-              content: input,
-            },
-            createdAt: Date.now(),
-          },
-          true
-        );
+        const prepared = prepareUserMessageSend(input, files, '', msg_id, conversationId);
+        publishOptimisticUserMessage(addOrUpdateMessage, prepared.optimisticMessage);
 
-        // Send message to backend
         void checkAndUpdateTitle(conversationId, input);
         const result = await ipcBridge.geminiConversation.sendMessage.invoke({
-          input,
+          input: prepared.displayMessage,
           msg_id,
           conversation_id: conversationId,
-          files: files || [],
+          files,
         });
         assertBridgeSuccess(result, 'Failed to send initial message to Gemini');
-        patchSentMessageContent(addOrUpdateMessage, conversationId, msg_id, result);
+        finalizeUserMessageAfterSend(
+          addOrUpdateMessage,
+          conversationId,
+          msg_id,
+          result,
+          prepared.displayMessage,
+          prepared
+        );
 
         emitter.emit('chat.history.refresh');
-        if (files && files.length > 0) {
+        if (files.length > 0) {
           emitter.emit('gemini.workspace.refresh');
         }
       } catch (error) {
         console.error('Failed to send initial message:', error);
+        removeMessageByMsgId(msg_id);
+        setActiveMsgId(null);
+        setWaitingResponse(false);
       }
     };
 

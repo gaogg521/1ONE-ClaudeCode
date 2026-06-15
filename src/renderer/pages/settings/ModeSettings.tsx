@@ -8,7 +8,9 @@ import React, { Suspense } from 'react';
 import AppLoader from '@renderer/components/layout/AppLoader';
 import SettingsPageWrapper from './components/SettingsPageWrapper';
 
-const ModelModalContent = React.lazy(() => import('@/renderer/components/settings/SettingsModal/contents/ModelModalContent'));
+const ModelModalContent = React.lazy(
+  () => import('@/renderer/components/settings/SettingsModal/contents/ModelModalContent')
+);
 
 const ModeSettings: React.FC = () => {
   return (

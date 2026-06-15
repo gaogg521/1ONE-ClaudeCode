@@ -40,8 +40,7 @@ const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
         </div>
         <div className='mt-4px text-12px text-t-tertiary'>
           {t('common.superAssistant.subtitle', {
-            defaultValue:
-              '先从当前 Issue 发起分析或执行，再在需要时进入调度、运行时和团队协作。',
+            defaultValue: '先从当前 Issue 发起分析或执行，再在需要时进入调度、运行时和团队协作。',
           })}
         </div>
         {tenantLabel ? (

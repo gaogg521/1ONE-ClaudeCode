@@ -1,9 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Empty, Input, Message, Popconfirm, Select, Spin, Tag } from '@arco-design/web-react';
-import {
-  useBindableSkillOptions,
-  type BindableSkillOption,
-} from '@/renderer/hooks/skills/useBindableSkillOptions';
+import { useBindableSkillOptions, type BindableSkillOption } from '@/renderer/hooks/skills/useBindableSkillOptions';
 import { useTranslation } from 'react-i18next';
 import AionModal from '@/renderer/components/base/AionModal';
 import type { ICronJob } from '@/common/adapter/ipcBridge';
@@ -76,10 +73,7 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
     }
   }, [agent, initialSkillIds, refetch, visible]);
 
-  const linkedJobs = useMemo(
-    () => (agent ? listAgentCronJobs(jobs, agent.teamId, agent.slotId) : []),
-    [agent, jobs]
-  );
+  const linkedJobs = useMemo(() => (agent ? listAgentCronJobs(jobs, agent.teamId, agent.slotId) : []), [agent, jobs]);
 
   const handleSave = async () => {
     if (!agent) {
@@ -137,8 +131,7 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
                 defaultValue: '删除数字员工？',
               })}
               content={t('common.superAssistant.deleteAgentConfirmDesc', {
-                defaultValue:
-                  '将删除该数字员工及其关联的定时任务，且不可恢复。进行中的会话不会被自动删除。',
+                defaultValue: '将删除该数字员工及其关联的定时任务，且不可恢复。进行中的会话不会被自动删除。',
                 agent: agent.agentName,
               })}
               okButtonProps={{ status: 'danger' }}
@@ -189,8 +182,7 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
           </div>
           <div className='mt-6px text-12px text-t-tertiary'>
             {t('common.superAssistant.agentSkillsSectionDesc', {
-              defaultValue:
-                '可选：绑定 Skills 注入专项流程。未绑定时仍使用内置基础 Skills 与全局 MCP（设置 → MCP）。',
+              defaultValue: '可选：绑定 Skills 注入专项流程。未绑定时仍使用内置基础 Skills 与全局 MCP（设置 → MCP）。',
             })}
           </div>
           <Select
@@ -230,9 +222,15 @@ const ManageWorkspaceAgentModal: React.FC<ManageWorkspaceAgentModalProps> = ({
                 onClick={() => {
                   setSavingSkills(true);
                   void onSaveSkillIds(skillIds)
-                    .then(() => Message.success(t('common.superAssistant.editAgentSuccess', { defaultValue: '数字员工已更新' })))
+                    .then(() =>
+                      Message.success(t('common.superAssistant.editAgentSuccess', { defaultValue: '数字员工已更新' }))
+                    )
                     .catch((error) =>
-                      Message.error(error instanceof Error ? error.message : t('common.superAssistant.editAgentFailed', { defaultValue: '更新数字员工失败' }))
+                      Message.error(
+                        error instanceof Error
+                          ? error.message
+                          : t('common.superAssistant.editAgentFailed', { defaultValue: '更新数字员工失败' })
+                      )
                     )
                     .finally(() => setSavingSkills(false));
                 }}

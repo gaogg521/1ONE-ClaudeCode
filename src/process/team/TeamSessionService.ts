@@ -44,9 +44,7 @@ export class TeamSessionService {
     );
   }
 
-  async runDigitalEmployeeNow(
-    input: TeamDigitalEmployeeRunNowInput
-  ): Promise<TeamDigitalEmployeeRunNowResult> {
+  async runDigitalEmployeeNow(input: TeamDigitalEmployeeRunNowInput): Promise<TeamDigitalEmployeeRunNowResult> {
     return this.teamDigitalEmployeeRun.runNow(input);
   }
 
@@ -386,7 +384,11 @@ export class TeamSessionService {
         const conversation = await this.conversationService.createConversation(conversationParams);
         // Ensure teamId is in extra regardless of which factory function was used
         // (some factories like createCodexAgent/createGeminiAgent drop unknown extra fields)
-        await this.conversationService.updateConversation(conversation.id, { extra: { teamId, tenantId } } as any, true);
+        await this.conversationService.updateConversation(
+          conversation.id,
+          { extra: { teamId, tenantId } } as any,
+          true
+        );
         const slotId = agent.slotId || `slot-${uuid(8)}`;
         return { ...agent, slotId, conversationId: conversation.id };
       })
@@ -470,7 +472,11 @@ export class TeamSessionService {
     });
     const conversation = await this.conversationService.createConversation(conversationParams);
     // Ensure teamId is in extra regardless of which factory function was used
-    await this.conversationService.updateConversation(conversation.id, { extra: { teamId, tenantId: team.tenantId } } as any, true);
+    await this.conversationService.updateConversation(
+      conversation.id,
+      { extra: { teamId, tenantId: team.tenantId } } as any,
+      true
+    );
 
     const newAgent: TeamAgent = {
       ...agent,
@@ -514,19 +520,12 @@ export class TeamSessionService {
     await this.repo.update(teamId, { agents: updatedAgents, updatedAt: Date.now() });
   }
 
-  async updateAgentSkillIds(
-    teamId: string,
-    slotId: string,
-    skillIds: string[],
-    tenantId?: string
-  ): Promise<void> {
+  async updateAgentSkillIds(teamId: string, slotId: string, skillIds: string[], tenantId?: string): Promise<void> {
     const team = await this.repo.findById(teamId, tenantId);
     if (!team) {
       throw new Error(`Team "${teamId}" not found`);
     }
-    const updatedAgents = team.agents.map((agent) =>
-      agent.slotId === slotId ? { ...agent, skillIds } : agent
-    );
+    const updatedAgents = team.agents.map((agent) => (agent.slotId === slotId ? { ...agent, skillIds } : agent));
     await this.repo.update(teamId, { agents: updatedAgents, updatedAt: Date.now() });
   }
 

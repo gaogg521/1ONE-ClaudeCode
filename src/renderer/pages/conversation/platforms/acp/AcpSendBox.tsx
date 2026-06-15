@@ -7,7 +7,7 @@ import ThoughtDisplay from '@/renderer/components/chat/ThoughtDisplay';
 import CommandQueuePanel from '@/renderer/components/chat/CommandQueuePanel';
 import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/chat/useSendBoxDraft';
 import { createSetUploadFile, useSendBoxFiles } from '@/renderer/hooks/chat/useSendBoxFiles';
-import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
+import { useAddOrUpdateMessage, useRemoveMessageByMsgId } from '@/renderer/pages/conversation/Messages/hooks';
 import {
   shouldEnqueueConversationCommand,
   useConversationCommandQueue,
@@ -39,8 +39,11 @@ import { useAcpMessage } from './useAcpMessage';
 import { useAcpInitialMessage } from './useAcpInitialMessage';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiveWorkspace';
-import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
-import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
+import {
+  finalizeUserMessageAfterSend,
+  prepareUserMessageSend,
+  publishOptimisticUserMessage,
+} from '@/renderer/utils/file/sentMessageDisplay';
 import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 
 const useAcpSendBoxDraft = getSendBoxDraftHook('acp', {
@@ -124,6 +127,7 @@ const AcpSendBox: React.FC<{
 
   const addOrUpdateMessage = useAddOrUpdateMessage(); // Move this here so it's available in useEffect
   const addOrUpdateMessageRef = useLatestRef(addOrUpdateMessage);
+  const removeMessageByMsgId = useRemoveMessageByMsgId();
 
   // Shared file handling logic
   const { handleFilesAdded, clearFiles } = useSendBoxFiles({
@@ -157,9 +161,11 @@ const AcpSendBox: React.FC<{
   useAcpInitialMessage({
     conversationId: conversation_id,
     backend,
+    effectiveWorkspace,
     setAiProcessing,
     checkAndUpdateTitle,
     addOrUpdateMessage: addOrUpdateMessageRef.current,
+    removeMessageByMsgId,
   });
 
   const executeCommand = useCallback(
@@ -190,16 +196,28 @@ const AcpSendBox: React.FC<{
             }
           }
         } else {
-          const displayMessage =
-            files.length > 0 ? buildDisplayMessage(input, files, effectiveWorkspace) : input;
-          const result = await ipcBridge.acpConversation.sendMessage.invoke({
-            input: displayMessage,
-            msg_id,
-            conversation_id,
-            files,
-          });
-          assertBridgeSuccess(result, `Failed to send message to ${backend}`);
-          patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
+          const prepared = prepareUserMessageSend(input, files, effectiveWorkspace, msg_id, conversation_id);
+          publishOptimisticUserMessage(addOrUpdateMessage, prepared.optimisticMessage);
+          try {
+            const result = await ipcBridge.acpConversation.sendMessage.invoke({
+              input: prepared.displayMessage,
+              msg_id,
+              conversation_id,
+              files,
+            });
+            assertBridgeSuccess(result, `Failed to send message to ${backend}`);
+            finalizeUserMessageAfterSend(
+              addOrUpdateMessage,
+              conversation_id,
+              msg_id,
+              result,
+              prepared.displayMessage,
+              prepared
+            );
+          } catch (sendError) {
+            removeMessageByMsgId(msg_id);
+            throw sendError;
+          }
         }
         emitter.emit('chat.history.refresh');
       } catch (error: unknown) {
@@ -243,6 +261,7 @@ Please check your local CLI tool authentication status`,
       checkAndUpdateTitle,
       conversation_id,
       effectiveWorkspace,
+      removeMessageByMsgId,
       setAiProcessing,
       t,
       teamId,
@@ -398,6 +417,7 @@ Please check your local CLI tool authentication status`,
                   <FilePreview
                     key={path}
                     path={path}
+                    conversationId={conversation_id}
                     onRemove={() => setUploadFile(uploadFile.filter((v) => v !== path))}
                   />
                 ))}
@@ -409,6 +429,7 @@ Please check your local CLI tool authentication status`,
                       <FilePreview
                         key={path}
                         path={path}
+                        conversationId={conversation_id}
                         onRemove={() => {
                           const newAtPath = atPath.filter((v) =>
                             typeof v === 'string' ? v !== path : v.path !== path

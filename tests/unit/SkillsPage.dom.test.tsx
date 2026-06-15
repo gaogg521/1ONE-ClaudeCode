@@ -57,20 +57,12 @@ vi.mock('@/renderer/components/layout/PageContentShell', () => ({
 }));
 
 vi.mock('@arco-design/web-react', () => ({
-  Button: ({
-    children,
-    onClick,
-    disabled,
-  }: React.PropsWithChildren<{ onClick?: () => void; disabled?: boolean }>) => (
+  Button: ({ children, onClick, disabled }: React.PropsWithChildren<{ onClick?: () => void; disabled?: boolean }>) => (
     <button onClick={onClick} disabled={disabled}>
       {children}
     </button>
   ),
-  Card: ({
-    title,
-    children,
-    onClick,
-  }: React.PropsWithChildren<{ title?: React.ReactNode; onClick?: () => void }>) => (
+  Card: ({ title, children, onClick }: React.PropsWithChildren<{ title?: React.ReactNode; onClick?: () => void }>) => (
     <section onClick={onClick}>
       {title ? <div>{title}</div> : null}
       {children}
@@ -90,11 +82,7 @@ vi.mock('@arco-design/web-react', () => ({
     success: (...args: unknown[]) => messageSuccessMock(...args),
     error: (...args: unknown[]) => messageErrorMock(...args),
   },
-  Modal: ({
-    visible,
-    title,
-    children,
-  }: React.PropsWithChildren<{ visible?: boolean; title?: React.ReactNode }>) =>
+  Modal: ({ visible, title, children }: React.PropsWithChildren<{ visible?: boolean; title?: React.ReactNode }>) =>
     visible ? (
       <div role='dialog'>
         <div>{title}</div>

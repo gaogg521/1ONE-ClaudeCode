@@ -47,11 +47,7 @@ export const OpenClawModelSelector: React.FC<{
       droplist={
         <Menu selectedKeys={selectedModel ? [selectedModel] : []}>
           {models.map((m) => (
-            <Menu.Item
-              key={m.id}
-              className={m.id === selectedModel ? '!bg-2' : ''}
-              onClick={() => onSelectModel(m.id)}
-            >
+            <Menu.Item key={m.id} className={m.id === selectedModel ? '!bg-2' : ''} onClick={() => onSelectModel(m.id)}>
               <div className='flex items-center justify-between gap-12px'>
                 <span>{m.name || m.id}</span>
                 {m.provider ? <span className='text-12px text-t-tertiary'>{m.provider}</span> : null}
@@ -71,4 +67,3 @@ export const OpenClawModelSelector: React.FC<{
     </Dropdown>
   );
 };
-

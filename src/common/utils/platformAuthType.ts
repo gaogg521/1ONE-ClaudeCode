@@ -92,7 +92,10 @@ export function getProviderAuthType(provider: {
   }
 
   // LiteLLM is always OpenAI-compatible HTTP; never use Anthropic/Gemini/Vertex native client paths.
-  if (isProviderLiteLlmProxy(provider) && (resolved === 'gemini' || resolved === 'vertex' || resolved === 'anthropic')) {
+  if (
+    isProviderLiteLlmProxy(provider) &&
+    (resolved === 'gemini' || resolved === 'vertex' || resolved === 'anthropic')
+  ) {
     return 'openai';
   }
   return resolved;

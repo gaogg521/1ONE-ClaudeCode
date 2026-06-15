@@ -51,10 +51,7 @@ describe('webuiCacheReset', () => {
     Object.defineProperty(navigator, 'serviceWorker', {
       configurable: true,
       value: {
-        getRegistrations: vi.fn().mockResolvedValue([
-          { unregister: unregisterA },
-          { unregister: unregisterB },
-        ]),
+        getRegistrations: vi.fn().mockResolvedValue([{ unregister: unregisterA }, { unregister: unregisterB }]),
       },
     });
 

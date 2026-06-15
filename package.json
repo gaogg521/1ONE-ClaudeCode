@@ -10,7 +10,8 @@
   },
   "main": "./out/main/index.js",
   "scripts": {
-    "start": "electron-vite dev",
+    "start": "node scripts/start-dev.mjs",
+    "start:raw": "electron-vite dev",
     "restart": "node scripts/restart-dev.mjs",
     "restart:fast": "node scripts/restart-dev.mjs --fast",
     "restart:webui": "node scripts/restart-dev.mjs --webui",

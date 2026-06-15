@@ -5,12 +5,7 @@
  * - Do NOT import `@office-ai/aioncli-core` in the renderer bundle.
  * - This type is persisted in `model.config` and used for routing protocol decisions.
  */
-export type ProviderAuthType =
-  | 'openai'
-  | 'anthropic'
-  | 'gemini'
-  | 'vertex'
-  | 'bedrock';
+export type ProviderAuthType = 'openai' | 'anthropic' | 'gemini' | 'vertex' | 'bedrock';
 
 /**
  * UI-facing protocol choice.
@@ -27,4 +22,3 @@ export const PROVIDER_AUTH_TYPE_LABELS: Record<ProviderAuthType, string> = {
   vertex: 'Vertex AI',
   bedrock: 'AWS Bedrock',
 };
-

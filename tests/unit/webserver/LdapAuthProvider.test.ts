@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  createClientMock,
-  serviceClient,
-  userClient,
-} = vi.hoisted(() => {
+const { createClientMock, serviceClient, userClient } = vi.hoisted(() => {
   const serviceClient = {
     bind: vi.fn((_principal: string, _password: string, cb: (err?: Error | null) => void) => cb(null)),
     search: vi.fn(

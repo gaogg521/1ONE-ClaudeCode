@@ -16,7 +16,12 @@ import { getDatabase } from '@process/services/database';
 export function initDatabaseBridge(repo: IConversationRepository): void {
   // Get conversation messages from database
   ipcBridge.database.getConversationMessages.provider(async (_params) => {
-    const { conversation_id, page = 0, pageSize = 10000, __authToken } = (_params ?? {}) as {
+    const {
+      conversation_id,
+      page = 0,
+      pageSize = 10000,
+      __authToken,
+    } = (_params ?? {}) as {
       conversation_id?: string;
       page?: number;
       pageSize?: number;
@@ -31,7 +36,9 @@ export function initDatabaseBridge(repo: IConversationRepository): void {
         if (!user) return [];
         const tenantId = (user as any).tenant_id ?? 'default';
         const db = await getDatabase();
-        if (!db.canUserAccessConversation({ tenantId, userId: user.id, conversationId: String(conversation_id ?? '') })) {
+        if (
+          !db.canUserAccessConversation({ tenantId, userId: user.id, conversationId: String(conversation_id ?? '') })
+        ) {
           return [];
         }
       }
@@ -45,7 +52,12 @@ export function initDatabaseBridge(repo: IConversationRepository): void {
 
   // Get user conversations from database with lazy migration from file storage
   ipcBridge.database.getUserConversations.provider(async (_params) => {
-    const { page = 0, pageSize = 10000, teamId, __authToken } = (_params ?? {}) as {
+    const {
+      page = 0,
+      pageSize = 10000,
+      teamId,
+      __authToken,
+    } = (_params ?? {}) as {
       page?: number;
       pageSize?: number;
       teamId?: string | null;
@@ -109,7 +121,12 @@ export function initDatabaseBridge(repo: IConversationRepository): void {
   });
 
   ipcBridge.database.searchConversationMessages.provider(async (_params) => {
-    const { keyword, page = 0, pageSize = 20, __authToken } = (_params ?? {}) as {
+    const {
+      keyword,
+      page = 0,
+      pageSize = 20,
+      __authToken,
+    } = (_params ?? {}) as {
       keyword?: string;
       page?: number;
       pageSize?: number;

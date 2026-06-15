@@ -31,8 +31,12 @@ import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiveWorkspace';
-import { buildDisplayMessage, collectSelectedFiles } from '@/renderer/utils/file/messageFiles';
-import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
+import { collectSelectedFiles } from '@/renderer/utils/file/messageFiles';
+import {
+  finalizeUserMessageAfterSend,
+  prepareUserMessageSend,
+  publishOptimisticUserMessage,
+} from '@/renderer/utils/file/sentMessageDisplay';
 import { getModelContextLimit } from '@/renderer/utils/model/modelContextLimits';
 import { useCommandQueueEnabled } from '@/renderer/hooks/system/useCommandQueueEnabled';
 import { Message, Tag } from '@arco-design/web-react';
@@ -154,31 +158,26 @@ const AionrsSendBox: React.FC<{
       setActiveMsgId(msg_id);
       setWaitingResponse(true);
 
-      const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
-      addOrUpdateMessage(
-        {
-          id: msg_id,
-          type: 'text',
-          position: 'right',
-          conversation_id,
-          content: {
-            content: displayMessage,
-          },
-          createdAt: Date.now(),
-        },
-        true
-      );
+      const prepared = prepareUserMessageSend(input, files, effectiveWorkspace, msg_id, conversation_id);
+      publishOptimisticUserMessage(addOrUpdateMessage, prepared.optimisticMessage);
 
       try {
         void checkAndUpdateTitle(conversation_id, input);
         const result = await ipcBridge.conversation.sendMessage.invoke({
-          input: displayMessage,
+          input: prepared.displayMessage,
           msg_id,
           conversation_id,
           files,
         });
         assertBridgeSuccess(result, 'Failed to send message to Aion CLI');
-        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
+        finalizeUserMessageAfterSend(
+          addOrUpdateMessage,
+          conversation_id,
+          msg_id,
+          result,
+          prepared.displayMessage,
+          prepared
+        );
         emitter.emit('chat.history.refresh');
         if (files.length > 0) {
           emitter.emit('aionrs.workspace.refresh');
@@ -369,6 +368,7 @@ const AionrsSendBox: React.FC<{
                   <FilePreview
                     key={path}
                     path={path}
+                    conversationId={conversation_id}
                     onRemove={() => setUploadFile(uploadFile.filter((v) => v !== path))}
                   />
                 ))}
@@ -380,6 +380,7 @@ const AionrsSendBox: React.FC<{
                       <FilePreview
                         key={path}
                         path={path}
+                        conversationId={conversation_id}
                         onRemove={() => {
                           const newAtPath = atPath.filter((v) =>
                             typeof v === 'string' ? v !== path : v.path !== path

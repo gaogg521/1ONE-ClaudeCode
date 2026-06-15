@@ -2,7 +2,20 @@
  * CTeam Milestone View — Version planning linked to CTeam epics
  */
 import React, { useCallback, useState } from 'react';
-import { Button, Card, Drawer, Empty, Form, Input, Message, Modal, Progress, Space, Tag, Typography } from '@arco-design/web-react';
+import {
+  Button,
+  Card,
+  Drawer,
+  Empty,
+  Form,
+  Input,
+  Message,
+  Modal,
+  Progress,
+  Space,
+  Tag,
+  Typography,
+} from '@arco-design/web-react';
 import { Plus, Refresh } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -36,18 +49,23 @@ const MilestoneView: React.FC = () => {
     t('common.milestones.loadFailed', { defaultValue: '加载里程碑失败' })
   );
 
-  const loadEpics = useCallback(async (milestoneId: string) => {
-    setEpicsLoading(true);
-    try {
-      const rows = await listMilestoneEpics(milestoneId);
-      setEpics(rows);
-    } catch (error) {
-      Message.error(getEnterpriseActionError(error, t('common.milestones.epicsLoadFailed', { defaultValue: '加载 Epic 失败' })));
-      setEpics([]);
-    } finally {
-      setEpicsLoading(false);
-    }
-  }, [t]);
+  const loadEpics = useCallback(
+    async (milestoneId: string) => {
+      setEpicsLoading(true);
+      try {
+        const rows = await listMilestoneEpics(milestoneId);
+        setEpics(rows);
+      } catch (error) {
+        Message.error(
+          getEnterpriseActionError(error, t('common.milestones.epicsLoadFailed', { defaultValue: '加载 Epic 失败' }))
+        );
+        setEpics([]);
+      } finally {
+        setEpicsLoading(false);
+      }
+    },
+    [t]
+  );
 
   const openMilestoneDetail = useCallback(
     (milestone: MilestoneRecord) => {

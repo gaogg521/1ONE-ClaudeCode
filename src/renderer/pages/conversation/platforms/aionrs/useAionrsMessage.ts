@@ -10,6 +10,7 @@ import type { IResponseMessage } from '@/common/adapter/ipcBridge';
 import type { TChatConversation, TokenUsageData } from '@/common/config/storage';
 import type { ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
+import { emitter } from '@/renderer/utils/emitter';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type TokenUsage = {
@@ -152,6 +153,9 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
             setStreamRunning(false);
             setWaitingResponse(false);
             setThought({ subject: '', description: '' });
+            requestAnimationFrame(() => {
+              emitter.emit('conversation.messages.sync', { conversationId: conversation_id });
+            });
           }
           break;
         case 'tool_group':
@@ -219,6 +223,9 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
             hasContentInTurnRef.current = false;
             // Clear active message id so next request won't be filtered
             activeMsgIdRef.current = null;
+            requestAnimationFrame(() => {
+              emitter.emit('conversation.messages.sync', { conversationId: conversation_id });
+            });
             onError?.(message as IResponseMessage);
           } else {
             // Mark that current turn has content output (exclude error type)

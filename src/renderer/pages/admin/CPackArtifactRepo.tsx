@@ -99,13 +99,18 @@ const CPackArtifactRepo: React.FC = () => {
         />
       ),
     },
-    { title: '操作', render: (_: unknown, r: ArtifactRepo) => <Button size='mini' status='danger' icon={<Delete />} onClick={() => void handleDelete(r.id)} /> },
+    {
+      title: '操作',
+      render: (_: unknown, r: ArtifactRepo) => (
+        <Button size='mini' status='danger' icon={<Delete />} onClick={() => void handleDelete(r.id)} />
+      ),
+    },
   ];
 
   const artifactColumns = [
     { title: '名称', dataIndex: 'name' },
     { title: '版本', dataIndex: 'version' },
-    { title: '大小', dataIndex: 'file_size', render: (v: number) => v ? `${(v / 1024).toFixed(1)} KB` : '—' },
+    { title: '大小', dataIndex: 'file_size', render: (v: number) => (v ? `${(v / 1024).toFixed(1)} KB` : '—') },
     { title: '仓库', dataIndex: 'repo_name' },
     { title: '下载', dataIndex: 'download_count' },
     {
@@ -129,7 +134,13 @@ const CPackArtifactRepo: React.FC = () => {
         description='统一管理 Generic / Docker / Maven / AI 模型制品，支持安全扫描与分发'
         actions={
           <>
-            <Button icon={<Refresh />} onClick={() => { void reposState.reload(); void artifactsState.reload(); }}>
+            <Button
+              icon={<Refresh />}
+              onClick={() => {
+                void reposState.reload();
+                void artifactsState.reload();
+              }}
+            >
               刷新
             </Button>
             <Button type='primary' icon={<Plus />} onClick={() => setModalVisible(true)}>
@@ -174,11 +185,35 @@ const CPackArtifactRepo: React.FC = () => {
           </ModuleDataState>
         </Card>
       </div>
-      <Modal title='新建制品仓库' visible={modalVisible} onCancel={() => setModalVisible(false)} onOk={handleCreate} confirmLoading={saving} okText='创建' cancelText='取消'>
+      <Modal
+        title='新建制品仓库'
+        visible={modalVisible}
+        onCancel={() => setModalVisible(false)}
+        onOk={handleCreate}
+        confirmLoading={saving}
+        okText='创建'
+        cancelText='取消'
+      >
         <Form layout='vertical'>
-          <Form.Item label='名称' required><Input value={form.name} onChange={(v) => setForm((s) => ({ ...s, name: v }))} /></Form.Item>
-          <Form.Item label='类型'><Select value={form.repo_type} onChange={(v) => setForm((s) => ({ ...s, repo_type: String(v) }))}>{Object.entries(REPO_TYPES).map(([k, v]) => <Select.Option key={k} value={k}>{v}</Select.Option>)}</Select></Form.Item>
-          <Form.Item label='端点 URL'><Input value={form.endpoint} onChange={(v) => setForm((s) => ({ ...s, endpoint: v }))} placeholder='https://registry.example.com' /></Form.Item>
+          <Form.Item label='名称' required>
+            <Input value={form.name} onChange={(v) => setForm((s) => ({ ...s, name: v }))} />
+          </Form.Item>
+          <Form.Item label='类型'>
+            <Select value={form.repo_type} onChange={(v) => setForm((s) => ({ ...s, repo_type: String(v) }))}>
+              {Object.entries(REPO_TYPES).map(([k, v]) => (
+                <Select.Option key={k} value={k}>
+                  {v}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item label='端点 URL'>
+            <Input
+              value={form.endpoint}
+              onChange={(v) => setForm((s) => ({ ...s, endpoint: v }))}
+              placeholder='https://registry.example.com'
+            />
+          </Form.Item>
           <ResourceScopeFields
             scope={resourceScope.scope}
             teamId={resourceScope.teamId}

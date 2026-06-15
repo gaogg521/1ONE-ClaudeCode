@@ -323,9 +323,7 @@ const conversationHistoryProxy = (options: typeof _chatMessageFile, dir: string)
     },
     backup(conversation_id: string) {
       const storage = buildMessageListStorage(conversation_id, dir);
-      return storage.backup(
-        path.join(dir, 'one-chat-history', 'backup', conversation_id + '_' + Date.now() + '.txt')
-      );
+      return storage.backup(path.join(dir, 'one-chat-history', 'backup', conversation_id + '_' + Date.now() + '.txt'));
     },
   };
 };
@@ -861,8 +859,7 @@ const ensureBuiltinMcpServers = async (): Promise<void> => {
       const existing = mcpServers[codegraphIdx];
       const existingStdio = existing.transport.type === 'stdio' ? existing.transport : null;
       const targetStdio = codegraphServer.transport.type === 'stdio' ? codegraphServer.transport : null;
-      const legacyScriptCommand =
-        existingStdio?.command != null && /\.(?:js|cjs|mjs)$/i.test(existingStdio.command);
+      const legacyScriptCommand = existingStdio?.command != null && /\.(?:js|cjs|mjs)$/i.test(existingStdio.command);
       const needsUpdate =
         existing.enabled !== codegraphShouldEnable ||
         existingStdio?.command !== targetStdio?.command ||
@@ -1004,9 +1001,7 @@ export async function syncBuiltinAssistantsConfig(): Promise<void> {
       const needsPromptsI18nUpdate = needsPromptsI18nMigration || promptsI18nMissing || promptsI18nChanged;
       const nameI18nMissing = !existing.nameI18n && !!builtin.nameI18n;
       const nameI18nChanged =
-        existing.nameI18n &&
-        builtin.nameI18n &&
-        JSON.stringify(existing.nameI18n) !== JSON.stringify(builtin.nameI18n);
+        existing.nameI18n && builtin.nameI18n && JSON.stringify(existing.nameI18n) !== JSON.stringify(builtin.nameI18n);
       const descriptionI18nMissing = !existing.descriptionI18n && !!builtin.descriptionI18n;
       const descriptionI18nChanged =
         existing.descriptionI18n &&
@@ -1097,13 +1092,13 @@ export async function syncBuiltinAssistantsConfig(): Promise<void> {
  * Clears `acp.hiddenBuiltinAssistantIds` and re-runs builtin sync so removed presets reappear.
  */
 export async function restoreHiddenBuiltinAssistants(): Promise<{ restoredCount: number }> {
-  const agentsBefore =
-    ((await configFile.get('acp.customAgents').catch((): undefined => undefined)) || []) as AcpBackendConfig[];
+  const agentsBefore = ((await configFile.get('acp.customAgents').catch((): undefined => undefined)) ||
+    []) as AcpBackendConfig[];
   const idsBefore = new Set(agentsBefore.map((a) => a.id));
   await configFile.set('acp.hiddenBuiltinAssistantIds', []);
   await syncBuiltinAssistantsConfig();
-  const agentsAfter =
-    ((await configFile.get('acp.customAgents').catch((): undefined => undefined)) || []) as AcpBackendConfig[];
+  const agentsAfter = ((await configFile.get('acp.customAgents').catch((): undefined => undefined)) ||
+    []) as AcpBackendConfig[];
   const restoredCount = agentsAfter.filter(
     (a) => typeof a.id === 'string' && a.id.startsWith('builtin-') && !idsBefore.has(a.id)
   ).length;
@@ -1172,8 +1167,7 @@ export const initStorageCore = async (): Promise<void> => {
 /** Heavy path: MCP bundles, builtin assistants — runs while the window is already visible. */
 export const initStorageDeferred = async (): Promise<void> => {
   const t0 = performance.now();
-  const mark = (label: string) =>
-    console.log(`[1ONE:init:deferred] ${label} +${Math.round(performance.now() - t0)}ms`);
+  const mark = (label: string) => console.log(`[1ONE:init:deferred] ${label} +${Math.round(performance.now() - t0)}ms`);
   mark('deferred start');
 
   // 4. 初始化 MCP 配置（为所有用户提供默认配置）
@@ -1198,7 +1192,7 @@ export const initStorageDeferred = async (): Promise<void> => {
   try {
     const existingToolkit = await configFile.get('tools.agentToolkit').catch((): undefined => undefined);
     if (!existingToolkit) {
-      await configFile.set('tools.agentToolkit', (await getAgentToolkitConfig(true)));
+      await configFile.set('tools.agentToolkit', await getAgentToolkitConfig(true));
     }
   } catch (error) {
     console.warn('[1ONE ClaudeCode] Failed to seed tools.agentToolkit config:', error);

@@ -13,30 +13,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { BUILTIN_IMAGE_GEN_ID, BUILTIN_IMAGE_GEN_NAME } from './constants';
+import { BUILTIN_IMAGE_GEN_NAME } from './constants';
 import { executeImageGeneration } from '@/common/chat/imageGenCore';
-import type { TProviderWithModel } from '@/common/config/storage';
-
-// Read provider config from environment variables
-function getProviderFromEnv(): TProviderWithModel | null {
-  const platform = process.env.ONE_IMG_PLATFORM;
-  const baseUrl = process.env.ONE_IMG_BASE_URL;
-  const apiKey = process.env.ONE_IMG_API_KEY;
-  const model = process.env.ONE_IMG_MODEL;
-
-  if (!platform || !model) {
-    return null;
-  }
-
-  return {
-    id: BUILTIN_IMAGE_GEN_ID,
-    name: BUILTIN_IMAGE_GEN_NAME,
-    platform,
-    baseUrl: baseUrl || '',
-    apiKey: apiKey || '',
-    useModel: model,
-  };
-}
+import { resolveImageGenProvider } from '@/common/chat/imageGenProvider';
 
 async function main() {
   const server = new McpServer({
@@ -95,13 +74,14 @@ IMPORTANT: When user provides multiple images, ALWAYS pass ALL images to the ima
         ),
     },
     async ({ prompt, image_uris, workspace_dir }) => {
-      const provider = getProviderFromEnv();
+      const hasImages = Boolean(image_uris?.length);
+      const provider = resolveImageGenProvider(hasImages);
       if (!provider) {
         return {
           content: [
             {
               type: 'text' as const,
-              text: 'Error: Image generation model not configured. Please select an image generation model in Settings > Tools.',
+              text: 'Error: Image generation model not configured. Please select an image generation model in Settings > Tools, or use a vision-capable chat model.',
             },
           ],
           isError: true,

@@ -119,7 +119,9 @@ export async function joinEnterpriseWithInvite(userId: string, codeRaw: string):
   // Transaction protection: update invite use_count + update user tenant_id must be atomic
   const joinTransaction = driver.transaction(() => {
     driver.prepare(`UPDATE tenant_invites SET use_count = use_count + 1 WHERE id = ?`).run(invite.id);
-    driver.prepare(`UPDATE users SET tenant_id = ?, updated_at = ? WHERE id = ?`).run(invite.tenant_id, Date.now(), userId);
+    driver
+      .prepare(`UPDATE users SET tenant_id = ?, updated_at = ? WHERE id = ?`)
+      .run(invite.tenant_id, Date.now(), userId);
   });
   joinTransaction();
   await AuthService.invalidateAllTokens();
@@ -128,10 +130,7 @@ export async function joinEnterpriseWithInvite(userId: string, codeRaw: string):
   return { tenantId: ctx.tenantId, tenantName: ctx.tenantName };
 }
 
-export async function createEnterpriseTenant(
-  userId: string,
-  name: string
-): Promise<EnterpriseSetupResult> {
+export async function createEnterpriseTenant(userId: string, name: string): Promise<EnterpriseSetupResult> {
   const trimmed = name.trim();
   if (!trimmed) {
     throw new EnterpriseJoinError('NAME_REQUIRED', 'Enterprise name is required');
@@ -156,12 +155,8 @@ export async function createEnterpriseTenant(
     driver
       .prepare(`INSERT INTO tenants (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)`)
       .run(tenantId, trimmed, now, now);
-    driver
-      .prepare(`UPDATE users SET tenant_id = ?, updated_at = ? WHERE id = ?`)
-      .run(tenantId, now, userId);
-    driver
-      .prepare(`UPDATE users SET role = ?, updated_at = ? WHERE id = ?`)
-      .run('org_admin', now, userId);
+    driver.prepare(`UPDATE users SET tenant_id = ?, updated_at = ? WHERE id = ?`).run(tenantId, now, userId);
+    driver.prepare(`UPDATE users SET role = ?, updated_at = ? WHERE id = ?`).run('org_admin', now, userId);
   });
   createTransaction();
   await AuthService.invalidateAllTokens();
@@ -192,9 +187,7 @@ export async function createEnterpriseInvite(params: {
   }
 
   const expiresAt =
-    params.expiresInDays && params.expiresInDays > 0
-      ? now + params.expiresInDays * 24 * 60 * 60 * 1000
-      : null;
+    params.expiresInDays && params.expiresInDays > 0 ? now + params.expiresInDays * 24 * 60 * 60 * 1000 : null;
   const maxUses = params.maxUses ?? null;
   const id = `inv_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 

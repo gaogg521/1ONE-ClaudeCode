@@ -76,12 +76,7 @@ const WorkspacePage: React.FC = () => {
   const navigate = useNavigate();
   const auth = useAuth();
   const { groupedHistory, conversations } = useConversationHistoryContext();
-  const {
-    showTeamsFeature,
-    showEnterpriseAdminNav,
-    showEnterpriseWorkspaceHub,
-    tenantLabel,
-  } = useEditionFeatures();
+  const { showTeamsFeature, showEnterpriseAdminNav, showEnterpriseWorkspaceHub, tenantLabel } = useEditionFeatures();
   const { openEnterpriseAdminInBrowser } = useWebuiEnterpriseMode();
   const lastActiveTeamScope = useMemo(() => readLastActiveTeamScope(), []);
 
@@ -153,15 +148,15 @@ const WorkspacePage: React.FC = () => {
       [
         showTeamsFeature
           ? {
-          key: 'overview',
-          title: t('common.workspace.hub.enterpriseOverviewTitle', {
-            defaultValue: '企业能力总览',
-          }),
-          description: t('common.workspace.hub.enterpriseOverviewDesc', {
-            defaultValue: '打开企业协同、研发平台能力与组织治理入口。',
-          }),
-          path: '/enterprise',
-        }
+              key: 'overview',
+              title: t('common.workspace.hub.enterpriseOverviewTitle', {
+                defaultValue: '企业能力总览',
+              }),
+              description: t('common.workspace.hub.enterpriseOverviewDesc', {
+                defaultValue: '打开企业协同、研发平台能力与组织治理入口。',
+              }),
+              path: '/enterprise',
+            }
           : null,
         {
           key: 'cteam',
@@ -175,27 +170,27 @@ const WorkspacePage: React.FC = () => {
         },
         showTeamsFeature
           ? {
-          key: 'shared-sessions',
-          title: t('common.workspace.hub.enterpriseSharedSessionsTitle', {
-            defaultValue: '共享会话',
-          }),
-          description: t('common.workspace.hub.enterpriseSharedSessionsDesc', {
-            defaultValue: '直接进入主工作台里的团队协同会话范围。',
-          }),
-          path: buildSharedWorkspaceScopePath('/sessions', lastActiveTeamScope),
-        }
+              key: 'shared-sessions',
+              title: t('common.workspace.hub.enterpriseSharedSessionsTitle', {
+                defaultValue: '共享会话',
+              }),
+              description: t('common.workspace.hub.enterpriseSharedSessionsDesc', {
+                defaultValue: '直接进入主工作台里的团队协同会话范围。',
+              }),
+              path: buildSharedWorkspaceScopePath('/sessions', lastActiveTeamScope),
+            }
           : null,
         showTeamsFeature
           ? {
-          key: 'shared-tasks',
-          title: t('common.workspace.hub.enterpriseSharedTasksTitle', {
-            defaultValue: '共享任务',
-          }),
-          description: t('common.workspace.hub.enterpriseSharedTasksDesc', {
-            defaultValue: '直接进入主工作台里的团队协同任务范围。',
-          }),
-          path: buildSharedWorkspaceScopePath('/tasks', lastActiveTeamScope),
-        }
+              key: 'shared-tasks',
+              title: t('common.workspace.hub.enterpriseSharedTasksTitle', {
+                defaultValue: '共享任务',
+              }),
+              description: t('common.workspace.hub.enterpriseSharedTasksDesc', {
+                defaultValue: '直接进入主工作台里的团队协同任务范围。',
+              }),
+              path: buildSharedWorkspaceScopePath('/tasks', lastActiveTeamScope),
+            }
           : null,
         {
           key: 'cagent',
@@ -239,7 +234,9 @@ const WorkspacePage: React.FC = () => {
     <PageContentShell className='workspace-page-shell' contentClassName='md:max-w-1200px'>
       <div className='flex items-start justify-between gap-12px'>
         <div className='min-w-0'>
-          <div className='text-18px font-bold text-t-primary'>{t('nav.workspace', { defaultValue: '工作区（文件）' })}</div>
+          <div className='text-18px font-bold text-t-primary'>
+            {t('nav.workspace', { defaultValue: '工作区（文件）' })}
+          </div>
           <div className='text-12px text-t-tertiary mt-4px'>
             {t('workspace.hub.subtitle', { defaultValue: '以项目/文件夹为中心管理会话与项目相关配置。' })}
           </div>
@@ -327,7 +324,8 @@ const WorkspacePage: React.FC = () => {
                 </div>
                 <div className='text-12px text-t-tertiary max-w-360px mx-auto'>
                   {t('workspace.hub.emptyHint', {
-                    defaultValue: '新用户这里会是空的。建议先创建一个会话并选择/打开工作区，之后最近工作区会自动出现在这里。',
+                    defaultValue:
+                      '新用户这里会是空的。建议先创建一个会话并选择/打开工作区，之后最近工作区会自动出现在这里。',
                   })}
                 </div>
                 <div className='flex items-center justify-center gap-10px pt-8px'>
@@ -390,4 +388,3 @@ const WorkspacePage: React.FC = () => {
 };
 
 export default WorkspacePage;
-

@@ -34,8 +34,8 @@ const SkillDetailPage: React.FC = () => {
       if (disposed) {
         return;
       }
-      const nextLocalSkills = localResult.status === 'fulfilled' ? localResult.value ?? [] : [];
-      const nextOrgSkills = orgResult.status === 'fulfilled' ? orgResult.value ?? [] : [];
+      const nextLocalSkills = localResult.status === 'fulfilled' ? (localResult.value ?? []) : [];
+      const nextOrgSkills = orgResult.status === 'fulfilled' ? (orgResult.value ?? []) : [];
       setLocalSkills(nextLocalSkills);
       setOrgSkills(nextOrgSkills);
 
@@ -87,7 +87,11 @@ const SkillDetailPage: React.FC = () => {
           {t('common.skills.title', { defaultValue: 'Skills' })}
         </Button>
         <span>/</span>
-        <span>{resolvedSkill?.source === 'local' ? resolvedSkill.localSkill.name : resolvedSkill?.orgSkill.name ?? skillKey}</span>
+        <span>
+          {resolvedSkill?.source === 'local'
+            ? resolvedSkill.localSkill.name
+            : (resolvedSkill?.orgSkill.name ?? skillKey)}
+        </span>
       </div>
 
       <Spin className='w-full mt-16px' loading={loading}>
@@ -150,30 +154,46 @@ const SkillDetailPage: React.FC = () => {
                 {resolvedSkill.source === 'local' ? (
                   <div className='space-y-12px text-13px'>
                     <div>
-                      <div className='text-t-tertiary'>{t('common.skills.propertySource', { defaultValue: '来源' })}</div>
+                      <div className='text-t-tertiary'>
+                        {t('common.skills.propertySource', { defaultValue: '来源' })}
+                      </div>
                       <div className='mt-4px text-t-primary'>{resolvedSkill.localSkill.sourceKind}</div>
                     </div>
                     <div>
-                      <div className='text-t-tertiary'>{t('common.skills.propertyLocation', { defaultValue: '文件位置' })}</div>
+                      <div className='text-t-tertiary'>
+                        {t('common.skills.propertyLocation', { defaultValue: '文件位置' })}
+                      </div>
                       <div className='mt-4px text-t-primary break-all'>{resolvedSkill.localSkill.location}</div>
                     </div>
                     <div>
-                      <div className='text-t-tertiary'>{t('common.skills.propertyFiles', { defaultValue: '运行时文件' })}</div>
-                      <div className='mt-4px text-t-primary'>{resolvedSkill.localSkill.runtimeFiles.join(', ') || '—'}</div>
+                      <div className='text-t-tertiary'>
+                        {t('common.skills.propertyFiles', { defaultValue: '运行时文件' })}
+                      </div>
+                      <div className='mt-4px text-t-primary'>
+                        {resolvedSkill.localSkill.runtimeFiles.join(', ') || '—'}
+                      </div>
                     </div>
                     <div>
-                      <div className='text-t-tertiary'>{t('common.skills.propertyPlatforms', { defaultValue: '平台' })}</div>
-                      <div className='mt-4px text-t-primary'>{resolvedSkill.localSkill.platforms.join(', ') || 'generic'}</div>
+                      <div className='text-t-tertiary'>
+                        {t('common.skills.propertyPlatforms', { defaultValue: '平台' })}
+                      </div>
+                      <div className='mt-4px text-t-primary'>
+                        {resolvedSkill.localSkill.platforms.join(', ') || 'generic'}
+                      </div>
                     </div>
                   </div>
                 ) : (
                   <div className='space-y-12px text-13px'>
                     <div>
-                      <div className='text-t-tertiary'>{t('common.skills.propertyScope', { defaultValue: '范围' })}</div>
+                      <div className='text-t-tertiary'>
+                        {t('common.skills.propertyScope', { defaultValue: '范围' })}
+                      </div>
                       <div className='mt-4px text-t-primary'>{resolvedSkill.orgSkill.scope}</div>
                     </div>
                     <div>
-                      <div className='text-t-tertiary'>{t('common.skills.propertyEnabled', { defaultValue: '启用状态' })}</div>
+                      <div className='text-t-tertiary'>
+                        {t('common.skills.propertyEnabled', { defaultValue: '启用状态' })}
+                      </div>
                       <div className='mt-4px text-t-primary'>
                         {resolvedSkill.orgSkill.enabled === 1
                           ? t('common.show', { defaultValue: '显示' })
@@ -181,8 +201,12 @@ const SkillDetailPage: React.FC = () => {
                       </div>
                     </div>
                     <div>
-                      <div className='text-t-tertiary'>{t('common.skills.propertyUpdatedAt', { defaultValue: '最近更新' })}</div>
-                      <div className='mt-4px text-t-primary'>{new Date(resolvedSkill.orgSkill.updated_at).toLocaleString()}</div>
+                      <div className='text-t-tertiary'>
+                        {t('common.skills.propertyUpdatedAt', { defaultValue: '最近更新' })}
+                      </div>
+                      <div className='mt-4px text-t-primary'>
+                        {new Date(resolvedSkill.orgSkill.updated_at).toLocaleString()}
+                      </div>
                     </div>
                   </div>
                 )}

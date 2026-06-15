@@ -115,13 +115,7 @@ export async function resolveUserAvatarFile(userId: string): Promise<{ filePath:
   }
   const ext = path.extname(row.avatar_path).toLowerCase();
   const mime =
-    ext === '.png'
-      ? 'image/png'
-      : ext === '.webp'
-        ? 'image/webp'
-        : ext === '.gif'
-          ? 'image/gif'
-          : 'image/jpeg';
+    ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
   return { filePath: row.avatar_path, mime };
 }
 

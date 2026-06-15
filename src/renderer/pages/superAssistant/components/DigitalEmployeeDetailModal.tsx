@@ -153,9 +153,7 @@ const DigitalEmployeeDetailModal: React.FC<DigitalEmployeeDetailModalProps> = ({
         <Empty description={t('common.superAssistant.agentNotFound', { defaultValue: '未找到该智能体' })} />
       ) : (
         <div className='flex flex-col gap-16px'>
-          {view.description ? (
-            <div className='text-13px text-t-secondary'>{view.description}</div>
-          ) : null}
+          {view.description ? <div className='text-13px text-t-secondary'>{view.description}</div> : null}
           {lastRun ? (
             <div className='rounded-8px border border-[var(--color-border-2)] p-12px'>
               <div className='flex flex-wrap items-center gap-8px'>
@@ -168,9 +166,7 @@ const DigitalEmployeeDetailModal: React.FC<DigitalEmployeeDetailModalProps> = ({
               {lastRun.summary ? (
                 <div className='mt-8px whitespace-pre-wrap text-13px text-t-secondary'>{lastRun.summary}</div>
               ) : null}
-              {lastRun.error ? (
-                <div className='mt-8px text-13px text-danger'>{lastRun.error}</div>
-              ) : null}
+              {lastRun.error ? <div className='mt-8px text-13px text-danger'>{lastRun.error}</div> : null}
               <div className='mt-12px'>
                 <Button
                   size='small'

@@ -75,14 +75,15 @@ export function buildHealthCheckHint(
     return {
       kind: 'protocol_mismatch',
       message: t('settings.healthCheckHintProtocolMismatch', {
-        defaultValue:
-          '协议不匹配：该模型仅支持 OpenAI 协议。请在“请求协议”里选择 OpenAI，或为该模型配置协议覆盖。',
+        defaultValue: '协议不匹配：该模型仅支持 OpenAI 协议。请在“请求协议”里选择 OpenAI，或为该模型配置协议覆盖。',
       }),
     };
   }
 
   return {
     kind: 'generic',
-    message: t('settings.healthCheckHintGeneric', { defaultValue: '请检查 API Key、baseUrl、请求协议/模式与网关路由是否匹配。' }),
+    message: t('settings.healthCheckHintGeneric', {
+      defaultValue: '请检查 API Key、baseUrl、请求协议/模式与网关路由是否匹配。',
+    }),
   };
 }

@@ -30,15 +30,13 @@ export class WebuiService {
   private static readonly RESET_EMAIL_TTL_MS = 5 * 60 * 1000;
   private static readonly RESET_EMAIL_RESEND_COOLDOWN_MS = 60 * 1000;
   private static readonly RESET_EMAIL_MAX_ATTEMPTS = 5;
-  private static resetEmailChallenge:
-    | {
-        codeHash: string;
-        expiresAt: number;
-        attempts: number;
-        email: string;
-        sentAt: number;
-      }
-    | null = null;
+  private static resetEmailChallenge: {
+    codeHash: string;
+    expiresAt: number;
+    attempts: number;
+    email: string;
+    sentAt: number;
+  } | null = null;
 
   /**
    * 加载 webserver 函数（避免循环依赖）
@@ -232,8 +230,7 @@ export class WebuiService {
     const { getAdminWebListenPort } = await import('@process/webserver/index');
     const adminPort = running ? getAdminWebListenPort() : null;
     const adminLocalUrl = adminPort ? `http://localhost:${adminPort}` : undefined;
-    const adminNetworkUrl =
-      adminPort && allowRemote && lanIP ? `http://${lanIP}:${adminPort}` : undefined;
+    const adminNetworkUrl = adminPort && allowRemote && lanIP ? `http://${lanIP}:${adminPort}` : undefined;
 
     return {
       running,
@@ -345,11 +342,7 @@ export class WebuiService {
    * Reset an arbitrary user's password with admin email verification code.
    * Verification code is sent to `users.email` of the system admin user.
    */
-  static async resetUserPasswordWithEmailCode(
-    userId: string,
-    newPassword: string,
-    code: string
-  ): Promise<void> {
+  static async resetUserPasswordWithEmailCode(userId: string, newPassword: string, code: string): Promise<void> {
     this.verifyResetPasswordEmailCode(code);
 
     const passwordValidation = AuthService.validatePasswordStrength(newPassword);

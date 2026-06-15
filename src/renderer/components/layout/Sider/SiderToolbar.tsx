@@ -19,12 +19,7 @@ interface SiderToolbarProps {
   onNewChat: () => void;
 }
 
-const SiderToolbar: React.FC<SiderToolbarProps> = ({
-  isMobile,
-  collapsed,
-  siderTooltipProps,
-  onNewChat,
-}) => {
+const SiderToolbar: React.FC<SiderToolbarProps> = ({ isMobile, collapsed, siderTooltipProps, onNewChat }) => {
   const { t } = useTranslation();
 
   if (collapsed) {

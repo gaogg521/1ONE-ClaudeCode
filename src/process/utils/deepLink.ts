@@ -19,9 +19,7 @@ const SUPPORTED_PROTOCOL_SCHEMES = ['1one', '1one-claudecode'];
 export const parseDeepLinkUrl = (url: string): { action: string; params: Record<string, string> } | null => {
   // Note: `new URL()` rejects schemes starting with digits (e.g. `1one-claudecode://`).
   // Parse manually to keep compatibility.
-  const match = url.match(
-    /^([0-9a-zA-Z+.-]+):\/\/([^/?#]+)([^?#]*)(?:\?([^#]*))?(?:#.*)?$/
-  );
+  const match = url.match(/^([0-9a-zA-Z+.-]+):\/\/([^/?#]+)([^?#]*)(?:\?([^#]*))?(?:#.*)?$/);
   if (!match) return null;
 
   const protocol = match[1];

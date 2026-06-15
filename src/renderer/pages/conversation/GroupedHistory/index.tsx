@@ -534,35 +534,35 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
                 return (
                   <>
                     {visibleItems.map((item) => {
-                if (item.type === 'workspace' && item.workspaceGroup) {
-                  const group = item.workspaceGroup;
-                  return (
-                    <div key={group.workspace} className={classNames('min-w-0', { 'px-8px': !collapsed })}>
-                      <WorkspaceCollapse
-                        expanded={expandedWorkspaces.includes(group.workspace)}
-                        onToggle={() => handleToggleWorkspace(group.workspace)}
-                        siderCollapsed={collapsed}
-                        header={
-                          <div className='flex items-center gap-8px text-14px min-w-0'>
-                            <span className='font-medium truncate flex-1 text-t-primary min-w-0'>
-                              {group.displayName}
-                            </span>
+                      if (item.type === 'workspace' && item.workspaceGroup) {
+                        const group = item.workspaceGroup;
+                        return (
+                          <div key={group.workspace} className={classNames('min-w-0', { 'px-8px': !collapsed })}>
+                            <WorkspaceCollapse
+                              expanded={expandedWorkspaces.includes(group.workspace)}
+                              onToggle={() => handleToggleWorkspace(group.workspace)}
+                              siderCollapsed={collapsed}
+                              header={
+                                <div className='flex items-center gap-8px text-14px min-w-0'>
+                                  <span className='font-medium truncate flex-1 text-t-primary min-w-0'>
+                                    {group.displayName}
+                                  </span>
+                                </div>
+                              }
+                            >
+                              <div className={classNames('flex flex-col gap-2px min-w-0', { 'mt-4px': !collapsed })}>
+                                {group.conversations.map((conversation) => renderConversation(conversation))}
+                              </div>
+                            </WorkspaceCollapse>
                           </div>
-                        }
-                      >
-                        <div className={classNames('flex flex-col gap-2px min-w-0', { 'mt-4px': !collapsed })}>
-                          {group.conversations.map((conversation) => renderConversation(conversation))}
-                        </div>
-                      </WorkspaceCollapse>
-                    </div>
-                  );
-                }
+                        );
+                      }
 
-                if (item.type === 'conversation' && item.conversation) {
-                  return renderConversation(item.conversation);
-                }
+                      if (item.type === 'conversation' && item.conversation) {
+                        return renderConversation(item.conversation);
+                      }
 
-                return null;
+                      return null;
                     })}
                     {hasMore ? (
                       <ViewAllRow

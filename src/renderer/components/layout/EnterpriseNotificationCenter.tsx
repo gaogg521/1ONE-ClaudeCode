@@ -81,9 +81,7 @@ const NotificationList: React.FC<{
               <div className='flex items-start justify-between gap-8px'>
                 <div className='min-w-0 flex-1'>
                   <div className='text-13px font-500 text-t-primary truncate'>{item.title}</div>
-                  <div className='text-12px text-t-secondary mt-4px line-clamp-2 whitespace-pre-wrap'>
-                    {item.body}
-                  </div>
+                  <div className='text-12px text-t-secondary mt-4px line-clamp-2 whitespace-pre-wrap'>{item.body}</div>
                   <div className='text-11px text-t-tertiary mt-6px'>
                     {resolveKindLabel(item.kind, t)} · {formatRelativeTime(item.created_at)}
                   </div>
@@ -103,14 +101,8 @@ const EnterpriseNotificationCenter: React.FC<EnterpriseNotificationCenterProps> 
   const navigate = useNavigate();
   const layout = useLayoutContext();
   const iconSize = layout?.isMobile ? 24 : 18;
-  const {
-    unreadCount,
-    items,
-    loading,
-    refreshNotifications,
-    markRead,
-    markAllRead,
-  } = useEnterpriseNotifications(enabled);
+  const { unreadCount, items, loading, refreshNotifications, markRead, markAllRead } =
+    useEnterpriseNotifications(enabled);
 
   const droplist = useMemo(
     () => (

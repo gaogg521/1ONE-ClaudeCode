@@ -1,12 +1,6 @@
 import type { IMcpServer } from '@/common/config/storage';
 import { Button, Switch, Tooltip, Tag } from '@arco-design/web-react';
-import {
-  LoadingOne,
-  Refresh,
-  Write,
-  DeleteFour,
-  Login,
-} from '@icon-park/react';
+import { LoadingOne, Refresh, Write, DeleteFour, Login } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import McpAgentStatusDisplay from './McpAgentStatusDisplay';

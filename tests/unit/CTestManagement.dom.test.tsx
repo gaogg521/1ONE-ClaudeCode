@@ -41,7 +41,11 @@ vi.mock('@/renderer/pages/admin/components/ModulePageHeader', () => ({
 }));
 
 vi.mock('@/renderer/pages/admin/components/ModuleDataState', () => ({
-  default: ({ children, empty, emptyDescription }: React.PropsWithChildren<{ empty?: boolean; emptyDescription?: string }>) =>
+  default: ({
+    children,
+    empty,
+    emptyDescription,
+  }: React.PropsWithChildren<{ empty?: boolean; emptyDescription?: string }>) =>
     empty ? <div>{emptyDescription}</div> : <>{children}</>,
 }));
 
@@ -106,17 +110,14 @@ vi.mock('@arco-design/web-react', () => {
   return {
     Button,
     Card,
-    Form: Object.assign(
-      ({ children }: React.PropsWithChildren) => <form>{children}</form>,
-      {
-        Item: ({ label, children }: React.PropsWithChildren<{ label?: React.ReactNode }>) => (
-          <label>
-            {label}
-            {children}
-          </label>
-        ),
-      }
-    ),
+    Form: Object.assign(({ children }: React.PropsWithChildren) => <form>{children}</form>, {
+      Item: ({ label, children }: React.PropsWithChildren<{ label?: React.ReactNode }>) => (
+        <label>
+          {label}
+          {children}
+        </label>
+      ),
+    }),
     Grid: {
       Row: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
       Col: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
@@ -128,10 +129,9 @@ vi.mock('@arco-design/web-react', () => {
       warning: vi.fn(),
     },
     Modal: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-    Select: Object.assign(
-      ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-      { Option: ({ children }: React.PropsWithChildren) => <option>{children}</option> }
-    ),
+    Select: Object.assign(({ children }: React.PropsWithChildren) => <div>{children}</div>, {
+      Option: ({ children }: React.PropsWithChildren) => <option>{children}</option>,
+    }),
     Space: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
     Table,
     Tag: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
@@ -143,9 +143,7 @@ import CTestManagement from '@/renderer/pages/admin/CTestManagement';
 describe('CTestManagement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    listTestPlansMock.mockResolvedValue([
-      { id: 'plan-1', name: '回归测试', description: 'v2.0', status: 'active' },
-    ]);
+    listTestPlansMock.mockResolvedValue([{ id: 'plan-1', name: '回归测试', description: 'v2.0', status: 'active' }]);
     listTestCasesMock.mockResolvedValue([
       {
         id: 'case-1',

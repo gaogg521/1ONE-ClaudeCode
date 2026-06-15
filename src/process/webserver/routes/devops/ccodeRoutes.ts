@@ -10,10 +10,7 @@ import { isEnterpriseAdminRole } from '../../auth/enterpriseRoles';
 import { getDatabase } from '@process/services/database';
 import { CodeRepoRepository } from '@process/services/database/repositories/devops/codeRepoRepository';
 import { CcodeService } from '@process/services/devops/ccode/ccodeService';
-import {
-  canManageScopedResource,
-  resolveResourceScope,
-} from '../resourceScope';
+import { canManageScopedResource, resolveResourceScope } from '../resourceScope';
 import { resolveDevopsTenantId, type DevopsRouteAuth } from './shared';
 
 export function registerCcodeRoutes(app: Express, auth: DevopsRouteAuth): void {

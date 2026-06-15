@@ -62,10 +62,7 @@ describe('TeamDigitalEmployeeRunService', () => {
     expect(result.conversationId).toBe('conv-1');
     expect(teamUpdate).toHaveBeenCalled();
     expect(onceIdle).toHaveBeenCalledWith('conv-1', expect.any(Function));
-    expect(sendMessageToAgent).toHaveBeenCalledWith(
-      'slot-1',
-      expect.stringContaining('Patrol Agent')
-    );
+    expect(sendMessageToAgent).toHaveBeenCalledWith('slot-1', expect.stringContaining('Patrol Agent'));
   });
 
   it('throws when team agent is missing', async () => {
@@ -77,8 +74,6 @@ describe('TeamDigitalEmployeeRunService', () => {
         }) as never,
       { findById: teamFindById, update: teamUpdate } as never
     );
-    await expect(
-      service.runNow({ teamId: 'team-1', slotId: 'missing' })
-    ).rejects.toThrow(/not found/i);
+    await expect(service.runNow({ teamId: 'team-1', slotId: 'missing' })).rejects.toThrow(/not found/i);
   });
 });

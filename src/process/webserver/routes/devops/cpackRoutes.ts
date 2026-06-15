@@ -10,10 +10,7 @@ import { isEnterpriseAdminRole } from '../../auth/enterpriseRoles';
 import { getDatabase } from '@process/services/database';
 import { ArtifactRepository } from '@process/services/database/repositories/devops/artifactRepository';
 import { CpackService } from '@process/services/devops/cpack/cpackService';
-import {
-  canManageScopedResource,
-  resolveResourceScope,
-} from '../resourceScope';
+import { canManageScopedResource, resolveResourceScope } from '../resourceScope';
 import { resolveDevopsTenantId, type DevopsRouteAuth } from './shared';
 
 export function registerCpackRoutes(app: Express, auth: DevopsRouteAuth): void {

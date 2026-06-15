@@ -26,7 +26,12 @@ import { mainLog } from '@process/utils/mainLogger';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
-import { getEnhancedEnv, getNpxCacheDir, getWindowsShellExecutionOptions, resolveNpxPath } from '@process/utils/shellEnv';
+import {
+  getEnhancedEnv,
+  getNpxCacheDir,
+  getWindowsShellExecutionOptions,
+  resolveNpxPath,
+} from '@process/utils/shellEnv';
 import {
   ACP_PERF_LOG,
   connectClaude,
@@ -133,10 +138,7 @@ export function buildStartupErrorMessage(
  * User-facing message when the ACP child process exits during an active request.
  * Exported for unit tests.
  */
-export function formatAcpUnexpectedExitMessage(
-  code: number | null,
-  signal: NodeJS.Signals | null
-): string {
+export function formatAcpUnexpectedExitMessage(code: number | null, signal: NodeJS.Signals | null): string {
   if (process.platform === 'win32' && code !== null && code !== 0 && signal == null) {
     return (
       `ACP 子进程异常退出（Windows code: ${code}）。` +

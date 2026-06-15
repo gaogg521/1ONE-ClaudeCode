@@ -663,9 +663,8 @@ export class CronService {
     this.executor.onceIdle(conversationId, async () => {
       if (autopilot?.source === 'super_assistant' && autopilot.agentSlotId) {
         try {
-          const { recordDigitalEmployeeCronRunFinished } = await import(
-            '@process/digitalEmployee/digitalEmployeeCronRun'
-          );
+          const { recordDigitalEmployeeCronRunFinished } =
+            await import('@process/digitalEmployee/digitalEmployeeCronRun');
           const { extractLastAssistantReply } = await import('@process/services/cron/autopilotPostback');
           const messagesResult = await this.conversationRepo.getMessages(conversationId, 0, 12, 'DESC');
           const reply = extractLastAssistantReply(messagesResult.data);
@@ -676,9 +675,8 @@ export class CronService {
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          const { recordDigitalEmployeeCronRunFinished } = await import(
-            '@process/digitalEmployee/digitalEmployeeCronRun'
-          );
+          const { recordDigitalEmployeeCronRunFinished } =
+            await import('@process/digitalEmployee/digitalEmployeeCronRun');
           await recordDigitalEmployeeCronRunFinished(autopilot, conversationId, {
             status: 'failed',
             error: message,

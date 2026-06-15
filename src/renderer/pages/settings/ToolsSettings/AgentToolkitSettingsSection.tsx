@@ -51,7 +51,9 @@ const AgentToolkitSettingsSection: React.FC = () => {
       const server = mcpServers.find(isBuiltinCodegraphServer);
       if (!server) return;
       const updated = mcpServers.map((s) =>
-        s.id === (ConfigStorage as unknown as Record<string, string>).BUILTIN_CODEGRAPH_ID ? { ...s, enabled, updatedAt: Date.now() } : s
+        s.id === (ConfigStorage as unknown as Record<string, string>).BUILTIN_CODEGRAPH_ID
+          ? { ...s, enabled, updatedAt: Date.now() }
+          : s
       );
       await saveMcpServers(updated);
     },

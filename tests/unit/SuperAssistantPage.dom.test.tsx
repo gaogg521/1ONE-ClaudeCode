@@ -33,7 +33,9 @@ const teamTaskState = vi.hoisted(() => ({
   items: [] as Array<Record<string, unknown>>,
 }));
 const teamRuntimeState = vi.hoisted(() => ({
-  agentStatusListener: null as null | ((event: { teamId: string; slotId: string; status: string; lastMessage?: string }) => void),
+  agentStatusListener: null as
+    | null
+    | ((event: { teamId: string; slotId: string; status: string; lastMessage?: string }) => void),
 }));
 const isElectronDesktopMock = vi.hoisted(() => vi.fn(() => false));
 
@@ -95,9 +97,7 @@ vi.mock('@/common', () => ({
       },
       agentStatusChanged: {
         on: vi.fn(
-          (
-            listener: (event: { teamId: string; slotId: string; status: string; lastMessage?: string }) => void
-          ) => {
+          (listener: (event: { teamId: string; slotId: string; status: string; lastMessage?: string }) => void) => {
             teamRuntimeState.agentStatusListener = listener;
             return () => {
               teamRuntimeState.agentStatusListener = null;
@@ -212,11 +212,7 @@ vi.mock('@arco-design/web-react', () => ({
       {children}
     </button>
   ),
-  Card: ({
-    title,
-    extra,
-    children,
-  }: React.PropsWithChildren<{ title?: React.ReactNode; extra?: React.ReactNode }>) => (
+  Card: ({ title, extra, children }: React.PropsWithChildren<{ title?: React.ReactNode; extra?: React.ReactNode }>) => (
     <section>
       {title ? <div>{title}</div> : null}
       {extra}
@@ -241,23 +237,19 @@ vi.mock('@arco-design/web-react', () => ({
     ) : null,
   Empty: ({ description }: { description?: React.ReactNode }) => <div>{description}</div>,
   Alert: ({ content }: { content?: React.ReactNode }) => <div role='alert'>{content}</div>,
-  Popconfirm: ({
-    children,
-    onOk,
-  }: React.PropsWithChildren<{ onOk?: () => void }>) => (
+  Popconfirm: ({ children, onOk }: React.PropsWithChildren<{ onOk?: () => void }>) => (
     <div data-testid='popconfirm' onClick={() => void onOk?.()}>
       {children}
     </div>
   ),
-  Timeline: Object.assign(
-    ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-    { Item: ({ children, label }: React.PropsWithChildren<{ label?: React.ReactNode }>) => (
+  Timeline: Object.assign(({ children }: React.PropsWithChildren) => <div>{children}</div>, {
+    Item: ({ children, label }: React.PropsWithChildren<{ label?: React.ReactNode }>) => (
       <div>
         {label}
         {children}
       </div>
-    ) }
-  ),
+    ),
+  }),
   Spin: ({ children }: React.PropsWithChildren<{ loading?: boolean }>) => <div>{children}</div>,
   Input: Object.assign(
     ({
@@ -463,8 +455,22 @@ describe('SuperAssistantPage (refactored command center)', () => {
           name: 'Alpha Team',
           workspace: '/repo/alpha',
           agents: [
-            { slotId: 'leader', role: 'lead', agentType: 'super', agentName: '超级助手 Leader', conversationType: 'gemini', status: 'active' },
-            { slotId: 'dev', role: 'teammate', agentType: 'dev', agentName: '开发 Agent', conversationType: 'codex', status: 'idle' },
+            {
+              slotId: 'leader',
+              role: 'lead',
+              agentType: 'super',
+              agentName: '超级助手 Leader',
+              conversationType: 'gemini',
+              status: 'active',
+            },
+            {
+              slotId: 'dev',
+              role: 'teammate',
+              agentType: 'dev',
+              agentName: '开发 Agent',
+              conversationType: 'codex',
+              status: 'idle',
+            },
           ],
         },
       ],
@@ -603,13 +609,9 @@ describe('SuperAssistantPage (refactored command center)', () => {
     render(<SuperAssistantPage />);
     fireEvent.click(await screen.findByRole('button', { name: '开发 Agent' }));
     await waitFor(() => {
-      expect(createTeamTaskMock).toHaveBeenCalledWith(
-        expect.objectContaining({ teamId: 'team-1', owner: 'dev' })
-      );
+      expect(createTeamTaskMock).toHaveBeenCalledWith(expect.objectContaining({ teamId: 'team-1', owner: 'dev' }));
       expect(ensureSessionMock).toHaveBeenCalledWith(expect.objectContaining({ teamId: 'team-1' }));
-      expect(sendMessageToAgentMock).toHaveBeenCalledWith(
-        expect.objectContaining({ teamId: 'team-1', slotId: 'dev' })
-      );
+      expect(sendMessageToAgentMock).toHaveBeenCalledWith(expect.objectContaining({ teamId: 'team-1', slotId: 'dev' }));
     });
   });
 

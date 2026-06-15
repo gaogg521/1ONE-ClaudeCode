@@ -36,11 +36,7 @@ export type DingTalkUserInfo = {
 
 const DINGTALK_OAUTH_AUTHORIZE_URL = 'https://login.dingtalk.com/oauth2/auth';
 
-export function buildDingTalkAuthorizeUrl(input: {
-  appKey: string;
-  redirectUri: string;
-  state: string;
-}): string {
+export function buildDingTalkAuthorizeUrl(input: { appKey: string; redirectUri: string; state: string }): string {
   const url = new URL(DINGTALK_OAUTH_AUTHORIZE_URL);
   url.searchParams.set('redirect_uri', input.redirectUri);
   url.searchParams.set('response_type', 'code');

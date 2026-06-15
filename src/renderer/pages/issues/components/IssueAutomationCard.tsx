@@ -13,12 +13,7 @@ type IssueAutomationCardProps = {
   leadAgent?: TeamAgent | null;
 };
 
-const IssueAutomationCard: React.FC<IssueAutomationCardProps> = ({
-  issueId,
-  issueSubject,
-  teamId,
-  leadAgent,
-}) => {
+const IssueAutomationCard: React.FC<IssueAutomationCardProps> = ({ issueId, issueSubject, teamId, leadAgent }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [createVisible, setCreateVisible] = useState(false);
@@ -35,8 +30,7 @@ const IssueAutomationCard: React.FC<IssueAutomationCardProps> = ({
       <Card title={t('common.issues.automationTitle', { defaultValue: '自动化' })}>
         <div className='text-12px text-t-tertiary'>
           {t('common.issues.automationDesc', {
-            defaultValue:
-              '为当前 Issue 配置定时 Agent 任务，实现 7×24 自动跟进（如每日扫描、周报汇总、阻塞提醒）。',
+            defaultValue: '为当前 Issue 配置定时 Agent 任务，实现 7×24 自动跟进（如每日扫描、周报汇总、阻塞提醒）。',
           })}
         </div>
         <div className='mt-10px flex flex-wrap gap-8px'>

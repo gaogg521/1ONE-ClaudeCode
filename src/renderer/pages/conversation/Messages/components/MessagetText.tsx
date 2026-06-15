@@ -6,8 +6,9 @@
 
 import type { IMessageText } from '@/common/chat/chatLib';
 import { ONE_FILES_MARKER } from '@/common/config/constants';
+import { parseDisplayMessageFiles } from '@/common/chat/messageFiles';
 import { iconColors } from '@/renderer/styles/colors';
-import { Alert, Message, Tooltip } from '@arco-design/web-react';
+import { Alert, Message, Spin, Tooltip } from '@arco-design/web-react';
 import { Copy } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useMemo, useState } from 'react';
@@ -53,13 +54,7 @@ const parseFileMarker = (content: string) => {
     return { text: content, files: [] as string[] };
   }
   const text = content.slice(0, markerIndex).trimEnd();
-  const afterMarker = content.slice(markerIndex + ONE_FILES_MARKER.length).trim();
-  const files = afterMarker
-    ? afterMarker
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-    : [];
+  const files = parseDisplayMessageFiles(content);
   return { text, files };
 };
 
@@ -97,6 +92,9 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
   }, [message.content.content]);
 
   const { text, files } = parseFileMarker(contentToRender);
+  const hasFileAttachments = files.length > 0;
+  const hasVisibleText = Boolean(text.trim());
+  const isPendingAttachments = message.status === 'pending' && !hasFileAttachments;
   const { data, json } = useFormatContent(text);
   const { t } = useTranslation();
   const [showCopyAlert, setShowCopyAlert] = useState(false);
@@ -104,8 +102,17 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
   const isTeammateMessage = message.position === 'left' && message.content.teammateMessage === true;
   const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
 
-  // 过滤空内容，避免渲染空DOM
-  if (!message.content.content || (typeof message.content.content === 'string' && !message.content.content.trim())) {
+  if (!hasVisibleText && !hasFileAttachments && !isPendingAttachments) {
+    return null;
+  }
+
+  if (
+    !message.content.content &&
+    !hasFileAttachments &&
+    !isPendingAttachments &&
+    typeof message.content.content === 'string' &&
+    !message.content.content.trim()
+  ) {
     return null;
   }
 
@@ -156,29 +163,52 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
             <span className='text-11px text-t-secondary'>{senderName}</span>
           </div>
         )}
-        {files.length > 0 && (
-          <div className={classNames('mt-6px', { 'self-end': isUserMessage })}>
+        {isPendingAttachments && (
+          <div
+            className={classNames('mb-6px flex items-center gap-8px text-12px text-t-secondary', {
+              'self-end': isUserMessage,
+            })}
+          >
+            <Spin size={14} />
+            <span>{t('common.fileAttach.uploading', { defaultValue: 'Uploading...' })}</span>
+          </div>
+        )}
+        {hasFileAttachments && (
+          <div className={classNames('mb-6px', { 'self-end': isUserMessage })}>
             {files.length === 1 ? (
               <div className='flex items-center'>
-                <FilePreview path={files[0]} onRemove={() => undefined} readonly />
+                <FilePreview
+                  path={files[0]}
+                  onRemove={() => undefined}
+                  readonly
+                  variant='chat'
+                  conversationId={message.conversation_id}
+                />
               </div>
             ) : (
               <HorizontalFileList>
-                {files.map((path) => (
-                  <FilePreview key={path} path={path} onRemove={() => undefined} readonly />
+                {files.map((filePath) => (
+                  <FilePreview
+                    key={filePath}
+                    path={filePath}
+                    onRemove={() => undefined}
+                    readonly
+                    variant='chat'
+                    conversationId={message.conversation_id}
+                  />
                 ))}
               </HorizontalFileList>
             )}
           </div>
         )}
-        <div
-          className={classNames('min-w-0 text-13px lh-20px [&>p:first-child]:mt-0px [&>p:last-child]:mb-0px', {
-            'bg-aou-2 p-8px': isUserMessage || cronMeta,
-            'bg-3 p-8px': isTeammateMessage,
-            'w-full': !(isUserMessage || cronMeta || isTeammateMessage),
-          })}
-          style={
-            {
+        {hasVisibleText && (
+          <div
+            className={classNames('min-w-0 text-13px lh-20px [&>p:first-child]:mt-0px [&>p:last-child]:mb-0px', {
+              'bg-aou-2 p-8px': isUserMessage || cronMeta,
+              'bg-3 p-8px': isTeammateMessage,
+              'w-full': !(isUserMessage || cronMeta || isTeammateMessage),
+            })}
+            style={{
               ...(stretchLayout
                 ? !isUserMessage
                   ? { width: '100%', maxWidth: 'none' }
@@ -189,20 +219,20 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
                 : isTeammateMessage
                   ? { borderRadius: '0 8px 8px 8px' }
                   : {}),
-            }
-          }
-        >
-          {/* JSON 内容使用折叠组件 Use CollapsibleContent for JSON content */}
-          {json ? (
-            <CollapsibleContent maxHeight={200} defaultCollapsed={true}>
-              <MarkdownView
-                codeStyle={{ marginTop: 4, marginBlock: 4 }}
-              >{`\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``}</MarkdownView>
-            </CollapsibleContent>
-          ) : (
-            <MarkdownView codeStyle={{ marginTop: 4, marginBlock: 4 }}>{data}</MarkdownView>
-          )}
-        </div>
+            }}
+          >
+            {/* JSON 内容使用折叠组件 Use CollapsibleContent for JSON content */}
+            {json ? (
+              <CollapsibleContent maxHeight={200} defaultCollapsed={true}>
+                <MarkdownView
+                  codeStyle={{ marginTop: 4, marginBlock: 4 }}
+                >{`\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``}</MarkdownView>
+              </CollapsibleContent>
+            ) : (
+              <MarkdownView codeStyle={{ marginTop: 4, marginBlock: 4 }}>{data}</MarkdownView>
+            )}
+          </div>
+        )}
         <div
           className={classNames('h-32px flex items-center mt-4px gap-8px', {
             'flex-row-reverse': isUserMessage,

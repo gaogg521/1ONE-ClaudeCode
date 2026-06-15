@@ -53,9 +53,7 @@ export function buildPersonalDigitalEmployeeCronPrompt(
     return DOCUMENT_DELIVERABLE_CRON_PROMPT;
   }
   const instructions =
-    typeof agent.automationConfig?.instructions === 'string'
-      ? agent.automationConfig.instructions.trim()
-      : '';
+    typeof agent.automationConfig?.instructions === 'string' ? agent.automationConfig.instructions.trim() : '';
   if (instructions) {
     return [
       `你是数字员工「${agent.name}」。`,

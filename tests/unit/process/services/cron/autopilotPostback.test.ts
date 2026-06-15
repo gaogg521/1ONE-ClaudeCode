@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TMessage } from '@/common/chat/chatLib';
-import {
-  enrichAutopilotPrompt,
-  extractLastAssistantReply,
-} from '@process/services/cron/autopilotPostback';
+import { enrichAutopilotPrompt, extractLastAssistantReply } from '@process/services/cron/autopilotPostback';
 
 describe('autopilotPostback', () => {
   it('extractLastAssistantReply returns the newest left-side text message', () => {

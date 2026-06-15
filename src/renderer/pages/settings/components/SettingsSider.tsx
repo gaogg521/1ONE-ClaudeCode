@@ -3,17 +3,7 @@ import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/pl
 import type { IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
 import { useExtensionSettingsTabs } from '@/renderer/hooks/extensions/useExtensionSettingsTabs';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
-import {
-  Communication,
-  Earth,
-  Lightning,
-  LinkCloud,
-  Puzzle,
-  Robot,
-  Speed,
-  System,
-  Toolkit,
-} from '@icon-park/react';
+import { Communication, Earth, Lightning, LinkCloud, Puzzle, Robot, Speed, System, Toolkit } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,15 +12,7 @@ import { Tooltip } from '@arco-design/web-react';
 import { getSiderTooltipProps } from '@/renderer/utils/ui/siderTooltip';
 
 /** Builtin settings tab IDs in display order (must match router paths). */
-export const BUILTIN_TAB_IDS = [
-  'agent',
-  'model',
-  'assistants',
-  'skills-hub',
-  'tools',
-  'webui',
-  'system',
-] as const;
+export const BUILTIN_TAB_IDS = ['agent', 'model', 'assistants', 'skills-hub', 'tools', 'webui', 'system'] as const;
 
 /** Remap removed builtin tab anchors so extension tabs keep a stable insertion point. */
 export function resolveSettingsTabAnchor(anchor: string): string {
@@ -156,9 +138,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
       })}
     >
       {!collapsed ? (
-        <div className='settings-sider__section-title'>
-          {t('nav.globalSettings', { defaultValue: '全局设置' })}
-        </div>
+        <div className='settings-sider__section-title'>{t('nav.globalSettings', { defaultValue: '全局设置' })}</div>
       ) : null}
       {menus.map((item) => {
         const itemRoute = `/settings/${item.path}`;

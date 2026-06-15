@@ -10,13 +10,7 @@ import {
 describe('getSidebarNavItems', () => {
   const personalGate = {
     can: (capability: string) =>
-      [
-        'personal.workspace',
-        'issues.personal',
-        'personal.agents',
-        'skills.local',
-        'mcp.personal',
-      ].includes(capability),
+      ['personal.workspace', 'issues.personal', 'personal.agents', 'skills.local', 'mcp.personal'].includes(capability),
   };
 
   const teamGate = {
@@ -76,9 +70,7 @@ describe('getSidebarNavItems', () => {
   });
 
   it('shows org nodes nav only when enterprise workspace is available', () => {
-    expect(getSidebarNavItems(personalGate).some((item) => item.path === '/agent-fleet')).toBe(
-      false
-    );
+    expect(getSidebarNavItems(personalGate).some((item) => item.path === '/agent-fleet')).toBe(false);
     expect(getSidebarNavItems(teamGate).some((item) => item.path === '/agent-fleet')).toBe(true);
   });
 });

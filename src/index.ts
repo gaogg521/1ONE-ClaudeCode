@@ -290,6 +290,12 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
     } else {
       setTimeout(() => {
         if (!mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+          console.warn('[1ONE] Dev early-show at 3s (Vite may still be compiling the first screen)');
+          showWindow();
+        }
+      }, 3_000);
+      setTimeout(() => {
+        if (!mainWindow.isDestroyed() && !mainWindow.isVisible()) {
           console.warn('[1ONE] Dev force-show after 20s (check renderer load logs above)');
           showWindow();
         }
@@ -335,19 +341,17 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   const rendererUrl = rendererUrlRaw ? resolveDevRendererUrl(rendererUrlRaw) : undefined;
   const fallbackFile = path.join(__dirname, '../renderer/index.html');
   const preferBuiltRendererInDev =
-    !app.isPackaged &&
-    process.env.ONE_DEV_LOAD_BUILT_RENDERER === '1' &&
-    fs.existsSync(fallbackFile);
+    !app.isPackaged && process.env.ONE_DEV_LOAD_BUILT_RENDERER === '1' && fs.existsSync(fallbackFile);
 
   const loadPackagedOrBuiltFile = (label: string): void => {
     console.log(`[1ONE] ${label}: ${fallbackFile}`);
     mainWindow.webContents.on('did-finish-load', () => {
       console.log('[1ONE] Renderer did-finish-load (file)', mainWindow.webContents.getURL());
     });
-    if (!app.isPackaged && process.env.ONE_OPEN_DEVTOOLS !== '0') {
+    if (!app.isPackaged && process.env.ONE_OPEN_DEVTOOLS === '1') {
       mainWindow.webContents.once('dom-ready', () => {
         mainWindow.webContents.openDevTools({ mode: 'detach' });
-        console.log('[1ONE] DevTools opened automatically (set ONE_OPEN_DEVTOOLS=0 to disable)');
+        console.log('[1ONE] DevTools opened (ONE_OPEN_DEVTOOLS=1)');
       });
     }
     mainWindow.loadFile(fallbackFile).catch((error) => {
@@ -363,7 +367,7 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
     let devToolsAutoOpened = false;
     const maxDevLoadAttempts = 8;
     const devRendererWatchdogMs = Number(process.env.ONE_DEV_RENDERER_WATCHDOG_MS) || 120_000;
-    const shouldAutoOpenDevTools = process.env.ONE_OPEN_DEVTOOLS !== '0';
+    const shouldAutoOpenDevTools = process.env.ONE_OPEN_DEVTOOLS === '1';
 
     const markDevNavigationSettled = (reason: string): void => {
       if (devNavigationSettled) {
@@ -379,7 +383,7 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
       }
       devToolsAutoOpened = true;
       mainWindow.webContents.openDevTools({ mode: 'detach' });
-      console.log('[1ONE] DevTools opened automatically (set ONE_OPEN_DEVTOOLS=0 to disable)');
+      console.log('[1ONE] DevTools opened (ONE_OPEN_DEVTOOLS=1)');
     };
 
     const stopInFlightNavigation = (): void => {
@@ -524,8 +528,7 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
     console.log('[1ONE] Main window closed');
   });
 
-  // Dev: DevTools auto-opens on first dom-ready (ONE_OPEN_DEVTOOLS=0 to disable).
-  // Packaged app: no auto-open; hidden 7-tap gesture in Layout or support builds only.
+  // Dev: DevTools only when ONE_OPEN_DEVTOOLS=1. Packaged app: settings / 7-tap gesture only.
 
   // Listen to DevTools state changes and notify Renderer
   mainWindow.webContents.on('devtools-opened', () => {

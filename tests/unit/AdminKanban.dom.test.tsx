@@ -15,10 +15,7 @@ vi.mock('react-router-dom', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (
-      _key: string,
-      options?: { defaultValue?: string; count?: number | string; name?: string; subject?: string }
-    ) =>
+    t: (_key: string, options?: { defaultValue?: string; count?: number | string; name?: string; subject?: string }) =>
       options?.defaultValue
         ?.replace('{{count}}', String(options?.count ?? ''))
         .replace('{{name}}', options?.name ?? '')
@@ -111,13 +108,7 @@ vi.mock('@arco-design/web-react', () => {
     value?: string;
     placeholder?: string;
     onChange?: (value: string) => void;
-  }) => (
-    <input
-      value={value}
-      placeholder={placeholder}
-      onChange={(event) => onChange?.(event.currentTarget.value)}
-    />
-  );
+  }) => <input value={value} placeholder={placeholder} onChange={(event) => onChange?.(event.currentTarget.value)} />;
   Input.TextArea = ({
     value,
     placeholder,
@@ -127,11 +118,7 @@ vi.mock('@arco-design/web-react', () => {
     placeholder?: string;
     onChange?: (value: string) => void;
   }) => (
-    <textarea
-      value={value}
-      placeholder={placeholder}
-      onChange={(event) => onChange?.(event.currentTarget.value)}
-    />
+    <textarea value={value} placeholder={placeholder} onChange={(event) => onChange?.(event.currentTarget.value)} />
   );
 
   const Typography = {

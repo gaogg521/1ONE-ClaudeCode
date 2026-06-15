@@ -5,10 +5,11 @@
  */
 
 import { ipcBridge } from '@/common';
-import { getAgentModes, supportsModeSwitch, type AgentModeOption } from '@/renderer/utils/model/agentModes';
+import { getDefaultSessionMode, resolveSessionMode } from '@/common/config/defaultSessionMode';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { iconColors } from '@/renderer/styles/colors';
 import { getAgentLogo } from '@/renderer/utils/model/agentLogo';
+import { getAgentModes, supportsModeSwitch, type AgentModeOption } from '@/renderer/utils/model/agentModes';
 import { Button, Dropdown, Menu, Message } from '@arco-design/web-react';
 import { Down, Robot } from '@icon-park/react';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -79,7 +80,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   const layout = useLayoutContext();
   const isMobile = Boolean(layout?.isMobile);
   const modes = getAgentModes(backend);
-  const defaultMode = modes[0]?.value ?? 'default';
+  const defaultMode = getDefaultSessionMode(backend);
   // Validate initialMode against available modes; fall back to backend's default
   // when the provided value doesn't match (e.g. opencode has 'build'/'plan', not 'default')
   const validInitialMode = initialMode && modes.some((m) => m.value === initialMode) ? initialMode : defaultMode;

@@ -27,8 +27,7 @@ function parseWorkspaceScopeSearch(search: string): {
 } {
   const params = new URLSearchParams(search);
   const value = params.get('scope');
-  const scope: WorkspaceScope =
-    value === 'personal' || value === 'team' || value === 'all' ? value : 'all';
+  const scope: WorkspaceScope = value === 'personal' || value === 'team' || value === 'all' ? value : 'all';
   return {
     scope,
     teamId: params.get('teamId'),
@@ -47,12 +46,12 @@ function resolveWorkspaceScope(search: string): WorkspaceScope {
 }
 
 const BACKEND_LABEL: Record<string, { label: string; color: string }> = {
-  claude:     { label: 'Claude Code', color: 'blue' },
-  gemini:     { label: 'Gemini',      color: 'green' },
-  qwen:       { label: 'Qwen',        color: 'orangered' },
-  codex:      { label: 'Codex',       color: 'purple' },
-  codebuddy:  { label: 'CodeBuddy',   color: 'cyan' },
-  opencode:   { label: 'OpenCode',    color: 'gold' },
+  claude: { label: 'Claude Code', color: 'blue' },
+  gemini: { label: 'Gemini', color: 'green' },
+  qwen: { label: 'Qwen', color: 'orangered' },
+  codex: { label: 'Codex', color: 'purple' },
+  codebuddy: { label: 'CodeBuddy', color: 'cyan' },
+  opencode: { label: 'OpenCode', color: 'gold' },
 };
 
 function getBackendInfo(conv: TChatConversation) {
@@ -191,7 +190,10 @@ const SessionCard: React.FC<{
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <span
             style={{
-              width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              flexShrink: 0,
               background: isRunning ? '#52c41a' : 'var(--color-text-4)',
             }}
           />
@@ -239,16 +241,25 @@ const SessionCard: React.FC<{
           </Tooltip>
           <Tooltip content='继续会话'>
             <Button
-              type='text' size='mini'
+              type='text'
+              size='mini'
               icon={<Play theme='outline' size={14} />}
-              onClick={(e) => { e.stopPropagation(); navigate(openPath); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(openPath);
+              }}
             />
           </Tooltip>
           <Tooltip content='删除'>
             <Button
-              type='text' size='mini' status='danger'
+              type='text'
+              size='mini'
+              status='danger'
               icon={<Delete theme='outline' size={14} />}
-              onClick={(e) => { e.stopPropagation(); onDelete(conv.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(conv.id);
+              }}
             />
           </Tooltip>
         </div>
@@ -310,7 +321,8 @@ const SessionsPage: React.FC = () => {
   const location = useLocation();
   const [scope, setScope] = useState<WorkspaceScope>(() => resolveWorkspaceScope(location.search));
   const navigate = useNavigate();
-  const { hasJoinedEnterprise, isEnterpriseEdition, showTeamsFeature, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
+  const { hasJoinedEnterprise, isEnterpriseEdition, showTeamsFeature, tenantLabel, showEnterpriseAdminNav } =
+    useEditionFeatures();
   const enterpriseMode = useWebuiEnterpriseMode();
   const { mutate: refreshTeams } = useTeamList();
   const {
@@ -536,11 +548,7 @@ const SessionsPage: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           {activeDateKey ? (
-            <Button
-              type='text'
-              icon={<Left theme='outline' size={16} />}
-              onClick={() => setActiveDateKey(null)}
-            >
+            <Button type='text' icon={<Left theme='outline' size={16} />} onClick={() => setActiveDateKey(null)}>
               {t('common.back', { defaultValue: '返回' })}
             </Button>
           ) : null}
@@ -548,12 +556,7 @@ const SessionsPage: React.FC = () => {
             {activeDateKey ? `${t('sessions.folderTitle')} · ${activeDateKey}` : t('sessions.title')}
           </h2>
         </div>
-        <Button
-          type='primary'
-          icon={<Add theme='outline' />}
-          size='small'
-          onClick={handleNewAction}
-        >
+        <Button type='primary' icon={<Add theme='outline' />} size='small' onClick={handleNewAction}>
           {isCurrentTeamScope
             ? t('team.continueTeamCollaboration', { defaultValue: '继续团队协同' })
             : scope === 'team'
@@ -639,11 +642,7 @@ const SessionsPage: React.FC = () => {
             })}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <Button
-              size='small'
-              type={scope === 'all' ? 'primary' : 'outline'}
-              onClick={() => applyScope('all')}
-            >
+            <Button size='small' type={scope === 'all' ? 'primary' : 'outline'} onClick={() => applyScope('all')}>
               {t('common.workspace.scopeAll', { defaultValue: '全部' })}
             </Button>
             <Tag size='small' color='gray'>
@@ -659,11 +658,7 @@ const SessionsPage: React.FC = () => {
             <Tag size='small' color='gray'>
               {scopeCounts.personal}
             </Tag>
-            <Button
-              size='small'
-              type={scope === 'team' ? 'primary' : 'outline'}
-              onClick={() => applyScope('team')}
-            >
+            <Button size='small' type={scope === 'team' ? 'primary' : 'outline'} onClick={() => applyScope('team')}>
               {t('common.workspace.scopeTeam', { defaultValue: '团队协同' })}
             </Button>
             <Tag size='small' color='gray'>
@@ -692,7 +687,16 @@ const SessionsPage: React.FC = () => {
       ) : null}
 
       {scopedIssueId && scopedIssueSubject ? (
-        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div
+          style={{
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
           <div style={{ fontSize: 12, color: 'var(--color-text-3)' }}>
             {t('common.workspace.issueContextHint', {
               defaultValue: '当前来自超级助手 Issue：{{subject}}',
@@ -702,7 +706,9 @@ const SessionsPage: React.FC = () => {
           <Button
             size='small'
             type='outline'
-            onClick={() => navigate(buildIssueKanbanPath(scopedIssueId, scopedIssueSubject, scopedTeamId, scopedTeamName))}
+            onClick={() =>
+              navigate(buildIssueKanbanPath(scopedIssueId, scopedIssueSubject, scopedTeamId, scopedTeamName))
+            }
           >
             {t('common.workspace.issueOpenKanban', {
               defaultValue: '打开当前 Issue 看板',
@@ -735,41 +741,26 @@ const SessionsPage: React.FC = () => {
               <Spin />
             </div>
           ) : (
-          <div style={{ padding: '40px 0' }}>
-            <Empty
-              description={
-                search
-                  ? t('sessions.emptySearch')
-                  : t('sessions.empty')
-              }
-            />
-            {!search && (
-              <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
-                <Button
-                  type='primary'
-                  icon={<Add theme='outline' />}
-                  onClick={handleNewAction}
-                >
-                  {isCurrentTeamScope
-                    ? t('team.continueTeamCollaboration', { defaultValue: '继续团队协同' })
-                    : scope === 'team'
-                      ? t('team.createTeamSession', { defaultValue: '新建团队会话' })
-                      : t('sessions.startFirst')}
-                </Button>
-              </div>
-            )}
-          </div>
+            <div style={{ padding: '40px 0' }}>
+              <Empty description={search ? t('sessions.emptySearch') : t('sessions.empty')} />
+              {!search && (
+                <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
+                  <Button type='primary' icon={<Add theme='outline' />} onClick={handleNewAction}>
+                    {isCurrentTeamScope
+                      ? t('team.continueTeamCollaboration', { defaultValue: '继续团队协同' })
+                      : scope === 'team'
+                        ? t('team.createTeamSession', { defaultValue: '新建团队会话' })
+                        : t('sessions.startFirst')}
+                  </Button>
+                </div>
+              )}
+            </div>
           )
         ) : (
           <>
             {isSearchActive ? (
               filtered.map((c) => (
-                <SessionCard
-                  key={c.id}
-                  conv={c}
-                  onDelete={handleDelete}
-                  matchPreview={contentMatchMap.get(c.id)}
-                />
+                <SessionCard key={c.id} conv={c} onDelete={handleDelete} matchPreview={contentMatchMap.get(c.id)} />
               ))
             ) : activeDateKey ? (
               activeFolder?.conversations.map((c) => <SessionCard key={c.id} conv={c} onDelete={handleDelete} />)
@@ -778,7 +769,9 @@ const SessionsPage: React.FC = () => {
                 <div style={{ marginBottom: 10, fontSize: 12, color: 'var(--color-text-3)' }}>
                   {t('sessions.recentLimitNote')}
                 </div>
-                {recent.map((c) => <SessionCard key={c.id} conv={c} onDelete={handleDelete} />)}
+                {recent.map((c) => (
+                  <SessionCard key={c.id} conv={c} onDelete={handleDelete} />
+                ))}
 
                 {folders.length > 0 ? (
                   <div style={{ marginTop: 10 }}>

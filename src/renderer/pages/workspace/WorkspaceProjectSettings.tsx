@@ -121,7 +121,12 @@ const WorkspaceProjectSettings: React.FC = () => {
             })}
           </Typography.Paragraph>
         </div>
-        <Button type='primary' icon={<Add theme='outline' size='16' />} loading={adding} onClick={() => void handleAddProject()}>
+        <Button
+          type='primary'
+          icon={<Add theme='outline' size='16' />}
+          loading={adding}
+          onClick={() => void handleAddProject()}
+        >
           {t('workspace.settings.projects.add', { defaultValue: '添加项目目录' })}
         </Button>
       </div>
@@ -151,7 +156,9 @@ const WorkspaceProjectSettings: React.FC = () => {
             >
               <div className='min-w-0'>
                 <div className='text-14px font-medium text-t-primary truncate'>{entry.displayName}</div>
-                <Typography.Ellipsis className='text-12px text-t-tertiary mt-4px max-w-full'>{entry.path}</Typography.Ellipsis>
+                <Typography.Ellipsis className='text-12px text-t-tertiary mt-4px max-w-full'>
+                  {entry.path}
+                </Typography.Ellipsis>
               </div>
               <div className='flex items-center gap-8px shrink-0'>
                 <Button

@@ -42,8 +42,13 @@ export async function syncAgentToolkitMcpToCliAgents(): Promise<void> {
 
   const result = await mcpService.syncMcpToAgents(enabledBuiltin, agents);
   if (!result.success) {
-    console.warn('[agentToolkit] Partial MCP CLI sync failures:', result.results.filter((r) => !r.success));
+    console.warn(
+      '[agentToolkit] Partial MCP CLI sync failures:',
+      result.results.filter((r) => !r.success)
+    );
   } else {
-    console.log(`[agentToolkit] Synced ${enabledBuiltin.length} builtin MCP server(s) to ${agents.length} CLI agent(s)`);
+    console.log(
+      `[agentToolkit] Synced ${enabledBuiltin.length} builtin MCP server(s) to ${agents.length} CLI agent(s)`
+    );
   }
 }

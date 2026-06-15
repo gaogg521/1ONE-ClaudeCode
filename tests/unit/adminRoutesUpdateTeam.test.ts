@@ -1,12 +1,7 @@
 import express from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  mockValidateToken,
-  mockGetDatabase,
-  prepareMock,
-  updateTeamMock,
-} = vi.hoisted(() => {
+const { mockValidateToken, mockGetDatabase, prepareMock, updateTeamMock } = vi.hoisted(() => {
   const updateTeam = vi.fn();
   const prepare = vi.fn((sql: string) => {
     if (sql.includes('UPDATE teams SET')) {
@@ -62,8 +57,7 @@ vi.mock('@process/webserver/auth/middleware/TokenMiddleware', () => ({
   },
 }));
 
-const passThroughMiddleware = (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
-  next();
+const passThroughMiddleware = (_req: express.Request, _res: express.Response, next: express.NextFunction) => next();
 
 vi.mock('@process/webserver/middleware/rateLimiter', () => ({
   apiRateLimiter: passThroughMiddleware,
@@ -150,8 +144,9 @@ vi.mock('@process/webserver/auth/instanceGovernance', () => ({
 
 function getUpdateTeamHandler(app: express.Express): express.RequestHandler {
   const layer = app.router.stack.find(
-    (entry: { route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> } }) =>
-      entry.route?.path === '/api/admin/teams/:id' && entry.route?.methods?.patch
+    (entry: {
+      route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> };
+    }) => entry.route?.path === '/api/admin/teams/:id' && entry.route?.methods?.patch
   );
 
   return layer?.route?.stack?.at(-1)?.handle as express.RequestHandler;

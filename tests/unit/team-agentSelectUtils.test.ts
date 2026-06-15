@@ -136,14 +136,8 @@ describe('filterDigitalEmployeeRuntimeAgents', () => {
   });
 
   it('still limits workspace digital employees to team-verified backends', () => {
-    const agents = [
-      makeAgent('claude'),
-      makeAgent('cursor'),
-      makeAgent('aionrs'),
-    ];
-    expect(filterDigitalEmployeeRuntimeAgents(agents, 'workspace').map((a) => a.backend)).toEqual([
-      'claude',
-    ]);
+    const agents = [makeAgent('claude'), makeAgent('cursor'), makeAgent('aionrs')];
+    expect(filterDigitalEmployeeRuntimeAgents(agents, 'workspace').map((a) => a.backend)).toEqual(['claude']);
   });
 });
 

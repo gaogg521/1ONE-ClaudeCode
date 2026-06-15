@@ -69,12 +69,9 @@ vi.mock('@arco-design/web-react', () => ({
     </button>
   ),
   Popover: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  Radio: Object.assign(
-    ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
-    {
-      Group: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-    }
-  ),
+  Radio: Object.assign(({ children }: { children?: React.ReactNode }) => <span>{children}</span>, {
+    Group: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  }),
   Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
   Tooltip: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));

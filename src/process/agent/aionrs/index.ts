@@ -49,9 +49,15 @@ export function mapAionrsToolResultDisplay(event: AionrsToolResultEvent): unknow
   const parsedOutput = tryParseJsonRecord(event.output);
   const outputRecord = parsedOutput ?? {};
   const candidateImgUrl =
-    [outputRecord.img_url, outputRecord.image_url, metadata.img_url, metadata.image_url, metadata.file_path, metadata.path, metadata.uri].find(
-      (value) => typeof value === 'string' && value.trim().length > 0
-    ) ?? null;
+    [
+      outputRecord.img_url,
+      outputRecord.image_url,
+      metadata.img_url,
+      metadata.image_url,
+      metadata.file_path,
+      metadata.path,
+      metadata.uri,
+    ].find((value) => typeof value === 'string' && value.trim().length > 0) ?? null;
   const candidateRelativePath =
     [outputRecord.relative_path, metadata.relative_path, metadata.relativePath].find(
       (value) => typeof value === 'string' && value.trim().length > 0
@@ -554,7 +560,11 @@ export class AionrsAgent {
       const dir = join(path, '..');
       const stale = readdirSync(dir).filter((f) => /^aionrs_ONE_.*\.toml$/.test(f));
       for (const f of stale) {
-        try { unlinkSync(join(dir, f)); } catch { /* ignore */ }
+        try {
+          unlinkSync(join(dir, f));
+        } catch {
+          /* ignore */
+        }
       }
     } catch {
       // Workspace may not be accessible; skip

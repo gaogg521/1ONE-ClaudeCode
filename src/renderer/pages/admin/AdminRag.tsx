@@ -84,11 +84,7 @@ const AdminRag: React.FC = () => {
     t('admin.rag.messages.loadFailed', { defaultValue: '加载文档失败' })
   );
 
-  const ragStatusState = useEnterpriseAsyncData(
-    getRagStatus,
-    { ready: true, message: '' },
-    ''
-  );
+  const ragStatusState = useEnterpriseAsyncData(getRagStatus, { ready: true, message: '' }, '');
 
   const { getTeamName, teams } = useTeamNameMap();
 
@@ -135,7 +131,9 @@ const AdminRag: React.FC = () => {
         Message.success(t('admin.rag.messages.deleteSuccess', { defaultValue: '文档删除成功' }));
         await documentsState.reload();
       } catch (e) {
-        Message.error(getEnterpriseActionError(e, t('admin.rag.messages.deleteFailed', { defaultValue: '删除文档失败' })));
+        Message.error(
+          getEnterpriseActionError(e, t('admin.rag.messages.deleteFailed', { defaultValue: '删除文档失败' }))
+        );
       }
     },
     [documentsState, t]
@@ -178,9 +176,7 @@ const AdminRag: React.FC = () => {
       setUrlTitle('');
       await documentsState.reload();
     } catch (error) {
-      Message.error(
-        getEnterpriseActionError(error, t('admin.rag.urlFailed', { defaultValue: '导入失败' }))
-      );
+      Message.error(getEnterpriseActionError(error, t('admin.rag.urlFailed', { defaultValue: '导入失败' })));
     } finally {
       setAdding(false);
     }
@@ -199,20 +195,13 @@ const AdminRag: React.FC = () => {
         title: feishuTitle.trim() || undefined,
         ...scopePayload(),
       });
-      Message.success(
-        t('admin.rag.feishuSuccess', { defaultValue: '飞书文档已提交导入，后台索引中' })
-      );
+      Message.success(t('admin.rag.feishuSuccess', { defaultValue: '飞书文档已提交导入，后台索引中' }));
       setFeishuVisible(false);
       setFeishuUrlInput('');
       setFeishuTitle('');
       await documentsState.reload();
     } catch (error) {
-      Message.error(
-        getEnterpriseActionError(
-          error,
-          t('admin.rag.feishuFailed', { defaultValue: '飞书文档导入失败' })
-        )
-      );
+      Message.error(getEnterpriseActionError(error, t('admin.rag.feishuFailed', { defaultValue: '飞书文档导入失败' })));
     } finally {
       setAdding(false);
     }
@@ -242,7 +231,9 @@ const AdminRag: React.FC = () => {
       setScopeEditVisible(false);
       await documentsState.reload();
     } catch (error) {
-      Message.error(getEnterpriseActionError(error, t('admin.rag.messages.scopeUpdateFailed', { defaultValue: '更新可见范围失败' })));
+      Message.error(
+        getEnterpriseActionError(error, t('admin.rag.messages.scopeUpdateFailed', { defaultValue: '更新可见范围失败' }))
+      );
     } finally {
       setScopeSaving(false);
     }
@@ -265,7 +256,10 @@ const AdminRag: React.FC = () => {
             {record.file_path || 'memory://text'}
           </Typography.Text>
           <div className='flex gap-6px flex-wrap'>
-            <Tag size='small' color={record.status === 'completed' ? 'green' : record.status === 'failed' ? 'red' : 'orange'}>
+            <Tag
+              size='small'
+              color={record.status === 'completed' ? 'green' : record.status === 'failed' ? 'red' : 'orange'}
+            >
               {record.status || 'pending'}
             </Tag>
             <Tag size='small' color='arcoblue'>
@@ -307,12 +301,7 @@ const AdminRag: React.FC = () => {
             title={t('common.confirmDelete', { defaultValue: '确认删除？' })}
             onOk={() => void handleDeleteDocument(record.id)}
           >
-            <Button
-              type='text'
-              status='danger'
-              size='small'
-              icon={<Delete theme='outline' size={14} />}
-            />
+            <Button type='text' status='danger' size='small' icon={<Delete theme='outline' size={14} />} />
           </Popconfirm>
         </Space>
       ),
@@ -329,23 +318,51 @@ const AdminRag: React.FC = () => {
           })}
           actions={
             <>
-              <Button type='outline' icon={<Plus />} onClick={() => { document.getElementById('rag-file-input')?.click(); }}>
+              <Button
+                type='outline'
+                icon={<Plus />}
+                onClick={() => {
+                  document.getElementById('rag-file-input')?.click();
+                }}
+              >
                 {t('admin.rag.uploadFile', { defaultValue: '上传文件' })}
               </Button>
-            <input id='rag-file-input' type='file' accept='.md,.txt,.docx,.html,.ts,.tsx,.js,.json,.css' style={{display:'none'}} onChange={async (e) => {
-              const file = e.target.files?.[0]; if (!file) return;
-              if (createScope.scope === 'team' && !createScope.teamId) {
-                Message.warning(t('admin.scope.teamRequired', { defaultValue: '请选择团队' }));
-                return;
-              }
-              setAdding(true);
-              try {
-                await uploadRagDocument(file, scopePayload());
-                Message.success(t('admin.rag.uploadSuccess',{defaultValue:'文件上传成功，后台索引导入中'}));
-                await documentsState.reload();
-              } catch (error) { Message.error(getEnterpriseActionError(error, t('admin.rag.uploadFailed',{defaultValue:'上传失败'}))); } finally { setAdding(false); (e.target as HTMLInputElement).value = ''; }
-            }} />
-              <Button type='outline' icon={<Plus />} onClick={() => { setUrlInput(''); setUrlTitle(''); setUrlVisible(true); }}>
+              <input
+                id='rag-file-input'
+                type='file'
+                accept='.md,.txt,.docx,.html,.ts,.tsx,.js,.json,.css'
+                style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (createScope.scope === 'team' && !createScope.teamId) {
+                    Message.warning(t('admin.scope.teamRequired', { defaultValue: '请选择团队' }));
+                    return;
+                  }
+                  setAdding(true);
+                  try {
+                    await uploadRagDocument(file, scopePayload());
+                    Message.success(t('admin.rag.uploadSuccess', { defaultValue: '文件上传成功，后台索引导入中' }));
+                    await documentsState.reload();
+                  } catch (error) {
+                    Message.error(
+                      getEnterpriseActionError(error, t('admin.rag.uploadFailed', { defaultValue: '上传失败' }))
+                    );
+                  } finally {
+                    setAdding(false);
+                    (e.target as HTMLInputElement).value = '';
+                  }
+                }}
+              />
+              <Button
+                type='outline'
+                icon={<Plus />}
+                onClick={() => {
+                  setUrlInput('');
+                  setUrlTitle('');
+                  setUrlVisible(true);
+                }}
+              >
                 {t('admin.rag.importUrl', { defaultValue: 'URL 导入' })}
               </Button>
               <Button
@@ -362,7 +379,10 @@ const AdminRag: React.FC = () => {
               <Button
                 type='primary'
                 icon={<Plus theme='outline' size={16} />}
-                onClick={() => { form.resetFields(); setAddVisible(true); }}
+                onClick={() => {
+                  form.resetFields();
+                  setAddVisible(true);
+                }}
               >
                 {t('admin.rag.addDoc', { defaultValue: '粘贴文本' })}
               </Button>
@@ -386,7 +406,8 @@ const AdminRag: React.FC = () => {
             type='warning'
             title={t('admin.rag.modelNotReady', { defaultValue: 'Embedding 模型未就绪' })}
             content={t('admin.rag.modelNotReadyDesc', {
-              defaultValue: '向量化模型正在初始化或下载中（约 80MB），导入的文档将在模型就绪后自动完成索引。若长时间未就绪，请检查网络连接或查看服务日志。错误信息：{{msg}}',
+              defaultValue:
+                '向量化模型正在初始化或下载中（约 80MB），导入的文档将在模型就绪后自动完成索引。若长时间未就绪，请检查网络连接或查看服务日志。错误信息：{{msg}}',
               msg: ragStatusState.data.message,
             })}
             closable
@@ -425,9 +446,7 @@ const AdminRag: React.FC = () => {
             bordered={false}
             extra={
               <Space size='small'>
-                <Typography.Text type='secondary'>
-                  Limit:
-                </Typography.Text>
+                <Typography.Text type='secondary'>Limit:</Typography.Text>
                 <InputNumber
                   size='mini'
                   style={{ width: 60 }}
@@ -457,7 +476,9 @@ const AdminRag: React.FC = () => {
 
               <List
                 loading={searching}
-                header={<div className='font-600 text-12px'>{t('admin.rag.results', { defaultValue: '检索结果' })}</div>}
+                header={
+                  <div className='font-600 text-12px'>{t('admin.rag.results', { defaultValue: '检索结果' })}</div>
+                }
                 noDataElement={
                   <div className='text-center py-24px text-t-muted text-12px'>
                     {t('admin.rag.noResults', { defaultValue: '暂无检索结果，输入上方查询词开始测试' })}
@@ -465,7 +486,10 @@ const AdminRag: React.FC = () => {
                 }
                 dataSource={searchResults}
                 render={(item: SearchResult, index) => (
-                  <List.Item key={index} className='p-12px border-b border-border-1 last:border-0 bg-fill-1 rounded-4px mb-8px'>
+                  <List.Item
+                    key={index}
+                    className='p-12px border-b border-border-1 last:border-0 bg-fill-1 rounded-4px mb-8px'
+                  >
                     <div className='flex justify-between items-start gap-8px mb-4px'>
                       <Typography.Text bold className='truncate max-w-180px text-13px'>
                         {item.title}
@@ -477,9 +501,7 @@ const AdminRag: React.FC = () => {
                     <div className='text-12px text-t-secondary leading-relaxed bg-fill-2 p-8px rounded-2px max-h-120px overflow-y-auto'>
                       {item.content}
                     </div>
-                    <div className='text-10px text-t-muted text-right mt-4px'>
-                      Chunk #{item.chunk_index}
-                    </div>
+                    <div className='text-10px text-t-muted text-right mt-4px'>Chunk #{item.chunk_index}</div>
                   </List.Item>
                 )}
               />
@@ -501,14 +523,20 @@ const AdminRag: React.FC = () => {
             <Form.Item
               label={t('admin.rag.modal.docTitle', { defaultValue: '文档标题' })}
               field='title'
-              rules={[{ required: true, message: t('admin.rag.validation.titleRequired', { defaultValue: '请输入标题' }) }]}
+              rules={[
+                { required: true, message: t('admin.rag.validation.titleRequired', { defaultValue: '请输入标题' }) },
+              ]}
             >
-              <Input placeholder={t('admin.rag.modal.titlePlaceholder', { defaultValue: '例如：1ONE Code 企业版部署说明' })} />
+              <Input
+                placeholder={t('admin.rag.modal.titlePlaceholder', { defaultValue: '例如：1ONE Code 企业版部署说明' })}
+              />
             </Form.Item>
             <Form.Item
               label={t('admin.rag.modal.docContent', { defaultValue: '文档内容' })}
               field='content'
-              rules={[{ required: true, message: t('admin.rag.validation.contentRequired', { defaultValue: '请输入内容' }) }]}
+              rules={[
+                { required: true, message: t('admin.rag.validation.contentRequired', { defaultValue: '请输入内容' }) },
+              ]}
             >
               <Input.TextArea
                 rows={12}
@@ -532,10 +560,18 @@ const AdminRag: React.FC = () => {
         >
           <Form layout='vertical'>
             <Form.Item label={t('admin.rag.urlLabel', { defaultValue: '文档 URL' })} required>
-              <Input value={urlInput} onChange={setUrlInput} placeholder='https://docs.example.com/guide 或 https://company.wiki/page' />
+              <Input
+                value={urlInput}
+                onChange={setUrlInput}
+                placeholder='https://docs.example.com/guide 或 https://company.wiki/page'
+              />
             </Form.Item>
             <Form.Item label={t('admin.rag.urlTitleLabel', { defaultValue: '标题（可选）' })}>
-              <Input value={urlTitle} onChange={setUrlTitle} placeholder={t('admin.rag.urlTitlePlaceholder', { defaultValue: '留空则自动从URL提取' })} />
+              <Input
+                value={urlTitle}
+                onChange={setUrlTitle}
+                placeholder={t('admin.rag.urlTitlePlaceholder', { defaultValue: '留空则自动从URL提取' })}
+              />
             </Form.Item>
           </Form>
         </Modal>

@@ -6,10 +6,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 vi.mock('@process/webserver/auth/middleware/TokenMiddleware', () => ({
   TokenMiddleware: {
     extractToken: vi.fn(() => null),
-    validateToken: () => ((req, _res, next) => {
-      req.user = { id: 'test-user-id', tenant_id: 'tenant-123', role: 'org_admin' };
-      next();
-    }) as RequestHandler,
+    validateToken: () =>
+      ((req, _res, next) => {
+        req.user = { id: 'test-user-id', tenant_id: 'tenant-123', role: 'org_admin' };
+        next();
+      }) as RequestHandler,
   },
 }));
 
@@ -69,16 +70,12 @@ function createResponseMock() {
 }
 
 function getRouteHandler(app: express.Express, method: string, path: string): RequestHandler {
-  const layer = app.router.stack.find(
-    (entry: any) => entry.route?.path === path && entry.route?.methods[method]
-  );
+  const layer = app.router.stack.find((entry: any) => entry.route?.path === path && entry.route?.methods[method]);
   return layer?.route?.stack?.at(-1)?.handle as RequestHandler;
 }
 
 async function runRouteStack(app: express.Express, method: string, path: string, req: any, res: any): Promise<void> {
-  const layer = app.router.stack.find(
-    (entry: any) => entry.route?.path === path && entry.route?.methods[method]
-  );
+  const layer = app.router.stack.find((entry: any) => entry.route?.path === path && entry.route?.methods[method]);
   const stack = layer?.route?.stack as Array<{ handle: RequestHandler }> | undefined;
   if (!stack) {
     throw new Error(`Route ${method.toUpperCase()} ${path} not found`);
@@ -141,9 +138,7 @@ describe('devopsRoutes', () => {
         data: [
           expect.objectContaining({
             id: 'epic-1',
-            children: [
-              expect.objectContaining({ id: 'story-1', parent_id: 'epic-1' }),
-            ],
+            children: [expect.objectContaining({ id: 'story-1', parent_id: 'epic-1' })],
           }),
         ],
       });
@@ -215,9 +210,7 @@ describe('devopsRoutes', () => {
     });
 
     it('PATCH /api/admin/requirements/:id - closes open stage and records process duration on status change', async () => {
-      mockGet
-        .mockReturnValueOnce({ id: 'req-1' })
-        .mockReturnValueOnce({ id: 'stage-open', entry_time: 1_000 });
+      mockGet.mockReturnValueOnce({ id: 'req-1' }).mockReturnValueOnce({ id: 'stage-open', entry_time: 1_000 });
 
       const handler = getRouteHandler(app, 'patch', '/api/admin/requirements/:id');
       const req = {
@@ -233,9 +226,7 @@ describe('devopsRoutes', () => {
       expect(mockDriver.prepare).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE value_stream_stages SET exit_time = ?, process_duration_ms = ? WHERE id = ?')
       );
-      expect(mockDriver.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO value_stream_stages')
-      );
+      expect(mockDriver.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO value_stream_stages'));
       expect(res.json).toHaveBeenCalledWith({ success: true });
     });
 
@@ -443,7 +434,9 @@ describe('devopsRoutes', () => {
 
       await handler(req, res, () => {});
 
-      expect(mockDriver.prepare).toHaveBeenCalledWith(expect.stringContaining('DELETE FROM rag_documents WHERE id = ?'));
+      expect(mockDriver.prepare).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE FROM rag_documents WHERE id = ?')
+      );
       expect(res.json).toHaveBeenCalledWith({ success: true });
     });
   });

@@ -7,15 +7,9 @@
 import { captureCsrfTokenFromResponse, getCsrfToken, withCsrfHeader } from '@process/webserver/middleware/csrfClient';
 import { CSRF_HEADER_NAME } from '@process/webserver/config/constants';
 import { webui } from '@/common/adapter/ipcBridge';
-import {
-  buildWebuiApiBaseCandidates,
-  type WebuiServerAddressSnapshot,
-} from '@/common/config/webuiApiBaseCandidates';
+import { buildWebuiApiBaseCandidates, type WebuiServerAddressSnapshot } from '@/common/config/webuiApiBaseCandidates';
 import { resolveWebuiAdminPort } from '@/common/config/webuiLoginAccess';
-import {
-  ONE_WEBUI_CLIENT_DESKTOP,
-  ONE_WEBUI_CLIENT_HEADER,
-} from '@/common/config/webuiClientHeaders';
+import { ONE_WEBUI_CLIENT_DESKTOP, ONE_WEBUI_CLIENT_HEADER } from '@/common/config/webuiClientHeaders';
 import { mergeEnterpriseApiOrigins } from '@/common/config/enterpriseApiOrigins';
 import { normalizeEnterpriseApiError } from '@/renderer/utils/enterpriseApi/error';
 import { isElectronDesktop } from '@/renderer/utils/platform';
@@ -175,10 +169,7 @@ function captureCsrfTokenFromLoopbackHeaders(headers: Record<string, string>): v
   );
 }
 
-async function ensureCsrfTokenForMutation(
-  bases: string[],
-  authHeaders: HeadersInit | undefined
-): Promise<void> {
+async function ensureCsrfTokenForMutation(bases: string[], authHeaders: HeadersInit | undefined): Promise<void> {
   if (getCsrfToken()) {
     return;
   }
@@ -199,10 +190,7 @@ async function ensureCsrfTokenForMutation(
   throw lastError instanceof Error ? lastError : new Error('WEBUI_NOT_RUNNING');
 }
 
-async function ensureCsrfTokenViaLoopback(
-  port: number,
-  authHeaders: HeadersInit | undefined
-): Promise<void> {
+async function ensureCsrfTokenViaLoopback(port: number, authHeaders: HeadersInit | undefined): Promise<void> {
   if (getCsrfToken()) {
     return;
   }
@@ -220,11 +208,7 @@ async function ensureCsrfTokenViaLoopback(
   }
 }
 
-async function fetchWebuiApiViaLoopbackIpc(
-  port: number,
-  path: string,
-  init?: RequestInit
-): Promise<Response> {
+async function fetchWebuiApiViaLoopbackIpc(port: number, path: string, init?: RequestInit): Promise<Response> {
   const method = (init?.method ?? 'GET').toUpperCase();
   const authHeaders = await getDesktopWebuiAuthHeaders(init?.headers);
   const isMutation = method !== 'GET' && method !== 'HEAD';
@@ -291,8 +275,7 @@ export async function fetchWebuiApi(path: string, init?: RequestInit): Promise<R
   const headers = isMutation ? withCsrfHeader(authHeaders) : authHeaders;
   const body = isMutation ? withCsrfFormData(init?.body ?? null) : init?.body;
   const credentials =
-    init?.credentials ??
-    (path === '/api/auth/user' && !getDesktopWebuiBearerToken() ? 'omit' : 'include');
+    init?.credentials ?? (path === '/api/auth/user' && !getDesktopWebuiBearerToken() ? 'omit' : 'include');
 
   let lastError: unknown = null;
   for (const candidate of bases) {
@@ -345,10 +328,7 @@ export function readWebuiApiErrorMessage(body: Record<string, unknown> | null, r
 }
 
 function unwrapSuccessEnvelope<T>(body: Record<string, unknown>): T {
-  if (
-    Object.prototype.hasOwnProperty.call(body, 'data') &&
-    (body as { data?: unknown }).data !== undefined
-  ) {
+  if (Object.prototype.hasOwnProperty.call(body, 'data') && (body as { data?: unknown }).data !== undefined) {
     return (body as { data: T }).data;
   }
   return body as unknown as T;

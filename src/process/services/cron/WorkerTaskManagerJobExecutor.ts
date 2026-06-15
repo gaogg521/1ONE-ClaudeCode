@@ -46,7 +46,11 @@ export class WorkerTaskManagerJobExecutor implements ICronJobExecutor {
     return this.busyGuard.isProcessing(conversationId);
   }
 
-  async executeJob(job: CronJob, onAcquired?: (conversationId: string) => void, preparedConversationId?: string): Promise<string | void> {
+  async executeJob(
+    job: CronJob,
+    onAcquired?: (conversationId: string) => void,
+    preparedConversationId?: string
+  ): Promise<string | void> {
     let conversationId = preparedConversationId ?? job.metadata.conversationId;
 
     // Create a conversation when needed (skip if already prepared):
@@ -206,9 +210,7 @@ export class WorkerTaskManagerJobExecutor implements ICronJobExecutor {
         ...extra,
         personalAgentId,
         tenantId: 'default',
-        ...(preset?.presetContext
-          ? { presetContext: preset.presetContext, presetRules: preset.presetContext }
-          : {}),
+        ...(preset?.presetContext ? { presetContext: preset.presetContext, presetRules: preset.presetContext } : {}),
         ...(preset?.enabledSkills?.length ? { enabledSkills: preset.enabledSkills } : {}),
         ...(preset?.preferredModelId ? { currentModelId: preset.preferredModelId } : {}),
       };
@@ -364,10 +366,7 @@ export class WorkerTaskManagerJobExecutor implements ICronJobExecutor {
    *   Pre-computed by the caller so the same condition drives both prompt and detection.
    */
   private buildMessageText(job: CronJob, hasSkill: boolean, inlineSkillSuggest: boolean): string {
-    const rawText = enrichAutopilotPrompt(
-      job.target.payload.text,
-      job.metadata.agentConfig?.autopilotContext
-    );
+    const rawText = enrichAutopilotPrompt(job.target.payload.text, job.metadata.agentConfig?.autopilotContext);
 
     if (job.target.executionMode !== 'new_conversation') {
       return buildExistingConvPrompt(job.name, job.schedule.description, rawText);

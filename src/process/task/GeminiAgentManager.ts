@@ -20,6 +20,8 @@ import { isProviderLiteLlmProxy } from '@/common/utils/litellmGateway';
 import { getProviderAuthType } from '@/common/utils/platformAuthType';
 import { AuthType, getOauthInfoWithCache, Storage } from '@office-ai/aioncli-core';
 import { GeminiApprovalStore } from '../agent/gemini/GeminiApprovalStore';
+import { isYoloSessionMode, resolveSessionMode } from '@/common/config/defaultSessionMode';
+import { shouldAutoApproveToolConfirmation } from '@/common/chat/toolConfirmationPolicy';
 import { ToolConfirmationOutcome } from '../agent/gemini/cli/tools/tools';
 import { getDatabase } from '@process/services/database';
 import { addMessage, addOrUpdateMessage, nextTickToLocalFinish } from '@process/utils/message';
@@ -169,7 +171,8 @@ export class GeminiAgentManager extends BaseAgentManager<
     this.enabledSkills = data.enabledSkills;
     this.excludeBuiltinSkills = data.excludeBuiltinSkills;
     this.forceYoloMode = data.yoloMode;
-    this.currentMode = data.sessionMode || 'default';
+    this.currentMode = resolveSessionMode('gemini', data.sessionMode);
+    this.yoloMode = isYoloSessionMode(this.currentMode) || Boolean(data.yoloMode);
     this.webSearchEngine = data.webSearchEngine;
     this.teamMcpStdioConfig = data.teamMcpStdioConfig;
     // 向后兼容 / Backward compatible
@@ -619,6 +622,11 @@ export class GeminiAgentManager extends BaseAgentManager<
    * Returns true if auto-approved (caller should skip UI), false otherwise.
    */
   private tryAutoApprove(content: IMessageToolGroup['content'][number]): boolean {
+    if (shouldAutoApproveToolConfirmation(content)) {
+      void this.postMessagePromise(content.callId, ToolConfirmationOutcome.ProceedOnce);
+      return true;
+    }
+
     const type = content.confirmationDetails?.type;
     console.log(
       `[GeminiAgentManager] tryAutoApprove: currentMode=${this.currentMode}, confirmationType=${type}, callId=${content.callId}`
@@ -637,6 +645,11 @@ export class GeminiAgentManager extends BaseAgentManager<
         void this.postMessagePromise(content.callId, ToolConfirmationOutcome.ProceedOnce);
         return true;
       }
+    }
+    // Default mode: read-only info confirmations (e.g. image/file read) should not hang the UI.
+    if (type === 'info') {
+      void this.postMessagePromise(content.callId, ToolConfirmationOutcome.ProceedOnce);
+      return true;
     }
     return false;
   }
@@ -673,7 +686,26 @@ export class GeminiAgentManager extends BaseAgentManager<
           });
           return;
         }
-        if (!question || !hasOptions) return;
+        if (!question || !hasOptions) {
+          this.addConfirmation({
+            title: content.confirmationDetails?.title || content.name || 'Awaiting Confirmation',
+            id: content.callId,
+            action: content.confirmationDetails?.type ?? 'info',
+            description: description || content.description || content.name || 'Tool requires confirmation',
+            callId: content.callId,
+            options: [
+              {
+                label: 'messages.confirmation.yesAllowOnce',
+                value: ToolConfirmationOutcome.ProceedOnce,
+              },
+              {
+                label: 'messages.confirmation.no',
+                value: ToolConfirmationOutcome.Cancel,
+              },
+            ],
+          });
+          return;
+        }
         // Extract commandType from exec confirmations for "always allow" memory
         const commandType =
           content.confirmationDetails?.type === 'exec'

@@ -96,17 +96,23 @@ vi.mock('@process/webserver/auth/enterpriseJoinService', () => ({
 
 function getRouteHandler(app: express.Express, method: 'get' | 'put', path: string): express.RequestHandler {
   const layer = app.router.stack.find(
-    (entry: { route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> } }) =>
-      entry.route?.path === path && entry.route?.methods?.[method]
+    (entry: {
+      route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> };
+    }) => entry.route?.path === path && entry.route?.methods?.[method]
   );
 
   return layer?.route?.stack?.at(-1)?.handle as express.RequestHandler;
 }
 
-function getRouteStack(app: express.Express, method: 'get' | 'put', path: string): Array<{ handle: express.RequestHandler }> {
+function getRouteStack(
+  app: express.Express,
+  method: 'get' | 'put',
+  path: string
+): Array<{ handle: express.RequestHandler }> {
   const layer = app.router.stack.find(
-    (entry: { route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> } }) =>
-      entry.route?.path === path && entry.route?.methods?.[method]
+    (entry: {
+      route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> };
+    }) => entry.route?.path === path && entry.route?.methods?.[method]
   );
 
   return layer?.route?.stack ?? [];

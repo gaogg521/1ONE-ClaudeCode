@@ -201,7 +201,7 @@ const McpManagement: React.FC<McpManagementProps> = ({ message }) => {
       <div className='flex items-center justify-between mb-12px'>
         <div className='flex items-center gap-8px'>
           <span className='text-14px font-medium text-t-primary'>{t('settings.mcpSettings')}</span>
-          {(visibleMcpServers.length + extensionMcpServers.length) > 0 && (
+          {visibleMcpServers.length + extensionMcpServers.length > 0 && (
             <span className='text-12px text-t-secondary bg-fill-2 px-6px py-1px rd-full'>
               {visibleMcpServers.length + extensionMcpServers.length}
             </span>
@@ -226,7 +226,9 @@ const McpManagement: React.FC<McpManagementProps> = ({ message }) => {
         {visibleMcpServers.length === 0 && extensionMcpServers.length === 0 ? (
           <div className='flex flex-col items-center justify-center py-32px gap-8px rd-12px border border-dashed border-[var(--color-border-2)]'>
             <span className='text-24px'>🔌</span>
-            <span className='text-14px font-medium text-t-primary'>{t('settings.mcpNoServersFound') || '暂无 MCP 服务器'}</span>
+            <span className='text-14px font-medium text-t-primary'>
+              {t('settings.mcpNoServersFound') || '暂无 MCP 服务器'}
+            </span>
             <span className='text-12px text-t-secondary text-center max-w-280px'>
               {'MCP 服务器可以让 AI 调用外部工具和服务，例如浏览器控制、文件操作、数据库查询等。'}
             </span>
@@ -235,7 +237,10 @@ const McpManagement: React.FC<McpManagementProps> = ({ message }) => {
               size='small'
               icon={<Plus size='13' />}
               className='mt-4px'
-              onClick={() => { setImportMode('json'); showAddMcpModal(); }}
+              onClick={() => {
+                setImportMode('json');
+                showAddMcpModal();
+              }}
             >
               {'添加第一个服务器'}
             </Button>

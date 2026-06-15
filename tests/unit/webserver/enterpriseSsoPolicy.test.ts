@@ -36,9 +36,10 @@ describe('enterpriseSsoPolicy', () => {
       enabled: provider === 'feishu',
     }));
 
-    await expect(
-      assertEnterpriseSsoEnableAllowed({ provider: 'ldap', enabled: true })
-    ).resolves.toEqual({ ok: false, conflicts: ['feishu'] });
+    await expect(assertEnterpriseSsoEnableAllowed({ provider: 'ldap', enabled: true })).resolves.toEqual({
+      ok: false,
+      conflicts: ['feishu'],
+    });
   });
 
   it('allows multiple SSO providers when explicitly confirmed', async () => {

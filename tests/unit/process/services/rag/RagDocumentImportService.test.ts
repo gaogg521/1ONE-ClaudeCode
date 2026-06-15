@@ -12,10 +12,7 @@ vi.mock('@process/services/rag/RAGService', () => ({
   },
 }));
 
-import {
-  parseFeishuDocumentUrl,
-  runRagDocumentIndexing,
-} from '@process/services/rag/RagDocumentImportService';
+import { parseFeishuDocumentUrl, runRagDocumentIndexing } from '@process/services/rag/RagDocumentImportService';
 
 describe('RagDocumentImportService', () => {
   const runMock = vi.fn();
@@ -45,11 +42,7 @@ describe('RagDocumentImportService', () => {
       content: 'hello world',
     });
 
-    expect(runMock.mock.calls).toContainEqual([
-      'model download failed',
-      expect.any(Number),
-      'doc-1',
-    ]);
+    expect(runMock.mock.calls).toContainEqual(['model download failed', expect.any(Number), 'doc-1']);
   });
 
   it('parses direct docx and wiki Feishu urls', () => {

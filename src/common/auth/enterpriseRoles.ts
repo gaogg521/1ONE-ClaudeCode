@@ -6,11 +6,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-  canAccessEnterpriseRoute,
-  ENTERPRISE_HOME_PATH,
-  getEnterpriseRouteMetaByPath,
-} from './enterpriseRoutes';
+import { canAccessEnterpriseRoute, ENTERPRISE_HOME_PATH, getEnterpriseRouteMetaByPath } from './enterpriseRoutes';
 
 export const ENTERPRISE_JOIN_PATH = '/enterprise/join';
 export const ENTERPRISE_ADMIN_HOME_PATH = ENTERPRISE_HOME_PATH;
@@ -44,9 +40,7 @@ export function isWebuiBuiltinAdministrator(principal: WebuiPrincipal | null | u
 /** @deprecated 使用 isWebuiBuiltinAdministrator；保留别名避免大范围重命名 */
 export const canAccessEnterpriseAdminConsole = isWebuiBuiltinAdministrator;
 
-export function resolveWebuiAdministratorRole(
-  principal: WebuiPrincipal | null | undefined
-): string | undefined {
+export function resolveWebuiAdministratorRole(principal: WebuiPrincipal | null | undefined): string | undefined {
   return principal?.role;
 }
 
@@ -121,11 +115,7 @@ export function resolveOAuthPostLoginRedirectPath(
   tenantId: string | undefined
 ): string {
   const target = resolvePostLoginRedirectPath(rawTarget, role, tenantId, false);
-  if (
-    target.startsWith('/settings') ||
-    target.startsWith('/login') ||
-    target === '/enterprise/auth'
-  ) {
+  if (target.startsWith('/settings') || target.startsWith('/login') || target === '/enterprise/auth') {
     return hasEnterpriseTenant(tenantId) ? ENTERPRISE_WORKSPACE_PATH : '/sessions';
   }
   return target;

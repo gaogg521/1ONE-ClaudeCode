@@ -204,10 +204,7 @@ function matchesPathPrefix(pathname: string, target: string): boolean {
   return pathname === target || pathname.startsWith(`${target}/`);
 }
 
-export function canAccessEnterpriseRouteRole(
-  requiredRole: EnterpriseRouteRole,
-  role: string | undefined
-): boolean {
+export function canAccessEnterpriseRouteRole(requiredRole: EnterpriseRouteRole, role: string | undefined): boolean {
   if (requiredRole === 'member') {
     return Boolean(role);
   }
@@ -217,10 +214,7 @@ export function canAccessEnterpriseRouteRole(
   return isEnterpriseAdminRole(role);
 }
 
-export function canAccessEnterprisePlatform(
-  platformPolicy: EnterprisePlatformPolicy,
-  isDesktop: boolean
-): boolean {
+export function canAccessEnterprisePlatform(platformPolicy: EnterprisePlatformPolicy, isDesktop: boolean): boolean {
   if (platformPolicy === 'all') {
     return true;
   }
@@ -230,15 +224,11 @@ export function canAccessEnterprisePlatform(
   return !isDesktop;
 }
 
-export function getEnterpriseRouteMetaByKey(
-  key: EnterpriseNavKey
-): EnterpriseRouteMeta | undefined {
+export function getEnterpriseRouteMetaByKey(key: EnterpriseNavKey): EnterpriseRouteMeta | undefined {
   return ENTERPRISE_ROUTE_META.find((route) => route.key === key);
 }
 
-export function getEnterpriseRouteMetaByPath(
-  pathname: string
-): EnterpriseRouteMeta | undefined {
+export function getEnterpriseRouteMetaByPath(pathname: string): EnterpriseRouteMeta | undefined {
   let matched: EnterpriseRouteMeta | undefined;
   let matchedLength = -1;
 
@@ -269,10 +259,7 @@ export function canAccessEnterpriseRoute(
   );
 }
 
-export function getVisibleEnterpriseNavKeys(
-  role: string | undefined,
-  isDesktop: boolean
-): EnterpriseNavKey[] {
+export function getVisibleEnterpriseNavKeys(role: string | undefined, isDesktop: boolean): EnterpriseNavKey[] {
   return ENTERPRISE_ROUTE_META.filter(
     (route) => route.visibleInNav !== false && canAccessEnterpriseRoute(route, role, isDesktop)
   ).map((route) => route.key);

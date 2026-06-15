@@ -96,9 +96,7 @@ export async function recordDigitalEmployeeCronRunFinished(
     return;
   }
   const updatedAgents = team.agents.map((agent) =>
-    agent.slotId === autopilot.agentSlotId
-      ? withFinishedDigitalEmployeeRun(agent, { conversationId }, patch)
-      : agent
+    agent.slotId === autopilot.agentSlotId ? withFinishedDigitalEmployeeRun(agent, { conversationId }, patch) : agent
   );
   await teamRepo.update(autopilot.teamId, { agents: updatedAgents, updatedAt: Date.now() });
 }

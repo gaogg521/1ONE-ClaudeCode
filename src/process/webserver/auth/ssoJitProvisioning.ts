@@ -44,9 +44,7 @@ function sanitizeUsername(raw: string): string {
     return '';
   }
 
-  const unicodeCleaned = trimmed
-    .replace(/[^\p{L}\p{N}._@-]/gu, '')
-    .replace(/^\.+|\.+$/g, '');
+  const unicodeCleaned = trimmed.replace(/[^\p{L}\p{N}._@-]/gu, '').replace(/^\.+|\.+$/g, '');
   if (unicodeCleaned.length >= 2) {
     return unicodeCleaned.slice(0, 64);
   }
@@ -61,10 +59,7 @@ function isGeneratedSsoUsername(username: string): boolean {
   return GENERATED_SSO_USERNAME.test(username.trim());
 }
 
-async function maybeUpgradeSsoDisplayUsername(
-  user: AuthUser,
-  preferredDisplayName: string
-): Promise<AuthUser> {
+async function maybeUpgradeSsoDisplayUsername(user: AuthUser, preferredDisplayName: string): Promise<AuthUser> {
   const next = sanitizeUsername(preferredDisplayName);
   if (next.length < 2 || !isGeneratedSsoUsername(user.username) || user.username === next) {
     return user;

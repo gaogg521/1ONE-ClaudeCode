@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getImageBase64Mock = vi.fn();
 const getFileMetadataMock = vi.fn();
+const resolveAttachmentDisplayPathMock = vi.fn();
 
 vi.mock('../../src/common', () => ({
   ipcBridge: {
@@ -21,6 +22,9 @@ vi.mock('../../src/common', () => ({
       },
       getFileMetadata: {
         invoke: (...args: any[]) => getFileMetadataMock(...args),
+      },
+      resolveAttachmentDisplayPath: {
+        invoke: (...args: any[]) => resolveAttachmentDisplayPathMock(...args),
       },
     },
   },
@@ -37,6 +41,7 @@ vi.mock('@arco-design/web-react', () => ({
   Image: ({ src, alt, style, ...rest }: any) => (
     <img data-testid='arco-image' src={src} alt={alt} style={style} {...rest} />
   ),
+  Spin: () => <span data-testid='arco-spin'>loading</span>,
 }));
 
 vi.mock('@icon-park/react', () => ({
@@ -59,6 +64,7 @@ describe('FilePreview', () => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     getFileMetadataMock.mockResolvedValue({ size: 1024 });
+    resolveAttachmentDisplayPathMock.mockImplementation(async ({ path }: { path: string }) => path);
   });
 
   afterEach(() => {
@@ -70,12 +76,12 @@ describe('FilePreview', () => {
 
     render(<FilePreview path='/workspace/test.png' onRemove={vi.fn()} />);
 
-    // Flush the initial promise resolution
+    await flushMicrotasks();
     await flushMicrotasks();
 
     const img = screen.getByTestId('arco-image');
     expect(img).toHaveAttribute('src', REAL_IMAGE_B64);
-    expect(getImageBase64Mock).toHaveBeenCalledTimes(1);
+    expect(getImageBase64Mock).toHaveBeenCalledWith({ path: '/workspace/test.png' });
   });
 
   it('retries when getImageBase64 returns placeholder then succeeds', async () => {
@@ -120,6 +126,22 @@ describe('FilePreview', () => {
     // After max retries, should show the placeholder
     const img = screen.getByTestId('arco-image');
     expect(img).toHaveAttribute('src', PLACEHOLDER_SVG);
+  });
+
+  it('loads image from resolved workspace path when temp path is stale', async () => {
+    getImageBase64Mock.mockResolvedValue(REAL_IMAGE_B64);
+    resolveAttachmentDisplayPathMock.mockResolvedValue('/workspace/photo.png');
+
+    render(<FilePreview path='/cache/temp/photo.png' onRemove={vi.fn()} conversationId='conv-1' />);
+
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    expect(resolveAttachmentDisplayPathMock).toHaveBeenCalledWith({
+      path: '/cache/temp/photo.png',
+      conversationId: 'conv-1',
+    });
+    expect(getImageBase64Mock).toHaveBeenCalledWith({ path: '/workspace/photo.png' });
   });
 
   it('renders non-image files without retry logic', async () => {

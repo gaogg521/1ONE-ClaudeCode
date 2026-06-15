@@ -188,8 +188,7 @@ function getFeishuAuthorizeHandler(app: express.Express): RequestHandler {
 
 function getRouteHandler(app: express.Express, path: string): RequestHandler {
   const layer = app.router.stack.find(
-    (entry: { route?: { path?: string; stack?: Array<{ handle: RequestHandler }> } }) =>
-      entry.route?.path === path
+    (entry: { route?: { path?: string; stack?: Array<{ handle: RequestHandler }> } }) => entry.route?.path === path
   );
 
   return layer?.route?.stack?.at(-1)?.handle as RequestHandler;
@@ -256,14 +255,13 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
     expect(mockGetProvider).toHaveBeenCalledWith('feishu');
     expect((res as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect).toHaveBeenCalledOnce();
 
-    const redirectLocation = (res as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock.calls[0][0] as string;
+    const redirectLocation = (res as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock
+      .calls[0][0] as string;
     const authorizeUrl = new URL(redirectLocation);
 
     expect(authorizeUrl.origin).toBe('https://passport.feishu.cn');
     expect(authorizeUrl.searchParams.get('client_id')).toBe('cli_a90abd387f395bca');
-    expect(authorizeUrl.searchParams.get('redirect_uri')).toBe(
-      'http://192.168.11.159:25809/api/auth/feishu/callback'
-    );
+    expect(authorizeUrl.searchParams.get('redirect_uri')).toBe('http://192.168.11.159:25809/api/auth/feishu/callback');
     expect(authorizeUrl.searchParams.get('state')).toBeTruthy();
     expect(authorizeUrl.searchParams.get('redirect_uri')).not.toContain('localhost');
   });
@@ -359,7 +357,8 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
       vi.fn()
     );
 
-    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock.calls[0][0] as string;
+    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock
+      .calls[0][0] as string;
     const state = new URL(authorizeLocation).searchParams.get('state');
 
     const callbackHandler = getRouteHandler(app, '/api/auth/feishu/callback');
@@ -414,7 +413,8 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
       vi.fn()
     );
 
-    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock.calls[0][0] as string;
+    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock
+      .calls[0][0] as string;
     const state = new URL(authorizeLocation).searchParams.get('state');
 
     const callbackHandler = getRouteHandler(app, '/api/auth/feishu/callback');
@@ -473,7 +473,8 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
       vi.fn()
     );
 
-    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock.calls[0][0] as string;
+    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock
+      .calls[0][0] as string;
     const state = new URL(authorizeLocation).searchParams.get('state');
 
     const callbackHandler = getRouteHandler(app, '/api/auth/feishu/callback');
@@ -531,7 +532,8 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
       vi.fn()
     );
 
-    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock.calls[0][0] as string;
+    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock
+      .calls[0][0] as string;
     const state = new URL(authorizeLocation).searchParams.get('state');
 
     const callbackHandler = getRouteHandler(app, '/api/auth/dingtalk/callback');
@@ -588,7 +590,8 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
       vi.fn()
     );
 
-    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock.calls[0][0] as string;
+    const authorizeLocation = (authorizeRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect.mock
+      .calls[0][0] as string;
     const state = new URL(authorizeLocation).searchParams.get('state');
 
     const callbackHandler = getRouteHandler(app, '/api/auth/wecom/callback');

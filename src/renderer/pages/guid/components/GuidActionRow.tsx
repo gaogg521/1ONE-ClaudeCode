@@ -157,7 +157,9 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
             });
         } else if (key === 'workspace') {
           if (isWebUI) {
-            Message.info(t('conversation.welcome.webWorkspaceHint', { defaultValue: '浏览器模式将自动使用服务端工作区目录。' }));
+            Message.info(
+              t('conversation.welcome.webWorkspaceHint', { defaultValue: '浏览器模式将自动使用服务端工作区目录。' })
+            );
             return;
           }
           ipcBridge.dialog.showOpen

@@ -8,6 +8,7 @@ import {
   useMessageLstCache,
   useRemoveMessageByMsgId,
 } from '@/renderer/pages/conversation/Messages/hooks';
+import { emitter } from '@/renderer/utils/emitter';
 
 const mockGetConversationMessagesInvoke = vi.fn();
 
@@ -27,6 +28,7 @@ type TestMessage = {
   conversation_id: string;
   type: string;
   position?: string;
+  status?: string;
   content: {
     content: string;
   };
@@ -63,6 +65,25 @@ const MutationProbe = () => {
         }
       >
         add-message
+      </button>
+      <button
+        type='button'
+        onClick={() =>
+          addOrUpdateMessage(
+            {
+              id: 'msg-1',
+              msg_id: 'msg-1',
+              conversation_id: 'conv-1',
+              type: 'text',
+              position: 'right',
+              status: 'finish',
+              content: { content: 'queued message' },
+            },
+            false
+          )
+        }
+      >
+        finalize-message
       </button>
       <button type='button' onClick={() => removeMessageByMsgId('msg-1')}>
         remove-message
@@ -143,6 +164,77 @@ describe('message hooks cache merge', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('mutated-messages').textContent).not.toContain('msg-1');
+    });
+  });
+
+  it('updates user message status when content is unchanged', async () => {
+    mockGetConversationMessagesInvoke.mockResolvedValue([]);
+
+    render(
+      <MessageListProvider value={[]}>
+        <MutationProbe />
+      </MessageListProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'add-message' }));
+
+    await waitFor(() => {
+      const parsed = JSON.parse(screen.getByTestId('mutated-messages').textContent ?? '[]') as TestMessage[];
+      expect(parsed[0]?.status).toBeUndefined();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'finalize-message' }));
+
+    await waitFor(() => {
+      const parsed = JSON.parse(screen.getByTestId('mutated-messages').textContent ?? '[]') as TestMessage[];
+      expect(parsed[0]?.status).toBe('finish');
+    });
+  });
+
+  it('replaces in-memory list with DB snapshot on conversation.messages.sync', async () => {
+    const dbMessages: TestMessage[] = [
+      {
+        id: 'db-assistant',
+        msg_id: 'turn-1',
+        conversation_id: 'conv-1',
+        type: 'text',
+        position: 'left',
+        content: { content: 'CentOS terminal shows operone-deploy npm error' },
+      },
+    ];
+    mockGetConversationMessagesInvoke.mockResolvedValue(dbMessages);
+
+    const staleStream: TestMessage[] = [
+      {
+        id: 'stream-assistant',
+        msg_id: 'turn-1',
+        conversation_id: 'conv-1',
+        type: 'text',
+        position: 'left',
+        content: {
+          content: 'This looks like a Windows configuration issue in package.json based on the screenshot text...',
+        },
+      },
+    ];
+
+    render(
+      <MessageListProvider value={staleStream}>
+        <CacheProbe conversationId='conv-1' />
+      </MessageListProvider>
+    );
+
+    await waitFor(() => {
+      const parsed = JSON.parse(screen.getByTestId('messages').textContent ?? '[]') as TestMessage[];
+      expect(parsed[0]?.content.content).toContain('Windows configuration');
+    });
+
+    emitter.emit('conversation.messages.sync', { conversationId: 'conv-1' });
+
+    await waitFor(() => {
+      const parsed = JSON.parse(screen.getByTestId('messages').textContent ?? '[]') as TestMessage[];
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0]?.content.content).toContain('CentOS terminal');
+      expect(parsed[0]?.content.content).not.toContain('Windows configuration');
     });
   });
 });

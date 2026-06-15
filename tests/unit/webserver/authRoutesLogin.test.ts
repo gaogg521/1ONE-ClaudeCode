@@ -155,8 +155,7 @@ vi.mock('@process/webserver/auth/registerBrowserWebuiLoginSession', () => ({
 
 function getLoginHandler(app: express.Express): RequestHandler {
   const layer = app.router.stack.find(
-    (entry: { route?: { path?: string; stack?: Array<{ handle: RequestHandler }> } }) =>
-      entry.route?.path === '/login'
+    (entry: { route?: { path?: string; stack?: Array<{ handle: RequestHandler }> } }) => entry.route?.path === '/login'
   );
 
   return layer?.route?.stack?.at(-1)?.handle as RequestHandler;
@@ -164,8 +163,7 @@ function getLoginHandler(app: express.Express): RequestHandler {
 
 function getRouteHandler(app: express.Express, path: string): RequestHandler {
   const layer = app.router.stack.find(
-    (entry: { route?: { path?: string; stack?: Array<{ handle: RequestHandler }> } }) =>
-      entry.route?.path === path
+    (entry: { route?: { path?: string; stack?: Array<{ handle: RequestHandler }> } }) => entry.route?.path === path
   );
 
   return layer?.route?.stack?.at(-1)?.handle as RequestHandler;
@@ -640,9 +638,7 @@ describe('registerAuthRoutes /api/auth/login-ui', () => {
   it('returns db_unavailable when provider list fails due to database corruption', async () => {
     mockListProviders.mockRejectedValue(
       new Error('Failed to list auth providers', {
-        cause: new Error(
-          'Database is corrupted and cannot be recovered. Please manually delete: C:\\test\\1one.db'
-        ),
+        cause: new Error('Database is corrupted and cannot be recovered. Please manually delete: C:\\test\\1one.db'),
       })
     );
 

@@ -30,7 +30,9 @@ const LocalAgents: React.FC = () => {
     async () => {
       const result = await ipcBridge.acpConversation.getAvailableAgents.invoke();
       if (result.success && result.data) {
-        return result.data.filter((agent) => agent.backend !== 'remote' && (agent.backend !== 'custom' || agent.isExtension));
+        return result.data.filter(
+          (agent) => agent.backend !== 'remote' && (agent.backend !== 'custom' || agent.isExtension)
+        );
       }
       return [];
     },
@@ -60,20 +62,14 @@ const LocalAgents: React.FC = () => {
       }
       idx += 1;
       if (idx >= attempts.length) return;
-      window.setTimeout(
-        (): void => {
-          void tick();
-        },
-        attempts[idx]
-      );
+      window.setTimeout((): void => {
+        void tick();
+      }, attempts[idx]);
     };
 
-    window.setTimeout(
-      (): void => {
-        void tick();
-      },
-      attempts[idx]
-    );
+    window.setTimeout((): void => {
+      void tick();
+    }, attempts[idx]);
     return () => {
       cancelled = true;
     };

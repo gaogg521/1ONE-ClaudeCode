@@ -55,7 +55,11 @@ const LoginMethodSwitcher: React.FC<LoginMethodSwitcherProps> = ({
       </div>
 
       <div className='login-page__method-switcher-shell'>
-        <div className='login-page__method-switcher' role='tablist' aria-label={t('login.methods.sectionTitle', { defaultValue: '登录方式' })}>
+        <div
+          className='login-page__method-switcher'
+          role='tablist'
+          aria-label={t('login.methods.sectionTitle', { defaultValue: '登录方式' })}
+        >
           {options.map((option) => (
             <button
               key={option.id}

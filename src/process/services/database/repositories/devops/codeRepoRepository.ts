@@ -5,17 +5,10 @@
  */
 
 import { getDatabase } from '@process/services/database';
-import {
-  VISIBLE_RESOURCE_WHERE,
-  type ScopedResourceRow,
-} from '@process/webserver/routes/resourceScope';
+import { VISIBLE_RESOURCE_WHERE, type ScopedResourceRow } from '@process/webserver/routes/resourceScope';
 
 export class CodeRepoRepository {
-  static async list(
-    tenantId: string,
-    userId: string,
-    isAdmin: boolean
-  ): Promise<unknown[]> {
+  static async list(tenantId: string, userId: string, isAdmin: boolean): Promise<unknown[]> {
     const db = await getDatabase();
     const driver = db.getDriver();
     if (isAdmin) {
@@ -24,9 +17,7 @@ export class CodeRepoRepository {
         .all(tenantId) as unknown[];
     }
     return driver
-      .prepare(
-        `SELECT * FROM code_repos WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY created_at DESC`
-      )
+      .prepare(`SELECT * FROM code_repos WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY created_at DESC`)
       .all(tenantId, userId, tenantId, userId) as unknown[];
   }
 
@@ -76,8 +67,6 @@ export class CodeRepoRepository {
 
   static async delete(id: string, tenantId: string): Promise<void> {
     const db = await getDatabase();
-    db.getDriver()
-      .prepare(`DELETE FROM code_repos WHERE id=? AND tenant_id=?`)
-      .run(id, tenantId);
+    db.getDriver().prepare(`DELETE FROM code_repos WHERE id=? AND tenant_id=?`).run(id, tenantId);
   }
 }

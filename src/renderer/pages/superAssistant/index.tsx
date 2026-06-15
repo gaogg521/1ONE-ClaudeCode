@@ -23,18 +23,13 @@ import CreateSharedTaskModal from './components/CreateSharedTaskModal';
 import SuperAssistantHeader from './components/SuperAssistantHeader';
 import IssuesWorkbench from './components/IssuesWorkbench';
 import AgentsTab, { type AgentCardRef } from './components/AgentsTab';
-import DigitalEmployeeDetailModal, {
-  type DigitalEmployeeDetailTarget,
-} from './components/DigitalEmployeeDetailModal';
+import DigitalEmployeeDetailModal, { type DigitalEmployeeDetailTarget } from './components/DigitalEmployeeDetailModal';
 import CreateWorkspaceAgentModal from './components/CreateWorkspaceAgentModal';
 import ManageWorkspaceAgentModal, { type ManagedAgentRef } from './components/ManageWorkspaceAgentModal';
 import CreateTaskDialog from '@/renderer/pages/cron/ScheduledTasksPage/CreateTaskDialog';
 import { useAssistantCollaborationTeams } from './hooks/useAssistantCollaborationTeams';
 import { useConversationAgents } from '@/renderer/pages/conversation/hooks/useConversationAgents';
-import {
-  deletePersonalDigitalEmployee,
-  deleteTeamDigitalEmployee,
-} from './utils/deleteDigitalEmployee';
+import { deletePersonalDigitalEmployee, deleteTeamDigitalEmployee } from './utils/deleteDigitalEmployee';
 import {
   agentFromKey,
   resolveConversationType,
@@ -130,10 +125,7 @@ type SuperAssistantIssueTaskMetadata = {
   manualBlockerMessage?: string | null;
 };
 
-function areIssueAssignmentsEqual(
-  a: SuperAssistantIssueAssignmentMap,
-  b: SuperAssistantIssueAssignmentMap
-): boolean {
+function areIssueAssignmentsEqual(a: SuperAssistantIssueAssignmentMap, b: SuperAssistantIssueAssignmentMap): boolean {
   const aKeys = Object.keys(a);
   const bKeys = Object.keys(b);
   if (aKeys.length !== bKeys.length) {
@@ -265,13 +257,12 @@ const SuperAssistantPage: React.FC = () => {
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [sharedTaskVisible, setSharedTaskVisible] = useState(false);
   const [createDigitalEmployeeVisible, setCreateDigitalEmployeeVisible] = useState(false);
-  const [digitalEmployeeDetailTarget, setDigitalEmployeeDetailTarget] =
-    useState<DigitalEmployeeDetailTarget | null>(null);
-  const [agentAutomationVisible, setAgentAutomationVisible] = useState(false);
-  const [automationAgent, setAutomationAgent] = useState<ManagedAgentRef | null>(null);
-  const [agentAutopilotDefaults, setAgentAutopilotDefaults] = useState<SuperAssistantAutopilotDefaults | null>(
+  const [digitalEmployeeDetailTarget, setDigitalEmployeeDetailTarget] = useState<DigitalEmployeeDetailTarget | null>(
     null
   );
+  const [agentAutomationVisible, setAgentAutomationVisible] = useState(false);
+  const [automationAgent, setAutomationAgent] = useState<ManagedAgentRef | null>(null);
+  const [agentAutopilotDefaults, setAgentAutopilotDefaults] = useState<SuperAssistantAutopilotDefaults | null>(null);
   const [automationInitialPrompt, setAutomationInitialPrompt] = useState<string | undefined>(undefined);
   const [editingCronJob, setEditingCronJob] = useState<ICronJob | undefined>(undefined);
   const [managingAgent, setManagingAgent] = useState<ManagedAgentRef | null>(null);
@@ -343,16 +334,12 @@ const SuperAssistantPage: React.FC = () => {
     });
   }, [featuredIssueId, issueLookup]);
 
-  const currentIssue =
-    (selectedIssueId ? issueLookup[selectedIssueId] : null) ?? superAssistantData.featuredIssue;
-  const currentIssueAssignment = currentIssue ? issueAssignments[currentIssue.id] ?? null : null;
-  const currentIssueAssignmentTaskId = currentIssue ? issueAssignmentTaskIds[currentIssue.id] ?? null : null;
+  const currentIssue = (selectedIssueId ? issueLookup[selectedIssueId] : null) ?? superAssistantData.featuredIssue;
+  const currentIssueAssignment = currentIssue ? (issueAssignments[currentIssue.id] ?? null) : null;
+  const currentIssueAssignmentTaskId = currentIssue ? (issueAssignmentTaskIds[currentIssue.id] ?? null) : null;
   const primaryTeamId = superAssistantData.primaryTeam?.id ?? null;
   const teamsVersionKey = useMemo(
-    () =>
-      teams
-        .map((team) => `${team.id}:${team.tenantId ?? ''}:${team.name}:${team.agents.length}`)
-        .join('|'),
+    () => teams.map((team) => `${team.id}:${team.tenantId ?? ''}:${team.name}:${team.agents.length}`).join('|'),
     [teams]
   );
   const teamLookup = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teamsVersionKey]);
@@ -378,10 +365,7 @@ const SuperAssistantPage: React.FC = () => {
         return;
       }
       const slotId = task.owner || metadata.slotId;
-      const agentName =
-        metadata.agentName ||
-        team.agents.find((agent) => agent.slotId === slotId)?.agentName ||
-        slotId;
+      const agentName = metadata.agentName || team.agents.find((agent) => agent.slotId === slotId)?.agentName || slotId;
       nextAssignments[metadata.issueId] = {
         issueId: metadata.issueId,
         issueSubject: metadata.issueSubject,
@@ -664,11 +648,7 @@ const SuperAssistantPage: React.FC = () => {
         mentionUserIds: superAssistantData.openAssigneeUserIds,
         postBackToIssue: Boolean(currentIssue?.id),
       }),
-    [
-      currentIssue?.id,
-      superAssistantData.openAssigneeUserIds,
-      superAssistantData.skillNames,
-    ]
+    [currentIssue?.id, superAssistantData.openAssigneeUserIds, superAssistantData.skillNames]
   );
 
   const autopilotDefaults = useMemo(
@@ -700,9 +680,7 @@ const SuperAssistantPage: React.FC = () => {
             ownerUserId: user?.id ?? DESKTOP_OPERATOR_USER_ID,
           });
           if (!record) {
-            Message.warning(
-              t('common.superAssistant.agentNotFound', { defaultValue: '未找到该智能体' })
-            );
+            Message.warning(t('common.superAssistant.agentNotFound', { defaultValue: '未找到该智能体' }));
             return;
           }
           const defaults = buildAutopilotForPersonalAgent(record, {
@@ -724,16 +702,19 @@ const SuperAssistantPage: React.FC = () => {
             job?.target.payload.text ?? buildPersonalDigitalEmployeeCronPrompt(record, currentIssue)
           );
         } else {
-          setAgentAutopilotDefaults(
-            buildAutopilotForTeamAgent(managed.teamId, managed.teamAgent) ?? null
-          );
+          setAgentAutopilotDefaults(buildAutopilotForTeamAgent(managed.teamId, managed.teamAgent) ?? null);
           setAutomationInitialPrompt(undefined);
         }
         setAgentAutomationVisible(true);
       } catch (error) {
-        Message.error(getEnterpriseActionError(error, t('common.superAssistant.agentScheduleFailed', {
-          defaultValue: '打开定时任务失败',
-        })));
+        Message.error(
+          getEnterpriseActionError(
+            error,
+            t('common.superAssistant.agentScheduleFailed', {
+              defaultValue: '打开定时任务失败',
+            })
+          )
+        );
       }
     },
     [
@@ -810,8 +791,7 @@ const SuperAssistantPage: React.FC = () => {
     async (job: ICronJob) => {
       try {
         const autopilot = job.metadata.agentConfig?.autopilotContext;
-        const isDigitalEmployeeCron =
-          autopilot?.source === 'super_assistant' && Boolean(autopilot.agentSlotId);
+        const isDigitalEmployeeCron = autopilot?.source === 'super_assistant' && Boolean(autopilot.agentSlotId);
         await ipcBridge.cron.runNow.invoke({ jobId: job.id });
         if (isDigitalEmployeeCron) {
           Message.success(
@@ -910,7 +890,8 @@ const SuperAssistantPage: React.FC = () => {
 
   const handleRunAgentNow = useCallback(
     async (ref: AgentCardRef | ManagedAgentRef): Promise<void> => {
-      const managed = 'teamAgent' in ref ? ref : resolveManagedAgent(teams, superAssistantData.agentExecutionGroups, ref);
+      const managed =
+        'teamAgent' in ref ? ref : resolveManagedAgent(teams, superAssistantData.agentExecutionGroups, ref);
       if (!managed) {
         return;
       }
@@ -933,7 +914,12 @@ const SuperAssistantPage: React.FC = () => {
           setDigitalEmployeeDetailTarget(buildDigitalEmployeeDetailTarget(managed));
           await superAssistantData.refresh();
         } catch (error) {
-          Message.error(getEnterpriseActionError(error, t('common.superAssistant.agentRunNowFailed', { defaultValue: '启动智能体会话失败' })));
+          Message.error(
+            getEnterpriseActionError(
+              error,
+              t('common.superAssistant.agentRunNowFailed', { defaultValue: '启动智能体会话失败' })
+            )
+          );
         }
         return;
       }
@@ -960,18 +946,15 @@ const SuperAssistantPage: React.FC = () => {
         await superAssistantData.refresh();
         await refreshCollaborationTeams();
       } catch (error) {
-        Message.error(getEnterpriseActionError(error, t('common.superAssistant.agentRunNowFailed', { defaultValue: '启动智能体会话失败' })));
+        Message.error(
+          getEnterpriseActionError(
+            error,
+            t('common.superAssistant.agentRunNowFailed', { defaultValue: '启动智能体会话失败' })
+          )
+        );
       }
     },
-    [
-      buildDigitalEmployeeDetailTarget,
-      currentIssue,
-      refreshCollaborationTeams,
-      superAssistantData,
-      t,
-      teams,
-      user?.id,
-    ]
+    [buildDigitalEmployeeDetailTarget, currentIssue, refreshCollaborationTeams, superAssistantData, t, teams, user?.id]
   );
 
   const handleViewDigitalEmployeeDetail = useCallback(
@@ -1114,11 +1097,7 @@ const SuperAssistantPage: React.FC = () => {
   const handleOpenSkillsHub = () => navigate('/skills');
   const handleOpenMcp = () => navigate('/mcp');
   const handleOpenAgentSettings = () => navigate('/settings/agent');
-  const handleAssignIssue = async (
-    slotId: string,
-    agentName: string,
-    options?: { navigateAfter?: boolean }
-  ) => {
+  const handleAssignIssue = async (slotId: string, agentName: string, options?: { navigateAfter?: boolean }) => {
     if (!currentIssue || !superAssistantData.primaryTeam) {
       return;
     }
@@ -1356,13 +1335,15 @@ const SuperAssistantPage: React.FC = () => {
       <div className='space-y-12px'>
         <Card>
           <div className='flex items-center gap-8px flex-wrap'>
-            {([
-              ['overview', t('common.superAssistant.tabs.workbench', { defaultValue: '工作台' })],
-              ['agents', t('common.superAssistant.tabs.agents', { defaultValue: '数字员工' })],
-              ['issues', t('common.superAssistant.tabs.dispatch', { defaultValue: '调度视图' })],
-              ['skills', t('common.superAssistant.tabs.skills', { defaultValue: 'Skills' })],
-              ['settings', t('common.superAssistant.tabs.settings', { defaultValue: '设置' })],
-            ] as const).map(([tab, label]) => (
+            {(
+              [
+                ['overview', t('common.superAssistant.tabs.workbench', { defaultValue: '工作台' })],
+                ['agents', t('common.superAssistant.tabs.agents', { defaultValue: '数字员工' })],
+                ['issues', t('common.superAssistant.tabs.dispatch', { defaultValue: '调度视图' })],
+                ['skills', t('common.superAssistant.tabs.skills', { defaultValue: 'Skills' })],
+                ['settings', t('common.superAssistant.tabs.settings', { defaultValue: '设置' })],
+              ] as const
+            ).map(([tab, label]) => (
               <Button
                 key={tab}
                 size='small'
@@ -1427,9 +1408,7 @@ const SuperAssistantPage: React.FC = () => {
                           })}
                         </Tag>
                       ) : (
-                        <Tag color='gray'>
-                          {t('common.superAssistant.unassigned', { defaultValue: '未分配' })}
-                        </Tag>
+                        <Tag color='gray'>{t('common.superAssistant.unassigned', { defaultValue: '未分配' })}</Tag>
                       )}
                     </div>
                     <div className='flex items-center gap-8px flex-wrap'>
@@ -1497,9 +1476,7 @@ const SuperAssistantPage: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <Empty
-                    description={t('common.superAssistant.noIssues', { defaultValue: '暂无共享 Issue' })}
-                  />
+                  <Empty description={t('common.superAssistant.noIssues', { defaultValue: '暂无共享 Issue' })} />
                 )}
               </Card>
             </div>

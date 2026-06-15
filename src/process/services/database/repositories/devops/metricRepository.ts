@@ -22,15 +22,7 @@ export class MetricRepository {
         `INSERT INTO metrics_snapshots (id, tenant_id, metric_type, metric_name, value, period, recorded_at)
          VALUES (?,?,?,?,?,?,?)`
       )
-      .run(
-        input.id,
-        input.tenantId,
-        input.metricType,
-        input.metricName,
-        input.value,
-        input.period,
-        input.recordedAt
-      );
+      .run(input.id, input.tenantId, input.metricType, input.metricName, input.value, input.period, input.recordedAt);
   }
 
   static async listSnapshots(tenantId: string, metricType?: string): Promise<unknown[]> {

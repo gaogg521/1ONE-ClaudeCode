@@ -13,11 +13,7 @@ type ModulePageHeaderProps = {
   actions?: React.ReactNode;
 };
 
-const ModulePageHeader: React.FC<ModulePageHeaderProps> = ({
-  title,
-  description,
-  actions,
-}) => {
+const ModulePageHeader: React.FC<ModulePageHeaderProps> = ({ title, description, actions }) => {
   return (
     <div className='flex items-center justify-between mb-16px gap-12px flex-wrap'>
       <div>

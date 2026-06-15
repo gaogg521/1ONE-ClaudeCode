@@ -369,8 +369,8 @@ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp /Applications/
 
 ### 配置文件位置
 
-| 平台    | 配置文件位置                                             |
-| ------- | -------------------------------------------------------- |
+| 平台    | 配置文件位置                                           |
+| ------- | ------------------------------------------------------ |
 | Windows | `%APPDATA%/1ONE/webui.config.json`                     |
 | macOS   | `~/Library/Application Support/1ONE/webui.config.json` |
 | Linux   | `~/.config/1ONE/webui.config.json`                     |

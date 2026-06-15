@@ -53,7 +53,7 @@ async function main() {
       }
       if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
         return {
-          content: [{ type: 'text' as const, text: "Error: url must start with http:// or https://." }],
+          content: [{ type: 'text' as const, text: 'Error: url must start with http:// or https://.' }],
           isError: true,
         };
       }
@@ -82,10 +82,7 @@ async function main() {
       `Use when the user asks to search the web, 百度搜索, 搜一下, or needs fresh information from the internet.`,
     {
       query: z.string().describe('Search keywords or question'),
-      engine: z
-        .enum(SEARCH_ENGINES)
-        .optional()
-        .describe('Search engine: baidu (default), bing, or duckduckgo'),
+      engine: z.enum(SEARCH_ENGINES).optional().describe('Search engine: baidu (default), bing, or duckduckgo'),
     },
     async ({ query, engine }) => {
       const trimmed = query?.trim() || '';
@@ -98,16 +95,19 @@ async function main() {
 
       try {
         const parsedEngine = parseEngine(engine);
-        const { engine: resolvedEngine, query: resolvedQuery, searchUrl, text, resultLinks } =
-          await fetchSearchResultsAsPlainText(trimmed, parsedEngine);
+        const {
+          engine: resolvedEngine,
+          query: resolvedQuery,
+          searchUrl,
+          text,
+          resultLinks,
+        } = await fetchSearchResultsAsPlainText(trimmed, parsedEngine);
         const sourcesBlock = formatSourcesBlock(searchUrl, resultLinks);
         return {
           content: [
             {
               type: 'text' as const,
-              text:
-                `Web search (${resolvedEngine}) for: ${resolvedQuery}\n` +
-                `${sourcesBlock}\n\n---\n\n${text}`,
+              text: `Web search (${resolvedEngine}) for: ${resolvedQuery}\n` + `${sourcesBlock}\n\n---\n\n${text}`,
             },
           ],
         };

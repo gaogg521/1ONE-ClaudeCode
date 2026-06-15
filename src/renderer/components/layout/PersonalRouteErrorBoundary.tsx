@@ -8,10 +8,7 @@ import React, { useCallback, useState } from 'react';
 import { Button, Card, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import {
-  buildCacheBustedWebuiUrl,
-  resetWebuiClientCaches,
-} from '@/renderer/services/webuiCacheReset';
+import { buildCacheBustedWebuiUrl, resetWebuiClientCaches } from '@/renderer/services/webuiCacheReset';
 
 type PersonalRouteErrorBoundaryProps = {
   children: React.ReactNode;

@@ -12,11 +12,7 @@ import {
 } from '@process/webserver/routes/resourceScope';
 
 export class ArtifactRepository {
-  static async listRepos(
-    tenantId: string,
-    userId: string,
-    isAdmin: boolean
-  ): Promise<unknown[]> {
+  static async listRepos(tenantId: string, userId: string, isAdmin: boolean): Promise<unknown[]> {
     const db = await getDatabase();
     const driver = db.getDriver();
     if (isAdmin) {
@@ -73,16 +69,10 @@ export class ArtifactRepository {
 
   static async deleteRepo(id: string, tenantId: string): Promise<void> {
     const db = await getDatabase();
-    db.getDriver()
-      .prepare(`DELETE FROM artifact_repos WHERE id=? AND tenant_id=?`)
-      .run(id, tenantId);
+    db.getDriver().prepare(`DELETE FROM artifact_repos WHERE id=? AND tenant_id=?`).run(id, tenantId);
   }
 
-  static async listArtifacts(
-    tenantId: string,
-    userId: string,
-    isAdmin: boolean
-  ): Promise<unknown[]> {
+  static async listArtifacts(tenantId: string, userId: string, isAdmin: boolean): Promise<unknown[]> {
     const db = await getDatabase();
     const driver = db.getDriver();
     const statement = isAdmin
@@ -101,8 +91,6 @@ export class ArtifactRepository {
              AND ${VISIBLE_RESOURCE_WHERE_ALIAS('a')}
            ORDER BY a.created_at DESC`
         );
-    return (isAdmin
-      ? statement.all(tenantId)
-      : statement.all(tenantId, userId, tenantId, userId)) as unknown[];
+    return (isAdmin ? statement.all(tenantId) : statement.all(tenantId, userId, tenantId, userId)) as unknown[];
   }
 }

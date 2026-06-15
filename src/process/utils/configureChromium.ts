@@ -229,7 +229,9 @@ function findAvailablePort(preferredPort: number): number {
       continue;
     }
     if (!probeTcpBindAvailable(p)) {
-      console.log(`[CDP] Port ${p} is not bindable on 127.0.0.1 (often another Chrome/Electron using remote debugging)`);
+      console.log(
+        `[CDP] Port ${p} is not bindable on 127.0.0.1 (often another Chrome/Electron using remote debugging)`
+      );
       continue;
     }
     if (p !== preferredPort) {

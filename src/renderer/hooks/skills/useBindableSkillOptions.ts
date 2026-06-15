@@ -26,10 +26,7 @@ export function encodeOrgSkillId(id: string): string {
   return `org:${id}`;
 }
 
-export function resolveBindableSkillLabel(
-  skillId: string,
-  options: BindableSkillOption[]
-): string {
+export function resolveBindableSkillLabel(skillId: string, options: BindableSkillOption[]): string {
   const normalized = normalizeStoredSkillId(skillId);
   return options.find((item) => item.value === normalized)?.label ?? normalized.replace(/^(local|org):/, '');
 }

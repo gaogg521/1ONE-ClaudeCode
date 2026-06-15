@@ -5,7 +5,15 @@
  * stability when navigating settings pages with extensions loaded.
  */
 import { test, expect } from '../fixtures';
-import { goToGuid, goToSettings, goToExtensionSettings, takeScreenshot, waitForSettle, ROUTES, expectUrlContains } from '../helpers';
+import {
+  goToGuid,
+  goToSettings,
+  goToExtensionSettings,
+  takeScreenshot,
+  waitForSettle,
+  ROUTES,
+  expectUrlContains,
+} from '../helpers';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Themes from Extensions

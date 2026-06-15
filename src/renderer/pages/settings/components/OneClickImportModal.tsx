@@ -176,7 +176,9 @@ const OneClickImportModal: React.FC<OneClickImportModalProps> = ({ visible, onCa
         <div>
           <div className='mb-3 flex items-center gap-2'>
             <Check theme='filled' size={20} fill={iconColors.success} />
-            <span className='settings-card-header__title'>{t('settings.mcpToolsLoaded', { count: importableServers.length })}</span>
+            <span className='settings-card-header__title'>
+              {t('settings.mcpToolsLoaded', { count: importableServers.length })}
+            </span>
           </div>
           <div className='settings-modal-list max-h-[200px] overflow-y-auto p-8px'>
             {importableServers.map((server, index) => (

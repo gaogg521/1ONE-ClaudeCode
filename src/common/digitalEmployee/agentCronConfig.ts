@@ -39,9 +39,7 @@ export function resolvePersonalAgentCronConfig(agent: PersonalAgent): ICronAgent
   }
 
   if (agent.customAgentId) {
-    const isPreset =
-      backend === 'gemini' ||
-      (ACP_ROUTED_PRESET_TYPES as readonly string[]).includes(backend);
+    const isPreset = backend === 'gemini' || (ACP_ROUTED_PRESET_TYPES as readonly string[]).includes(backend);
     return {
       backend,
       name: agent.name,

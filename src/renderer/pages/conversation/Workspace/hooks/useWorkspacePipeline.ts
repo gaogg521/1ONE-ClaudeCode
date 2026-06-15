@@ -58,14 +58,20 @@ export function useWorkspacePipeline(workspace: string): UseWorkspacePipelineRes
         setPipelines(res.data);
         if (!selectedPipelineId) setSelectedPipelineId(res.data[0].id);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [selectedPipelineId]);
 
   const triggerRun = useCallback(async () => {
     if (!selectedPipelineId) return;
     setTriggering(true);
     try {
-      const res = await apiMutate<{ success: boolean; data: { runId: string } }>(`/api/admin/pipelines/run/${selectedPipelineId}`, 'POST', {});
+      const res = await apiMutate<{ success: boolean; data: { runId: string } }>(
+        `/api/admin/pipelines/run/${selectedPipelineId}`,
+        'POST',
+        {}
+      );
       if (res?.success) {
         setActiveRun({
           id: res.data.runId,
@@ -74,7 +80,11 @@ export function useWorkspacePipeline(workspace: string): UseWorkspacePipelineRes
           stages_status_json: null,
         });
       }
-    } catch { /* ignore */ } finally { setTriggering(false); }
+    } catch {
+      /* ignore */
+    } finally {
+      setTriggering(false);
+    }
   }, [selectedPipelineId, t]);
 
   // Poll active run every 1.5s
@@ -84,7 +94,9 @@ export function useWorkspacePipeline(workspace: string): UseWorkspacePipelineRes
       try {
         const res = await api<{ success: boolean; data: IPipelineRun }>(`/api/admin/pipelines/runs/${activeRun.id}`);
         if (res?.success) setActiveRun(res.data);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }, 1500);
     return () => clearInterval(timer);
   }, [activeRun]);
@@ -104,5 +116,13 @@ export function useWorkspacePipeline(workspace: string): UseWorkspacePipelineRes
     return () => unsub();
   }, [loadPipelines, selectedPipelineId, triggerRun]);
 
-  return { pipelines, selectedPipelineId, activeRun, triggering, loadPipelines, triggerRun, selectPipeline: setSelectedPipelineId };
+  return {
+    pipelines,
+    selectedPipelineId,
+    activeRun,
+    triggering,
+    loadPipelines,
+    triggerRun,
+    selectPipeline: setSelectedPipelineId,
+  };
 }

@@ -1,12 +1,13 @@
 import { AcpAgent } from '@process/agent/acp';
-import { channelEventBus } from '@process/channels/agent/ChannelEventBus';
+import { channelEventBus, ChannelEvents } from '@process/channels/agent/ChannelEventBus';
 import { teamEventBus } from '@process/team/teamEventBus';
 import { ipcBridge } from '@/common';
 import type { CronMessageMeta, TMessage } from '@/common/chat/chatLib';
 import { isCodexAutoApproveMode } from '@/common/types/codex/codexModes';
 import type { SlashCommandItem } from '@/common/chat/slash/types';
 import { transformMessage } from '@/common/chat/chatLib';
-import { ONE_FILES_MARKER } from '@/common/config/constants';
+import { stripFilesMarker } from '@/common/chat/messageFiles';
+import { isYoloSessionMode, resolveSessionMode } from '@/common/config/defaultSessionMode';
 import type { IResponseMessage } from '@/common/adapter/ipcBridge';
 import { parseError, uuid } from '@/common/utils';
 import { resolveAcpContextLimit } from '@/common/utils/resolveAcpContextLimit';
@@ -107,11 +108,11 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     this.conversation_id = data.conversation_id;
     this.workspace = data.workspace;
     this.options = data;
-    this.currentMode = data.sessionMode || 'default';
+    this.currentMode = resolveSessionMode(data.backend, data.sessionMode);
     this.persistedModelId = data.currentModelId || null;
     this.status = 'pending';
     // Sync yoloMode from sessionMode so addConfirmation auto-approves when Full Auto is selected
-    this.yoloMode = this.yoloMode || this.isYoloMode(this.currentMode);
+    this.yoloMode = this.yoloMode || isYoloSessionMode(this.currentMode) || this.isYoloMode(this.currentMode);
   }
 
   private makeStreamBufferKey(message: Extract<TMessage, { type: 'text' }>): string {
@@ -549,15 +550,15 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
               })),
             });
 
-            // Channels (Telegram/Lark) currently don't have interactive permission UX.
-            // Emit a readable error to avoid "silent hang" in external platforms.
-            channelEventBus.emitAgentMessage(this.conversation_id, {
-              type: 'error',
-              conversation_id: this.conversation_id,
-              msg_id: v.msg_id,
-              data: 'Permission required. Please open 1ONE ClaudeCode and confirm the pending request in the conversation panel.',
-            });
-            return;
+            // External channels (Telegram/Lark) lack interactive permission UX — notify there only.
+            if (channelEventBus.listenerCount(ChannelEvents.AGENT_MESSAGE) > 0) {
+              channelEventBus.emitAgentMessage(this.conversation_id, {
+                type: 'error',
+                conversation_id: this.conversation_id,
+                msg_id: v.msg_id,
+                data: 'Permission required. Please open 1ONE ClaudeCode and confirm the pending request in the conversation panel.',
+              });
+            }
           }
 
           // Clear busy guard and finalize thinking message when turn ends
@@ -751,9 +752,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
 
       if (data.msg_id && data.content) {
         let contentToSend = data.content;
-        if (contentToSend.includes(ONE_FILES_MARKER)) {
-          contentToSend = contentToSend.split(ONE_FILES_MARKER)[0].trimEnd();
-        }
+        contentToSend = stripFilesMarker(contentToSend);
 
         // Run CLI bootstrap and first-message toolkit injection in parallel.
         const initPromise = this.initAgent(this.options);

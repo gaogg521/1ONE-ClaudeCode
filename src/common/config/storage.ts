@@ -621,8 +621,8 @@ export interface IMcpTool {
   _meta?: Record<string, unknown>;
 }
 
-  /**
-   * CSS 主题配置接口 / CSS Theme configuration interface
+/**
+ * CSS 主题配置接口 / CSS Theme configuration interface
  * 用于存储用户自定义的 CSS 皮肤 / Used to store user-defined CSS skins
  */
 export interface ICssTheme {

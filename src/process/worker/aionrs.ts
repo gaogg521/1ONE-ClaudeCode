@@ -6,6 +6,7 @@
 
 import { AionrsAgent } from '@process/agent/aionrs';
 import { forkTask } from './utils';
+import { shouldAutoApproveToolConfirmation } from '@/common/chat/toolConfirmationPolicy';
 
 export default forkTask(({ data }, pipe) => {
   pipe.log('aionrs.init', data);
@@ -23,6 +24,11 @@ export default forkTask(({ data }, pipe) => {
           const { confirmationDetails, ...other } = tool;
 
           if (confirmationDetails && tool.status === 'Confirming') {
+            if (shouldAutoApproveToolConfirmation(tool)) {
+              agent.approveTool(tool.callId, 'once');
+              return { ...other, confirmationDetails: undefined };
+            }
+
             // For aionrs, approval goes through the binary's stdin
             const onConfirm = (confirmKey: string) => {
               if (confirmKey === 'cancel') {
@@ -65,9 +71,12 @@ export default forkTask(({ data }, pipe) => {
     deferred.with(agent.injectConversationHistory(event.text));
   });
 
-  pipe.on('send.message', (event: { input: string; agentPrompt?: string; msg_id: string; files?: string[] }, deferred) => {
-    deferred.with(agent.send(event.agentPrompt ?? event.input, event.msg_id, event.files));
-  });
+  pipe.on(
+    'send.message',
+    (event: { input: string; agentPrompt?: string; msg_id: string; files?: string[] }, deferred) => {
+      deferred.with(agent.send(event.agentPrompt ?? event.input, event.msg_id, event.files));
+    }
+  );
 
   return agent.start();
 });

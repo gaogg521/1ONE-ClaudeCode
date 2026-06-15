@@ -82,8 +82,7 @@ export function groupRuntimeNodesByMachine(nodes: TeamRuntimeNode[]): {
   local: TeamRuntimeNode[];
   remote: TeamRuntimeNode[];
 } {
-  const hostname =
-    typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : '';
+  const hostname = typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : '';
   const local: TeamRuntimeNode[] = [];
   const remote: TeamRuntimeNode[] = [];
   for (const node of nodes) {

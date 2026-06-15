@@ -19,7 +19,9 @@ const isElectron = (): boolean => typeof window !== 'undefined' && !!window.elec
 const ELECTRON_ME: KanbanMe = { id: 'system_default_user', username: 'Admin', role: 'admin' };
 
 async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
-  const headers = opts?.headers ? { 'Content-Type': 'application/json', ...opts.headers } : { 'Content-Type': 'application/json' };
+  const headers = opts?.headers
+    ? { 'Content-Type': 'application/json', ...opts.headers }
+    : { 'Content-Type': 'application/json' };
   const method = String(opts?.method ?? 'GET').toUpperCase();
   const shouldAttachCsrf = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
   let body = opts?.body;
@@ -102,10 +104,7 @@ export type AdminUser = {
 export type AuthProviderId = 'ldap' | 'feishu' | 'dingtalk' | 'wecom';
 
 export const adminApi = {
-  listUsers: () =>
-    isElectron()
-      ? ipcBridge.adminUsers.list.invoke()
-      : apiFetch<AdminUser[]>('/api/admin/users'),
+  listUsers: () => (isElectron() ? ipcBridge.adminUsers.list.invoke() : apiFetch<AdminUser[]>('/api/admin/users')),
 
   createUser: (username: string, password: string, role: KanbanRole) =>
     isElectron()
@@ -113,8 +112,7 @@ export const adminApi = {
       : apiFetch<AdminUser>('/api/admin/users', { method: 'POST', body: JSON.stringify({ username, password, role }) }),
 
   setRole: (id: string, role: KanbanRole | UserDbRole) => {
-    const desktopRole =
-      role === 'admin' || role === 'system_admin' || role === 'org_admin' ? 'admin' : 'user';
+    const desktopRole = role === 'admin' || role === 'system_admin' || role === 'org_admin' ? 'admin' : 'user';
     return isElectron()
       ? ipcBridge.adminUsers.setRole.invoke({ id, role: desktopRole })
       : apiFetch('/api/admin/users/' + id + '/role', { method: 'PATCH', body: JSON.stringify({ role }) });

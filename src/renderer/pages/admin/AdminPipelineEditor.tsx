@@ -7,7 +7,21 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Card, Divider, Empty, Form, Input, Message, Modal, Space, Steps, Switch, Tag, Typography } from '@arco-design/web-react';
+import {
+  Button,
+  Card,
+  Divider,
+  Empty,
+  Form,
+  Input,
+  Message,
+  Modal,
+  Space,
+  Steps,
+  Switch,
+  Tag,
+  Typography,
+} from '@arco-design/web-react';
 import { Delete, Down, Edit, Move, Plus, Refresh, Save, Star, Undo } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { ConfigStorage } from '@/common/config/storage';
@@ -85,11 +99,8 @@ function buildPipelineDefinition(stages: StageDef[]): {
             : [],
         };
       })
-      .filter(
-        (
-          stage
-        ): stage is { name: string; enabled: boolean; jobs: Array<{ name: string; commands: string[] }> } =>
-          Boolean(stage)
+      .filter((stage): stage is { name: string; enabled: boolean; jobs: Array<{ name: string; commands: string[] }> } =>
+        Boolean(stage)
       ),
   };
 }
@@ -118,11 +129,7 @@ function parsePipelineStages(definitionJson: string | undefined): StageDef[] {
         : [];
 
       const command =
-        nestedCommands.length > 0
-          ? nestedCommands.join('\n')
-          : typeof stage.command === 'string'
-            ? stage.command
-            : '';
+        nestedCommands.length > 0 ? nestedCommands.join('\n') : typeof stage.command === 'string' ? stage.command : '';
 
       return {
         name,
@@ -166,7 +173,10 @@ const PipelineEditor: React.FC = () => {
   }, []);
 
   const handleSaveCustomTemplate = useCallback(async () => {
-    if (!saveTemplateName.trim()) { Message.warning('请输入模板名称'); return; }
+    if (!saveTemplateName.trim()) {
+      Message.warning('请输入模板名称');
+      return;
+    }
     const newTemplate: StageDef = { name: saveTemplateName.trim(), command: editForm.command, enabled: true };
     const updated = [...customTemplates, newTemplate];
     await ConfigStorage.set('cci.custom_stage_templates', updated);
@@ -176,15 +186,22 @@ const PipelineEditor: React.FC = () => {
     Message.success('已保存为自定义模板');
   }, [saveTemplateName, editForm.command, customTemplates]);
 
-  const handleDeleteCustomTemplate = useCallback(async (idx: number) => {
-    const updated = customTemplates.filter((_, i) => i !== idx);
-    await ConfigStorage.set('cci.custom_stage_templates', updated);
-    setCustomTemplates(updated);
-  }, [customTemplates]);
+  const handleDeleteCustomTemplate = useCallback(
+    async (idx: number) => {
+      const updated = customTemplates.filter((_, i) => i !== idx);
+      await ConfigStorage.set('cci.custom_stage_templates', updated);
+      setCustomTemplates(updated);
+    },
+    [customTemplates]
+  );
 
   // Select pipeline → load definition
   useEffect(() => {
-    if (!selectedId) { setStages([]); setPipelineName(''); return; }
+    if (!selectedId) {
+      setStages([]);
+      setPipelineName('');
+      return;
+    }
     const p = pipelinesState.data.find((pipeline) => pipeline.id === selectedId);
     if (!p) return;
     setPipelineName(p.name || '');
@@ -214,7 +231,10 @@ const PipelineEditor: React.FC = () => {
   }, [runId]);
 
   const handleSave = async () => {
-    if (!pipelineName.trim()) { Message.warning('请输入流水线名称'); return; }
+    if (!pipelineName.trim()) {
+      Message.warning('请输入流水线名称');
+      return;
+    }
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
@@ -222,9 +242,7 @@ const PipelineEditor: React.FC = () => {
         definition: buildPipelineDefinition(stages),
         associatedTeamId: null,
       };
-      const saved = selectedId
-        ? await updatePipeline(selectedId, payload)
-        : await savePipeline(payload);
+      const saved = selectedId ? await updatePipeline(selectedId, payload) : await savePipeline(payload);
       Message.success(t('common.saved', { defaultValue: '已保存' }));
       setIsCreating(false);
       await pipelinesState.reload();
@@ -259,11 +277,21 @@ const PipelineEditor: React.FC = () => {
     setTemplateVisible(false);
   };
 
-  const removeStage = (idx: number) => { setStages((prev) => prev.filter((_, i) => i !== idx)); };
-  const moveStage = (from: number, to: number) => {
-    setStages((prev) => { const next = [...prev]; const [item] = next.splice(from, 1); next.splice(to, 0, item); return next; });
+  const removeStage = (idx: number) => {
+    setStages((prev) => prev.filter((_, i) => i !== idx));
   };
-  const editStage = (idx: number) => { setEditStageIdx(idx); setEditForm({ ...stages[idx] }); };
+  const moveStage = (from: number, to: number) => {
+    setStages((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+  const editStage = (idx: number) => {
+    setEditStageIdx(idx);
+    setEditForm({ ...stages[idx] });
+  };
   const saveStageEdit = () => {
     if (editStageIdx === null) return;
     setStages((prev) => prev.map((s, i) => (i === editStageIdx ? { ...s, ...editForm } : s)));
@@ -281,7 +309,9 @@ const PipelineEditor: React.FC = () => {
     <AdminPageWrapper>
       <ModulePageHeader
         title={t('admin.pipeline.title', { defaultValue: 'CCI 持续集成流水线编排器' })}
-        description={t('admin.pipeline.editorDesc', { defaultValue: '可视化拖拽编排 Stage/Job，内置 50+ 原子模板，支持质量红线拦截与多环境部署。' })}
+        description={t('admin.pipeline.editorDesc', {
+          defaultValue: '可视化拖拽编排 Stage/Job，内置 50+ 原子模板，支持质量红线拦截与多环境部署。',
+        })}
         actions={
           <>
             <Button icon={<Refresh />} onClick={() => void pipelinesState.reload()}>
@@ -313,7 +343,8 @@ const PipelineEditor: React.FC = () => {
           </Typography.Text>
           <Typography.Text className='text-12px text-t-secondary'>
             {t('admin.pipeline.introDesc', {
-              defaultValue: '先编排最小 Stage，再保存、运行和查看日志。当前编辑器使用简化视图，但会自动转换为执行器可运行的 jobs/commands 结构。',
+              defaultValue:
+                '先编排最小 Stage，再保存、运行和查看日志。当前编辑器使用简化视图，但会自动转换为执行器可运行的 jobs/commands 结构。',
             })}
           </Typography.Text>
           <Typography.Text className='text-12px text-t-secondary'>
@@ -326,7 +357,12 @@ const PipelineEditor: React.FC = () => {
 
       <div className='flex gap-16px' style={{ minHeight: 'calc(100vh - 220px)' }}>
         {/* 左侧流水线列表 */}
-        <Card bordered={false} title={t('admin.pipeline.list', { defaultValue: '流水线列表' })} className='rd-12px' style={{ width: 260, flexShrink: 0 }}>
+        <Card
+          bordered={false}
+          title={t('admin.pipeline.list', { defaultValue: '流水线列表' })}
+          className='rd-12px'
+          style={{ width: 260, flexShrink: 0 }}
+        >
           <ModuleDataState
             loading={pipelinesState.loading}
             error={pipelinesState.error}
@@ -335,7 +371,11 @@ const PipelineEditor: React.FC = () => {
           >
             <>
               {pipelinesState.data.map((p: PipelineListItem) => (
-                <div key={p.id} className={`px-12px py-8px rd-6px cursor-pointer mb-4px transition-colors ${selectedId === p.id ? 'bg-[var(--primary-1)] text-[rgb(var(--primary-6))] font-600' : 'bg-fill-1 hover:bg-fill-2'}`} onClick={() => setSelectedId(p.id)}>
+                <div
+                  key={p.id}
+                  className={`px-12px py-8px rd-6px cursor-pointer mb-4px transition-colors ${selectedId === p.id ? 'bg-[var(--primary-1)] text-[rgb(var(--primary-6))] font-600' : 'bg-fill-1 hover:bg-fill-2'}`}
+                  onClick={() => setSelectedId(p.id)}
+                >
                   <div className='text-13px truncate'>{p.name}</div>
                   <div className='text-11px text-t-tertiary mt-2px'>{p.enabled === 1 ? '✅ 已启用' : '⏸ 已暂停'}</div>
                 </div>
@@ -343,31 +383,66 @@ const PipelineEditor: React.FC = () => {
             </>
           </ModuleDataState>
           <Divider />
-          <Button type='outline' long icon={<Plus />} onClick={() => { setSelectedId(''); setPipelineName(''); setStages([]); setIsCreating(true); }}>
+          <Button
+            type='outline'
+            long
+            icon={<Plus />}
+            onClick={() => {
+              setSelectedId('');
+              setPipelineName('');
+              setStages([]);
+              setIsCreating(true);
+            }}
+          >
             {t('admin.pipeline.create', { defaultValue: '新建流水线' })}
           </Button>
         </Card>
 
         {/* 右侧编排区域 */}
-        <Card bordered={false} className='flex-1 rd-12px' title={selectedId ? pipelineName : t('admin.pipeline.newPipeline', { defaultValue: '新建流水线' })}>
-          {!selectedId && !pipelineName && !isCreating && <Empty description={t('admin.pipeline.selectOrCreate', { defaultValue: '选择或新建一条流水线开始编排' })} />}
+        <Card
+          bordered={false}
+          className='flex-1 rd-12px'
+          title={selectedId ? pipelineName : t('admin.pipeline.newPipeline', { defaultValue: '新建流水线' })}
+        >
+          {!selectedId && !pipelineName && !isCreating && (
+            <Empty description={t('admin.pipeline.selectOrCreate', { defaultValue: '选择或新建一条流水线开始编排' })} />
+          )}
 
           {(selectedId || pipelineName || isCreating) && (
             <>
-              <Form.Item label={t('admin.pipeline.name', { defaultValue: '流水线名称' })}><Input value={pipelineName} onChange={setPipelineName} placeholder='例如: 1ONE-Main-Prod' style={{ width: 320 }} /></Form.Item>
+              <Form.Item label={t('admin.pipeline.name', { defaultValue: '流水线名称' })}>
+                <Input
+                  value={pipelineName}
+                  onChange={setPipelineName}
+                  placeholder='例如: 1ONE-Main-Prod'
+                  style={{ width: 320 }}
+                />
+              </Form.Item>
 
               {/* Stage 步骤可视化 */}
-              <Typography.Text className='text-13px font-600 text-t-secondary mb-8px block mt-16px'>{t('admin.pipeline.stages', { defaultValue: 'Stage 编排（拖拽排序）' })}</Typography.Text>
+              <Typography.Text className='text-13px font-600 text-t-secondary mb-8px block mt-16px'>
+                {t('admin.pipeline.stages', { defaultValue: 'Stage 编排（拖拽排序）' })}
+              </Typography.Text>
               {stages.length === 0 ? (
                 <Empty description={t('admin.pipeline.noStages', { defaultValue: '暂无 Stage，点击下方按钮添加' })} />
               ) : (
                 <div className='mb-12px'>
                   {stages.map((stage, idx) => (
-                    <div key={idx} draggable className='flex items-center gap-8px px-12px py-8px mb-6px bg-fill-2 rd-6px border border-border-2 hover:shadow-sm transition-shadow cursor-grab active:cursor-grabbing'
-                      onDragStart={() => setDragIdx(idx)} onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => { if (dragIdx !== null && dragIdx !== idx) moveStage(dragIdx, idx); setDragIdx(null); }}>
+                    <div
+                      key={idx}
+                      draggable
+                      className='flex items-center gap-8px px-12px py-8px mb-6px bg-fill-2 rd-6px border border-border-2 hover:shadow-sm transition-shadow cursor-grab active:cursor-grabbing'
+                      onDragStart={() => setDragIdx(idx)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => {
+                        if (dragIdx !== null && dragIdx !== idx) moveStage(dragIdx, idx);
+                        setDragIdx(null);
+                      }}
+                    >
                       <Move size={14} className='text-t-tertiary shrink-0' />
-                      <Tag color={stage.enabled ? 'arcoblue' : 'gray'} size='small'>{stage.name}</Tag>
+                      <Tag color={stage.enabled ? 'arcoblue' : 'gray'} size='small'>
+                        {stage.name}
+                      </Tag>
                       <span className='text-12px text-t-tertiary flex-1 truncate font-mono'>{stage.command}</span>
                       <Button size='mini' icon={<Edit />} onClick={() => editStage(idx)} />
                       <Button size='mini' status='danger' icon={<Delete />} onClick={() => removeStage(idx)} />
@@ -378,17 +453,38 @@ const PipelineEditor: React.FC = () => {
               )}
 
               <Space>
-                <Button type='outline' icon={<Plus />} onClick={() => addStage()}>{t('admin.pipeline.addStage', { defaultValue: '添加 Stage' })}</Button>
-                <Button type='outline' status='warning' icon={<Plus />} onClick={() => setTemplateVisible(true)}>{t('admin.pipeline.addFromTemplate', { defaultValue: '从原子模板添加' })}</Button>
+                <Button type='outline' icon={<Plus />} onClick={() => addStage()}>
+                  {t('admin.pipeline.addStage', { defaultValue: '添加 Stage' })}
+                </Button>
+                <Button type='outline' status='warning' icon={<Plus />} onClick={() => setTemplateVisible(true)}>
+                  {t('admin.pipeline.addFromTemplate', { defaultValue: '从原子模板添加' })}
+                </Button>
               </Space>
 
               {/* Run results */}
               {runId && (
-                <Card bordered={false} className='mt-16px bg-fill-2 rd-8px' title={<Space><Tag color={runStatus === 'success' ? 'green' : runStatus === 'failed' ? 'red' : 'blue'}>{runStatus}</Tag>{t('admin.pipeline.runResult', { defaultValue: '执行结果' })}</Space>}>
+                <Card
+                  bordered={false}
+                  className='mt-16px bg-fill-2 rd-8px'
+                  title={
+                    <Space>
+                      <Tag color={runStatus === 'success' ? 'green' : runStatus === 'failed' ? 'red' : 'blue'}>
+                        {runStatus}
+                      </Tag>
+                      {t('admin.pipeline.runResult', { defaultValue: '执行结果' })}
+                    </Space>
+                  }
+                >
                   <Steps size='small' current={stages.length} className='mb-12px'>
-                    {stages.map((s, i) => <Step key={i} title={s.name} status={renderStageStatus(i)} />)}
+                    {stages.map((s, i) => (
+                      <Step key={i} title={s.name} status={renderStageStatus(i)} />
+                    ))}
                   </Steps>
-                  {runLog && <pre className='bg-black text-green-400 text-11px p-12px rd-6px overflow-y-auto max-h-300px font-mono whitespace-pre-wrap'>{runLog}</pre>}
+                  {runLog && (
+                    <pre className='bg-black text-green-400 text-11px p-12px rd-6px overflow-y-auto max-h-300px font-mono whitespace-pre-wrap'>
+                      {runLog}
+                    </pre>
+                  )}
                 </Card>
               )}
             </>
@@ -397,7 +493,13 @@ const PipelineEditor: React.FC = () => {
       </div>
 
       {/* 原子模板库 Modal */}
-      <Modal title={t('admin.pipeline.templateLibrary', { defaultValue: '模板库' })} visible={templateVisible} onCancel={() => setTemplateVisible(false)} footer={null} style={{ width: 720 }}>
+      <Modal
+        title={t('admin.pipeline.templateLibrary', { defaultValue: '模板库' })}
+        visible={templateVisible}
+        onCancel={() => setTemplateVisible(false)}
+        footer={null}
+        style={{ width: 720 }}
+      >
         {customTemplates.length > 0 && (
           <>
             <div className='text-12px font-600 text-t-secondary mb-8px'>
@@ -405,14 +507,23 @@ const PipelineEditor: React.FC = () => {
             </div>
             <div className='grid grid-cols-2 gap-8px mb-16px'>
               {customTemplates.map((tpl, i) => (
-                <div key={`custom-${i}`} className='flex items-center justify-between px-12px py-8px bg-fill-2 rd-6px hover:bg-fill-3 transition-colors'>
+                <div
+                  key={`custom-${i}`}
+                  className='flex items-center justify-between px-12px py-8px bg-fill-2 rd-6px hover:bg-fill-3 transition-colors'
+                >
                   <div className='flex-1 cursor-pointer' onClick={() => addStage({ ...tpl })}>
                     <div className='text-13px font-600 text-t-primary'>{tpl.name}</div>
-                    <div className='text-11px text-t-tertiary font-mono truncate' style={{ maxWidth: 240 }}>{tpl.command}</div>
+                    <div className='text-11px text-t-tertiary font-mono truncate' style={{ maxWidth: 240 }}>
+                      {tpl.command}
+                    </div>
                   </div>
                   <div className='flex items-center gap-4px ml-8px'>
                     <Plus size={14} className='text-primary cursor-pointer' onClick={() => addStage({ ...tpl })} />
-                    <Delete size={14} className='text-danger cursor-pointer' onClick={() => void handleDeleteCustomTemplate(i)} />
+                    <Delete
+                      size={14}
+                      className='text-danger cursor-pointer'
+                      onClick={() => void handleDeleteCustomTemplate(i)}
+                    />
                   </div>
                 </div>
               ))}
@@ -425,10 +536,16 @@ const PipelineEditor: React.FC = () => {
         </div>
         <div className='grid grid-cols-2 gap-8px max-h-400px overflow-y-auto'>
           {ATOMIC_TEMPLATES.map((tpl, i) => (
-            <div key={i} className='flex items-center justify-between px-12px py-8px bg-fill-2 rd-6px cursor-pointer hover:bg-fill-3 transition-colors' onClick={() => addStage({ ...tpl })}>
+            <div
+              key={i}
+              className='flex items-center justify-between px-12px py-8px bg-fill-2 rd-6px cursor-pointer hover:bg-fill-3 transition-colors'
+              onClick={() => addStage({ ...tpl })}
+            >
               <div>
                 <div className='text-13px font-600 text-t-primary'>{tpl.name}</div>
-                <div className='text-11px text-t-tertiary font-mono truncate' style={{ maxWidth: 280 }}>{tpl.command}</div>
+                <div className='text-11px text-t-tertiary font-mono truncate' style={{ maxWidth: 280 }}>
+                  {tpl.command}
+                </div>
               </div>
               <Plus size={14} className='text-primary shrink-0' />
             </div>
@@ -450,21 +567,36 @@ const PipelineEditor: React.FC = () => {
               size='small'
               type='text'
               icon={<Star />}
-              onClick={() => { setSaveTemplateName(editForm.name); setSaveTemplateVisible(true); }}
+              onClick={() => {
+                setSaveTemplateName(editForm.name);
+                setSaveTemplateVisible(true);
+              }}
             >
               {t('admin.pipeline.saveAsTemplate', { defaultValue: '保存为自定义模板' })}
             </Button>
             <Space>
               <Button onClick={() => setEditStageIdx(null)}>{t('common.cancel', { defaultValue: '取消' })}</Button>
-              <Button type='primary' onClick={saveStageEdit}>{t('common.confirm', { defaultValue: '确定' })}</Button>
+              <Button type='primary' onClick={saveStageEdit}>
+                {t('common.confirm', { defaultValue: '确定' })}
+              </Button>
             </Space>
           </div>
         }
       >
         <Form layout='vertical'>
-          <Form.Item label={t('admin.pipeline.stageName', { defaultValue: 'Stage 名称' })} required><Input value={editForm.name} onChange={(v) => setEditForm((s) => ({ ...s, name: v }))} /></Form.Item>
-          <Form.Item label={t('admin.pipeline.stageCommand', { defaultValue: '执行命令' })} required><Input.TextArea value={editForm.command} onChange={(v) => setEditForm((s) => ({ ...s, command: v }))} autoSize /></Form.Item>
-          <Form.Item label={t('admin.pipeline.stageEnabled', { defaultValue: '启用' })}><Switch checked={editForm.enabled} onChange={(v) => setEditForm((s) => ({ ...s, enabled: v }))} /></Form.Item>
+          <Form.Item label={t('admin.pipeline.stageName', { defaultValue: 'Stage 名称' })} required>
+            <Input value={editForm.name} onChange={(v) => setEditForm((s) => ({ ...s, name: v }))} />
+          </Form.Item>
+          <Form.Item label={t('admin.pipeline.stageCommand', { defaultValue: '执行命令' })} required>
+            <Input.TextArea
+              value={editForm.command}
+              onChange={(v) => setEditForm((s) => ({ ...s, command: v }))}
+              autoSize
+            />
+          </Form.Item>
+          <Form.Item label={t('admin.pipeline.stageEnabled', { defaultValue: '启用' })}>
+            <Switch checked={editForm.enabled} onChange={(v) => setEditForm((s) => ({ ...s, enabled: v }))} />
+          </Form.Item>
         </Form>
       </Modal>
 
@@ -479,7 +611,11 @@ const PipelineEditor: React.FC = () => {
       >
         <Form layout='vertical'>
           <Form.Item label={t('admin.pipeline.templateName', { defaultValue: '模板名称' })} required>
-            <Input value={saveTemplateName} onChange={setSaveTemplateName} placeholder={t('admin.pipeline.templateNamePlaceholder', { defaultValue: '例如：我的 Node.js 构建流程' })} />
+            <Input
+              value={saveTemplateName}
+              onChange={setSaveTemplateName}
+              placeholder={t('admin.pipeline.templateNamePlaceholder', { defaultValue: '例如：我的 Node.js 构建流程' })}
+            />
           </Form.Item>
           <Form.Item label={t('admin.pipeline.templateCommand', { defaultValue: '命令预览' })}>
             <Input.TextArea value={editForm.command} readOnly autoSize />

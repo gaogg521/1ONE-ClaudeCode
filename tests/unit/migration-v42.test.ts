@@ -41,7 +41,20 @@ describeOrSkip('migration v42: backfill scoped repo ownership', () => {
         `INSERT INTO code_repos (id, tenant_id, name, url, provider, credential_id, default_branch, scope, team_id, created_by, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run('code-1', 'tenant-a', 'legacy-code', 'https://git.example/a', 'gitlab', '', 'main', 'personal', null, '', now, now);
+      .run(
+        'code-1',
+        'tenant-a',
+        'legacy-code',
+        'https://git.example/a',
+        'gitlab',
+        '',
+        'main',
+        'personal',
+        null,
+        '',
+        now,
+        now
+      );
     driver
       .prepare(
         `INSERT INTO artifacts (id, repo_id, name, version, file_size, checksum, scope, team_id, created_by, download_count, created_at)
@@ -57,15 +70,15 @@ describeOrSkip('migration v42: backfill scoped repo ownership', () => {
   it('backfills created_by from tenant admin and propagates artifact ownership', () => {
     runMigrations(driver, 41, 42);
 
-    const repo = driver
-      .prepare(`SELECT created_by FROM artifact_repos WHERE id = ?`)
-      .get('repo-1') as { created_by: string };
-    const codeRepo = driver
-      .prepare(`SELECT created_by FROM code_repos WHERE id = ?`)
-      .get('code-1') as { created_by: string };
-    const artifact = driver
-      .prepare(`SELECT created_by FROM artifacts WHERE id = ?`)
-      .get('artifact-1') as { created_by: string };
+    const repo = driver.prepare(`SELECT created_by FROM artifact_repos WHERE id = ?`).get('repo-1') as {
+      created_by: string;
+    };
+    const codeRepo = driver.prepare(`SELECT created_by FROM code_repos WHERE id = ?`).get('code-1') as {
+      created_by: string;
+    };
+    const artifact = driver.prepare(`SELECT created_by FROM artifacts WHERE id = ?`).get('artifact-1') as {
+      created_by: string;
+    };
 
     expect(repo.created_by).toBe('admin-1');
     expect(codeRepo.created_by).toBe('admin-1');

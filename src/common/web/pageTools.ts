@@ -109,10 +109,7 @@ export function normalizeFetchUrl(url: string): string {
   return normalized;
 }
 
-export async function fetchUrlAsPlainText(
-  url: string,
-  maxLength = 100000
-): Promise<{ url: string; text: string }> {
+export async function fetchUrlAsPlainText(url: string, maxLength = 100000): Promise<{ url: string; text: string }> {
   const normalized = normalizeFetchUrl(url);
   const html = await fetchPageHtml(normalized);
   return { url: normalized, text: htmlToPlainText(html, maxLength) };

@@ -137,8 +137,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
   }, []);
 
   // Whether skills section should be visible
-  const showSkills =
-    isCreating || (activeAssistant !== null && !isExtensionAssistant(activeAssistant));
+  const showSkills = isCreating || (activeAssistant !== null && !isExtensionAssistant(activeAssistant));
 
   const customSkillItems = availableSkills.filter((skill) => skill.isCustom);
   const builtinSkillItems = availableSkills.filter((skill) => !skill.isCustom);
@@ -587,7 +586,9 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                           onClick={() => {
                             if (!selectedTemplateAssistant) return;
                             setSelectedSkills(
-                              Array.from(new Set([...(selectedTemplateAssistant.enabledSkills || []), ...selectedSkills]))
+                              Array.from(
+                                new Set([...(selectedTemplateAssistant.enabledSkills || []), ...selectedSkills])
+                              )
                             );
                           }}
                         >

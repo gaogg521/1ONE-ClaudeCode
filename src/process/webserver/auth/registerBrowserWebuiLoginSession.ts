@@ -5,10 +5,7 @@
  */
 
 import type { Request } from 'express';
-import {
-  isElectronDesktopRequest,
-  registerBrowserWebuiSession,
-} from '@process/webserver/auth/browserSessionBridge';
+import { isElectronDesktopRequest, registerBrowserWebuiSession } from '@process/webserver/auth/browserSessionBridge';
 import { TokenUtils } from '@process/webserver/auth/middleware/TokenMiddleware';
 
 export function registerBrowserWebuiLoginSession(

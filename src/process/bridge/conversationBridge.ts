@@ -38,6 +38,11 @@ import {
   isImageFilePath,
   stripFilesMarker,
 } from '@/common/chat/messageFiles';
+import {
+  DEFAULT_ATTACHMENT_ANALYSIS_PROMPT,
+  messageReferencesRecentAttachments,
+} from '@/common/chat/attachmentFollowUp';
+import { getRecentUserAttachmentPaths } from '@process/bridge/recentAttachmentPaths';
 import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 import { resolvePersonalAgentPreset } from '@process/digitalEmployee/resolvePersonalAgentPreset';
 import { buildPromptAugmentationPrefix, composeAgentPrompt } from '@process/services/promptAugmentation';
@@ -49,6 +54,15 @@ const refreshTrayMenuSafely = async (): Promise<void> => {
     console.warn('[conversationBridge] Failed to refresh tray menu:', error);
   }
 };
+
+function resolveTaskModelId(task: IAgentManager): string | undefined {
+  const candidate = task as {
+    model?: { useModel?: string };
+    persistedModelId?: string;
+    options?: { currentModelId?: string };
+  };
+  return candidate.model?.useModel ?? candidate.persistedModelId ?? candidate.options?.currentModelId;
+}
 
 const VALID_CONVERSATION_TYPES = new Set<TChatConversation['type']>([
   'gemini',
@@ -557,12 +571,13 @@ export function initConversationBridge(
     // aionrs binary reads files from the workspace cwd; raw cache paths work for text, but
     // binary/image files (PNG, JPG, …) must live inside the workspace so the binary can pass
     // them as vision attachments rather than leaving the model to call file_read on binary data.
-    let workspaceFiles: string[];
     const isGeminiAgent = task.type === 'gemini';
     const isAionrsAgent = task.type === 'aionrs';
     const cacheDir = getSystemDir().cacheDir;
     const hasTempUploads = (files ?? []).some((filePath) => isCacheTempFilePath(filePath, cacheDir));
 
+    const textOnly = stripFilesMarker(other.input);
+    let workspaceFiles: string[] = [];
     if (isGeminiAgent || isAionrsAgent || hasTempUploads) {
       // Copy files to workspace (required for gemini/aionrs; WebUI temp uploads for all agent types)
       try {
@@ -576,16 +591,21 @@ export function initConversationBridge(
       workspaceFiles = (files ?? []).filter((f) => path.isAbsolute(f));
     }
 
-    const textOnly = stripFilesMarker(other.input);
+    if (workspaceFiles.length === 0 && messageReferencesRecentAttachments(textOnly)) {
+      workspaceFiles = await getRecentUserAttachmentPaths(conversation_id);
+    }
+
+    const displayText = textOnly.trim();
     const resolvedInput =
-      workspaceFiles.length > 0
-        ? buildDisplayMessage(textOnly, workspaceFiles, task.workspace)
-        : textOnly;
+      workspaceFiles.length > 0 ? buildDisplayMessage(displayText, workspaceFiles, task.workspace) : displayText;
 
     // Precompute agent content with optional skill injection.
     // OpenClaw uses full-content mode: inject full skill text rather than index paths,
     // because the CLI may not proactively read SKILL.md files the way ACP agents do.
     let agentContent = resolvedInput;
+    if (!displayText && workspaceFiles.length > 0) {
+      agentContent = buildDisplayMessage(DEFAULT_ATTACHMENT_ANALYSIS_PROMPT, workspaceFiles, task.workspace);
+    }
     if (other.injectSkills?.length) {
       agentContent = await prepareFirstMessage(other.input, {
         enabledSkills: other.injectSkills,
@@ -603,6 +623,8 @@ export function initConversationBridge(
     const augmentationPrefix = await buildPromptAugmentationPrefix({
       displayContent: agentContent,
       files: workspaceFiles,
+      modelId: resolveTaskModelId(task),
+      agentType: task.type,
     });
     const agentPrompt = composeAgentPrompt(agentContent, augmentationPrefix);
 

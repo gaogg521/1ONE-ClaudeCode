@@ -1,10 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Empty, Spin } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
-import {
-  listRequirementComments,
-  type RequirementCommentRecord,
-} from '@/renderer/utils/enterpriseApi/modules';
+import { listRequirementComments, type RequirementCommentRecord } from '@/renderer/utils/enterpriseApi/modules';
 
 type IssueCommentsPanelProps = {
   requirementId: string | null;

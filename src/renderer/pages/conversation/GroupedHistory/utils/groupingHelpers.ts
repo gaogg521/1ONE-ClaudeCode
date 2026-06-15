@@ -133,7 +133,9 @@ export const buildGroupedHistory = (
 
   const normalConversations = visibleConversations.filter(
     (conversation) =>
-      !isConversationPinned(conversation) && !isConversationFavorited(conversation) && !isCronJobConversation(conversation)
+      !isConversationPinned(conversation) &&
+      !isConversationFavorited(conversation) &&
+      !isCronJobConversation(conversation)
   );
 
   return {

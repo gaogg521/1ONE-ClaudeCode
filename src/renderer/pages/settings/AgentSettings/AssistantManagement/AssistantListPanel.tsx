@@ -185,9 +185,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
                 {t('settings.assistants', { defaultValue: 'Assistants' })}
               </h2>
             </div>
-            <div
-              className={`${isMobile ? 'w-full' : 'flex-shrink-0'} flex flex-wrap items-center justify-end gap-8px`}
-            >
+            <div className={`${isMobile ? 'w-full' : 'flex-shrink-0'} flex flex-wrap items-center justify-end gap-8px`}>
               {hasHiddenBuiltinAssistants ? (
                 <Popconfirm
                   title={t('settings.restoreHiddenBuiltinAssistantsTitle', {

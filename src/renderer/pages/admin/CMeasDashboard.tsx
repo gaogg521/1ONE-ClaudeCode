@@ -28,14 +28,13 @@ const CMeasDashboard: React.FC = () => {
 
   return (
     <AdminPageWrapper>
-      <Typography.Title heading={5} className='mt-0 mb-4px'>{t('admin.cmeas.title', { defaultValue: 'CMeas 效能洞察' })}</Typography.Title>
-      <Typography.Paragraph type='secondary' className='mb-20px text-13px'>{t('admin.cmeas.desc', { defaultValue: 'DORA 四维指标 + 需求-代码-测试-部署全流程数据分析，助力精益改进决策' })}</Typography.Paragraph>
-      <ModuleDataState
-        loading={metricsState.loading}
-        error={metricsState.error}
-        empty={false}
-        emptyDescription=''
-      >
+      <Typography.Title heading={5} className='mt-0 mb-4px'>
+        {t('admin.cmeas.title', { defaultValue: 'CMeas 效能洞察' })}
+      </Typography.Title>
+      <Typography.Paragraph type='secondary' className='mb-20px text-13px'>
+        {t('admin.cmeas.desc', { defaultValue: 'DORA 四维指标 + 需求-代码-测试-部署全流程数据分析，助力精益改进决策' })}
+      </Typography.Paragraph>
+      <ModuleDataState loading={metricsState.loading} error={metricsState.error} empty={false} emptyDescription=''>
         <>
           <Row gutter={[16, 16]} className='mb-24px'>
             {doraCards.map((c) => {
@@ -44,17 +43,37 @@ const CMeasDashboard: React.FC = () => {
               return (
                 <Col key={c.key} xs={24} sm={12} lg={6}>
                   <Card bordered={false} className='rd-12px' style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
-                    <Statistic title={c.title} value={val} suffix={c.suffix} style={{ color: c.color, fontWeight: 'bold' } as React.CSSProperties} />
+                    <Statistic
+                      title={c.title}
+                      value={val}
+                      suffix={c.suffix}
+                      style={{ color: c.color, fontWeight: 'bold' } as React.CSSProperties}
+                    />
                     <Progress percent={c.invert ? 100 - pct : pct} size='small' className='mt-8px' color={c.color} />
                   </Card>
                 </Col>
               );
             })}
           </Row>
-          <Card bordered={false} className='rd-12px' title={t('admin.cmeas.aiDiagnosis', { defaultValue: 'AI 效能诊断' })}>
-            {Object.keys(metrics).length === 0
-              ? <Empty description={t('admin.cmeas.noData', { defaultValue: '暂无度量数据。系统将在代码提交和流水线运行时自动采集 DORA 指标。' })} />
-              : <Typography.Paragraph type='secondary'>{t('admin.cmeas.aiSuggestion', { defaultValue: '基于当前 DORA 指标数据分析，团队在变更前置时间和部署频率上表现良好。建议关注变更失败率的降低，可通过加强 CCI 流水线中的质量红线（单元测试覆盖率 > 80%）来实现。' })}</Typography.Paragraph>}
+          <Card
+            bordered={false}
+            className='rd-12px'
+            title={t('admin.cmeas.aiDiagnosis', { defaultValue: 'AI 效能诊断' })}
+          >
+            {Object.keys(metrics).length === 0 ? (
+              <Empty
+                description={t('admin.cmeas.noData', {
+                  defaultValue: '暂无度量数据。系统将在代码提交和流水线运行时自动采集 DORA 指标。',
+                })}
+              />
+            ) : (
+              <Typography.Paragraph type='secondary'>
+                {t('admin.cmeas.aiSuggestion', {
+                  defaultValue:
+                    '基于当前 DORA 指标数据分析，团队在变更前置时间和部署频率上表现良好。建议关注变更失败率的降低，可通过加强 CCI 流水线中的质量红线（单元测试覆盖率 > 80%）来实现。',
+                })}
+              </Typography.Paragraph>
+            )}
           </Card>
         </>
       </ModuleDataState>

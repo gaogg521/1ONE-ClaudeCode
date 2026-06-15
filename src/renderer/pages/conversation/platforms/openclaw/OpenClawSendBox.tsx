@@ -26,8 +26,11 @@ import { Message, Tag } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiveWorkspace';
-import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
-import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
+import {
+  finalizeUserMessageAfterSend,
+  prepareUserMessageSend,
+  publishOptimisticUserMessage,
+} from '@/renderer/utils/file/sentMessageDisplay';
 import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import FilePreview from '@/renderer/components/media/FilePreview';
 import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
@@ -419,30 +422,27 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
       }
 
       const msg_id = uuid();
-      const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
-
-      const userMessage: TMessage = {
-        id: msg_id,
-        msg_id,
-        conversation_id,
-        type: 'text',
-        position: 'right',
-        content: { content: displayMessage },
-        createdAt: Date.now(),
-      };
-      addOrUpdateMessage(userMessage, true);
+      const prepared = prepareUserMessageSend(input, files, effectiveWorkspace, msg_id, conversation_id);
+      publishOptimisticUserMessage(addOrUpdateMessage, prepared.optimisticMessage);
       setAiProcessing(true);
       aiProcessingRef.current = true;
       try {
         void checkAndUpdateTitle(conversation_id, input);
         const result = await ipcBridge.openclawConversation.sendMessage.invoke({
-          input: displayMessage,
+          input: prepared.displayMessage,
           msg_id,
           conversation_id,
           files,
         });
         assertBridgeSuccess(result, 'Failed to send message to OpenClaw');
-        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
+        finalizeUserMessageAfterSend(
+          addOrUpdateMessage,
+          conversation_id,
+          msg_id,
+          result,
+          prepared.displayMessage,
+          prepared
+        );
         emitter.emit('chat.history.refresh');
       } catch (error) {
         removeMessageByMsgId(msg_id);
@@ -532,6 +532,7 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
       if (!stored) return;
       if (sessionStorage.getItem(processedKey)) return;
 
+      let msg_id = '';
       try {
         const runtimeOk = await validateRuntimeMismatch(conversation_id);
         if (!runtimeOk) return;
@@ -540,38 +541,35 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
         setAiProcessing(true);
         aiProcessingRef.current = true;
         const { input, files = [] } = JSON.parse(stored) as { input: string; files?: string[] };
-        const msg_id = `initial_${conversation_id}_${Date.now()}`;
+        msg_id = `initial_${conversation_id}_${Date.now()}`;
         const loading_id = uuid();
-        const initialDisplayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
-
-        const userMessage: TMessage = {
-          id: msg_id,
-          msg_id,
-          conversation_id,
-          type: 'text',
-          position: 'right',
-          content: { content: initialDisplayMessage },
-          createdAt: Date.now(),
-        };
-        // Reset AI reply for new turn
-        // 重置 AI 回复用于新一轮
-        addOrUpdateMessage(userMessage, true);
+        const prepared = prepareUserMessageSend(input, files, effectiveWorkspace, msg_id, conversation_id);
+        publishOptimisticUserMessage(addOrUpdateMessage, prepared.optimisticMessage);
 
         void checkAndUpdateTitle(conversation_id, input);
         const result = await ipcBridge.openclawConversation.sendMessage.invoke({
-          input: initialDisplayMessage,
+          input: prepared.displayMessage,
           msg_id,
           conversation_id,
           files,
           loading_id,
         });
         assertBridgeSuccess(result, 'Failed to send initial message to OpenClaw');
-        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
+        finalizeUserMessageAfterSend(
+          addOrUpdateMessage,
+          conversation_id,
+          msg_id,
+          result,
+          prepared.displayMessage,
+          prepared
+        );
         emitter.emit('chat.history.refresh');
         sessionStorage.removeItem(storageKey);
       } catch {
+        if (msg_id) {
+          removeMessageByMsgId(msg_id);
+        }
         sessionStorage.removeItem(processedKey);
-        // Only reset aiProcessing on error, normal flow is reset by 'finish' event
         setAiProcessing(false);
         aiProcessingRef.current = false;
       }
@@ -649,6 +647,7 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
                   <FilePreview
                     key={path}
                     path={path}
+                    conversationId={conversation_id}
                     onRemove={() => setUploadFile(uploadFile.filter((v) => v !== path))}
                   />
                 ))}
@@ -660,6 +659,7 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
                       <FilePreview
                         key={path}
                         path={path}
+                        conversationId={conversation_id}
                         onRemove={() => {
                           const newAtPath = atPath.filter((v) =>
                             typeof v === 'string' ? v !== path : v.path !== path

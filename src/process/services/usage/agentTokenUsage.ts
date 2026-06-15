@@ -51,7 +51,7 @@ function resolveAgentKey(
       source: 'personal',
     };
   }
-  const teamId = conv.type === 'acp' ? (conv.extra as ConversationExtraSlice)?.teamId ?? extra.teamId : extra.teamId;
+  const teamId = conv.type === 'acp' ? ((conv.extra as ConversationExtraSlice)?.teamId ?? extra.teamId) : extra.teamId;
   if (teamId && extra.agentName) {
     return {
       key: `team:${teamId}:${extra.agentName}`,

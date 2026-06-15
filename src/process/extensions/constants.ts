@@ -25,8 +25,7 @@ export function getAppDataExtensionsDir(): string {
 }
 
 export function getEnvExtensionsDirs(): string[] {
-  const envPath =
-    process.env[ONE_EXTENSIONS_PATH_ENV] ?? process.env[LEGACY_ONE_EXTENSIONS_PATH_ENV];
+  const envPath = process.env[ONE_EXTENSIONS_PATH_ENV] ?? process.env[LEGACY_ONE_EXTENSIONS_PATH_ENV];
   if (!envPath) return [];
   return envPath.split(PATH_SEPARATOR).filter(Boolean);
 }

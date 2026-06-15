@@ -9,6 +9,7 @@
 // 2. 子进程管理，需要根据不同的agent处理不同的agent任务，同时所有子进程具备相同的通信机制
 import { GeminiAgent } from '@process/agent/gemini';
 import { forkTask } from './utils';
+import { shouldAutoApproveToolConfirmation } from '@/common/chat/toolConfirmationPolicy';
 export default forkTask(({ data }, pipe) => {
   pipe.log('gemini.init', data);
   console.log(`[GeminiWorker] presetRules length: ${data.presetRules?.length || 0}`);
@@ -30,6 +31,15 @@ export default forkTask(({ data }, pipe) => {
           const { confirmationDetails, ...other } = tool;
           if (confirmationDetails) {
             const { onConfirm, ...details } = confirmationDetails;
+            if (
+              shouldAutoApproveToolConfirmation({
+                ...tool,
+                confirmationDetails: details,
+              })
+            ) {
+              queueMicrotask(() => onConfirm('proceed_once'));
+              return { ...other, confirmationDetails: undefined };
+            }
             // Always keep the latest onConfirm reference
             confirmCallbacks.set(tool.callId, onConfirm);
 
@@ -64,9 +74,12 @@ export default forkTask(({ data }, pipe) => {
   pipe.on('init.history', (event: { text: string }, deferred) => {
     deferred.with(agent.injectConversationHistory(event.text));
   });
-  pipe.on('send.message', (event: { input: string; agentPrompt?: string; msg_id: string; files?: string[] }, deferred) => {
-    deferred.with(agent.send(event.agentPrompt ?? event.input, event.msg_id, event.files));
-  });
+  pipe.on(
+    'send.message',
+    (event: { input: string; agentPrompt?: string; msg_id: string; files?: string[] }, deferred) => {
+      deferred.with(agent.send(event.agentPrompt ?? event.input, event.msg_id, event.files));
+    }
+  );
 
   return agent.bootstrap;
 });

@@ -85,13 +85,16 @@ class AcpDetector {
   private persistCache(agents: DetectedAgent[]): void {
     try {
       // Best-effort, never block UI/startup for caching failures.
-      void ProcessConfig.set?.(AcpDetector.CACHE_KEY as never, {
-        version: AcpDetector.CACHE_VERSION,
-        platform: process.platform,
-        arch: process.arch,
-        createdAt: Date.now(),
-        agents,
-      } as never).catch(() => {});
+      void ProcessConfig.set?.(
+        AcpDetector.CACHE_KEY as never,
+        {
+          version: AcpDetector.CACHE_VERSION,
+          platform: process.platform,
+          arch: process.arch,
+          createdAt: Date.now(),
+          agents,
+        } as never
+      ).catch(() => {});
     } catch {
       // ignore
     }
@@ -259,7 +262,9 @@ class AcpDetector {
       }
 
       const promises = candidates.map((c) =>
-        Promise.resolve().then(async (): Promise<DetectedAgent | null> => ((await this.isCliAvailable(c.cliCommand)) ? c.agent : null))
+        Promise.resolve().then(
+          async (): Promise<DetectedAgent | null> => ((await this.isCliAvailable(c.cliCommand)) ? c.agent : null)
+        )
       );
 
       const results = await Promise.allSettled(promises);
@@ -345,7 +350,9 @@ class AcpDetector {
       if (!this.backgroundRefreshStarted) {
         this.backgroundRefreshStarted = true;
         setTimeout(() => {
-          void this.refreshAll().then(() => this.persistCache(this.detectedAgents)).catch(() => {});
+          void this.refreshAll()
+            .then(() => this.persistCache(this.detectedAgents))
+            .catch(() => {});
         }, 0);
       }
       return;

@@ -182,9 +182,7 @@ describe('WebuiEnterpriseModeProvider', () => {
     const initialCalls = getEnterpriseContextInvokeMock.mock.calls.length;
     window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
 
-    await waitFor(() =>
-      expect(getEnterpriseContextInvokeMock.mock.calls.length).toBeGreaterThan(initialCalls)
-    );
+    await waitFor(() => expect(getEnterpriseContextInvokeMock.mock.calls.length).toBeGreaterThan(initialCalls));
     expect(refreshMock).not.toHaveBeenCalled();
   });
 

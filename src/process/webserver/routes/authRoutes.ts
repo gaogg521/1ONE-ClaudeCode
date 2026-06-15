@@ -17,14 +17,14 @@ import { TokenUtils } from '@process/webserver/auth/middleware/TokenMiddleware';
 import { createAppError } from '../middleware/errorHandler';
 import { authRateLimiter, authenticatedActionLimiter, apiRateLimiter } from '../middleware/security';
 import { verifyQRTokenDirect } from '@process/bridge/webuiQR';
-import { authenticateWithLdap, formatLdapConnectionError, type LdapProviderConfig } from '../auth/providers/LdapAuthProvider';
+import {
+  authenticateWithLdap,
+  formatLdapConnectionError,
+  type LdapProviderConfig,
+} from '../auth/providers/LdapAuthProvider';
 import { resolveEnterpriseContext } from '../auth/enterpriseContext';
 import { getInstanceGovernance } from '../auth/instanceGovernance';
-import {
-  EnterpriseJoinError,
-  joinEnterpriseWithInvite,
-  previewEnterpriseInvite,
-} from '../auth/enterpriseJoinService';
+import { EnterpriseJoinError, joinEnterpriseWithInvite, previewEnterpriseInvite } from '../auth/enterpriseJoinService';
 import {
   buildFeishuAuthorizeUrl,
   exchangeFeishuCodeForUserAccessToken,
@@ -223,8 +223,7 @@ export function registerAuthRoutes(app: Express): void {
       const dingtalkConfigured = Boolean(dingtalkRow?.hasConfig);
       const wecomConfigured = Boolean(wecomRow?.hasConfig);
       const editionSettings = await getOrgEditionSettings();
-      const mode =
-        ldapEnabled || feishuEnabled || dingtalkEnabled || wecomEnabled ? 'enterprise' : 'standalone';
+      const mode = ldapEnabled || feishuEnabled || dingtalkEnabled || wecomEnabled ? 'enterprise' : 'standalone';
       res.json({
         success: true,
         data: {
@@ -382,10 +381,7 @@ export function registerAuthRoutes(app: Express): void {
         res.status(504).send('Feishu login timeout. Please retry.');
         return;
       }
-      if (
-        normalized.startsWith('Feishu token exchange failed:') ||
-        normalized.startsWith('Feishu user_info failed:')
-      ) {
+      if (normalized.startsWith('Feishu token exchange failed:') || normalized.startsWith('Feishu user_info failed:')) {
         const detail = normalized.replace(/^Feishu (token exchange|user_info) failed:\s*/u, '').trim();
         res.status(400).send(`Feishu login failed: ${detail || 'upstream request failed'}`);
         return;
@@ -607,10 +603,7 @@ export function registerAuthRoutes(app: Express): void {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       const normalized = msg.trim();
-      if (
-        normalized.startsWith('WeCom token request failed:') ||
-        normalized.startsWith('WeCom user info failed:')
-      ) {
+      if (normalized.startsWith('WeCom token request failed:') || normalized.startsWith('WeCom user info failed:')) {
         const detail = normalized.replace(/^WeCom (token request|user info) failed:\s*/u, '').trim();
         res.status(400).send(`WeCom login failed: ${detail || 'upstream request failed'}`);
         return;
@@ -699,89 +692,94 @@ export function registerAuthRoutes(app: Express): void {
    *
    * 说明：首次 LDAP 登录会自动 JIT 开通本地账号并绑定身份；重复登录走已绑定用户。
    */
-  app.post('/api/auth/ldap/login', authRateLimiter, AuthMiddleware.validateLoginInput, async (req: Request, res: Response) => {
-    let ldapConfig: LdapProviderConfig | undefined;
-    try {
-      const { username, password } = req.body as { username: string; password: string };
-      const provider: AuthProviderType = 'ldap';
-      const providerRow = await AuthProviderRepository.getProvider(provider);
-      if (!providerRow || !providerRow.enabled) {
-        res.status(404).json({ success: false, message: 'LDAP login is not enabled' });
-        return;
-      }
-
-      ldapConfig = providerRow.config as unknown as LdapProviderConfig;
-      if (!ldapConfig?.url || !ldapConfig?.baseDN) {
-        res.status(500).json({ success: false, message: 'LDAP provider not configured' });
-        return;
-      }
-
-      const result = await authenticateWithLdap(username, password, ldapConfig);
-
-      const { user, isAdmin } = await resolveOrProvisionLdapUser(username, {
-        externalId: result.externalId,
-        isAdmin: result.isAdmin,
-        orgUnitPath: result.orgUnitPath,
-      });
-
-      const joinedUser = await refreshUserAfterEnterpriseAutoJoin(user);
-
-      const effectiveRole = isAdmin ? 'system_admin' : normalizeWebRole(joinedUser.role);
-      if (isAdmin && joinedUser.role !== 'system_admin') {
-        try {
-          await UserRepository.setRole(joinedUser.id, 'system_admin');
-        } catch (roleError) {
-          console.warn('[AuthRoute] failed to persist LDAP admin role:', roleError);
+  app.post(
+    '/api/auth/ldap/login',
+    authRateLimiter,
+    AuthMiddleware.validateLoginInput,
+    async (req: Request, res: Response) => {
+      let ldapConfig: LdapProviderConfig | undefined;
+      try {
+        const { username, password } = req.body as { username: string; password: string };
+        const provider: AuthProviderType = 'ldap';
+        const providerRow = await AuthProviderRepository.getProvider(provider);
+        if (!providerRow || !providerRow.enabled) {
+          res.status(404).json({ success: false, message: 'LDAP login is not enabled' });
+          return;
         }
-      }
-      const token = await AuthService.generateToken({
-        id: joinedUser.id,
-        username: joinedUser.username,
-        role: effectiveRole,
-      });
 
-      await UserRepository.updateLastLogin(joinedUser.id);
-      res.cookie(AUTH_CONFIG.COOKIE.NAME, token, {
-        ...getCookieOptions(),
-        maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,
-      });
-      registerBrowserWebuiLoginSession(req, joinedUser, token, effectiveRole);
+        ldapConfig = providerRow.config as unknown as LdapProviderConfig;
+        if (!ldapConfig?.url || !ldapConfig?.baseDN) {
+          res.status(500).json({ success: false, message: 'LDAP provider not configured' });
+          return;
+        }
 
-      res.json({
-        success: true,
-        message: 'Login successful',
-        user: buildAuthResponseUser(joinedUser, effectiveRole),
-        token,
-      });
-    } catch (error: any) {
-      const msg = error instanceof Error ? error.message : String(error);
-      const lower = msg.toLowerCase();
-      const code = String(error?.code ?? '').toUpperCase();
-      if (
-        lower.includes('invalidcredentials') ||
-        lower.includes('invalid credentials') ||
-        lower.includes('user not found')
-      ) {
-        res.status(401).json({ success: false, message: 'Invalid username or password' });
-        return;
-      }
-      if (
-        lower.includes('timeout') ||
-        code === 'ETIMEDOUT' ||
-        code === 'ECONNREFUSED' ||
-        code === 'ECONNRESET' ||
-        code === 'ENOTFOUND'
-      ) {
-        res.status(503).json({
-          success: false,
-          message: formatLdapConnectionError(error, ldapConfig),
+        const result = await authenticateWithLdap(username, password, ldapConfig);
+
+        const { user, isAdmin } = await resolveOrProvisionLdapUser(username, {
+          externalId: result.externalId,
+          isAdmin: result.isAdmin,
+          orgUnitPath: result.orgUnitPath,
         });
-        return;
+
+        const joinedUser = await refreshUserAfterEnterpriseAutoJoin(user);
+
+        const effectiveRole = isAdmin ? 'system_admin' : normalizeWebRole(joinedUser.role);
+        if (isAdmin && joinedUser.role !== 'system_admin') {
+          try {
+            await UserRepository.setRole(joinedUser.id, 'system_admin');
+          } catch (roleError) {
+            console.warn('[AuthRoute] failed to persist LDAP admin role:', roleError);
+          }
+        }
+        const token = await AuthService.generateToken({
+          id: joinedUser.id,
+          username: joinedUser.username,
+          role: effectiveRole,
+        });
+
+        await UserRepository.updateLastLogin(joinedUser.id);
+        res.cookie(AUTH_CONFIG.COOKIE.NAME, token, {
+          ...getCookieOptions(),
+          maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,
+        });
+        registerBrowserWebuiLoginSession(req, joinedUser, token, effectiveRole);
+
+        res.json({
+          success: true,
+          message: 'Login successful',
+          user: buildAuthResponseUser(joinedUser, effectiveRole),
+          token,
+        });
+      } catch (error: any) {
+        const msg = error instanceof Error ? error.message : String(error);
+        const lower = msg.toLowerCase();
+        const code = String(error?.code ?? '').toUpperCase();
+        if (
+          lower.includes('invalidcredentials') ||
+          lower.includes('invalid credentials') ||
+          lower.includes('user not found')
+        ) {
+          res.status(401).json({ success: false, message: 'Invalid username or password' });
+          return;
+        }
+        if (
+          lower.includes('timeout') ||
+          code === 'ETIMEDOUT' ||
+          code === 'ECONNREFUSED' ||
+          code === 'ECONNRESET' ||
+          code === 'ENOTFOUND'
+        ) {
+          res.status(503).json({
+            success: false,
+            message: formatLdapConnectionError(error, ldapConfig),
+          });
+          return;
+        }
+        console.error('[AuthRoute] ldap login error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
       }
-      console.error('[AuthRoute] ldap login error:', error);
-      res.status(500).json({ success: false, message: 'Internal server error' });
     }
-  });
+  );
 
   /**
    * 用户登出 - Logout endpoint

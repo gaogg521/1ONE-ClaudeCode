@@ -29,7 +29,20 @@ describeOrSkip('migration v49: normalize legacy organization resource scopes', (
         `INSERT INTO rag_documents (id, tenant_id, title, file_path, file_size, mime_type, status, scope, team_id, created_by, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run('rag-1', 'tenant-a', 'Legacy RAG', '/tmp/a.md', 1, 'text/markdown', 'completed', 'tenant', null, 'user-1', now, now);
+      .run(
+        'rag-1',
+        'tenant-a',
+        'Legacy RAG',
+        '/tmp/a.md',
+        1,
+        'text/markdown',
+        'completed',
+        'tenant',
+        null,
+        'user-1',
+        now,
+        now
+      );
     driver
       .prepare(
         `INSERT INTO mcp_registry (id, tenant_id, name, type, endpoint, env_json, enabled, scope, team_id, created_by, created_at, updated_at)
@@ -51,8 +64,14 @@ describeOrSkip('migration v49: normalize legacy organization resource scopes', (
   it('backfills tenant/org scopes to organization', () => {
     runMigrations(driver, 48, 49);
 
-    expect((driver.prepare(`SELECT scope FROM rag_documents WHERE id = ?`).get('rag-1') as { scope: string }).scope).toBe('organization');
-    expect((driver.prepare(`SELECT scope FROM mcp_registry WHERE id = ?`).get('mcp-1') as { scope: string }).scope).toBe('organization');
-    expect((driver.prepare(`SELECT scope FROM skills_registry WHERE id = ?`).get('skill-1') as { scope: string }).scope).toBe('organization');
+    expect(
+      (driver.prepare(`SELECT scope FROM rag_documents WHERE id = ?`).get('rag-1') as { scope: string }).scope
+    ).toBe('organization');
+    expect(
+      (driver.prepare(`SELECT scope FROM mcp_registry WHERE id = ?`).get('mcp-1') as { scope: string }).scope
+    ).toBe('organization');
+    expect(
+      (driver.prepare(`SELECT scope FROM skills_registry WHERE id = ?`).get('skill-1') as { scope: string }).scope
+    ).toBe('organization');
   });
 });

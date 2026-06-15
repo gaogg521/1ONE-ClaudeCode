@@ -195,9 +195,7 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
                   borderRadius: '50%',
                   background: currentTheme.gradient,
                   border:
-                    currentTheme.theme === 'light'
-                      ? '2px solid rgba(0,0,0,0.6)'
-                      : '2px solid rgba(255,255,255,0.9)',
+                    currentTheme.theme === 'light' ? '2px solid rgba(0,0,0,0.6)' : '2px solid rgba(255,255,255,0.9)',
                   boxShadow: '0 0 0 1px rgba(255,255,255,0.2), 0 0 6px rgba(255,255,255,0.2)',
                   flexShrink: 0,
                 }}

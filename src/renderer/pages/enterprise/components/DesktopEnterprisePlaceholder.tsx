@@ -64,9 +64,7 @@ const DesktopEnterprisePlaceholder: React.FC<DesktopEnterprisePlaceholderProps> 
     if (!enterpriseBrowserUrl) return;
     try {
       await navigator.clipboard.writeText(enterpriseBrowserUrl);
-      Message.success(
-        t('settings.enterpriseConsole.desktopLinkCopied', { defaultValue: '链接已复制到剪贴板' })
-      );
+      Message.success(t('settings.enterpriseConsole.desktopLinkCopied', { defaultValue: '链接已复制到剪贴板' }));
     } catch {
       Message.error(
         t('settings.enterpriseConsole.desktopCopyFailed', { defaultValue: '复制失败，请手动选择并复制地址' })
@@ -129,8 +127,7 @@ const DesktopEnterprisePlaceholder: React.FC<DesktopEnterprisePlaceholderProps> 
                 className={styles.desktopAlert}
                 type='warning'
                 content={t('settings.enterpriseConsole.desktopWebuiStopped', {
-                  defaultValue:
-                    '本地 WebUI 未运行，无法打开或复制地址。请先到「单机 WebUI 设置」中启动服务。',
+                  defaultValue: '本地 WebUI 未运行，无法打开或复制地址。请先到「单机 WebUI 设置」中启动服务。',
                 })}
               />
             ) : null}

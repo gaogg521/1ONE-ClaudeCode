@@ -7,10 +7,7 @@
 import { existsSync } from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import {
-  isCodegraphBundled,
-  resolveCodegraphInvocation,
-} from '@process/services/agentToolkit/bundledCli';
+import { isCodegraphBundled, resolveCodegraphInvocation } from '@process/services/agentToolkit/bundledCli';
 
 const hasBundledRuntime = existsSync(
   path.join(

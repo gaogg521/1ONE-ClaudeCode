@@ -26,13 +26,7 @@ vi.mock('@arco-design/web-react', () => {
     value?: string;
     onChange?: (value: string) => void;
     placeholder?: string;
-  }) => (
-    <input
-      value={value}
-      placeholder={placeholder}
-      onChange={(event) => onChange?.(event.currentTarget.value)}
-    />
-  );
+  }) => <input value={value} placeholder={placeholder} onChange={(event) => onChange?.(event.currentTarget.value)} />;
   Input.TextArea = Input;
 
   const Form = ({ children }: React.PropsWithChildren) => <form>{children}</form>;
@@ -112,10 +106,9 @@ vi.mock('@arco-design/web-react', () => {
       {children}
     </select>
   );
-  Select.Option = ({
-    children,
-    value,
-  }: React.PropsWithChildren<{ value: string }>) => <option value={value}>{children}</option>;
+  Select.Option = ({ children, value }: React.PropsWithChildren<{ value: string }>) => (
+    <option value={value}>{children}</option>
+  );
 
   return {
     Button: ({
@@ -127,7 +120,11 @@ vi.mock('@arco-design/web-react', () => {
         {children}
       </button>
     ),
-    Card: ({ children, title, extra }: React.PropsWithChildren<{ title?: React.ReactNode; extra?: React.ReactNode }>) => (
+    Card: ({
+      children,
+      title,
+      extra,
+    }: React.PropsWithChildren<{ title?: React.ReactNode; extra?: React.ReactNode }>) => (
       <section>
         {title}
         {extra}

@@ -112,11 +112,7 @@ export function canManageScopedResource(
   return false;
 }
 
-export function getTeamPeerUserIds(
-  driver: ScopeDriver,
-  tenantId: string,
-  userId: string
-): string[] {
+export function getTeamPeerUserIds(driver: ScopeDriver, tenantId: string, userId: string): string[] {
   const rows = driver
     .prepare(
       `SELECT DISTINCT m2.user_id AS user_id

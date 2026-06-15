@@ -41,12 +41,8 @@ const EnterpriseSettings: React.FC = () => {
     return name.trim() !== profileState.data.name;
   }, [name, profileState.data]);
 
-  const createdAtLabel = profileState.data
-    ? new Date(profileState.data.created_at).toLocaleString()
-    : '—';
-  const updatedAtLabel = profileState.data
-    ? new Date(profileState.data.updated_at).toLocaleString()
-    : '—';
+  const createdAtLabel = profileState.data ? new Date(profileState.data.created_at).toLocaleString() : '—';
+  const updatedAtLabel = profileState.data ? new Date(profileState.data.updated_at).toLocaleString() : '—';
 
   const handleSave = async () => {
     const trimmed = name.trim();
@@ -91,9 +87,7 @@ const EnterpriseSettings: React.FC = () => {
             defaultValue: '维护当前企业的基础信息。首版支持修改企业名称，并查看企业标识与创建时间。',
           })}
           actions={
-            <Button onClick={() => void profileState.reload()}>
-              {t('common.refresh', { defaultValue: '刷新' })}
-            </Button>
+            <Button onClick={() => void profileState.reload()}>{t('common.refresh', { defaultValue: '刷新' })}</Button>
           }
         />
 
@@ -156,10 +150,7 @@ const EnterpriseSettings: React.FC = () => {
               <Button type='primary' loading={saving} disabled={!hasChanges} onClick={() => void handleSave()}>
                 {t('common.save', { defaultValue: '保存' })}
               </Button>
-              <Button
-                disabled={!profileState.data || saving}
-                onClick={() => setName(profileState.data?.name ?? '')}
-              >
+              <Button disabled={!profileState.data || saving} onClick={() => setName(profileState.data?.name ?? '')}>
                 {t('settings.enterpriseConsole.settingsReset', { defaultValue: '重置' })}
               </Button>
             </Space>

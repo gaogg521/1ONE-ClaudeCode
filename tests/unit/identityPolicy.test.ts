@@ -6,10 +6,7 @@ import {
   type IdentityKind,
 } from '@/common/auth/identityPolicy';
 
-function expectCapabilities(
-  kind: IdentityKind,
-  capabilities: Record<EditionCapability, boolean>
-): void {
+function expectCapabilities(kind: IdentityKind, capabilities: Record<EditionCapability, boolean>): void {
   const enabled = Object.entries(capabilities)
     .filter(([, value]) => value)
     .map(([capability]) => capability);
@@ -23,21 +20,10 @@ function expectCapabilities(
         kind === 'anonymous'
           ? null
           : {
-              id:
-                kind === 'desktop_operator'
-                  ? 'desktop-local-admin'
-                  : `${kind}-user`,
+              id: kind === 'desktop_operator' ? 'desktop-local-admin' : `${kind}-user`,
               username: kind,
-              role:
-                kind === 'enterprise_admin'
-                  ? 'org_admin'
-                  : kind === 'enterprise_member'
-                    ? 'member'
-                    : 'user',
-              tenant_id:
-                kind === 'enterprise_member' || kind === 'enterprise_admin'
-                  ? 'tenant-1'
-                  : 'default',
+              role: kind === 'enterprise_admin' ? 'org_admin' : kind === 'enterprise_member' ? 'member' : 'user',
+              tenant_id: kind === 'enterprise_member' || kind === 'enterprise_admin' ? 'tenant-1' : 'default',
             },
       enterpriseContext:
         kind === 'enterprise_member' || kind === 'enterprise_admin'
@@ -48,10 +34,7 @@ function expectCapabilities(
               role: kind === 'enterprise_admin' ? 'org_admin' : 'member',
             }
           : { joined: false, tenantId: 'default', tenantName: null },
-      managementMode:
-        kind === 'enterprise_member' || kind === 'enterprise_admin'
-          ? 'enterprise'
-          : 'standalone',
+      managementMode: kind === 'enterprise_member' || kind === 'enterprise_admin' ? 'enterprise' : 'standalone',
     }),
   });
 
@@ -82,10 +65,7 @@ describe('identityPolicy', () => {
                 id: expectedUserId,
                 username: kind,
                 role: kind === 'enterprise_admin' ? 'org_admin' : 'member',
-                tenant_id:
-                  kind === 'enterprise_member' || kind === 'enterprise_admin'
-                    ? 'tenant-1'
-                    : 'default',
+                tenant_id: kind === 'enterprise_member' || kind === 'enterprise_admin' ? 'tenant-1' : 'default',
               },
         enterpriseContext:
           kind === 'enterprise_member' || kind === 'enterprise_admin'
@@ -96,10 +76,7 @@ describe('identityPolicy', () => {
                 role: kind === 'enterprise_admin' ? 'org_admin' : 'member',
               }
             : { joined: false, tenantId: 'default', tenantName: null },
-        managementMode:
-          kind === 'enterprise_member' || kind === 'enterprise_admin'
-            ? 'enterprise'
-            : 'standalone',
+        managementMode: kind === 'enterprise_member' || kind === 'enterprise_admin' ? 'enterprise' : 'standalone',
       });
 
       expect(snapshot.kind).toBe(kind);

@@ -1,33 +1,31 @@
 import express from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  mockValidateToken,
-  mockGetDatabase,
-  prepareMock,
-  runTeamInsertMock,
-  runMembershipInsertMock,
-} = vi.hoisted(() => {
-  const runTeamInsert = vi.fn();
-  const runMembershipInsert = vi.fn();
-  const prepare = vi.fn((sql: string) => {
-    if (sql.includes('INSERT INTO teams')) {
-      return { run: runTeamInsert };
-    }
-    if (sql.includes('INSERT INTO team_memberships')) {
-      return { run: runMembershipInsert };
-    }
-    return { run: vi.fn(), get: vi.fn(), all: vi.fn() };
-  });
+const { mockValidateToken, mockGetDatabase, prepareMock, runTeamInsertMock, runMembershipInsertMock } = vi.hoisted(
+  () => {
+    const runTeamInsert = vi.fn();
+    const runMembershipInsert = vi.fn();
+    const prepare = vi.fn((sql: string) => {
+      if (sql.includes('INSERT INTO teams')) {
+        return { run: runTeamInsert };
+      }
+      if (sql.includes('INSERT INTO team_memberships')) {
+        return { run: runMembershipInsert };
+      }
+      return { run: vi.fn(), get: vi.fn(), all: vi.fn() };
+    });
 
-  return {
-    mockValidateToken: vi.fn(() => (_req: express.Request, _res: express.Response, next: express.NextFunction) => next()),
-    mockGetDatabase: vi.fn(),
-    prepareMock: prepare,
-    runTeamInsertMock: runTeamInsert,
-    runMembershipInsertMock: runMembershipInsert,
-  };
-});
+    return {
+      mockValidateToken: vi.fn(
+        () => (_req: express.Request, _res: express.Response, next: express.NextFunction) => next()
+      ),
+      mockGetDatabase: vi.fn(),
+      prepareMock: prepare,
+      runTeamInsertMock: runTeamInsert,
+      runMembershipInsertMock: runMembershipInsert,
+    };
+  }
+);
 
 vi.mock('@process/webserver/auth/repository/UserRepository', () => ({
   UserRepository: {
@@ -113,8 +111,9 @@ vi.mock('@process/webserver/auth/enterpriseJoinService', () => ({
 
 function getCreateTeamHandler(app: express.Express): express.RequestHandler {
   const layer = app.router.stack.find(
-    (entry: { route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> } }) =>
-      entry.route?.path === '/api/admin/teams' && entry.route?.methods?.post
+    (entry: {
+      route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> };
+    }) => entry.route?.path === '/api/admin/teams' && entry.route?.methods?.post
   );
 
   return layer?.route?.stack?.at(-1)?.handle as express.RequestHandler;
@@ -157,9 +156,7 @@ describe('registerAdminRoutes /api/admin/teams', () => {
     await handler(req, res, vi.fn());
 
     expect(runTeamInsertMock).toHaveBeenCalledOnce();
-    expect(prepareMock).toHaveBeenCalledWith(
-      expect.stringContaining("VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?)")
-    );
+    expect(prepareMock).toHaveBeenCalledWith(expect.stringContaining("VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?)"));
     expect(runMembershipInsertMock).toHaveBeenCalledOnce();
     expect(res.json).toHaveBeenCalledWith({
       success: true,

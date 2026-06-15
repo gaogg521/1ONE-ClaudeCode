@@ -503,7 +503,9 @@ export class TeamMcpServer {
     if (members.length === 0) {
       return 'No enterprise members found for assignment.';
     }
-    const lines = members.map((member) => `- @${member.username} (${member.id.slice(0, 8)}${member.role ? `, ${member.role}` : ''})`);
+    const lines = members.map(
+      (member) => `- @${member.username} (${member.id.slice(0, 8)}${member.role ? `, ${member.role}` : ''})`
+    );
     return `## Enterprise Members\nAssign human work with team_issue_escalate(assign_to_member="@username").\n${lines.join('\n')}`;
   }
 
@@ -571,10 +573,9 @@ export class TeamMcpServer {
   private async resolveTeamTenant(): Promise<{ tenantId: string } | null> {
     const { getDatabase } = await import('@process/services/database');
     const db = await getDatabase();
-    const row = db
-      .getDriver()
-      .prepare(`SELECT tenant_id FROM teams WHERE id = ?`)
-      .get(this.params.teamId) as { tenant_id: string } | undefined;
+    const row = db.getDriver().prepare(`SELECT tenant_id FROM teams WHERE id = ?`).get(this.params.teamId) as
+      | { tenant_id: string }
+      | undefined;
     return row ? { tenantId: row.tenant_id } : null;
   }
 }

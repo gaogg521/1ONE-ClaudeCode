@@ -11,13 +11,18 @@ import type { IResponseMessage } from '@/common/adapter/ipcBridge';
 import type { TProviderWithModel } from '@/common/config/storage';
 import { BaseApprovalStore, type IApprovalKey } from '@/common/chat/approval';
 import { ToolConfirmationOutcome } from '../agent/gemini/cli/tools/tools';
+import { isImageFilePath } from '@/common/chat/messageFiles';
+import { shouldAutoApproveToolConfirmation } from '@/common/chat/toolConfirmationPolicy';
+import { isYoloSessionMode, resolveSessionMode } from '@/common/config/defaultSessionMode';
 import { getDatabase } from '@process/services/database';
-import { addMessage, addOrUpdateMessage } from '@process/utils/message';
+import { addMessage, addOrUpdateMessage, flushConversationMessages } from '@process/utils/message';
 import { uuid } from '@/common/utils';
 import BaseAgentManager from './BaseAgentManager';
 import { IpcAgentEventEmitter } from './IpcAgentEventEmitter';
 import { mainError } from '@process/utils/mainLogger';
 import { ProcessConfig } from '@process/utils/initStorage';
+import { syncImageGenConversationModelEnv } from '@process/utils/imageGenMcpEnv';
+import { ensureBuiltinMcpBundles } from '@process/utils/ensureBuiltinMcpBundles';
 import type { IProvider } from '@/common/config/storage';
 import { getSystemDir } from '@process/utils/initStorage';
 import fs from 'node:fs';
@@ -73,6 +78,7 @@ type AionrsManagerData = {
   maxTokens?: number;
   maxTurns?: number;
   sessionMode?: string;
+  sessionModeUserSet?: boolean;
   sessionId?: string;
   resume?: string;
 };
@@ -81,7 +87,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   workspace: string;
   model: TProviderWithModel;
   readonly approvalStore = new AionrsApprovalStore();
-  private currentMode: string = 'default';
+  private currentMode: string = resolveSessionMode('aionrs', undefined);
   private static readonly autoFixedProtocolKeys = new Set<string>();
   private pendingModelIdentityNotice: string | null = null;
   private lastModelIdSeen: string | null = null;
@@ -114,11 +120,16 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   }
 
   constructor(data: AionrsManagerData, model: TProviderWithModel) {
-    super('aionrs', { ...data, model }, new IpcAgentEventEmitter());
+    const currentMode = resolveSessionMode('aionrs', data.sessionMode, {
+      userSet: data.sessionModeUserSet,
+    });
+    const yoloMode = isYoloSessionMode(currentMode) || Boolean(data.yoloMode);
+    super('aionrs', { ...data, model, sessionMode: currentMode, yoloMode }, new IpcAgentEventEmitter());
     this.workspace = data.workspace;
     this.conversation_id = data.conversation_id;
     this.model = model;
-    this.currentMode = data.sessionMode || 'default';
+    this.currentMode = currentMode;
+    this.yoloMode = yoloMode;
 
     // Start the worker bootstrap
     void this.start().catch(() => {});
@@ -133,6 +144,8 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
    * We persist `extra.aionrsSessionId` when `ready` fires; only then use `--resume`.
    */
   override async start() {
+    await syncImageGenConversationModelEnv(this.model).catch(() => {});
+
     try {
       const db = await getDatabase();
       const result = db.getConversationMessages(this.conversation_id, 0, 1);
@@ -146,9 +159,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       }
 
       const sessionArgs =
-        hasMessages && storedAionrsSession
-          ? { resume: storedAionrsSession }
-          : { sessionId: this.conversation_id };
+        hasMessages && storedAionrsSession ? { resume: storedAionrsSession } : { sessionId: this.conversation_id };
 
       const res = await super.start({ ...this.data.data, ...sessionArgs } as AionrsManagerData);
 
@@ -287,9 +298,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       const truncatedTail = fullText.slice(-MAX_CHARS);
       const headerLines: string[] = [];
       headerLines.push('[Conversation History]');
-      headerLines.push(
-        `Note: history may be truncated for context limits. ConversationId=${this.conversation_id}.`
-      );
+      headerLines.push(`Note: history may be truncated for context limits. ConversationId=${this.conversation_id}.`);
       if (snapshotPath) {
         headerLines.push(`Full history snapshot saved at: ${snapshotPath}`);
         headerLines.push('You may read it if you need older context.');
@@ -311,12 +320,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     await super.stop();
   }
 
-  async sendMessage(data: {
-    input: string;
-    agentPrompt?: string;
-    msg_id: string;
-    files?: string[];
-  }) {
+  async sendMessage(data: { input: string; agentPrompt?: string; msg_id: string; files?: string[] }) {
     const originalInput = data.input;
 
     // Detect model switches even when the worker is NOT rebuilt (some flows can update model routing without restart).
@@ -340,6 +344,11 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       }
     } catch {
       // ignore
+    }
+
+    if (data.files?.some((filePath) => isImageFilePath(filePath))) {
+      await ensureBuiltinMcpBundles();
+      await syncImageGenConversationModelEnv(this.model).catch(() => {});
     }
 
     const identityQuery = this.isModelIdentityQuery(originalInput);
@@ -402,6 +411,11 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
    * Check if a confirmation should be auto-approved based on current mode.
    */
   private tryAutoApprove(content: IMessageToolGroup['content'][number]): boolean {
+    if (shouldAutoApproveToolConfirmation(content)) {
+      void this.postMessagePromise(content.callId, ToolConfirmationOutcome.ProceedOnce);
+      return true;
+    }
+
     const type = content.confirmationDetails?.type;
 
     if (this.currentMode === 'yolo') {
@@ -413,6 +427,10 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
         void this.postMessagePromise(content.callId, ToolConfirmationOutcome.ProceedOnce);
         return true;
       }
+    }
+    if (type === 'info') {
+      void this.postMessagePromise(content.callId, ToolConfirmationOutcome.ProceedOnce);
+      return true;
     }
     return false;
   }
@@ -472,58 +490,66 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   init() {
     super.init();
     this.on('aionrs.message', (data) => {
-      if ((data as { type?: string }).type === 'aionrs_session_bound') {
-        const sid = String((data as { data?: unknown }).data ?? '').trim();
-        if (sid) void this.persistAionrsSessionId(sid);
-        return;
-      }
+      void this.handleAionrsMessage(data as IResponseMessage);
+    });
+  }
 
-      const contentTypes = ['content', 'tool_group'];
-      if (contentTypes.includes(data.type)) {
-        this.status = 'finished';
-      }
+  private async handleAionrsMessage(data: IResponseMessage): Promise<void> {
+    if ((data as { type?: string }).type === 'aionrs_session_bound') {
+      const sid = String((data as { data?: unknown }).data ?? '').trim();
+      if (sid) void this.persistAionrsSessionId(sid);
+      return;
+    }
 
-      if (data.type === 'start') {
-        this.status = 'running';
-        ipcBridge.conversation.responseStream.emit({
-          type: 'request_trace',
-          conversation_id: this.conversation_id,
-          msg_id: uuid(),
-          data: {
-            agentType: 'aionrs' as const,
-            provider: this.model.name,
-            modelId: this.model.useModel,
-            baseUrl: this.model.baseUrl,
-            platform: this.model.platform,
-            timestamp: Date.now(),
-          },
-        });
-      }
+    const contentTypes = ['content', 'tool_group'];
+    if (contentTypes.includes(data.type)) {
+      this.status = 'finished';
+    }
 
-      data.conversation_id = this.conversation_id;
+    if (data.type === 'start') {
+      this.status = 'running';
+      ipcBridge.conversation.responseStream.emit({
+        type: 'request_trace',
+        conversation_id: this.conversation_id,
+        msg_id: uuid(),
+        data: {
+          agentType: 'aionrs' as const,
+          provider: this.model.name,
+          modelId: this.model.useModel,
+          baseUrl: this.model.baseUrl,
+          platform: this.model.platform,
+          timestamp: Date.now(),
+        },
+      });
+    }
 
-      if (data.type === 'error') {
-        // Auto-fix common "protocol mismatch" issues for gateway providers (LiteLLM/new-api).
-        // Example error:
-        // "The model does not support the [\"anthropic\",\"claude_code\"] protocols, it only supports [\"openai\"]."
-        const errText = String((data as { data?: unknown }).data ?? '');
-        void this.maybeAutoFixProtocolMismatch(errText).catch(() => {});
-      }
+    data.conversation_id = this.conversation_id;
 
-      // Transform and persist message (skip transient UI state)
-      const skipTransformTypes = ['thought', 'finished', 'start', 'finish'];
-      if (!skipTransformTypes.includes(data.type)) {
-        const tMessage = transformMessage(data as IResponseMessage);
-        if (tMessage) {
-          addOrUpdateMessage(this.conversation_id, tMessage, 'aionrs');
-          if (tMessage.type === 'tool_group') {
-            this.handleConformationMessage(tMessage);
-          }
+    if (data.type === 'error') {
+      // Auto-fix common "protocol mismatch" issues for gateway providers (LiteLLM/new-api).
+      // Example error:
+      // "The model does not support the [\"anthropic\",\"claude_code\"] protocols, it only supports [\"openai\"]."
+      const errText = String((data as { data?: unknown }).data ?? '');
+      void this.maybeAutoFixProtocolMismatch(errText).catch(() => {});
+    }
+
+    // Transform and persist message (skip transient UI state)
+    const skipTransformTypes = ['thought', 'finished', 'start', 'finish'];
+    if (!skipTransformTypes.includes(data.type)) {
+      const tMessage = transformMessage(data as IResponseMessage);
+      if (tMessage) {
+        addOrUpdateMessage(this.conversation_id, tMessage, 'aionrs');
+        if (tMessage.type === 'tool_group') {
+          this.handleConformationMessage(tMessage);
         }
       }
+    }
 
-      ipcBridge.conversation.responseStream.emit(data as IResponseMessage);
-    });
+    if (data.type === 'finish' || data.type === 'error') {
+      await flushConversationMessages(this.conversation_id);
+    }
+
+    ipcBridge.conversation.responseStream.emit(data as IResponseMessage);
   }
 
   private async maybeAutoFixProtocolMismatch(errorMessage: string): Promise<void> {
@@ -532,7 +558,9 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     const looksLikeProtocolMismatch =
       msg.includes('does not support') &&
       msg.includes('protocol') &&
-      (msg.includes('only supports ["openai"]') || msg.includes('only supports [\\"openai\\"]') || msg.includes('only supports [openai]'));
+      (msg.includes('only supports ["openai"]') ||
+        msg.includes('only supports [\\"openai\\"]') ||
+        msg.includes('only supports [openai]'));
     if (!looksLikeProtocolMismatch) return;
 
     const providerId = this.model.id;
@@ -569,18 +597,23 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
 
   async setMode(mode: string): Promise<{ success: boolean; data?: { mode: string } }> {
     this.currentMode = mode;
-    this.saveSessionMode(mode);
+    this.yoloMode = isYoloSessionMode(mode);
+    this.saveSessionMode(mode, true);
     return { success: true, data: { mode: this.currentMode } };
   }
 
-  private async saveSessionMode(mode: string): Promise<void> {
+  private async saveSessionMode(mode: string, userSet = false): Promise<void> {
     try {
       const db = await getDatabase();
       const result = db.getConversation(this.conversation_id);
       if (result.success && result.data && result.data.type === 'aionrs') {
         const conversation = result.data;
         db.updateConversation(this.conversation_id, {
-          extra: { ...conversation.extra, sessionMode: mode },
+          extra: {
+            ...conversation.extra,
+            sessionMode: mode,
+            ...(userSet ? { sessionModeUserSet: true } : {}),
+          },
         } as Partial<typeof conversation>);
       }
     } catch (error) {

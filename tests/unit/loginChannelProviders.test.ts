@@ -5,7 +5,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { testDingTalkAppCredentials, buildDingTalkAuthorizeUrl, resolveDingTalkExternalId } from '@/process/webserver/auth/providers/DingTalkAuthProvider';
+import {
+  testDingTalkAppCredentials,
+  buildDingTalkAuthorizeUrl,
+  resolveDingTalkExternalId,
+} from '@/process/webserver/auth/providers/DingTalkAuthProvider';
 import {
   testWeComAppCredentials,
   buildWeComAuthorizeUrl,
@@ -16,9 +20,7 @@ describe('DingTalkAuthProvider', () => {
   beforeEach(() => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ errcode: 0, access_token: 'token' }), { status: 200 })
-      )
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ errcode: 0, access_token: 'token' }), { status: 200 }))
     );
   });
 
@@ -40,9 +42,7 @@ describe('WeComAuthProvider', () => {
   beforeEach(() => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ errcode: 0, access_token: 'token' }), { status: 200 })
-      )
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ errcode: 0, access_token: 'token' }), { status: 200 }))
     );
   });
 
@@ -73,9 +73,7 @@ describe('WeComAuthProvider', () => {
   it('resolves user id from oauth code', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ errcode: 0, UserId: 'zhangsan' }), { status: 200 })
-      )
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ errcode: 0, UserId: 'zhangsan' }), { status: 200 }))
     );
     await expect(fetchWeComUserIdByOAuthCode('token', 'code')).resolves.toBe('zhangsan');
   });

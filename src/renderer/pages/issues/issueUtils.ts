@@ -40,26 +40,14 @@ export type IssueListItem = RequirementRecord & {
   epicSubject: string | null;
 };
 
-export const ISSUE_STATUS_ORDER: RequirementStatus[] = [
-  'backlog',
-  'planning',
-  'developing',
-  'testing',
-  'completed',
-];
+export const ISSUE_STATUS_ORDER: RequirementStatus[] = ['backlog', 'planning', 'developing', 'testing', 'completed'];
 
 export function flattenIssues(tree: RequirementRecord[]): IssueListItem[] {
   const items: IssueListItem[] = [];
 
-  const walk = (
-    nodes: RequirementRecord[],
-    context: { epicId: string | null; epicSubject: string | null }
-  ) => {
+  const walk = (nodes: RequirementRecord[], context: { epicId: string | null; epicSubject: string | null }) => {
     nodes.forEach((node) => {
-      const nextContext =
-        node.type === 'epic'
-          ? { epicId: node.id, epicSubject: node.subject }
-          : context;
+      const nextContext = node.type === 'epic' ? { epicId: node.id, epicSubject: node.subject } : context;
 
       if (node.type !== 'epic') {
         items.push({
@@ -79,10 +67,7 @@ export function flattenIssues(tree: RequirementRecord[]): IssueListItem[] {
   return items;
 }
 
-export function findRequirementById(
-  tree: RequirementRecord[],
-  requirementId: string
-): RequirementRecord | null {
+export function findRequirementById(tree: RequirementRecord[], requirementId: string): RequirementRecord | null {
   for (const node of tree) {
     if (node.id === requirementId) {
       return node;

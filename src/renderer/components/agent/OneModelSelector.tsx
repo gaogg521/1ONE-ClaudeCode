@@ -84,7 +84,10 @@ export const OneModelSelector: React.FC<{ conversationId: string }> = ({ convers
       conversationId,
       providers: Array.isArray(modelConfig) ? modelConfig.length : null,
       availableModels: availableModels.length,
-      firstProvider: Array.isArray(modelConfig) && modelConfig.length > 0 ? { id: modelConfig[0].id, platform: modelConfig[0].platform } : null,
+      firstProvider:
+        Array.isArray(modelConfig) && modelConfig.length > 0
+          ? { id: modelConfig[0].id, platform: modelConfig[0].platform }
+          : null,
     });
   }, [availableModels.length, conversationId, modelConfig]);
 
@@ -102,8 +105,7 @@ export const OneModelSelector: React.FC<{ conversationId: string }> = ({ convers
     [availableModels, conversationId]
   );
 
-  const displayLabel =
-    currentModelLabel || currentModelId || t('common.defaultModel', { defaultValue: '默认模型' });
+  const displayLabel = currentModelLabel || currentModelId || t('common.defaultModel', { defaultValue: '默认模型' });
 
   const hasDropdown = availableModels.length > 0;
 
@@ -159,4 +161,3 @@ export const OneModelSelector: React.FC<{ conversationId: string }> = ({ convers
 };
 
 export default OneModelSelector;
-

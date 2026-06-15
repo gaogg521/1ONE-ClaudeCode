@@ -31,10 +31,7 @@ export function registerCmeasRoutes(app: Express, auth: DevopsRouteAuth): void {
 
   app.get('/api/admin/metrics', apiRateLimiter, auth, async (req, res) => {
     try {
-      const rows = await CmeasService.listMetrics(
-        resolveDevopsTenantId(req),
-        String(req.query.type || '')
-      );
+      const rows = await CmeasService.listMetrics(resolveDevopsTenantId(req), String(req.query.type || ''));
       res.json({ success: true, data: rows });
     } catch {
       res.status(500).json({ success: false, message: 'Internal server error' });

@@ -30,10 +30,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function pickFirstNonEmptyString(
-  source: Record<string, unknown>,
-  keys: readonly string[]
-): string | undefined {
+function pickFirstNonEmptyString(source: Record<string, unknown>, keys: readonly string[]): string | undefined {
   for (const key of keys) {
     const value = source[key];
     if (typeof value === 'string' && value.trim().length > 0) {

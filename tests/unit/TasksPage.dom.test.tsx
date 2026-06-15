@@ -34,9 +34,9 @@ vi.mock('@arco-design/web-react', async () => {
   const Modal = ({ children }: React.PropsWithChildren) => <div>{children}</div>;
   (Modal as unknown as { confirm: ReturnType<typeof vi.fn> }).confirm = vi.fn();
   const Form = ({ children }: React.PropsWithChildren) => <form>{children}</form>;
-  (Form as unknown as { Item: React.FC<React.PropsWithChildren> }).Item = ({
-    children,
-  }: React.PropsWithChildren) => <div>{children}</div>;
+  (Form as unknown as { Item: React.FC<React.PropsWithChildren> }).Item = ({ children }: React.PropsWithChildren) => (
+    <div>{children}</div>
+  );
   return {
     Button: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => (
       <button onClick={onClick}>{children}</button>

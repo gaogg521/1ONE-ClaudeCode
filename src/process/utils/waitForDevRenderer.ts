@@ -23,13 +23,10 @@ export async function waitForDevRendererUrl(rendererUrl: string, maxWaitMs = 90_
 
   const probe = (): Promise<boolean> =>
     new Promise((resolve) => {
-      const req = http.request(
-        { hostname: host, port, path, method: 'GET', timeout: 3000 },
-        (res) => {
-          res.resume();
-          resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 500);
-        }
-      );
+      const req = http.request({ hostname: host, port, path, method: 'GET', timeout: 3000 }, (res) => {
+        res.resume();
+        resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 500);
+      });
       req.on('error', () => resolve(false));
       req.on('timeout', () => {
         req.destroy();

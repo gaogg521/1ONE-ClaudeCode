@@ -45,7 +45,10 @@ export function parseMentionUsernames(body: string): string[] {
   return [...new Set([...matches].map((match) => match[1]?.trim()).filter(Boolean))] as string[];
 }
 
-async function resolveUsersByUsernames(tenantId: string, usernames: string[]): Promise<Array<{ id: string; username: string; email?: string }>> {
+async function resolveUsersByUsernames(
+  tenantId: string,
+  usernames: string[]
+): Promise<Array<{ id: string; username: string; email?: string }>> {
   if (usernames.length === 0) {
     return [];
   }
@@ -163,7 +166,9 @@ export async function notifyEnterpriseUsers(
   return results;
 }
 
-export async function dispatchIssueCommentNotifications(payload: IssueNotificationPayload): Promise<NotificationDeliveryResult[]> {
+export async function dispatchIssueCommentNotifications(
+  payload: IssueNotificationPayload
+): Promise<NotificationDeliveryResult[]> {
   const mentionNames = parseMentionUsernames(payload.body);
   const mentionedUsers = await resolveUsersByUsernames(payload.tenantId, mentionNames);
   const explicitUsers = await resolveUsersByIds(payload.explicitUserIds ?? []);

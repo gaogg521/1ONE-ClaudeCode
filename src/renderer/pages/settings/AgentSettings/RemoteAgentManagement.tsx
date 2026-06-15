@@ -219,7 +219,11 @@ const RemoteAgentFormModal: React.FC<{
         style={{ maxWidth: '92vw', borderRadius: 16 }}
         contentStyle={{ background: 'var(--bg-1)', borderRadius: 16, padding: '20px 24px 16px', overflow: 'auto' }}
         footer={{
-          render: () => <Button className='settings-pill-button' onClick={handleCancelPairing}>{t('settings.remoteAgent.pendingCancel')}</Button>,
+          render: () => (
+            <Button className='settings-pill-button' onClick={handleCancelPairing}>
+              {t('settings.remoteAgent.pendingCancel')}
+            </Button>
+          ),
         }}
         afterClose={() => {
           stopPolling();
@@ -370,7 +374,7 @@ const RemoteAgentFormModal: React.FC<{
             icon={<Speed theme='outline' size='14' />}
             loading={testing}
             onClick={handleTestConnection}
-          className='settings-pill-button'
+            className='settings-pill-button'
           >
             {t('settings.remoteAgent.testConnection')}
           </Button>
@@ -420,9 +424,7 @@ const RemoteAgentManagement: React.FC = () => {
   return (
     <div className='flex flex-col gap-16px py-16px'>
       <div className='settings-inline-section-head flex items-center justify-between px-16px'>
-        <span className='settings-content-summary'>
-          {t('settings.agentManagement.remoteAgentsDescription')}
-        </span>
+        <span className='settings-content-summary'>{t('settings.agentManagement.remoteAgentsDescription')}</span>
         <Button
           type='outline'
           shape='round'
@@ -454,10 +456,7 @@ const RemoteAgentManagement: React.FC = () => {
       ) : (
         <div className='grid grid-cols-1 gap-12px px-16px md:grid-cols-2 xl:grid-cols-3'>
           {agents.map((agent) => (
-            <div
-              key={agent.id}
-              className='settings-card-grid-item flex min-h-[214px] flex-col p-14px'
-            >
+            <div key={agent.id} className='settings-card-grid-item flex min-h-[214px] flex-col p-14px'>
               <div className='mb-12px flex justify-center'>
                 <Avatar
                   size={48}

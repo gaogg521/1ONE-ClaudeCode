@@ -80,9 +80,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const showBackToChatButton = Boolean(layout?.isMobile && isSettingsRoute);
   const showNewConversationButton = Boolean(layout?.isMobile && workspaceAvailable);
   const showNotificationCenter = Boolean(
-    enterpriseMode.webuiApiBase &&
-      enterpriseMode.hasJoinedEnterprise &&
-      auth.status === 'authenticated'
+    enterpriseMode.webuiApiBase && enterpriseMode.hasJoinedEnterprise && auth.status === 'authenticated'
   );
   const siderTooltip = layout?.siderCollapsed
     ? t('common.expandMore', { defaultValue: 'Expand sidebar' })

@@ -113,9 +113,7 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
       const db = await getDatabase();
       const result = db.getAllUsers();
       if (!result.success || !result.data) return [];
-      return result.data
-        .filter((u) => u.id !== DESKTOP_USER_ID)
-        .map((u) => ({ id: u.id, username: u.username }));
+      return result.data.filter((u) => u.id !== DESKTOP_USER_ID).map((u) => ({ id: u.id, username: u.username }));
     } catch (error) {
       console.error('[KanbanBridge] listUsers failed:', error);
       return [];
@@ -138,14 +136,13 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
         .map((u) => ({
           id: u.id,
           username: u.username,
-          role:
-            u.role === 'system_admin' || u.role === 'org_admin'
-              ? ('admin' as const)
-              : ('user' as const),
+          role: u.role === 'system_admin' || u.role === 'org_admin' ? ('admin' as const) : ('user' as const),
           created_at: u.created_at,
           last_login: u.last_login,
         }));
-    } catch { return []; }
+    } catch {
+      return [];
+    }
   });
 
   ipcBridge.adminUsers.create.provider(async ({ username, password, role }) => {
@@ -176,4 +173,3 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
     return true;
   });
 }
-

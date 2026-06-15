@@ -25,9 +25,7 @@ export function registerCtestRoutes(app: Express, auth: DevopsRouteAuth): void {
         tenantId: resolveDevopsTenantId(req),
         name: String(req.body?.name ?? ''),
         description: String(req.body?.description ?? ''),
-        linkedRequirementId: req.body?.linked_requirement_id
-          ? String(req.body.linked_requirement_id)
-          : undefined,
+        linkedRequirementId: req.body?.linked_requirement_id ? String(req.body.linked_requirement_id) : undefined,
         createdBy: req.user!.id,
       });
       res.json({ success: true, data });
@@ -42,10 +40,7 @@ export function registerCtestRoutes(app: Express, auth: DevopsRouteAuth): void {
 
   app.get('/api/admin/test-cases', apiRateLimiter, auth, async (req, res) => {
     try {
-      const rows = await CtestService.listCases(
-        String(req.query.planId || ''),
-        resolveDevopsTenantId(req)
-      );
+      const rows = await CtestService.listCases(String(req.query.planId || ''), resolveDevopsTenantId(req));
       res.json({ success: true, data: rows });
     } catch (error) {
       if (error instanceof Error && error.message === 'plan not found') {

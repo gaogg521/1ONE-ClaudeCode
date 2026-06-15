@@ -21,7 +21,10 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = FEIS
   }
 }
 
-export async function getFeishuTenantAccessToken(): Promise<{ token: string; receiveIdType: 'open_id' | 'union_id' } | null> {
+export async function getFeishuTenantAccessToken(): Promise<{
+  token: string;
+  receiveIdType: 'open_id' | 'union_id';
+} | null> {
   const provider = await AuthProviderRepository.getProvider('feishu');
   if (!provider?.enabled) {
     return null;

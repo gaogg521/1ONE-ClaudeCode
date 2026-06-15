@@ -92,10 +92,7 @@ const EnterpriseUsagePage: React.FC = () => {
       dataIndex: 'username',
       render: (name: string, record: MemberDashboardRecord) => (
         <div className='flex items-center gap-8px'>
-          <Badge
-            status={record.is_online ? 'processing' : 'default'}
-            dot
-          />
+          <Badge status={record.is_online ? 'processing' : 'default'} dot />
           <span className='font-600 text-t-primary'>{name}</span>
         </div>
       ),
@@ -123,7 +120,12 @@ const EnterpriseUsagePage: React.FC = () => {
             <div className='text-11px text-t-tertiary mt-2px'>
               {t('admin.usage.lastSeen', {
                 defaultValue: '最近：{{time}}',
-                time: new Date(record.last_login).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                time: new Date(record.last_login).toLocaleString('zh-CN', {
+                  month: 'numeric',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
               })}
             </div>
           )}
@@ -182,12 +184,7 @@ const EnterpriseUsagePage: React.FC = () => {
           }
         />
 
-        <ModuleDataState
-          loading={statsState.loading}
-          error={statsState.error}
-          empty={false}
-          emptyDescription=''
-        >
+        <ModuleDataState loading={statsState.loading} error={statsState.error} empty={false} emptyDescription=''>
           <Row gutter={[16, 16]}>
             {statCards.map((card) => (
               <Col key={card.title} xs={12} sm={8} lg={6}>

@@ -74,7 +74,9 @@ const _AssociatedConversation: React.FC<{ conversation_id: string }> = ({ conver
           })}
           {hasMore ? (
             <Menu.Item key='__view_all__'>
-              <span className='text-t-secondary'>{t('conversation.history.viewAll', { defaultValue: '查看所有' })}</span>
+              <span className='text-t-secondary'>
+                {t('conversation.history.viewAll', { defaultValue: '查看所有' })}
+              </span>
             </Menu.Item>
           ) : null}
         </Menu>

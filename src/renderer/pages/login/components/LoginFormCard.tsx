@@ -1,12 +1,5 @@
 import React, { useState } from 'react';
-import {
-  Alert,
-  Button,
-  Checkbox,
-  Input,
-  Select,
-  Typography,
-} from '@arco-design/web-react';
+import { Alert, Button, Checkbox, Input, Select, Typography } from '@arco-design/web-react';
 import { Left, Lock, Send, Shield, User } from '@icon-park/react';
 import loginLogo from '@renderer/assets/logos/brand/app.png';
 import EnterpriseLoginChannelPanel from '@/renderer/pages/enterprise/components/EnterpriseLoginChannelPanel';
@@ -219,169 +212,182 @@ const LoginFormCard: React.FC<LoginFormCardProps> = ({
         ) : null}
 
         {showPasswordForm ? (
-        <form className='login-page__form' onSubmit={onSubmit}>
-          <div className='login-page__form-item'>
-            <Typography.Text className='login-page__label'>
-              {isEnterpriseLogin
-                ? t('login.accountName', { defaultValue: '账户名' })
-                : t('login.username', { defaultValue: '用户名' })}
-            </Typography.Text>
-            <Input
-              id='login-username-input'
-              name='username'
-              prefix={isEnterpriseLogin ? undefined : <User theme='outline' size='16' />}
-              suffix={isEnterpriseLogin ? <User theme='outline' size='16' /> : undefined}
-              placeholder={
-                isEnterpriseLogin
-                  ? t('login.accountNamePlaceholder', { defaultValue: '请输入您的账户名' })
-                  : t('login.usernamePlaceholder', { defaultValue: '请输入用户名' })
-              }
-              autoComplete='username'
-              value={username}
-              onChange={onUsernameChange}
-              size='large'
-              className='login-page__input'
-            />
-          </div>
-
-          <div className='login-page__form-item'>
-            <Typography.Text className='login-page__label'>{t('login.password')}</Typography.Text>
-            <Input.Password
-              id='password'
-              name='password'
-              prefix={isEnterpriseLogin ? undefined : <Lock theme='outline' size='16' />}
-              suffix={isEnterpriseLogin ? <Lock theme='outline' size='16' /> : undefined}
-              placeholder={t('login.passwordPlaceholder', { defaultValue: '请输入您的密码' })}
-              autoComplete='current-password'
-              value={password}
-              onChange={onPasswordChange}
-              size='large'
-              className='login-page__input'
-            />
-          </div>
-
-          <Checkbox checked={rememberMe} onChange={onRememberMeChange} className='login-page__remember'>
-            {t('login.rememberMe')}
-          </Checkbox>
-
-          <div
-            role='alert'
-            aria-live='polite'
-            className={`login-page__message ${message ? 'login-page__message--visible' : ''} ${message ? (message.type === 'success' ? 'login-page__message--success' : 'login-page__message--error') : ''}`}
-            hidden={!message}
-          >
-            {message?.text}
-          </div>
-
-          <Button type='primary' htmlType='submit' long size='large' loading={loading} className='login-page__submit-btn'>
-            {loading ? t('login.submitting') : t('login.submit')}
-          </Button>
-
-          {showOAuthSection ? (
-            <>
-              <div className='login-page__oauth-divider'>
-                <span>{t('login.orDivider', { defaultValue: '或' })}</span>
-              </div>
-
-              {showFeishuLogin ? (
-                <Button
-                  long
-                  size='large'
-                  htmlType='button'
-                  className='login-page__oauth-btn mb-8px'
-                  onClick={onFeishuOauth}
-                  disabled={loading}
-                >
-                  <span className='login-page__oauth-btn-inner'>
-                    <Send theme='filled' size={16} fill='var(--login-accent)' className='login-page__feishu-icon' />
-                    <span>{t('login.methods.feishuOauth', { defaultValue: '使用飞书登录' })}</span>
-                  </span>
-                </Button>
-              ) : null}
-
-              {showFeishuLogin && feishuLoginEnabled ? (
-                <>
-                  <Button type='text' long htmlType='button' className='login-page__feishu-qr-toggle' onClick={onToggleFeishuQr}>
-                    {showFeishuQr
-                      ? t('login.hideFeishuQr', { defaultValue: '收起飞书扫码' })
-                      : t('login.showFeishuQr', { defaultValue: '显示飞书扫码登录' })}
-                  </Button>
-
-                  {showFeishuQr ? (
-                    <div className='login-page__feishu-qr'>
-                      <div className='login-page__feishu-qr-title'>
-                        {t('login.methods.feishuQrTitle', { defaultValue: '或使用飞书扫码登录' })}
-                      </div>
-                      <div id='one-feishu-qr-container' className='login-page__feishu-qr-container' />
-                    </div>
-                  ) : null}
-                </>
-              ) : null}
-
-              {showDingtalkLogin ? (
-                <Button
-                  long
-                  size='large'
-                  htmlType='button'
-                  className={`login-page__oauth-btn mb-8px${dingtalkLoginEnabled ? '' : ' login-page__oauth-btn--pending'}`}
-                  onClick={onDingtalkOauth}
-                  disabled={loading}
-                >
-                  <span className='login-page__oauth-btn-inner'>
-                    <Send theme='filled' size={16} fill='var(--login-accent)' />
-                    <span>{t('login.methods.dingtalkOauth', { defaultValue: '使用钉钉登录' })}</span>
-                  </span>
-                </Button>
-              ) : null}
-
-              {showWecomLogin ? (
-                <Button
-                  long
-                  size='large'
-                  htmlType='button'
-                  className={`login-page__oauth-btn mb-8px${wecomLoginEnabled ? '' : ' login-page__oauth-btn--pending'}`}
-                  onClick={onWecomOauth}
-                  disabled={loading}
-                >
-                  <span className='login-page__oauth-btn-inner'>
-                    <Send theme='filled' size={16} fill='var(--login-accent)' />
-                    <span>{t('login.methods.wecomOauth', { defaultValue: '使用企业微信登录' })}</span>
-                  </span>
-                </Button>
-              ) : null}
-            </>
-          ) : null}
-
-          {feishuQrError ? (
-            <Typography.Paragraph type='error' className='login-page__method-hint text-12px'>
-              {t('login.methods.feishuQrError', { defaultValue: '飞书二维码初始化失败' })}
-            </Typography.Paragraph>
-          ) : null}
-
-          {isBrowserWebUi && showEnterpriseExtras ? (
-            <div className='login-page__invite-block'>
-              <Button
-                type='text'
-                long
-                htmlType='button'
-                className='login-page__invite-toggle'
-                onClick={() => setInviteExpanded((value) => !value)}
-              >
-                {inviteExpanded
-                  ? t('login.inviteCollapse', { defaultValue: '收起邀请码说明' })
-                  : t('login.inviteTitle', { defaultValue: '或使用邀请码加入' })}
-              </Button>
-              {inviteExpanded ? (
-                <Typography.Paragraph type='secondary' className='login-page__invite-detail'>
-                  {t('login.inviteCoexist', {
-                    defaultValue:
-                      '邀请码与企业账号登录可并存：先用上方任一方式登录（本地账户、LDAP、飞书等），登录成功后进入「企业」页输入邀请码即可加入。',
-                  })}
-                </Typography.Paragraph>
-              ) : null}
+          <form className='login-page__form' onSubmit={onSubmit}>
+            <div className='login-page__form-item'>
+              <Typography.Text className='login-page__label'>
+                {isEnterpriseLogin
+                  ? t('login.accountName', { defaultValue: '账户名' })
+                  : t('login.username', { defaultValue: '用户名' })}
+              </Typography.Text>
+              <Input
+                id='login-username-input'
+                name='username'
+                prefix={isEnterpriseLogin ? undefined : <User theme='outline' size='16' />}
+                suffix={isEnterpriseLogin ? <User theme='outline' size='16' /> : undefined}
+                placeholder={
+                  isEnterpriseLogin
+                    ? t('login.accountNamePlaceholder', { defaultValue: '请输入您的账户名' })
+                    : t('login.usernamePlaceholder', { defaultValue: '请输入用户名' })
+                }
+                autoComplete='username'
+                value={username}
+                onChange={onUsernameChange}
+                size='large'
+                className='login-page__input'
+              />
             </div>
-          ) : null}
-        </form>
+
+            <div className='login-page__form-item'>
+              <Typography.Text className='login-page__label'>{t('login.password')}</Typography.Text>
+              <Input.Password
+                id='password'
+                name='password'
+                prefix={isEnterpriseLogin ? undefined : <Lock theme='outline' size='16' />}
+                suffix={isEnterpriseLogin ? <Lock theme='outline' size='16' /> : undefined}
+                placeholder={t('login.passwordPlaceholder', { defaultValue: '请输入您的密码' })}
+                autoComplete='current-password'
+                value={password}
+                onChange={onPasswordChange}
+                size='large'
+                className='login-page__input'
+              />
+            </div>
+
+            <Checkbox checked={rememberMe} onChange={onRememberMeChange} className='login-page__remember'>
+              {t('login.rememberMe')}
+            </Checkbox>
+
+            <div
+              role='alert'
+              aria-live='polite'
+              className={`login-page__message ${message ? 'login-page__message--visible' : ''} ${message ? (message.type === 'success' ? 'login-page__message--success' : 'login-page__message--error') : ''}`}
+              hidden={!message}
+            >
+              {message?.text}
+            </div>
+
+            <Button
+              type='primary'
+              htmlType='submit'
+              long
+              size='large'
+              loading={loading}
+              className='login-page__submit-btn'
+            >
+              {loading ? t('login.submitting') : t('login.submit')}
+            </Button>
+
+            {showOAuthSection ? (
+              <>
+                <div className='login-page__oauth-divider'>
+                  <span>{t('login.orDivider', { defaultValue: '或' })}</span>
+                </div>
+
+                {showFeishuLogin ? (
+                  <Button
+                    long
+                    size='large'
+                    htmlType='button'
+                    className='login-page__oauth-btn mb-8px'
+                    onClick={onFeishuOauth}
+                    disabled={loading}
+                  >
+                    <span className='login-page__oauth-btn-inner'>
+                      <Send theme='filled' size={16} fill='var(--login-accent)' className='login-page__feishu-icon' />
+                      <span>{t('login.methods.feishuOauth', { defaultValue: '使用飞书登录' })}</span>
+                    </span>
+                  </Button>
+                ) : null}
+
+                {showFeishuLogin && feishuLoginEnabled ? (
+                  <>
+                    <Button
+                      type='text'
+                      long
+                      htmlType='button'
+                      className='login-page__feishu-qr-toggle'
+                      onClick={onToggleFeishuQr}
+                    >
+                      {showFeishuQr
+                        ? t('login.hideFeishuQr', { defaultValue: '收起飞书扫码' })
+                        : t('login.showFeishuQr', { defaultValue: '显示飞书扫码登录' })}
+                    </Button>
+
+                    {showFeishuQr ? (
+                      <div className='login-page__feishu-qr'>
+                        <div className='login-page__feishu-qr-title'>
+                          {t('login.methods.feishuQrTitle', { defaultValue: '或使用飞书扫码登录' })}
+                        </div>
+                        <div id='one-feishu-qr-container' className='login-page__feishu-qr-container' />
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+
+                {showDingtalkLogin ? (
+                  <Button
+                    long
+                    size='large'
+                    htmlType='button'
+                    className={`login-page__oauth-btn mb-8px${dingtalkLoginEnabled ? '' : ' login-page__oauth-btn--pending'}`}
+                    onClick={onDingtalkOauth}
+                    disabled={loading}
+                  >
+                    <span className='login-page__oauth-btn-inner'>
+                      <Send theme='filled' size={16} fill='var(--login-accent)' />
+                      <span>{t('login.methods.dingtalkOauth', { defaultValue: '使用钉钉登录' })}</span>
+                    </span>
+                  </Button>
+                ) : null}
+
+                {showWecomLogin ? (
+                  <Button
+                    long
+                    size='large'
+                    htmlType='button'
+                    className={`login-page__oauth-btn mb-8px${wecomLoginEnabled ? '' : ' login-page__oauth-btn--pending'}`}
+                    onClick={onWecomOauth}
+                    disabled={loading}
+                  >
+                    <span className='login-page__oauth-btn-inner'>
+                      <Send theme='filled' size={16} fill='var(--login-accent)' />
+                      <span>{t('login.methods.wecomOauth', { defaultValue: '使用企业微信登录' })}</span>
+                    </span>
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+
+            {feishuQrError ? (
+              <Typography.Paragraph type='error' className='login-page__method-hint text-12px'>
+                {t('login.methods.feishuQrError', { defaultValue: '飞书二维码初始化失败' })}
+              </Typography.Paragraph>
+            ) : null}
+
+            {isBrowserWebUi && showEnterpriseExtras ? (
+              <div className='login-page__invite-block'>
+                <Button
+                  type='text'
+                  long
+                  htmlType='button'
+                  className='login-page__invite-toggle'
+                  onClick={() => setInviteExpanded((value) => !value)}
+                >
+                  {inviteExpanded
+                    ? t('login.inviteCollapse', { defaultValue: '收起邀请码说明' })
+                    : t('login.inviteTitle', { defaultValue: '或使用邀请码加入' })}
+                </Button>
+                {inviteExpanded ? (
+                  <Typography.Paragraph type='secondary' className='login-page__invite-detail'>
+                    {t('login.inviteCoexist', {
+                      defaultValue:
+                        '邀请码与企业账号登录可并存：先用上方任一方式登录（本地账户、LDAP、飞书等），登录成功后进入「企业」页输入邀请码即可加入。',
+                    })}
+                  </Typography.Paragraph>
+                ) : null}
+              </div>
+            ) : null}
+          </form>
         ) : null}
 
         <div className='login-page__footer'>

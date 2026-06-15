@@ -32,9 +32,9 @@ describe('isProviderLiteLlmProxy', () => {
   });
 
   it('detects litellm/ model id on useModel', () => {
-    expect(isProviderLiteLlmProxy({ useModel: 'litellm/gemini-3.1-pro-preview', baseUrl: 'https://gw.internal/v1' })).toBe(
-      true
-    );
+    expect(
+      isProviderLiteLlmProxy({ useModel: 'litellm/gemini-3.1-pro-preview', baseUrl: 'https://gw.internal/v1' })
+    ).toBe(true);
     expect(modelIdLooksLikeLitellmProxy('LITELLM/gemini-3.1-pro-preview')).toBe(true);
   });
 
@@ -58,11 +58,15 @@ describe('shouldAttachLiteLlmOpenAiProtocolHeader', () => {
   });
 
   it('is true when baseUrl contains litellm', () => {
-    expect(shouldAttachLiteLlmOpenAiProtocolHeader({ platform: 'custom', baseUrl: 'https://litellm.example/v1' })).toBe(true);
+    expect(shouldAttachLiteLlmOpenAiProtocolHeader({ platform: 'custom', baseUrl: 'https://litellm.example/v1' })).toBe(
+      true
+    );
   });
 
   it('is false for plain custom OpenAI without litellm', () => {
-    expect(shouldAttachLiteLlmOpenAiProtocolHeader({ platform: 'custom', baseUrl: 'https://api.openai.com/v1' })).toBe(false);
+    expect(shouldAttachLiteLlmOpenAiProtocolHeader({ platform: 'custom', baseUrl: 'https://api.openai.com/v1' })).toBe(
+      false
+    );
   });
 
   it('matches deprecated shouldSendOpenAiCompletionsApiHeader alias', () => {

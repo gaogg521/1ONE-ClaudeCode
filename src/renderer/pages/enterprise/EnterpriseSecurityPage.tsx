@@ -65,7 +65,17 @@ const EnterpriseSecurityPage: React.FC = () => {
       title: t('admin.security.colAction', { defaultValue: '操作' }),
       dataIndex: 'action',
       render: (v: string) => (
-        <Tag color={v.startsWith('governance.') ? 'orangered' : v.includes('login') ? 'green' : v.includes('delete') ? 'red' : 'arcoblue'}>
+        <Tag
+          color={
+            v.startsWith('governance.')
+              ? 'orangered'
+              : v.includes('login')
+                ? 'green'
+                : v.includes('delete')
+                  ? 'red'
+                  : 'arcoblue'
+          }
+        >
           {resolveActionLabel(v)}
         </Tag>
       ),

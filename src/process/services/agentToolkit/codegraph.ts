@@ -9,10 +9,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import {
-  BUILTIN_CODEGRAPH_ID,
-  BUILTIN_CODEGRAPH_NAME,
-} from '@process/resources/builtinMcp/constants';
+import { BUILTIN_CODEGRAPH_ID, BUILTIN_CODEGRAPH_NAME } from '@process/resources/builtinMcp/constants';
 import type { IMcpServer } from '@/common/config/storage';
 import { CODEGRAPH_MARKER_DIR } from './constants';
 import { getAgentToolkitConfig } from './config';
@@ -89,9 +86,7 @@ export async function ensureCodegraphWorkspaceIndexed(workspace: string): Promis
       timeout: 30 * 60 * 1000,
       windowsHide: true,
     });
-    console.log(
-      `[agentToolkit] CodeGraph initialized for workspace (${inv.source}): ${resolved}`
-    );
+    console.log(`[agentToolkit] CodeGraph initialized for workspace (${inv.source}): ${resolved}`);
   } catch (error) {
     console.warn(
       `[agentToolkit] CodeGraph init failed for ${resolved}:`,

@@ -18,9 +18,7 @@ import { setPostLoginRedirect } from '@/renderer/utils/postLoginRedirect';
 const PUBLIC_PERSONAL_PATHS = ['/enterprise/join'] as const;
 
 function isPublicPersonalPath(pathname: string): boolean {
-  return PUBLIC_PERSONAL_PATHS.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`)
-  );
+  return PUBLIC_PERSONAL_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
 const PersonalBrowserAuthLayout: React.FC = () => {

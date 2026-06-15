@@ -10,7 +10,10 @@ vi.mock('@process/services/database', () => ({
   })),
 }));
 
-import { listEnterpriseMembers, escalateEnterpriseIssue } from '@process/services/devops/enterpriseIssueEscalationService';
+import {
+  listEnterpriseMembers,
+  escalateEnterpriseIssue,
+} from '@process/services/devops/enterpriseIssueEscalationService';
 
 describe('enterpriseIssueEscalationService', () => {
   beforeEach(() => {

@@ -14,7 +14,7 @@ const modelCapabilitiesCache = new Map<string, boolean | undefined>();
  */
 const CAPABILITY_PATTERNS: Record<ModelType, RegExp> = {
   text: /gpt|claude|gemini|qwen|llama|mistral|deepseek/i,
-  vision: /4o|claude-3|gemini-.*-pro|gemini-.*-flash|gemini-2\.0|qwen-vl|llava|vision/i,
+  vision: /4o|claude-3|claude-4|gemini-2[\d.]|gemini-.*-(pro|flash)|qwen-vl|qwen-?3|qwen3|qwen.*plus|llava|vision/i,
   function_calling: /gpt-4|claude-3|gemini|qwen|deepseek/i,
   image_generation: /flux|diffusion|stabilityai|sd-|dall|cogview|janus|midjourney|mj-|imagen/i,
   web_search: /search|perplexity/i,

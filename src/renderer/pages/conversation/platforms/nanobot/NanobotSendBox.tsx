@@ -26,8 +26,11 @@ import { Message, Tag } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiveWorkspace';
-import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
-import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
+import {
+  finalizeUserMessageAfterSend,
+  prepareUserMessageSend,
+  publishOptimisticUserMessage,
+} from '@/renderer/utils/file/sentMessageDisplay';
 import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import FilePreview from '@/renderer/components/media/FilePreview';
 import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
@@ -243,29 +246,26 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
   const executeCommand = useCallback(
     async ({ input, files }: Pick<ConversationCommandQueueItem, 'input' | 'files'>) => {
       const msg_id = uuid();
-      const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
-
-      const userMessage: TMessage = {
-        id: msg_id,
-        msg_id,
-        conversation_id,
-        type: 'text',
-        position: 'right',
-        content: { content: displayMessage },
-        createdAt: Date.now(),
-      };
-      addOrUpdateMessage(userMessage, true);
+      const prepared = prepareUserMessageSend(input, files, effectiveWorkspace, msg_id, conversation_id);
+      publishOptimisticUserMessage(addOrUpdateMessage, prepared.optimisticMessage);
       setAiProcessing(true);
       try {
         void checkAndUpdateTitle(conversation_id, input);
         const result = await ipcBridge.conversation.sendMessage.invoke({
-          input: displayMessage,
+          input: prepared.displayMessage,
           msg_id,
           conversation_id,
           files,
         });
         assertBridgeSuccess(result, 'Failed to send message to Nanobot');
-        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
+        finalizeUserMessageAfterSend(
+          addOrUpdateMessage,
+          conversation_id,
+          msg_id,
+          result,
+          prepared.displayMessage,
+          prepared
+        );
         emitter.emit('chat.history.refresh');
       } catch (error) {
         removeMessageByMsgId(msg_id);
@@ -347,45 +347,44 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
       if (sessionStorage.getItem(processedKey)) return;
       sessionStorage.setItem(processedKey, 'true');
 
+      let msg_id = '';
       try {
         setAiProcessing(true);
         const { input, files = [] } = JSON.parse(stored) as { input: string; files?: string[] };
         const res = await ipcBridge.conversation.get.invoke({ id: conversation_id });
         const resolvedWorkspace = res?.extra?.workspace ?? effectiveWorkspace;
-        const msg_id = `initial_${conversation_id}_${Date.now()}`;
-        const initialDisplayMessage = buildDisplayMessage(input, files, resolvedWorkspace);
-
-        const userMessage: TMessage = {
-          id: msg_id,
-          msg_id,
-          conversation_id,
-          type: 'text',
-          position: 'right',
-          content: { content: initialDisplayMessage },
-          createdAt: Date.now(),
-        };
-        // Reset AI reply for new turn
-        // 重置 AI 回复用于新一轮
-        addOrUpdateMessage(userMessage, true);
+        msg_id = `initial_${conversation_id}_${Date.now()}`;
+        const prepared = prepareUserMessageSend(input, files, resolvedWorkspace, msg_id, conversation_id);
+        publishOptimisticUserMessage(addOrUpdateMessage, prepared.optimisticMessage);
 
         void checkAndUpdateTitle(conversation_id, input);
         const result = await ipcBridge.conversation.sendMessage.invoke({
-          input: initialDisplayMessage,
+          input: prepared.displayMessage,
           msg_id,
           conversation_id,
           files,
         });
         assertBridgeSuccess(result, 'Failed to send initial message to Nanobot');
-        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
+        finalizeUserMessageAfterSend(
+          addOrUpdateMessage,
+          conversation_id,
+          msg_id,
+          result,
+          prepared.displayMessage,
+          prepared
+        );
         emitter.emit('chat.history.refresh');
         sessionStorage.removeItem(storageKey);
       } catch {
+        if (msg_id) {
+          removeMessageByMsgId(msg_id);
+        }
         sessionStorage.removeItem(processedKey);
         setAiProcessing(false);
       }
     };
     processInitialMessage().catch(console.error);
-  }, [conversation_id, addOrUpdateMessage]);
+  }, [conversation_id, addOrUpdateMessage, removeMessageByMsgId]);
 
   const handleStop = async (): Promise<void> => {
     try {
@@ -444,6 +443,7 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
                   <FilePreview
                     key={path}
                     path={path}
+                    conversationId={conversation_id}
                     onRemove={() => setUploadFile(uploadFile.filter((v) => v !== path))}
                   />
                 ))}
@@ -455,6 +455,7 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
                       <FilePreview
                         key={path}
                         path={path}
+                        conversationId={conversation_id}
                         onRemove={() => {
                           const newAtPath = atPath.filter((v) =>
                             typeof v === 'string' ? v !== path : v.path !== path

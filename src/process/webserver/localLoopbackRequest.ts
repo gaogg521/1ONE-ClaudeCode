@@ -8,10 +8,7 @@
  */
 
 import { net, session } from 'electron';
-import {
-  ONE_WEBUI_CLIENT_DESKTOP,
-  ONE_WEBUI_CLIENT_HEADER,
-} from '@/common/config/webuiClientHeaders';
+import { ONE_WEBUI_CLIENT_DESKTOP, ONE_WEBUI_CLIENT_HEADER } from '@/common/config/webuiClientHeaders';
 import { CSRF_HEADER_NAME } from '@process/webserver/config/constants';
 
 export type LoopbackRequestInput = {

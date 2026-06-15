@@ -95,9 +95,7 @@ describe('enterpriseJoinService', () => {
     });
 
     it('returns tenant preview for a valid invite', async () => {
-      mockPrepareInstance.get
-        .mockReturnValueOnce(activeInviteRow)
-        .mockReturnValueOnce({ name: 'Acme Corp' });
+      mockPrepareInstance.get.mockReturnValueOnce(activeInviteRow).mockReturnValueOnce({ name: 'Acme Corp' });
 
       const preview = await previewEnterpriseInvite('ABCD-1234');
       expect(preview).toEqual({ tenantId: 'tenant_acme', tenantName: 'Acme Corp' });
@@ -128,9 +126,7 @@ describe('enterpriseJoinService', () => {
         tenant_id: 'default',
         role: 'member',
       });
-      mockPrepareInstance.get
-        .mockReturnValueOnce(activeInviteRow)
-        .mockReturnValueOnce({ name: 'Acme Corp' });
+      mockPrepareInstance.get.mockReturnValueOnce(activeInviteRow).mockReturnValueOnce({ name: 'Acme Corp' });
 
       const result = await joinEnterpriseWithInvite('u1', 'abcd-1234');
 
@@ -190,9 +186,9 @@ describe('enterpriseJoinService', () => {
     it('throws when tenant does not exist', async () => {
       mockPrepareInstance.get.mockReturnValueOnce(undefined);
 
-      await expect(
-        createEnterpriseInvite({ tenantId: 'missing', createdBy: 'admin' })
-      ).rejects.toMatchObject({ code: 'TENANT_NOT_FOUND' });
+      await expect(createEnterpriseInvite({ tenantId: 'missing', createdBy: 'admin' })).rejects.toMatchObject({
+        code: 'TENANT_NOT_FOUND',
+      });
     });
   });
 

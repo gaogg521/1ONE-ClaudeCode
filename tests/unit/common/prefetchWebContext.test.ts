@@ -1,8 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import {
-  prefetchWebContextForUserMessage,
-  shouldPrefetchWebContext,
-} from '@/common/web/prefetchWebContext';
+import { prefetchWebContextForUserMessage, shouldPrefetchWebContext } from '@/common/web/prefetchWebContext';
 
 vi.mock('@/common/web/pageTools', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/common/web/pageTools')>();
@@ -37,9 +34,7 @@ describe('prefetchWebContext', () => {
   });
 
   it('prefetches URL content block for ACP prompt injection', async () => {
-    const result = await prefetchWebContextForUserMessage(
-      'https://api.luanti.org/ 阅读这个URL，总结一下'
-    );
+    const result = await prefetchWebContextForUserMessage('https://api.luanti.org/ 阅读这个URL，总结一下');
     expect(result?.kind).toBe('fetch');
     if (result?.kind === 'fetch') {
       expect(result.url).toBe('https://api.luanti.org/');

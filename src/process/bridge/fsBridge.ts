@@ -5,6 +5,7 @@
  */
 
 import { ONE_TIMESTAMP_SEPARATOR } from '@/common/config/constants';
+import { isPlausibleReadFilePath } from '@/common/chat/fsPathValidation';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -14,8 +15,16 @@ import JSZip from 'jszip';
 import { ipcBridge } from '@/common';
 import type { SkillMetadata, SkillSourceKind } from '@/common/types/skillMetadata';
 import { readSkillMetadata } from '@process/extensions/resolvers/utils/skillMetadata';
-import { getSystemDir, getAssistantsDir, getSkillsDir, getBuiltinSkillsCopyDir, getAutoSkillsDir } from '@process/utils/initStorage';
+import {
+  getSystemDir,
+  getAssistantsDir,
+  getSkillsDir,
+  getBuiltinSkillsCopyDir,
+  getAutoSkillsDir,
+} from '@process/utils/initStorage';
 import { readDirectoryRecursive } from '@process/utils';
+import { getDatabase } from '@process/services/database';
+import { existsSync } from 'node:fs';
 
 // ============================================================================
 // Helper functions for builtin resource directory resolution
@@ -748,6 +757,10 @@ export function initFsBridge(): void {
 
   ipcBridge.fs.readFile.provider(async ({ path: filePath }) => {
     try {
+      if (!isPlausibleReadFilePath(filePath)) {
+        console.warn(`[fsBridge] Ignoring implausible read path: ${filePath.slice(0, 120)}`);
+        return null;
+      }
       const stat = await fs.stat(filePath);
       if (stat.size > MAX_READ_FILE_SIZE) {
         console.warn(`[fsBridge] File too large to read as text (${stat.size} bytes): ${filePath}`);
@@ -769,6 +782,10 @@ export function initFsBridge(): void {
   // 读取二进制文件为 ArrayBuffer / Read binary file as ArrayBuffer
   ipcBridge.fs.readFileBuffer.provider(async ({ path: filePath }) => {
     try {
+      if (!isPlausibleReadFilePath(filePath)) {
+        console.warn(`[fsBridge] Ignoring implausible read path: ${filePath.slice(0, 120)}`);
+        return null;
+      }
       const buffer = await fs.readFile(filePath);
       // 将 Node.js Buffer 转换为 ArrayBuffer
       // Convert Node.js Buffer to ArrayBuffer
@@ -970,6 +987,54 @@ export function initFsBridge(): void {
         canceledZipRequests.delete(requestId);
       }
     }
+  });
+
+  // Resolve attachment path for UI preview when temp cache files were deleted after copy-to-workspace.
+  ipcBridge.fs.resolveAttachmentDisplayPath.provider(async ({ path: filePath, conversationId }) => {
+    try {
+      await fs.access(filePath);
+      return filePath;
+    } catch {
+      // continue to workspace fallback
+    }
+
+    const baseName = path.basename(filePath);
+    if (!conversationId) {
+      return filePath;
+    }
+
+    try {
+      const db = await getDatabase();
+      const conv = db.getConversation(conversationId);
+      const workspace =
+        conv.success && conv.data?.extra && typeof conv.data.extra === 'object'
+          ? (conv.data.extra as { workspace?: string }).workspace
+          : undefined;
+      if (!workspace) {
+        return filePath;
+      }
+
+      const direct = path.join(workspace, baseName);
+      if (existsSync(direct)) {
+        return direct;
+      }
+
+      const entries = await fs.readdir(workspace);
+      const stem = path.basename(baseName, path.extname(baseName));
+      const ext = path.extname(baseName);
+      const match = entries.find((entry) => {
+        if (entry === baseName) return true;
+        if (!ext) return entry.startsWith(stem);
+        return entry.endsWith(ext) && entry.includes(stem.split('_ONE_')[0] ?? stem);
+      });
+      if (match) {
+        return path.join(workspace, match);
+      }
+    } catch (error) {
+      console.warn('[fsBridge] resolveAttachmentDisplayPath fallback failed:', filePath, error);
+    }
+
+    return filePath;
   });
 
   // 获取文件元数据

@@ -1,11 +1,6 @@
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
-import type {
-  SkillMetadata,
-  SkillMetadataFormat,
-  SkillPlatform,
-  SkillSourceKind,
-} from '@/common/types/skillMetadata';
+import type { SkillMetadata, SkillMetadataFormat, SkillPlatform, SkillSourceKind } from '@/common/types/skillMetadata';
 
 type SkillMetadataOptions = {
   sourceKind: SkillSourceKind;
@@ -181,7 +176,11 @@ function buildLegacySkillMetadata(skillDir: string, options: SkillMetadataOption
   };
 }
 
-function buildSkillhubMetadata(skillDir: string, skillhub: SkillhubConfig, options: SkillMetadataOptions): SkillMetadata | null {
+function buildSkillhubMetadata(
+  skillDir: string,
+  skillhub: SkillhubConfig,
+  options: SkillMetadataOptions
+): SkillMetadata | null {
   const fallbackSkill = buildLegacySkillMetadata(skillDir, options);
   const adapters = skillhub.adapters ?? {};
   const targetPlatform = options.targetPlatform ?? DEFAULT_TARGET_PLATFORM;
@@ -192,8 +191,7 @@ function buildSkillhubMetadata(skillDir: string, skillhub: SkillhubConfig, optio
     undefined;
 
   const commonFile =
-    toAbsoluteSkillFile(skillDir, commonEntry) ??
-    (commonEntry ? null : toAbsoluteSkillFile(skillDir, 'SKILL.md'));
+    toAbsoluteSkillFile(skillDir, commonEntry) ?? (commonEntry ? null : toAbsoluteSkillFile(skillDir, 'SKILL.md'));
 
   const adapterEntries = Object.entries(adapters)
     .map(([platformKey, value]) => {
@@ -218,11 +216,7 @@ function buildSkillhubMetadata(skillDir: string, skillhub: SkillhubConfig, optio
   const fallbackDescription = fallbackSkill?.description || '';
   const explicitPlatforms = normalizePlatforms(skillhub.platforms);
   const platforms = uniq(
-    [
-      ...explicitPlatforms,
-      ...(commonFile ? (['generic'] as SkillPlatform[]) : []),
-      ...adapterPlatforms,
-    ].filter(Boolean)
+    [...explicitPlatforms, ...(commonFile ? (['generic'] as SkillPlatform[]) : []), ...adapterPlatforms].filter(Boolean)
   ) as SkillPlatform[];
 
   return {
@@ -233,7 +227,7 @@ function buildSkillhubMetadata(skillDir: string, skillhub: SkillhubConfig, optio
         : fallbackDescription,
     location: runtimeFiles[0] ?? fallbackSkill?.location ?? path.join(skillDir, 'SKILL.md'),
     directory: skillDir,
-    runtimeFiles: runtimeFiles.length > 0 ? runtimeFiles : fallbackSkill?.runtimeFiles ?? [],
+    runtimeFiles: runtimeFiles.length > 0 ? runtimeFiles : (fallbackSkill?.runtimeFiles ?? []),
     isCustom: options.isCustom,
     sourceKind: options.sourceKind,
     sourceLabel: options.sourceLabel,
@@ -264,7 +258,10 @@ export function detectSkillMetadataFormat(skillDir: string): SkillMetadataFormat
   return existsSync(path.join(skillDir, 'skillhub.json')) ? 'skillhub-json' : 'legacy-skill-md';
 }
 
-export function resolveSkillRuntimeFiles(skillDir: string, targetPlatform: SkillPlatform = DEFAULT_TARGET_PLATFORM): string[] {
+export function resolveSkillRuntimeFiles(
+  skillDir: string,
+  targetPlatform: SkillPlatform = DEFAULT_TARGET_PLATFORM
+): string[] {
   const metadata = readSkillMetadata(skillDir, {
     sourceKind: 'custom',
     isCustom: true,

@@ -34,21 +34,14 @@ import {
   listEnterpriseInvites,
   revokeEnterpriseInvite,
 } from '../auth/enterpriseJoinService';
-import {
-  assertEnterpriseSsoEnableAllowed,
-  isEnterpriseSsoProvider,
-} from '../auth/enterpriseSsoPolicy';
+import { assertEnterpriseSsoEnableAllowed, isEnterpriseSsoProvider } from '../auth/enterpriseSsoPolicy';
 import { isElectronDesktopRequest } from '../auth/browserSessionBridge';
 import { publishLoginChannelsChanged, publishOrgConfigChanged } from '../orgConfigBroadcast';
 import { testDingTalkAppCredentials } from '../auth/providers/DingTalkAuthProvider';
 import { testWeComAppCredentials } from '../auth/providers/WeComAuthProvider';
 import { getOrgEditionSettings, setOrgEditionSettings } from '../auth/orgEditionSettings';
 import { GOVERNANCE_AUDIT_ACTIONS, recordGovernanceAudit } from '../auth/auditLogService';
-import {
-  assertCanRevokeSystemAdmin,
-  claimSystemAdmin,
-  InstanceGovernanceError,
-} from '../auth/instanceGovernance';
+import { assertCanRevokeSystemAdmin, claimSystemAdmin, InstanceGovernanceError } from '../auth/instanceGovernance';
 
 const PROTECTED_IDS = new Set(['system_default_user']);
 
@@ -147,7 +140,10 @@ export function registerAdminRoutes(app: Express): void {
           cfg[key] = '******';
         }
       }
-      res.json({ success: true, data: { provider, enabled: row.enabled ? 1 : 0, config: cfg, updated_at: row.updated_at } });
+      res.json({
+        success: true,
+        data: { provider, enabled: row.enabled ? 1 : 0, config: cfg, updated_at: row.updated_at },
+      });
     } catch (err) {
       console.error('[AdminRoute] getAuthProvider error:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
@@ -155,55 +151,63 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // PUT /api/admin/auth/providers/:provider — 更新提供方配置
-  app.put('/api/admin/auth/providers/:provider', apiRateLimiter, auth, requireAdmin, rejectDesktopAuthConfigMutation, async (req, res) => {
-    try {
-      const provider = String(req.params.provider);
-      if (!isConfigurableAuthProvider(provider)) {
-        res.status(400).json({ success: false, message: 'Unsupported provider' });
-        return;
-      }
-      const enabled = Boolean(req.body?.enabled);
-      const config = (req.body?.config && typeof req.body.config === 'object') ? (req.body.config as Record<string, unknown>) : {};
-      const allowMultipleSso = Boolean(req.body?.allowMultipleSso);
-
-      if (enabled && isEnterpriseSsoProvider(provider)) {
-        const policy = await assertEnterpriseSsoEnableAllowed({
-          provider,
-          enabled,
-          allowMultipleSso,
-        });
-        if (policy.ok === false) {
-          res.status(409).json({
-            success: false,
-            code: 'SSO_PROVIDER_CONFLICT',
-            message:
-              '已有其他企业登录方式处于启用状态。默认建议同时仅启用一种用于登录；配置与测试不受此限制。若确需启用多种，请确认后重试。',
-            data: { conflicts: policy.conflicts },
-          });
+  app.put(
+    '/api/admin/auth/providers/:provider',
+    apiRateLimiter,
+    auth,
+    requireAdmin,
+    rejectDesktopAuthConfigMutation,
+    async (req, res) => {
+      try {
+        const provider = String(req.params.provider);
+        if (!isConfigurableAuthProvider(provider)) {
+          res.status(400).json({ success: false, message: 'Unsupported provider' });
           return;
         }
-      }
+        const enabled = Boolean(req.body?.enabled);
+        const config =
+          req.body?.config && typeof req.body.config === 'object' ? (req.body.config as Record<string, unknown>) : {};
+        const allowMultipleSso = Boolean(req.body?.allowMultipleSso);
 
-      const existing = await AuthProviderRepository.getProvider(provider);
-      const next = { ...existing?.config, ...config } as Record<string, unknown>;
-      for (const key of MASK_SECRET_KEYS[provider]) {
-        if (config[key] === '******') {
-          next[key] = (existing?.config as Record<string, unknown>)?.[key] ?? '';
+        if (enabled && isEnterpriseSsoProvider(provider)) {
+          const policy = await assertEnterpriseSsoEnableAllowed({
+            provider,
+            enabled,
+            allowMultipleSso,
+          });
+          if (policy.ok === false) {
+            res.status(409).json({
+              success: false,
+              code: 'SSO_PROVIDER_CONFLICT',
+              message:
+                '已有其他企业登录方式处于启用状态。默认建议同时仅启用一种用于登录；配置与测试不受此限制。若确需启用多种，请确认后重试。',
+              data: { conflicts: policy.conflicts },
+            });
+            return;
+          }
         }
+
+        const existing = await AuthProviderRepository.getProvider(provider);
+        const next = { ...existing?.config, ...config } as Record<string, unknown>;
+        for (const key of MASK_SECRET_KEYS[provider]) {
+          if (config[key] === '******') {
+            next[key] = (existing?.config as Record<string, unknown>)?.[key] ?? '';
+          }
+        }
+        await AuthProviderRepository.setProvider(provider, enabled, next);
+
+        publishLoginChannelsChanged({
+          tenantId: resolveAdminTenantId(req),
+          provider,
+        });
+
+        res.json({ success: true });
+      } catch (err) {
+        console.error('[AdminRoute] setAuthProvider error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
       }
-      await AuthProviderRepository.setProvider(provider, enabled, next);
-
-      publishLoginChannelsChanged({
-        tenantId: resolveAdminTenantId(req),
-        provider,
-      });
-
-      res.json({ success: true });
-    } catch (err) {
-      console.error('[AdminRoute] setAuthProvider error:', err);
-      res.status(500).json({ success: false, message: 'Internal server error' });
     }
-  });
+  );
 
   // POST /api/admin/auth/providers/ldap/test — LDAP 连通性测试（合并已保存的密钥）
   app.post('/api/admin/auth/providers/ldap/test', apiRateLimiter, auth, requireAdmin, async (req, res) => {
@@ -262,10 +266,7 @@ export function registerAdminRoutes(app: Express): void {
         res.status(400).json({ success: false, message: 'LDAP is not enabled' });
         return;
       }
-      const data = await resolveLocalUserForLdapEntry(
-        { dn, username },
-        { tenantId: resolveAdminTenantId(req) }
-      );
+      const data = await resolveLocalUserForLdapEntry({ dn, username }, { tenantId: resolveAdminTenantId(req) });
       res.json({ success: true, data });
     } catch (err) {
       console.error('[AdminRoute] ldap user resolve error:', err);
@@ -438,13 +439,16 @@ export function registerAdminRoutes(app: Express): void {
 
       // 查询今日任务完成情况
       const userIds = users.map((u) => u.id);
-      const taskRows = userIds.length > 0
-        ? (driver.prepare(
-            `SELECT owner, status, COUNT(*) as cnt FROM team_tasks
+      const taskRows =
+        userIds.length > 0
+          ? (driver
+              .prepare(
+                `SELECT owner, status, COUNT(*) as cnt FROM team_tasks
              WHERE tenant_id = ? AND owner IN (${userIds.map(() => '?').join(',')})
              GROUP BY owner, status`
-          ).all(adminTenantId, ...userIds) as Array<{ owner: string; status: string; cnt: number }>)
-        : [];
+              )
+              .all(adminTenantId, ...userIds) as Array<{ owner: string; status: string; cnt: number }>)
+          : [];
 
       const tasksByUser = new Map<string, { total: number; completed: number; inProgress: number }>();
       for (const row of taskRows) {
@@ -459,7 +463,7 @@ export function registerAdminRoutes(app: Express): void {
         success: true,
         data: users.map((u) => {
           const lastLogin = u.last_login ?? 0;
-          const isOnline = lastLogin > 0 && (now - lastLogin) < ONLINE_THRESHOLD_MS;
+          const isOnline = lastLogin > 0 && now - lastLogin < ONLINE_THRESHOLD_MS;
           const tasks = tasksByUser.get(u.id) ?? { total: 0, completed: 0, inProgress: 0 };
           return {
             id: u.id,
@@ -520,24 +524,26 @@ export function registerAdminRoutes(app: Express): void {
       const driver = db.getDriver();
       const tenantId = resolveAdminTenantId(req);
       const isAdmin = isEnterpriseAdminRole(req.user!.role);
-      const rows = (isAdmin
-        ? driver
-          .prepare(
-            `SELECT id, tenant_id, user_id, name, workspace, workspace_mode, lead_agent_id, agents, created_at, updated_at
+      const rows = (
+        isAdmin
+          ? driver
+              .prepare(
+                `SELECT id, tenant_id, user_id, name, workspace, workspace_mode, lead_agent_id, agents, created_at, updated_at
              FROM teams
              WHERE tenant_id = ?
              ORDER BY updated_at DESC`
-          )
-          .all(tenantId)
-        : driver
-          .prepare(
-            `SELECT t.id, t.tenant_id, t.user_id, t.name, t.workspace, t.workspace_mode, t.lead_agent_id, t.agents, t.created_at, t.updated_at
+              )
+              .all(tenantId)
+          : driver
+              .prepare(
+                `SELECT t.id, t.tenant_id, t.user_id, t.name, t.workspace, t.workspace_mode, t.lead_agent_id, t.agents, t.created_at, t.updated_at
              FROM teams t
              INNER JOIN team_memberships m ON m.team_id = t.id AND m.tenant_id = t.tenant_id
              WHERE t.tenant_id = ? AND m.user_id = ?
              ORDER BY t.updated_at DESC`
-          )
-          .all(tenantId, req.user!.id)) as Array<Record<string, unknown>>;
+              )
+              .all(tenantId, req.user!.id)
+      ) as Array<Record<string, unknown>>;
       res.json({ success: true, data: rows });
     } catch (err) {
       console.error('[AdminRoute] listTeams error:', err);
@@ -570,15 +576,19 @@ export function registerAdminRoutes(app: Express): void {
       const createTeamTransaction = driver.transaction(() => {
         // Existing schema keeps lead_agent_id as NOT NULL with '' default,
         // so new teams must follow the persisted contract until the schema changes.
-        driver.prepare(
-          `INSERT INTO teams (id, tenant_id, user_id, name, workspace, workspace_mode, lead_agent_id, agents, created_at, updated_at)
+        driver
+          .prepare(
+            `INSERT INTO teams (id, tenant_id, user_id, name, workspace, workspace_mode, lead_agent_id, agents, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?)`
-        ).run(id, tenantId, req.user!.id, name, workspace, workspaceMode, now, now);
-        driver.prepare(
-          `INSERT INTO team_memberships (tenant_id, team_id, user_id, role, created_at, updated_at)
+          )
+          .run(id, tenantId, req.user!.id, name, workspace, workspaceMode, now, now);
+        driver
+          .prepare(
+            `INSERT INTO team_memberships (tenant_id, team_id, user_id, role, created_at, updated_at)
            VALUES (?, ?, ?, 'owner', ?, ?)
            ON CONFLICT(team_id, user_id) DO UPDATE SET role='owner', updated_at=excluded.updated_at`
-        ).run(tenantId, id, req.user!.id, now, now);
+          )
+          .run(tenantId, id, req.user!.id, now, now);
       });
       createTeamTransaction();
 
@@ -596,8 +606,7 @@ export function registerAdminRoutes(app: Express): void {
       const teamId = String(req.params.id);
       const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
       const workspace = typeof req.body?.workspace === 'string' ? req.body.workspace.trim() : '';
-      const workspaceMode =
-        typeof req.body?.workspace_mode === 'string' ? req.body.workspace_mode.trim() : '';
+      const workspaceMode = typeof req.body?.workspace_mode === 'string' ? req.body.workspace_mode.trim() : '';
 
       const updates: string[] = [];
       const values: Array<string | number> = [];
@@ -682,11 +691,13 @@ export function registerAdminRoutes(app: Express): void {
       const db = await getDatabase();
       const driver = db.getDriver();
       const now = Date.now();
-      driver.prepare(
-        `INSERT INTO team_memberships (tenant_id, team_id, user_id, role, created_at, updated_at)
+      driver
+        .prepare(
+          `INSERT INTO team_memberships (tenant_id, team_id, user_id, role, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(team_id, user_id) DO UPDATE SET role=excluded.role, updated_at=excluded.updated_at`
-      ).run(tenantId, teamId, userId, role, now, now);
+        )
+        .run(tenantId, teamId, userId, role, now, now);
       res.json({ success: true });
     } catch (err) {
       console.error('[AdminRoute] addTeamMember error:', err);
@@ -708,10 +719,12 @@ export function registerAdminRoutes(app: Express): void {
       const db = await getDatabase();
       const driver = db.getDriver();
       const now = Date.now();
-      driver.prepare(
-        `UPDATE team_memberships SET role = ?, updated_at = ?
+      driver
+        .prepare(
+          `UPDATE team_memberships SET role = ?, updated_at = ?
          WHERE tenant_id = ? AND team_id = ? AND user_id = ?`
-      ).run(role, now, tenantId, teamId, userId);
+        )
+        .run(role, now, tenantId, teamId, userId);
       res.json({ success: true });
     } catch (err) {
       console.error('[AdminRoute] updateTeamMember error:', err);
@@ -727,7 +740,9 @@ export function registerAdminRoutes(app: Express): void {
       const userId = String(req.params.userId);
       const db = await getDatabase();
       const driver = db.getDriver();
-      driver.prepare(`DELETE FROM team_memberships WHERE tenant_id = ? AND team_id = ? AND user_id = ?`).run(tenantId, teamId, userId);
+      driver
+        .prepare(`DELETE FROM team_memberships WHERE tenant_id = ? AND team_id = ? AND user_id = ?`)
+        .run(tenantId, teamId, userId);
       res.json({ success: true });
     } catch (err) {
       console.error('[AdminRoute] removeTeamMember error:', err);
@@ -869,26 +884,21 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // POST /api/admin/instance/claim-system-admin — one-time bootstrap when no system_admin exists
-  app.post(
-    '/api/admin/instance/claim-system-admin',
-    apiRateLimiter,
-    auth,
-    async (req: Request, res: Response) => {
-      try {
-        const actorId = req.user!.id;
-        await claimSystemAdmin(actorId, req.user!.role);
-        void recordGovernanceAudit(req, GOVERNANCE_AUDIT_ACTIONS.claimSystemAdmin, actorId, req.user!.username);
-        res.json({ success: true, data: { role: 'system_admin' } });
-      } catch (err) {
-        if (err instanceof InstanceGovernanceError) {
-          res.status(403).json({ success: false, code: err.code, message: err.message });
-          return;
-        }
-        console.error('[AdminRoute] claim-system-admin error:', err);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+  app.post('/api/admin/instance/claim-system-admin', apiRateLimiter, auth, async (req: Request, res: Response) => {
+    try {
+      const actorId = req.user!.id;
+      await claimSystemAdmin(actorId, req.user!.role);
+      void recordGovernanceAudit(req, GOVERNANCE_AUDIT_ACTIONS.claimSystemAdmin, actorId, req.user!.username);
+      res.json({ success: true, data: { role: 'system_admin' } });
+    } catch (err) {
+      if (err instanceof InstanceGovernanceError) {
+        res.status(403).json({ success: false, code: err.code, message: err.message });
+        return;
       }
+      console.error('[AdminRoute] claim-system-admin error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
-  );
+  });
 
   // PATCH /api/admin/users/:id/password — 重置密码（admin）
   app.patch('/api/admin/users/:id/password', apiRateLimiter, auth, requireAdmin, async (req, res) => {
@@ -944,26 +954,33 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // PUT /api/admin/system/admin-email — 设置管理员邮箱（浏览器可用）
-  app.put('/api/admin/system/admin-email', apiRateLimiter, auth, requireAdmin, rejectDesktopAuthConfigMutation, async (req, res) => {
-    try {
-      const email = String(req.body?.email ?? '').trim();
-      if (!email) {
-        res.status(400).json({ success: false, message: 'Email is required' });
-        return;
-      }
+  app.put(
+    '/api/admin/system/admin-email',
+    apiRateLimiter,
+    auth,
+    requireAdmin,
+    rejectDesktopAuthConfigMutation,
+    async (req, res) => {
+      try {
+        const email = String(req.body?.email ?? '').trim();
+        if (!email) {
+          res.status(400).json({ success: false, message: 'Email is required' });
+          return;
+        }
 
-      await WebuiService.setAdminEmail(email);
-      publishOrgConfigChanged({
-        scope: 'admin-email',
-        tenantId: resolveAdminTenantId(req),
-      });
-      res.json({ success: true });
-    } catch (err) {
-      console.error('[AdminRoute] setAdminEmail error:', err);
-      const message = err instanceof Error ? err.message : 'Internal server error';
-      res.status(400).json({ success: false, message });
+        await WebuiService.setAdminEmail(email);
+        publishOrgConfigChanged({
+          scope: 'admin-email',
+          tenantId: resolveAdminTenantId(req),
+        });
+        res.json({ success: true });
+      } catch (err) {
+        console.error('[AdminRoute] setAdminEmail error:', err);
+        const message = err instanceof Error ? err.message : 'Internal server error';
+        res.status(400).json({ success: false, message });
+      }
     }
-  });
+  );
 
   // GET /api/admin/org/edition-access — 企业团队版模式对成员的可见性
   app.get('/api/admin/org/edition-access', apiRateLimiter, auth, requireAdmin, async (_req, res) => {
@@ -977,28 +994,35 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // PUT /api/admin/org/edition-access — 启用/禁用成员使用企业团队版模式切换
-  app.put('/api/admin/org/edition-access', apiRateLimiter, auth, requireAdmin, rejectDesktopAuthConfigMutation, async (req, res) => {
-    try {
-      if (!isSystemAdminRole(req.user!.role)) {
-        res.status(403).json({
-          success: false,
-          code: 'SYSTEM_ADMIN_REQUIRED',
-          message: '仅系统管理员可修改企业团队版模式可见性',
+  app.put(
+    '/api/admin/org/edition-access',
+    apiRateLimiter,
+    auth,
+    requireAdmin,
+    rejectDesktopAuthConfigMutation,
+    async (req, res) => {
+      try {
+        if (!isSystemAdminRole(req.user!.role)) {
+          res.status(403).json({
+            success: false,
+            code: 'SYSTEM_ADMIN_REQUIRED',
+            message: '仅系统管理员可修改企业团队版模式可见性',
+          });
+          return;
+        }
+        const editionSwitcherEnabled = Boolean(req.body?.editionSwitcherEnabled);
+        await setOrgEditionSettings({ editionSwitcherEnabled });
+        publishOrgConfigChanged({
+          tenantId: resolveAdminTenantId(req),
+          scope: 'edition-access',
         });
-        return;
+        res.json({ success: true, data: { editionSwitcherEnabled } });
+      } catch (err) {
+        console.error('[AdminRoute] setOrgEditionAccess error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
       }
-      const editionSwitcherEnabled = Boolean(req.body?.editionSwitcherEnabled);
-      await setOrgEditionSettings({ editionSwitcherEnabled });
-      publishOrgConfigChanged({
-        tenantId: resolveAdminTenantId(req),
-        scope: 'edition-access',
-      });
-      res.json({ success: true, data: { editionSwitcherEnabled } });
-    } catch (err) {
-      console.error('[AdminRoute] setOrgEditionAccess error:', err);
-      res.status(500).json({ success: false, message: 'Internal server error' });
     }
-  });
+  );
 
   // DELETE /api/admin/users/:id — 删除用户
   app.delete('/api/admin/users/:id', apiRateLimiter, auth, requireAdmin, async (req, res) => {
@@ -1022,26 +1046,20 @@ export function registerAdminRoutes(app: Express): void {
   });
 
   // POST /api/admin/enterprise/setup — create tenant and assign current user (system_admin on default only)
-  app.post(
-    '/api/admin/enterprise/setup',
-    apiRateLimiter,
-    auth,
-    requireAdmin,
-    async (req: Request, res: Response) => {
-      try {
-        const name = String((req.body as { name?: unknown })?.name ?? '');
-        const data = await createEnterpriseTenant(req.user!.id, name);
-        res.json({ success: true, data });
-      } catch (err) {
-        if (err instanceof EnterpriseJoinError) {
-          res.status(400).json({ success: false, code: err.code, message: err.message });
-          return;
-        }
-        console.error('[AdminRoute] enterprise setup error:', err);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+  app.post('/api/admin/enterprise/setup', apiRateLimiter, auth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const name = String((req.body as { name?: unknown })?.name ?? '');
+      const data = await createEnterpriseTenant(req.user!.id, name);
+      res.json({ success: true, data });
+    } catch (err) {
+      if (err instanceof EnterpriseJoinError) {
+        res.status(400).json({ success: false, code: err.code, message: err.message });
+        return;
       }
+      console.error('[AdminRoute] enterprise setup error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
-  );
+  });
 
   // GET /api/admin/enterprise — current tenant profile
   app.get('/api/admin/enterprise', apiRateLimiter, auth, requireAdmin, async (req: Request, res: Response) => {
@@ -1052,9 +1070,7 @@ export function registerAdminRoutes(app: Express): void {
       }
       const db = await getDatabase();
       const driver = db.getDriver();
-      const row = driver
-        .prepare('SELECT id, name, created_at, updated_at FROM tenants WHERE id = ?')
-        .get(tenantId) as
+      const row = driver.prepare('SELECT id, name, created_at, updated_at FROM tenants WHERE id = ?').get(tenantId) as
         | {
             id: string;
             name: string;
@@ -1108,71 +1124,55 @@ export function registerAdminRoutes(app: Express): void {
   );
 
   // GET /api/admin/enterprise/invites
-  app.get(
-    '/api/admin/enterprise/invites',
-    apiRateLimiter,
-    auth,
-    requireAdmin,
-    async (req: Request, res: Response) => {
-      try {
-        const tenantId = req.user?.tenant_id ?? 'default';
-        if (!isEnterpriseTenantId(tenantId)) {
-          res.status(400).json({ success: false, message: 'Join or create an enterprise first' });
-          return;
-        }
-        const invites = await listEnterpriseInvites(tenantId);
-        res.json({
-          success: true,
-          data: invites.map((inv) => ({
-            ...inv,
-            display_code:
-              inv.code.length > 4 ? `${inv.code.slice(0, 4)}-${inv.code.slice(4)}` : inv.code,
-          })),
-        });
-      } catch (err) {
-        console.error('[AdminRoute] list enterprise invites error:', err);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+  app.get('/api/admin/enterprise/invites', apiRateLimiter, auth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const tenantId = req.user?.tenant_id ?? 'default';
+      if (!isEnterpriseTenantId(tenantId)) {
+        res.status(400).json({ success: false, message: 'Join or create an enterprise first' });
+        return;
       }
+      const invites = await listEnterpriseInvites(tenantId);
+      res.json({
+        success: true,
+        data: invites.map((inv) => ({
+          ...inv,
+          display_code: inv.code.length > 4 ? `${inv.code.slice(0, 4)}-${inv.code.slice(4)}` : inv.code,
+        })),
+      });
+    } catch (err) {
+      console.error('[AdminRoute] list enterprise invites error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
-  );
+  });
 
   // POST /api/admin/enterprise/invites
-  app.post(
-    '/api/admin/enterprise/invites',
-    apiRateLimiter,
-    auth,
-    requireAdmin,
-    async (req: Request, res: Response) => {
-      try {
-        const tenantId = req.user?.tenant_id ?? 'default';
-        if (!isEnterpriseTenantId(tenantId)) {
-          res.status(400).json({ success: false, message: 'Join or create an enterprise first' });
-          return;
-        }
-        const body = req.body as { maxUses?: unknown; expiresInDays?: unknown };
-        const maxUses =
-          typeof body.maxUses === 'number' && body.maxUses > 0 ? Math.floor(body.maxUses) : null;
-        const expiresInDays =
-          typeof body.expiresInDays === 'number' && body.expiresInDays > 0
-            ? Math.floor(body.expiresInDays)
-            : null;
-        const { invite, displayCode } = await createEnterpriseInvite({
-          tenantId,
-          createdBy: req.user!.id,
-          maxUses,
-          expiresInDays,
-        });
-        res.json({ success: true, data: { invite, displayCode } });
-      } catch (err) {
-        if (err instanceof EnterpriseJoinError) {
-          res.status(400).json({ success: false, code: err.code, message: err.message });
-          return;
-        }
-        console.error('[AdminRoute] create enterprise invite error:', err);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+  app.post('/api/admin/enterprise/invites', apiRateLimiter, auth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const tenantId = req.user?.tenant_id ?? 'default';
+      if (!isEnterpriseTenantId(tenantId)) {
+        res.status(400).json({ success: false, message: 'Join or create an enterprise first' });
+        return;
       }
+      const body = req.body as { maxUses?: unknown; expiresInDays?: unknown };
+      const maxUses = typeof body.maxUses === 'number' && body.maxUses > 0 ? Math.floor(body.maxUses) : null;
+      const expiresInDays =
+        typeof body.expiresInDays === 'number' && body.expiresInDays > 0 ? Math.floor(body.expiresInDays) : null;
+      const { invite, displayCode } = await createEnterpriseInvite({
+        tenantId,
+        createdBy: req.user!.id,
+        maxUses,
+        expiresInDays,
+      });
+      res.json({ success: true, data: { invite, displayCode } });
+    } catch (err) {
+      if (err instanceof EnterpriseJoinError) {
+        res.status(400).json({ success: false, code: err.code, message: err.message });
+        return;
+      }
+      console.error('[AdminRoute] create enterprise invite error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
-  );
+  });
 
   // DELETE /api/admin/enterprise/invites/:id
   app.delete(

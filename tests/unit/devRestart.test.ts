@@ -48,9 +48,7 @@ describe('devRestart', () => {
   });
 
   it('resolves restart script under project root', () => {
-    expect(resolveDevRestartScript('D:/1one-command')).toBe(
-      path.join('D:/1one-command', 'scripts', 'restart-dev.mjs')
-    );
+    expect(resolveDevRestartScript('D:/1one-command')).toBe(path.join('D:/1one-command', 'scripts', 'restart-dev.mjs'));
   });
 
   it('prefers npm_node_execpath for node binary', () => {

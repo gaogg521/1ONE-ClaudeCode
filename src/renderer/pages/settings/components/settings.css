@@ -510,8 +510,7 @@
 
 .settings-desktop-top-nav__item--active {
   color: var(--text-primary);
-  background:
-    linear-gradient(180deg, rgba(var(--primary-6), 0.14), rgba(var(--primary-6), 0.085));
+  background: linear-gradient(180deg, rgba(var(--primary-6), 0.14), rgba(var(--primary-6), 0.085));
   border-color: rgba(var(--primary-6), 0.19);
   box-shadow:
     0 0 0 1px rgba(var(--primary-6), 0.065),

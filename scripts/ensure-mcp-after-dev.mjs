@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB_TOOLS = path.join(ROOT, 'out', 'main', 'builtin-mcp-web-tools.js');
+const IMAGE_GEN = path.join(ROOT, 'out', 'main', 'builtin-mcp-image-gen.js');
+const MAIN_INDEX = path.join(ROOT, 'out', 'main', 'index.js');
 const MIN_BYTES = 80_000;
 const MAX_WAIT_MS = 120_000;
 const POLL_MS = 2_000;
@@ -19,19 +21,30 @@ function sleep(ms) {
 
 function needsRepair() {
   try {
-    return fs.statSync(WEB_TOOLS).size < MIN_BYTES;
+    const webToolsOk = fs.statSync(WEB_TOOLS).size >= MIN_BYTES;
+    const imageGenOk = fs.statSync(IMAGE_GEN).size >= MIN_BYTES;
+    return !(webToolsOk && imageGenOk);
   } catch {
     return true;
   }
 }
 
-async function main() {
+async function waitForDevMainBuild() {
   const deadline = Date.now() + MAX_WAIT_MS;
   while (Date.now() < deadline) {
-    if (fs.existsSync(path.join(ROOT, 'out', 'main', 'index.js')) && !needsRepair()) {
-      return;
+    if (fs.existsSync(MAIN_INDEX)) {
+      return true;
     }
     await sleep(POLL_MS);
+  }
+  return fs.existsSync(MAIN_INDEX);
+}
+
+async function main() {
+  const ready = await waitForDevMainBuild();
+  if (!ready) {
+    console.warn('[restart] MCP post-dev repair: timed out waiting for out/main/index.js');
+    return;
   }
 
   if (!needsRepair()) {

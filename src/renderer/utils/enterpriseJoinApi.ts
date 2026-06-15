@@ -5,7 +5,11 @@
  */
 
 import { webui } from '@/common/adapter/ipcBridge';
-import type { EnterpriseInvitePreview, EnterpriseJoinResult, EnterpriseSetupResult } from '@/common/types/enterpriseJoin';
+import type {
+  EnterpriseInvitePreview,
+  EnterpriseJoinResult,
+  EnterpriseSetupResult,
+} from '@/common/types/enterpriseJoin';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { fetchWebuiApi, fetchWebuiApiJson, getWebuiApiBaseUrl } from '@/renderer/utils/webuiApiBase';
 import { rememberEnterpriseApiOrigin } from '@/renderer/utils/rememberEnterpriseApiOrigin';

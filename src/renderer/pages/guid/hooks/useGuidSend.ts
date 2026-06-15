@@ -9,7 +9,6 @@ import type { TProviderWithModel } from '@/common/config/storage';
 import type { TChatConversation } from '@/common/config/storage';
 import { buildAgentConversationParams } from '@/common/utils/buildAgentConversationParams';
 import { emitter } from '@/renderer/utils/emitter';
-import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
 import { updateWorkspaceTime } from '@/renderer/utils/workspace/workspaceHistory';
 import { isAcpRoutedPresetType, type PresetAgentType } from '@/common/types/acpTypes';
 import { Message } from '@arco-design/web-react';
@@ -200,10 +199,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
 
         emitter.emit('chat.history.refresh');
 
-        const workspacePath = conversation.extra?.workspace || '';
-        const displayMessage = buildDisplayMessage(input, files, workspacePath);
         const initialMessage = {
-          input: displayMessage,
+          input,
           files: files.length > 0 ? files : undefined,
         };
         sessionStorage.setItem(`gemini_initial_message_${conversation.id}`, JSON.stringify(initialMessage));

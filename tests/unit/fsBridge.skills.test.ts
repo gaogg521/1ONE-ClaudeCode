@@ -251,7 +251,10 @@ describe('fsBridge skills functionality', () => {
             response.resume = () => {};
             callback(response);
             if (responseConfig.body) {
-              response.emit('data', Buffer.isBuffer(responseConfig.body) ? responseConfig.body : Buffer.from(responseConfig.body));
+              response.emit(
+                'data',
+                Buffer.isBuffer(responseConfig.body) ? responseConfig.body : Buffer.from(responseConfig.body)
+              );
             }
             response.emit('end');
           });
@@ -309,6 +312,7 @@ describe('fsBridge skills functionality', () => {
             createZip: createCommandMock('create-zip-file'),
             cancelZip: createCommandMock('cancel-zip-file'),
             getFileMetadata: createCommandMock('get-file-metadata'),
+            resolveAttachmentDisplayPath: createCommandMock('resolve-attachment-display-path'),
             copyFilesToWorkspace: createCommandMock('copy-files-to-workspace'),
             removeEntry: createCommandMock('remove-entry'),
             renameEntry: createCommandMock('rename-entry'),

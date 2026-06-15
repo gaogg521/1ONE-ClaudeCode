@@ -59,9 +59,7 @@ export function isBuiltinWebToolsTransport(transport?: {
   if (!transport || transport.type !== 'stdio' || transport.command !== 'node') {
     return false;
   }
-  return (transport.args || []).some(
-    (arg) => typeof arg === 'string' && arg.includes('builtin-mcp-web-tools.js')
-  );
+  return (transport.args || []).some((arg) => typeof arg === 'string' && arg.includes('builtin-mcp-web-tools.js'));
 }
 
 export function isBuiltinCodegraphTransport(transport?: {

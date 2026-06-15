@@ -222,6 +222,25 @@ describe('useGuidSend', () => {
       expect(parsed.files).toEqual(['/tmp/a.ts']);
     });
 
+    it('stores raw input for gemini initial message without display marker', async () => {
+      const deps = makeDeps({
+        selectedAgent: 'gemini',
+        files: ['/tmp/photo.png'],
+        input: 'analyze this image',
+      });
+      const { result } = renderHook(() => useGuidSend(deps));
+
+      await act(async () => {
+        await result.current.handleSend();
+      });
+
+      const stored = sessionStorage.getItem('gemini_initial_message_new-conv');
+      const parsed = JSON.parse(stored!);
+      expect(parsed.input).toBe('analyze this image');
+      expect(parsed.files).toEqual(['/tmp/photo.png']);
+      expect(parsed.input).not.toContain('ONE_FILES');
+    });
+
     it('opens tab for custom workspace', async () => {
       const deps = makeDeps({ dir: '/custom/workspace' });
       const { result } = renderHook(() => useGuidSend(deps));

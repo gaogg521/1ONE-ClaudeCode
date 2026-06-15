@@ -5,10 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  isEnterpriseTenantId,
-  normalizeWebuiManagementMode,
-} from '@/common/config/webuiEnterpriseConfig';
+import { isEnterpriseTenantId, normalizeWebuiManagementMode } from '@/common/config/webuiEnterpriseConfig';
 
 describe('webuiEnterpriseConfig', () => {
   it('treats default tenant as not joined', () => {

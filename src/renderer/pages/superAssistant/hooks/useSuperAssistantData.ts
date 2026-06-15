@@ -201,8 +201,15 @@ export function useSuperAssistantData(
     setLoading(true);
     const ownerUserId = user?.id ?? DESKTOP_OPERATOR_USER_ID;
     const loadEnterpriseAdminData = isAdmin;
-    const [requirementsResult, skillsResult, mcpResult, ragResult, codeRepoResult, pipelineResult, personalAgentsResult] =
-      await Promise.allSettled([
+    const [
+      requirementsResult,
+      skillsResult,
+      mcpResult,
+      ragResult,
+      codeRepoResult,
+      pipelineResult,
+      personalAgentsResult,
+    ] = await Promise.allSettled([
       listRequirementsTree(),
       listSkills(),
       loadEnterpriseAdminData ? listMcpRegistry() : Promise.resolve([]),
@@ -210,7 +217,7 @@ export function useSuperAssistantData(
       loadEnterpriseAdminData ? listCodeRepos() : Promise.resolve([]),
       loadEnterpriseAdminData ? listPipelines() : Promise.resolve([]),
       ipcBridge.personalAgent.list.invoke({ ownerUserId }),
-      ]);
+    ]);
     setRequirements(requirementsResult.status === 'fulfilled' ? (requirementsResult.value ?? []) : []);
     setSkills(skillsResult.status === 'fulfilled' ? (skillsResult.value ?? []) : []);
     setMcpRegistry(mcpResult.status === 'fulfilled' ? (mcpResult.value ?? []) : []);
@@ -234,10 +241,7 @@ export function useSuperAssistantData(
     };
   }, [refresh]);
 
-  const teamSessionKey = useMemo(
-    () => teams.map((team) => `${team.id}:${team.tenantId ?? ''}`).join('|'),
-    [teams]
-  );
+  const teamSessionKey = useMemo(() => teams.map((team) => `${team.id}:${team.tenantId ?? ''}`).join('|'), [teams]);
   const runtimeTeamsSnapshot = useMemo(() => teams, [teamSessionKey]);
 
   useEffect(() => {
@@ -250,14 +254,12 @@ export function useSuperAssistantData(
       new Map(
         runtimeTeamsSnapshot.flatMap((team) => {
           const failedAgents = loadFailedAgents(team.id);
-          return team.agents.map(
-            (agent): [string, RuntimeStatusInfo] => [
-              getRuntimeKey(team.id, agent.slotId),
-              {
-                status: failedAgents.has(agent.slotId) ? 'failed' : agent.status,
-              },
-            ]
-          );
+          return team.agents.map((agent): [string, RuntimeStatusInfo] => [
+            getRuntimeKey(team.id, agent.slotId),
+            {
+              status: failedAgents.has(agent.slotId) ? 'failed' : agent.status,
+            },
+          ]);
         })
       )
     );
@@ -420,11 +422,7 @@ export function useSuperAssistantData(
   );
 
   const activeAgentCount = useMemo(
-    () =>
-      teams.reduce(
-        (sum, team) => sum + team.agents.filter((agent) => agent.status === 'active').length,
-        0
-      ),
+    () => teams.reduce((sum, team) => sum + team.agents.filter((agent) => agent.status === 'active').length, 0),
     [teams]
   );
 
@@ -434,40 +432,39 @@ export function useSuperAssistantData(
   );
 
   const agentExecutionGroups = useMemo<SuperAssistantAgentExecutionGroup[]>(
-    () =>
-      [
-        ...(personalAgents.length > 0
-          ? [
-              {
-                teamId: 'personal',
-                teamName: '个人数字员工',
-                workspace: '',
-                conversationCount: 0,
-                agentCount: personalAgents.length,
-                activeAgentCount: 0,
-                agents: personalAgents.map(
-                  (agent): SuperAssistantAgentExecutionItem => ({
-                    teamId: 'personal',
-                    teamName: '个人数字员工',
-                    teamWorkspace: '',
-                    teamConversationCount: 0,
-                    slotId: agent.id,
-                    agentName: agent.name,
-                    role: 'teammate',
-                    agentType: agent.agentType,
-                    conversationType: agent.conversationType,
-                    status: 'idle',
-                    currentIssueSubject: null,
-                    queuedIssueSubject: prioritizedOpenIssues[0]?.subject ?? null,
-                    blockerMessage: null,
-                    dependencyNames: [skills[0]?.name ?? '', enabledMcpNames[0] ?? ''].filter(Boolean),
-                    digitalEmployeeRun: agent.automationConfig?.lastRun,
-                  })
-                ),
-              } satisfies SuperAssistantAgentExecutionGroup,
-            ]
-          : []),
-        ...teams.map((team) => {
+    () => [
+      ...(personalAgents.length > 0
+        ? [
+            {
+              teamId: 'personal',
+              teamName: '个人数字员工',
+              workspace: '',
+              conversationCount: 0,
+              agentCount: personalAgents.length,
+              activeAgentCount: 0,
+              agents: personalAgents.map(
+                (agent): SuperAssistantAgentExecutionItem => ({
+                  teamId: 'personal',
+                  teamName: '个人数字员工',
+                  teamWorkspace: '',
+                  teamConversationCount: 0,
+                  slotId: agent.id,
+                  agentName: agent.name,
+                  role: 'teammate',
+                  agentType: agent.agentType,
+                  conversationType: agent.conversationType,
+                  status: 'idle',
+                  currentIssueSubject: null,
+                  queuedIssueSubject: prioritizedOpenIssues[0]?.subject ?? null,
+                  blockerMessage: null,
+                  dependencyNames: [skills[0]?.name ?? '', enabledMcpNames[0] ?? ''].filter(Boolean),
+                  digitalEmployeeRun: agent.automationConfig?.lastRun,
+                })
+              ),
+            } satisfies SuperAssistantAgentExecutionGroup,
+          ]
+        : []),
+      ...teams.map((team) => {
         const assignedIssuesBySlot = new Map<string, RequirementRecord>();
         const assignedIssueIds = new Set<string>();
         Object.values(issueAssignments).forEach((assignment) => {
@@ -580,19 +577,28 @@ export function useSuperAssistantData(
           }),
         } satisfies SuperAssistantAgentExecutionGroup;
       }),
-      ],
-    [enabledMcpNames, issueAssignments, personalAgents, prioritizedOpenIssues, runtimeStatusMap, skills, teamConversationCountByTeam, teams, visibleRequirements]
+    ],
+    [
+      enabledMcpNames,
+      issueAssignments,
+      personalAgents,
+      prioritizedOpenIssues,
+      runtimeStatusMap,
+      skills,
+      teamConversationCountByTeam,
+      teams,
+      visibleRequirements,
+    ]
   );
 
   const openAssigneeUserIds = useMemo(
-    () =>
-      [
-        ...new Set(
-          visibleRequirements
-            .filter((item) => item.status !== 'completed' && item.assigned_to)
-            .map((item) => item.assigned_to as string)
-        ),
-      ],
+    () => [
+      ...new Set(
+        visibleRequirements
+          .filter((item) => item.status !== 'completed' && item.assigned_to)
+          .map((item) => item.assigned_to as string)
+      ),
+    ],
     [visibleRequirements]
   );
 
@@ -633,7 +639,10 @@ export function useSuperAssistantData(
     skillCount: skills.length,
     skillNames: skills.slice(0, 3).map((skill) => skill.name),
     enabledMcpCount: mcpRegistry.filter((item) => item.enabled).length,
-    mcpNames: mcpRegistry.filter((item) => item.enabled).slice(0, 3).map((item) => item.name),
+    mcpNames: mcpRegistry
+      .filter((item) => item.enabled)
+      .slice(0, 3)
+      .map((item) => item.name),
     ragDocumentCount: ragDocuments.length,
     ragChunkCount: ragDocuments.reduce((sum, doc) => sum + (Number(doc.chunk_count) || 0), 0),
     codeRepoCount: codeRepos.length,

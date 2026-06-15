@@ -46,31 +46,29 @@ vi.mock('@arco-design/web-react', () => {
     <input type='password' value={value} onChange={(event) => onChange?.(event.currentTarget.value)} />
   );
 
-  const Form = Object.assign(
-    ({ children }: React.PropsWithChildren) => <form>{children}</form>,
-    {
-      Item: ({ label, children }: React.PropsWithChildren<{ label?: React.ReactNode }>) => (
-        <label>
-          {label}
-          {children}
-        </label>
-      ),
-    }
-  );
+  const Form = Object.assign(({ children }: React.PropsWithChildren) => <form>{children}</form>, {
+    Item: ({ label, children }: React.PropsWithChildren<{ label?: React.ReactNode }>) => (
+      <label>
+        {label}
+        {children}
+      </label>
+    ),
+  });
 
   return {
     Button: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => (
-      <button type='button' onClick={onClick}>{children}</button>
+      <button type='button' onClick={onClick}>
+        {children}
+      </button>
     ),
     Form,
     Input,
     Message: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
     Modal: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
     Popconfirm: ({ children }: React.PropsWithChildren) => <>{children}</>,
-    Select: Object.assign(
-      ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-      { Option: ({ children }: React.PropsWithChildren) => <option>{children}</option> }
-    ),
+    Select: Object.assign(({ children }: React.PropsWithChildren) => <div>{children}</div>, {
+      Option: ({ children }: React.PropsWithChildren) => <option>{children}</option>,
+    }),
     Space: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
     Spin: ({ tip }: { tip?: string }) => <div>{tip}</div>,
     Table: ({
@@ -78,7 +76,12 @@ vi.mock('@arco-design/web-react', () => {
       columns,
     }: {
       data: Array<Record<string, unknown>>;
-      columns: Array<{ title?: string; dataIndex?: string; key?: string; render?: (value: unknown, record: Record<string, unknown>) => React.ReactNode }>;
+      columns: Array<{
+        title?: string;
+        dataIndex?: string;
+        key?: string;
+        render?: (value: unknown, record: Record<string, unknown>) => React.ReactNode;
+      }>;
     }) => (
       <table>
         <tbody>

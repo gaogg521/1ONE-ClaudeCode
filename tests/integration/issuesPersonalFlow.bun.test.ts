@@ -167,29 +167,18 @@ describeIntegration('Issues personal desktop flow (integration)', () => {
       data: Array<Record<string, unknown>>;
     };
     const walk = (nodes: Array<Record<string, unknown>>): Array<Record<string, unknown>> =>
-      nodes.flatMap((node) => [
-        node,
-        ...walk((node.children as Array<Record<string, unknown>> | undefined) ?? []),
-      ]);
+      nodes.flatMap((node) => [node, ...walk((node.children as Array<Record<string, unknown>> | undefined) ?? [])]);
     const created = walk(treeBody.data).find((row) => row.id === createdId);
     expect(created?.creator_id).toBe(DESKTOP_OPERATOR_USER_ID);
     expect(created?.creator_name).toBe('本地用户');
-    expect(formatCreatorDisplayName(created as { creator_id: string; creator_name?: string }, null)).toBe(
-      '本地用户'
-    );
+    expect(formatCreatorDisplayName(created as { creator_id: string; creator_name?: string }, null)).toBe('本地用户');
 
     const commentReq = createDesktopReq({
       params: { id: createdId },
       body: { body: 'P0 集成测试评论' },
     });
     const commentRes = createResponseMock();
-    await runRouteStack(
-      app,
-      'post',
-      '/api/admin/requirements/:id/comments',
-      commentReq,
-      commentRes
-    );
+    await runRouteStack(app, 'post', '/api/admin/requirements/:id/comments', commentReq, commentRes);
     const commentPayload = commentRes.json.mock.calls[0]?.[0] as { success: boolean };
     expect(commentPayload.success).toBe(true);
 
@@ -197,13 +186,7 @@ describeIntegration('Issues personal desktop flow (integration)', () => {
       params: { id: createdId },
     });
     const listCommentsRes = createResponseMock();
-    await runRouteStack(
-      app,
-      'get',
-      '/api/admin/requirements/:id/comments',
-      listCommentsReq,
-      listCommentsRes
-    );
+    await runRouteStack(app, 'get', '/api/admin/requirements/:id/comments', listCommentsReq, listCommentsRes);
     const commentRows = listCommentsRes.json.mock.calls[0]?.[0] as Array<{ author_name: string }>;
     expect(commentRows).toHaveLength(1);
     expect(commentRows[0]?.author_name).toBe('本地用户');

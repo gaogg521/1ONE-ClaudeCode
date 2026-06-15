@@ -6,10 +6,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { getDatabase } from '@process/services/database';
-import type {
-  CreateUserNotificationInput,
-  UserNotificationRecord,
-} from '@/common/types/userNotification';
+import type { CreateUserNotificationInput, UserNotificationRecord } from '@/common/types/userNotification';
 
 type NotificationRow = {
   id: string;

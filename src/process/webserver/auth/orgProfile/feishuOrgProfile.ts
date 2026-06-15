@@ -19,11 +19,7 @@ function asFeishuResponse<T>(value: unknown): FeishuApiResponse<T> | null {
   return obj as FeishuApiResponse<T>;
 }
 
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  timeoutMs = FEISHU_HTTP_TIMEOUT_MS
-): Promise<Response> {
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = FEISHU_HTTP_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -82,13 +78,8 @@ async function fetchFeishuContactUser(openId: string, tenantToken: string): Prom
   return obj.data?.user ?? null;
 }
 
-async function fetchFeishuDepartment(
-  departmentId: string,
-  tenantToken: string
-): Promise<FeishuDepartment | null> {
-  const url = new URL(
-    `https://open.feishu.cn/open-apis/contact/v3/departments/${encodeURIComponent(departmentId)}`
-  );
+async function fetchFeishuDepartment(departmentId: string, tenantToken: string): Promise<FeishuDepartment | null> {
+  const url = new URL(`https://open.feishu.cn/open-apis/contact/v3/departments/${encodeURIComponent(departmentId)}`);
   url.searchParams.set('department_id_type', 'open_department_id');
 
   const res = await fetchWithTimeout(url.toString(), {

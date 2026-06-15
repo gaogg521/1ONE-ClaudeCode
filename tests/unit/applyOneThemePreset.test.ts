@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  findOneThemePresetById,
-  resolvePresetForLightDarkToggle,
-} from '@/renderer/utils/theme/applyOneThemePreset';
+import { findOneThemePresetById, resolvePresetForLightDarkToggle } from '@/renderer/utils/theme/applyOneThemePreset';
 
 describe('applyOneThemePreset', () => {
   it('maps cyber dark to moonlight when toggling to light', () => {

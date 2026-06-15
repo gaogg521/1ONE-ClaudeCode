@@ -7,15 +7,23 @@
 import { ipcBridge } from '@/common';
 import type { TMessage } from '@/common/chat/chatLib';
 import { uuid } from '@/common/utils';
+import { assertBridgeSuccess } from '@/renderer/pages/conversation/platforms/assertBridgeSuccess';
+import {
+  finalizeUserMessageAfterSend,
+  prepareUserMessageSend,
+  publishOptimisticUserMessage,
+} from '@/renderer/utils/file/sentMessageDisplay';
 import { emitter } from '@/renderer/utils/emitter';
 import { useEffect } from 'react';
 
 type UseAcpInitialMessageParams = {
   conversationId: string;
   backend: string;
+  effectiveWorkspace: string;
   setAiProcessing: (value: boolean) => void;
   checkAndUpdateTitle: (conversationId: string, input: string) => void;
   addOrUpdateMessage: (message: TMessage, prepend?: boolean) => void;
+  removeMessageByMsgId: (msgId: string) => void;
 };
 
 /**
@@ -25,9 +33,11 @@ type UseAcpInitialMessageParams = {
 export const useAcpInitialMessage = ({
   conversationId,
   backend,
+  effectiveWorkspace,
   setAiProcessing,
   checkAndUpdateTitle,
   addOrUpdateMessage,
+  removeMessageByMsgId,
 }: UseAcpInitialMessageParams): void => {
   useEffect(() => {
     const storageKey = `acp_initial_message_${conversationId}`;
@@ -35,72 +45,60 @@ export const useAcpInitialMessage = ({
 
     if (!storedMessage) return;
 
-    // Clear immediately to prevent duplicate sends (e.g., if component remounts while sendMessage is pending)
     sessionStorage.removeItem(storageKey);
 
     const sendInitialMessage = async () => {
+      const msg_id = uuid();
+
       try {
-        const initialMessage = JSON.parse(storedMessage);
-        const { input, files } = initialMessage;
+        const initialMessage = JSON.parse(storedMessage) as { input: string; files?: string[] };
+        const { input, files = [] } = initialMessage;
 
-        // ACP: don't use buildDisplayMessage, pass raw input directly
-        // File references are added by the backend ACP agent (using actual copied paths)
-        // Avoid two inconsistent sets of file references in the message
-        const msg_id = uuid();
+        const prepared = prepareUserMessageSend(input, files, effectiveWorkspace, msg_id, conversationId);
+        publishOptimisticUserMessage(addOrUpdateMessage, prepared.optimisticMessage);
 
-        const userMessage: TMessage = {
-          id: msg_id,
-          msg_id,
-          conversation_id: conversationId,
-          type: 'text',
-          position: 'right',
-          content: { content: input },
-          createdAt: Date.now(),
-        };
-        addOrUpdateMessage(userMessage, true);
-
-        // Start AI processing loading state (user message will be added via backend response)
         setAiProcessing(true);
 
-        // Send the message
         void checkAndUpdateTitle(conversationId, input);
         const result = await ipcBridge.acpConversation.sendMessage.invoke({
-          input,
+          input: prepared.displayMessage,
           msg_id,
           conversation_id: conversationId,
           files,
         });
 
-        if (result && result.success === true) {
-          // Initial message sent successfully
-          emitter.emit('chat.history.refresh');
-        } else {
-          // Handle send failure
-          console.error('[ACP-FRONTEND] Failed to send initial message:', result);
-          // Create error message in UI
-          const errorMessage: TMessage = {
-            id: uuid(),
-            msg_id: uuid(),
-            conversation_id: conversationId,
-            type: 'tips',
-            position: 'center',
-            content: {
-              content: 'Failed to send message. Please try again.',
-              type: 'error',
-            },
-            createdAt: Date.now() + 2,
-          };
-          addOrUpdateMessage(errorMessage, true);
-          setAiProcessing(false); // Stop loading state on failure
-        }
+        assertBridgeSuccess(result, `Failed to send initial message to ${backend}`);
+        finalizeUserMessageAfterSend(
+          addOrUpdateMessage,
+          conversationId,
+          msg_id,
+          result,
+          prepared.displayMessage,
+          prepared
+        );
+        emitter.emit('chat.history.refresh');
       } catch (error) {
-        console.error('Error sending initial message:', error);
-        setAiProcessing(false); // Stop loading state on error
+        console.error('[ACP-FRONTEND] Failed to send initial message:', error);
+        removeMessageByMsgId(msg_id);
+        const errorMessage: TMessage = {
+          id: uuid(),
+          msg_id: uuid(),
+          conversation_id: conversationId,
+          type: 'tips',
+          position: 'center',
+          content: {
+            content: 'Failed to send message. Please try again.',
+            type: 'error',
+          },
+          createdAt: Date.now() + 2,
+        };
+        addOrUpdateMessage(errorMessage, true);
+        setAiProcessing(false);
       }
     };
 
     sendInitialMessage().catch((error) => {
       console.error('Failed to send initial message:', error);
     });
-  }, [conversationId, backend]);
+  }, [conversationId, backend, effectiveWorkspace]);
 };

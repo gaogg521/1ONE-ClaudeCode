@@ -9,51 +9,39 @@ const pipelineCreateMock = vi.hoisted(() => vi.fn());
 const pipelineTriggerMock = vi.hoisted(() => vi.fn());
 const pipelineGetInstanceMock = vi.hoisted(() => vi.fn());
 
-vi.mock(
-  '@process/services/database/repositories/devops/artifactRepository',
-  () => ({
-    ArtifactRepository: {
-      createRepo: (...args: unknown[]) => createArtifactRepoMock(...args),
-      listRepos: vi.fn(),
-      deleteRepo: vi.fn(),
-      listArtifacts: vi.fn(),
-    },
-  })
-);
+vi.mock('@process/services/database/repositories/devops/artifactRepository', () => ({
+  ArtifactRepository: {
+    createRepo: (...args: unknown[]) => createArtifactRepoMock(...args),
+    listRepos: vi.fn(),
+    deleteRepo: vi.fn(),
+    listArtifacts: vi.fn(),
+  },
+}));
 
-vi.mock(
-  '@process/services/database/repositories/devops/codeRepoRepository',
-  () => ({
-    CodeRepoRepository: {
-      create: (...args: unknown[]) => createCodeRepoMock(...args),
-      list: vi.fn(),
-      delete: vi.fn(),
-    },
-  })
-);
+vi.mock('@process/services/database/repositories/devops/codeRepoRepository', () => ({
+  CodeRepoRepository: {
+    create: (...args: unknown[]) => createCodeRepoMock(...args),
+    list: vi.fn(),
+    delete: vi.fn(),
+  },
+}));
 
-vi.mock(
-  '@process/services/database/repositories/devops/metricRepository',
-  () => ({
-    MetricRepository: {
-      createSnapshot: (...args: unknown[]) => createMetricSnapshotMock(...args),
-      listSnapshots: vi.fn(),
-    },
-  })
-);
+vi.mock('@process/services/database/repositories/devops/metricRepository', () => ({
+  MetricRepository: {
+    createSnapshot: (...args: unknown[]) => createMetricSnapshotMock(...args),
+    listSnapshots: vi.fn(),
+  },
+}));
 
-vi.mock(
-  '@process/services/database/repositories/devops/testRepository',
-  () => ({
-    TestRepository: {
-      createCase: (...args: unknown[]) => createTestCaseMock(...args),
-      hasPlanInTenant: (...args: unknown[]) => hasPlanInTenantMock(...args),
-      listPlans: vi.fn(),
-      createPlan: vi.fn(),
-      listCases: vi.fn(),
-    },
-  })
-);
+vi.mock('@process/services/database/repositories/devops/testRepository', () => ({
+  TestRepository: {
+    createCase: (...args: unknown[]) => createTestCaseMock(...args),
+    hasPlanInTenant: (...args: unknown[]) => hasPlanInTenantMock(...args),
+    listPlans: vi.fn(),
+    createPlan: vi.fn(),
+    listCases: vi.fn(),
+  },
+}));
 
 vi.mock('@process/services/pipeline/PipelineService', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@process/services/pipeline/PipelineService')>();

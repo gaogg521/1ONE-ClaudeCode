@@ -138,7 +138,10 @@ const Layout: React.FC<{
   const navigate = useNavigate();
   useConversationShortcuts({ navigate });
   const location = useLocation();
-  const workspaceAvailable = location.pathname.startsWith('/conversation/') || location.pathname.startsWith('/team/') || location.pathname.startsWith('/workspace');
+  const workspaceAvailable =
+    location.pathname.startsWith('/conversation/') ||
+    location.pathname.startsWith('/team/') ||
+    location.pathname.startsWith('/workspace');
   const collapsedRef = useRef(collapsed);
   const desktopSiderWidthRef = useRef(desktopSiderWidth);
   const dragStateRef = useRef<{ active: boolean; startX: number; startWidth: number }>({
@@ -147,10 +150,8 @@ const Layout: React.FC<{
     startWidth: getDesktopSiderDefaultWidth(typeof window === 'undefined' ? 1280 : window.innerWidth),
   });
 
-
   // CSS 注入系统已移除（"显示"功能模块已删除）
   // 主题通过 SiderFooter 的 ThemeSwitcher + data-color-scheme CSS 变量实现
-
 
   // 检测移动端并响应窗口大小变化
   useEffect(() => {
@@ -423,7 +424,9 @@ const Layout: React.FC<{
               {/* 侧栏折叠改由标题栏统一控制 / Sidebar folding handled by Titlebar toggle */}
             </ArcoLayout.Header>
 
-            <ArcoLayout.Content className={classNames('p-8px layout-sider-content flex flex-col min-h-0', !isMobile && 'h-full')}>
+            <ArcoLayout.Content
+              className={classNames('p-8px layout-sider-content flex flex-col min-h-0', !isMobile && 'h-full')}
+            >
               {React.isValidElement(sider)
                 ? React.cloneElement(sider, {
                     onSessionClick: () => {

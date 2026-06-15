@@ -53,7 +53,8 @@ describe('ClaudeMcpAgent helpers', () => {
   });
 
   it('wraps legacy script-path commands for Claude stdio JSON', () => {
-    const scriptPath = 'D:/app/resources/bundled-agent-toolkit/win32-x64/node_modules/@colbymchenry/codegraph/dist/bin/codegraph.js';
+    const scriptPath =
+      'D:/app/resources/bundled-agent-toolkit/win32-x64/node_modules/@colbymchenry/codegraph/dist/bin/codegraph.js';
     const normalized = normalizeClaudeStdioTransport({
       type: 'stdio',
       command: scriptPath,

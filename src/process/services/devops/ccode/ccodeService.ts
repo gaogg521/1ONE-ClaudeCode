@@ -8,11 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { CodeRepoRepository } from '@process/services/database/repositories/devops/codeRepoRepository';
 
 export class CcodeService {
-  static async listRepos(input: {
-    tenantId: string;
-    userId: string;
-    isAdmin: boolean;
-  }): Promise<unknown[]> {
+  static async listRepos(input: { tenantId: string; userId: string; isAdmin: boolean }): Promise<unknown[]> {
     return CodeRepoRepository.list(input.tenantId, input.userId, input.isAdmin);
   }
 

@@ -108,16 +108,16 @@ export function buildSpawnConfig(
   // For OpenAI-compatible providers (custom/LiteLLM/Gemini), override the binary's
   // default Claude identity with a neutral system prompt.
   // Anthropic keeps its own default (no override needed).
-  // Use a more explicit prompt that discourages unnecessary tool use —
-  // some models (e.g. doubao-seed) trigger tool-call bugs when they explore the workspace
-  // unprompted, leading to tool_call_id errors.
+  const imageGuidance =
+    'When the user attaches images or screenshots, call one_image_generation with prompt "Analyze image: …" and image_uris set to the absolute file path(s). Answer from the tool output.';
   const neutralSystemPrompt =
     provider !== 'anthropic'
       ? [
-          'You are a helpful AI assistant. Answer questions directly.',
+          "You are a helpful AI assistant. Answer questions directly in the same language as the user. Respond naturally; do not echo or repeat the user's greeting.",
           'Only use file system tools when the user explicitly asks you to read, write, or execute files.',
           'For project/directory structure: ALWAYS use `git ls-files` first (fastest). If git is not available, run shallow one-level listings like `dir /b` or `ls` on specific subdirs — NEVER run `dir /s /b`, `dir /s`, `find` or any unbounded recursive command on the workspace root; these time out at 120 s and block all work.',
-          'Do NOT try to read binary or image files with file_read or bash — they contain binary data that cannot be interpreted as text.',
+          'Do NOT read binary or image files with file_read or bash.',
+          imageGuidance,
           'Do NOT make up information. If you cannot retrieve real-time data (weather, stock prices, live URLs) because you have no web-search tool, tell the user clearly instead of guessing.',
         ].join(' ')
       : undefined;
@@ -131,7 +131,8 @@ export function buildSpawnConfig(
   // causing cascading 400 errors after the first tool call.
   // Cap max-turns to 1 for these models to prevent the loop from hanging.
   const useModelLower = (model.useModel ?? '').toLowerCase();
-  const isSeedModel = useModelLower.includes('seed') || useModelLower.includes('thinking') || useModelLower.includes('reasoner');
+  const isSeedModel =
+    useModelLower.includes('seed') || useModelLower.includes('thinking') || useModelLower.includes('reasoner');
   if (isSeedModel && !options.maxTurns) {
     args.push('--max-turns', '1');
   }
@@ -191,11 +192,7 @@ export function buildSpawnConfig(
 function buildProjectConfig(model: TProviderWithModel, provider: AionrsProvider): string {
   if (provider !== 'openai') return '';
 
-  const chunks: string[] = [
-    '[providers.openai]',
-    'api = "openai-completions"',
-    '',
-  ];
+  const chunks: string[] = ['[providers.openai]', 'api = "openai-completions"', ''];
 
   const compat: string[] = [];
 

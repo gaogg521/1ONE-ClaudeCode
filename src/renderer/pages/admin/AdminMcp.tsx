@@ -162,7 +162,9 @@ const AdminMcp: React.FC = () => {
         // Validation error
         return;
       }
-      Message.error(getEnterpriseActionError(e, t('admin.mcp.messages.saveFailed', { defaultValue: '保存 MCP 服务失败' })));
+      Message.error(
+        getEnterpriseActionError(e, t('admin.mcp.messages.saveFailed', { defaultValue: '保存 MCP 服务失败' }))
+      );
     } finally {
       setSaving(false);
     }
@@ -175,7 +177,9 @@ const AdminMcp: React.FC = () => {
         Message.success(t('admin.mcp.messages.deleteSuccess', { defaultValue: '删除 MCP 服务成功' }));
         await connectorsState.reload();
       } catch (e) {
-        Message.error(getEnterpriseActionError(e, t('admin.mcp.messages.deleteFailed', { defaultValue: '删除 MCP 服务失败' })));
+        Message.error(
+          getEnterpriseActionError(e, t('admin.mcp.messages.deleteFailed', { defaultValue: '删除 MCP 服务失败' }))
+        );
       }
     },
     [connectorsState, t]
@@ -218,11 +222,7 @@ const AdminMcp: React.FC = () => {
       setBatchJson('');
       await connectorsState.reload();
     } catch (error) {
-      setBatchError(
-        error instanceof SyntaxError
-          ? 'JSON格式错误'
-          : getEnterpriseActionError(error, '导入失败')
-      );
+      setBatchError(error instanceof SyntaxError ? 'JSON格式错误' : getEnterpriseActionError(error, '导入失败'));
     } finally {
       setBatchSaving(false);
     }
@@ -291,11 +291,7 @@ const AdminMcp: React.FC = () => {
       key: 'enabled',
       width: 100,
       render: (val: boolean, record: McpConnector) => (
-        <Switch
-          checked={val}
-          onChange={(checked) => void handleToggleStatus(record, checked)}
-          size='small'
-        />
+        <Switch checked={val} onChange={(checked) => void handleToggleStatus(record, checked)} size='small' />
       ),
     },
     {
@@ -316,12 +312,7 @@ const AdminMcp: React.FC = () => {
             title={t('common.confirmDelete', { defaultValue: '确认删除？' })}
             onOk={() => void handleDelete(record.id)}
           >
-            <Button
-              type='text'
-              status='danger'
-              size='small'
-              icon={<Delete theme='outline' size={14} />}
-            />
+            <Button type='text' status='danger' size='small' icon={<Delete theme='outline' size={14} />} />
           </Popconfirm>
         </Space>
       ),
@@ -350,11 +341,7 @@ const AdminMcp: React.FC = () => {
               >
                 {t('admin.mcp.batchImport', { defaultValue: '批量导入' })}
               </Button>
-              <Button
-                type='primary'
-                icon={<Plus theme='outline' size={16} />}
-                onClick={handleOpenAdd}
-              >
+              <Button type='primary' icon={<Plus theme='outline' size={16} />} onClick={handleOpenAdd}>
                 {t('admin.mcp.addConnector', { defaultValue: '注册服务' })}
               </Button>
             </>
@@ -369,12 +356,7 @@ const AdminMcp: React.FC = () => {
             empty={connectorsState.data.length === 0}
             emptyDescription={t('admin.mcp.empty', { defaultValue: '暂无 MCP 服务，点击上方开始注册。' })}
           >
-            <Table
-              rowKey='id'
-              columns={columns}
-              data={connectorsState.data}
-              pagination={false}
-            />
+            <Table rowKey='id' columns={columns} data={connectorsState.data} pagination={false} />
           </ModuleDataState>
         </Card>
 
@@ -397,9 +379,16 @@ const AdminMcp: React.FC = () => {
               <Form.Item
                 label={t('admin.mcp.modal.name', { defaultValue: '服务名称' })}
                 field='name'
-                rules={[{ required: true, message: t('admin.mcp.validation.nameRequired', { defaultValue: '请输入服务名称' }) }]}
+                rules={[
+                  {
+                    required: true,
+                    message: t('admin.mcp.validation.nameRequired', { defaultValue: '请输入服务名称' }),
+                  },
+                ]}
               >
-                <Input placeholder={t('admin.mcp.modal.namePlaceholder', { defaultValue: '例如：postgres-database-tool' })} />
+                <Input
+                  placeholder={t('admin.mcp.modal.namePlaceholder', { defaultValue: '例如：postgres-database-tool' })}
+                />
               </Form.Item>
               <Form.Item
                 label={t('admin.mcp.modal.type', { defaultValue: '传输类型' })}
@@ -422,12 +411,19 @@ const AdminMcp: React.FC = () => {
             <Form.Item
               label={t('admin.mcp.modal.endpoint', { defaultValue: '端点或命令行' })}
               field='endpoint'
-              rules={[{ required: true, message: t('admin.mcp.validation.endpointRequired', { defaultValue: '请输入端点地址或启动命令' }) }]}
+              rules={[
+                {
+                  required: true,
+                  message: t('admin.mcp.validation.endpointRequired', { defaultValue: '请输入端点地址或启动命令' }),
+                },
+              ]}
             >
               <Input
                 placeholder={
                   mcpType === 'stdio'
-                    ? t('admin.mcp.modal.endpointPlaceholderStdio', { defaultValue: '例如：npx -y @modelcontextprotocol/server-postgres' })
+                    ? t('admin.mcp.modal.endpointPlaceholderStdio', {
+                        defaultValue: '例如：npx -y @modelcontextprotocol/server-postgres',
+                      })
                     : t('admin.mcp.modal.endpointPlaceholderSse', { defaultValue: '例如：http://localhost:3001/sse' })
                 }
               />
@@ -455,12 +451,7 @@ const AdminMcp: React.FC = () => {
                 <Typography.Text bold className='text-14px'>
                   {t('admin.mcp.modal.credentials', { defaultValue: '环境变量凭证 (Credentials)' })}
                 </Typography.Text>
-                <Button
-                  type='outline'
-                  size='small'
-                  icon={<Plus theme='outline' size={14} />}
-                  onClick={handleAddEnvRow}
-                >
+                <Button type='outline' size='small' icon={<Plus theme='outline' size={14} />} onClick={handleAddEnvRow}>
                   {t('admin.mcp.modal.addEnv', { defaultValue: '添加凭证' })}
                 </Button>
               </div>
@@ -513,11 +504,7 @@ const AdminMcp: React.FC = () => {
         >
           <Form layout='vertical'>
             <Form.Item label='JSON (数组)'>
-              <Input.TextArea
-                value={batchJson}
-                onChange={setBatchJson}
-                autoSize={{ minRows: 8, maxRows: 16 }}
-              />
+              <Input.TextArea value={batchJson} onChange={setBatchJson} autoSize={{ minRows: 8, maxRows: 16 }} />
             </Form.Item>
             {batchError ? <Alert type='error' content={batchError} /> : null}
           </Form>

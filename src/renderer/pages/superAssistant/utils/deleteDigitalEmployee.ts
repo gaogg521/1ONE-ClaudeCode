@@ -7,10 +7,7 @@
 import { ipcBridge } from '@/common';
 import { listAgentCronJobs } from './agentAutomationUtils';
 
-export async function removeCronJobsForDigitalEmployee(
-  teamId: string,
-  slotId: string
-): Promise<number> {
+export async function removeCronJobsForDigitalEmployee(teamId: string, slotId: string): Promise<number> {
   const jobs = await ipcBridge.cron.listJobs.invoke();
   const linked = listAgentCronJobs(jobs ?? [], teamId, slotId);
   await Promise.all(linked.map((job) => ipcBridge.cron.removeJob.invoke({ jobId: job.id })));

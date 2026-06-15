@@ -24,7 +24,11 @@ const AdminTeamRuntimes: React.FC = () => {
   const asAdmin = isEnterpriseAdminRole(user?.role);
   const channel = isElectronDesktop() ? 'desktop' : 'browser';
 
-  const { data: nodes, isLoading, mutate } = useSWR(
+  const {
+    data: nodes,
+    isLoading,
+    mutate,
+  } = useSWR(
     user?.id ? `admin-team-runtime/${tenantId}/${asAdmin ? 'admin' : 'member'}` : null,
     () =>
       syncFleetWithAdminBackend({
@@ -49,8 +53,7 @@ const AdminTeamRuntimes: React.FC = () => {
         </Typography.Title>
         <Typography.Paragraph type='secondary' style={{ margin: '8px 0 0' }}>
           {t('admin.teamRuntimes.desc', {
-            defaultValue:
-              '汇总 C/S 桌面端与 B/S 浏览器端上报的机器名、IP 与已安装 Agent，数据与超级管理员后台同步。',
+            defaultValue: '汇总 C/S 桌面端与 B/S 浏览器端上报的机器名、IP 与已安装 Agent，数据与超级管理员后台同步。',
           })}
         </Typography.Paragraph>
       </div>
