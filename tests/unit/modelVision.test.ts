@@ -19,6 +19,11 @@ describe('modelSupportsNativeVision', () => {
     expect(modelSupportsNativeVision('claude-sonnet-4-6')).toBe(true);
   });
 
+  it('detects Kimi K2 and Qwen3.7 vision models', () => {
+    expect(modelSupportsNativeVision('kimi-k2-6')).toBe(true);
+    expect(modelSupportsNativeVision('qwen-3-7-max')).toBe(true);
+  });
+
   it('rejects embedding-only models', () => {
     expect(modelSupportsNativeVision('text-embedding-3-small')).toBe(false);
   });

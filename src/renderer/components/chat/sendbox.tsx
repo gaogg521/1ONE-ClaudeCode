@@ -487,7 +487,7 @@ const SendBox: React.FC<{
     mountWarmupTimerRef.current = setTimeout(() => {
       mountWarmupTimerRef.current = null;
       triggerConversationWarmup(cid);
-    }, 300);
+    }, 0);
 
     return () => {
       if (mountWarmupTimerRef.current) {

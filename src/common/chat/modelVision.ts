@@ -15,8 +15,8 @@ const NATIVE_VISION_MODEL_PATTERNS: RegExp[] = [
   /qwen-vl|qwen2-vl|qwen2\.5-vl|qwen3-vl/i,
   /qwen-?3/i,
   /qwen3/i,
-  /qwen.*plus/i,
-  /kimi.*vision|moonshot-v1-vision/i,
+  /qwen-?3-7|qwen3-7|qwen-3\.7/i,
+  /kimi-k2|kimi-k[\d.-]|moonshot-v1|moonshot-kimi/i,
   /doubao.*vision|seed.*vision/i,
   /llava|vision/i,
 ];

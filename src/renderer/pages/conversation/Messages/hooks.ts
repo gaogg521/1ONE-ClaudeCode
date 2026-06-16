@@ -445,7 +445,8 @@ async function fetchAndReplaceConversationMessages(
     }
     const uiLeftTextCount = sameConversation.filter((m) => m.type === 'text' && m.position === 'left').length;
     const dbLeftTextCount = messages.filter((m) => m.type === 'text' && m.position === 'left').length;
-    if (dbLeftTextCount >= uiLeftTextCount) {
+    const dbHasMoreThanUi = messages.length > sameConversation.length;
+    if (dbLeftTextCount > uiLeftTextCount || (dbLeftTextCount === uiLeftTextCount && dbHasMoreThanUi)) {
       return replaceMessageListFromDb(messages);
     }
     return mergeDbMessagesWithStreaming(conversationId, messages, currentList);

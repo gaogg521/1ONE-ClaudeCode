@@ -29,6 +29,19 @@ describe('buildStartupErrorMessage', () => {
     expect(msg).toContain("'gemini' CLI not found");
   });
 
+  it('should provide Cursor-specific guidance when agent CLI is missing', () => {
+    const msg = buildStartupErrorMessage(
+      'cursor',
+      127,
+      null,
+      "'agent' is not recognized as an internal or external command",
+      undefined,
+      'agent'
+    );
+    expect(msg).toContain('Cursor Agent');
+    expect(msg).toContain('where agent');
+  });
+
   it('should detect config loading error and extract config path', () => {
     const stderr =
       'Error: error loading config: /Users/test/.codex/config.toml:10:1: invalid type: integer `2`, expected struct AgentRoleToml';

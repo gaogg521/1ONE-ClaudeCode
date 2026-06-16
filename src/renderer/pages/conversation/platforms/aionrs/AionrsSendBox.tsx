@@ -161,6 +161,21 @@ const AionrsSendBox: React.FC<{
       const prepared = prepareUserMessageSend(input, files, effectiveWorkspace, msg_id, conversation_id);
       publishOptimisticUserMessage(addOrUpdateMessage, prepared.optimisticMessage);
 
+      // Sync worker model when UI selector drifted from persisted conversation model (no extra IPC get).
+      const persisted = modelSelection.persistedModel;
+      const modelDrifted =
+        persisted &&
+        (persisted.useModel !== currentModel.useModel ||
+          persisted.id !== currentModel.id ||
+          persisted.baseUrl !== currentModel.baseUrl);
+      if (modelDrifted) {
+        await ipcBridge.conversation.stop.invoke({ conversation_id });
+        await ipcBridge.conversation.update.invoke({
+          id: conversation_id,
+          updates: { model: currentModel },
+        });
+      }
+
       try {
         void checkAndUpdateTitle(conversation_id, input);
         const result = await ipcBridge.conversation.sendMessage.invoke({
@@ -184,6 +199,7 @@ const AionrsSendBox: React.FC<{
         }
       } catch (error) {
         removeMessageByMsgId(msg_id);
+        setWaitingResponse(false);
         throw error;
       }
     },
@@ -191,11 +207,13 @@ const AionrsSendBox: React.FC<{
       addOrUpdateMessage,
       checkAndUpdateTitle,
       conversation_id,
-      currentModel?.useModel,
+      currentModel,
+      modelSelection.persistedModel,
       setActiveMsgId,
       removeMessageByMsgId,
       setWaitingResponse,
       effectiveWorkspace,
+      t,
     ]
   );
 

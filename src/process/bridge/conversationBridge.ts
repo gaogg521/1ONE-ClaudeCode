@@ -5,7 +5,7 @@
  */
 
 import { GeminiAgent, GeminiApprovalStore } from '@process/agent/gemini';
-import type { TChatConversation } from '@/common/config/storage';
+import type { TChatConversation, TProviderWithModel } from '@/common/config/storage';
 import type { IAgentManager } from '@process/task/IAgentManager';
 import type { IConversationService, CreateConversationParams } from '@process/services/IConversationService';
 import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
@@ -46,6 +46,7 @@ import { getRecentUserAttachmentPaths } from '@process/bridge/recentAttachmentPa
 import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 import { resolvePersonalAgentPreset } from '@process/digitalEmployee/resolvePersonalAgentPreset';
 import { buildPromptAugmentationPrefix, composeAgentPrompt } from '@process/services/promptAugmentation';
+import { resolveAionrsTaskForSend } from './aionrsTaskResolver';
 
 const refreshTrayMenuSafely = async (): Promise<void> => {
   try {
@@ -62,6 +63,10 @@ function resolveTaskModelId(task: IAgentManager): string | undefined {
     options?: { currentModelId?: string };
   };
   return candidate.model?.useModel ?? candidate.persistedModelId ?? candidate.options?.currentModelId;
+}
+
+function resolveTaskConversationModel(task: IAgentManager): TProviderWithModel | undefined {
+  return (task as { model?: TProviderWithModel }).model;
 }
 
 const VALID_CONVERSATION_TYPES = new Set<TChatConversation['type']>([
@@ -410,8 +415,10 @@ export function initConversationBridge(
         }
       }
       const task = await workerTaskManager.getOrBuildTask(conversation_id);
-      if (task && task.type === 'acp') {
+      if (task.type === 'acp') {
         await (task as unknown as AcpAgentManager).initAgent();
+      } else if (task.type === 'aionrs') {
+        await (task as AionrsManager).bootstrap;
       }
     } catch {
       // Ignore errors — warmup is best-effort
@@ -553,7 +560,12 @@ export function initConversationBridge(
     const { conversation_id, files, ...other } = params;
     let task: IAgentManager | undefined;
     try {
-      task = await workerTaskManager.getOrBuildTask(conversation_id);
+      const conversation = await conversationService.getConversation(conversation_id);
+      if (conversation?.type === 'aionrs') {
+        task = await resolveAionrsTaskForSend(conversation_id, { conversationService, workerTaskManager });
+      } else {
+        task = await workerTaskManager.getOrBuildTask(conversation_id);
+      }
     } catch (err) {
       console.error(`[conversationBridge] sendMessage: failed to get/build task: ${conversation_id}`, err);
       return {
@@ -625,6 +637,8 @@ export function initConversationBridge(
       files: workspaceFiles,
       modelId: resolveTaskModelId(task),
       agentType: task.type,
+      workspaceDir: task.workspace,
+      conversationModel: resolveTaskConversationModel(task),
     });
     const agentPrompt = composeAgentPrompt(agentContent, augmentationPrefix);
 

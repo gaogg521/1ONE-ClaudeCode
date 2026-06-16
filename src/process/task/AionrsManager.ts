@@ -20,8 +20,14 @@ import { uuid } from '@/common/utils';
 import BaseAgentManager from './BaseAgentManager';
 import { IpcAgentEventEmitter } from './IpcAgentEventEmitter';
 import { mainError } from '@process/utils/mainLogger';
+import type { AgentKillReason } from './IAgentManager';
 import { ProcessConfig } from '@process/utils/initStorage';
 import { syncImageGenConversationModelEnv } from '@process/utils/imageGenMcpEnv';
+import {
+  agentPromptHasImageAnalysisFailure,
+  agentPromptHasPrefetchedImageAnalysis,
+  extractImageAnalysisFailureMessage,
+} from '@process/services/imageAnalysisPrefetch';
 import { ensureBuiltinMcpBundles } from '@process/utils/ensureBuiltinMcpBundles';
 import type { IProvider } from '@/common/config/storage';
 import { getSystemDir } from '@process/utils/initStorage';
@@ -87,10 +93,13 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   workspace: string;
   model: TProviderWithModel;
   readonly approvalStore = new AionrsApprovalStore();
+  /** Resolves when the aionrs worker binary has emitted `ready`. */
+  readonly bootstrap: Promise<void>;
   private currentMode: string = resolveSessionMode('aionrs', undefined);
   private static readonly autoFixedProtocolKeys = new Set<string>();
   private pendingModelIdentityNotice: string | null = null;
   private lastModelIdSeen: string | null = null;
+  private suppressExitErrors = false;
 
   private inferProductLine(): string {
     const modelId = (this.model.useModel || '').toLowerCase();
@@ -131,8 +140,9 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     this.currentMode = currentMode;
     this.yoloMode = yoloMode;
 
-    // Start the worker bootstrap
-    void this.start().catch(() => {});
+    this.bootstrap = this.start().catch((error) => {
+      mainError('[AionrsManager]', 'Worker bootstrap failed', error);
+    });
   }
 
   /**
@@ -320,11 +330,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     await super.stop();
   }
 
-  async sendMessage(data: { input: string; agentPrompt?: string; msg_id: string; files?: string[] }) {
-    const originalInput = data.input;
-
-    // Detect model switches even when the worker is NOT rebuilt (some flows can update model routing without restart).
-    // If we notice a change, queue a one-time identity reminder for the next prompt.
+  private async trackLastModelIdAsync(): Promise<void> {
     try {
       const currentModelId = this.model.useModel || '';
       if (currentModelId && this.lastModelIdSeen && this.lastModelIdSeen !== currentModelId) {
@@ -332,19 +338,24 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       }
       if (currentModelId && (!this.lastModelIdSeen || this.lastModelIdSeen !== currentModelId)) {
         this.lastModelIdSeen = currentModelId;
-        // Best-effort persist; do not block send.
         const db = await getDatabase();
-        const conv = db.getConversation(this.conversation_id);
-        if ((conv as { success?: boolean })?.success && (conv as { data?: any })?.data) {
-          const conversation = (conv as { data: any }).data;
-          db.updateConversation(this.conversation_id, {
-            extra: { ...conversation.extra, lastModelId: currentModelId },
-          } as Partial<typeof conversation>);
-        }
+        const result = db.getConversation(this.conversation_id);
+        if (!result.success || !result.data || result.data.type !== 'aionrs') return;
+        const conversation = result.data;
+        db.updateConversation(this.conversation_id, {
+          extra: { ...conversation.extra, lastModelId: currentModelId },
+        } as Partial<typeof conversation>);
       }
     } catch {
       // ignore
     }
+  }
+
+  async sendMessage(data: { input: string; agentPrompt?: string; msg_id: string; files?: string[] }) {
+    const originalInput = data.input;
+
+    // Track model id without blocking the send path.
+    void this.trackLastModelIdAsync();
 
     if (data.files?.some((filePath) => isImageFilePath(filePath))) {
       await ensureBuiltinMcpBundles();
@@ -388,6 +399,35 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       data = { ...data, input: data.agentPrompt };
     }
 
+    if (agentPromptHasImageAnalysisFailure(data.input)) {
+      const message: TMessage = {
+        id: data.msg_id,
+        type: 'text',
+        position: 'right',
+        conversation_id: this.conversation_id,
+        content: { content: originalInput },
+      };
+      addMessage(this.conversation_id, message);
+      try {
+        (await getDatabase()).updateConversation(this.conversation_id, {});
+      } catch {
+        // Conversation might not exist in DB yet
+      }
+      this.emitImageAnalysisFailure(
+        data.msg_id,
+        extractImageAnalysisFailureMessage(data.input) ?? 'Image analysis failed'
+      );
+      return;
+    }
+
+    // Image already pre-analyzed in agentPrompt — do not pass files[] to aionrs (avoids tool + vision double path).
+    const imageHandledInPrompt =
+      agentPromptHasPrefetchedImageAnalysis(data.agentPrompt ?? data.input) ||
+      agentPromptHasImageAnalysisFailure(data.agentPrompt ?? data.input);
+    if (imageHandledInPrompt) {
+      data = { ...data, files: undefined };
+    }
+
     const message: TMessage = {
       id: data.msg_id,
       type: 'text',
@@ -405,6 +445,29 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     }
     this.status = 'pending';
     return super.sendMessage(data);
+  }
+
+  private emitImageAnalysisFailure(userMsgId: string, error: string): void {
+    const message: IResponseMessage = {
+      type: 'error',
+      conversation_id: this.conversation_id,
+      msg_id: uuid(),
+      data: error,
+    };
+
+    const tMessage = transformMessage(message);
+    if (tMessage) {
+      addMessage(this.conversation_id, tMessage);
+    }
+
+    ipcBridge.conversation.responseStream.emit(message);
+    ipcBridge.conversation.responseStream.emit({
+      type: 'finished',
+      conversation_id: this.conversation_id,
+      msg_id: userMsgId,
+      data: undefined,
+    });
+    this.status = 'finished';
   }
 
   /**
@@ -495,6 +558,10 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   }
 
   private async handleAionrsMessage(data: IResponseMessage): Promise<void> {
+    if (data.type === 'error' && this.suppressExitErrors) {
+      return;
+    }
+
     if ((data as { type?: string }).type === 'aionrs_session_bound') {
       const sid = String((data as { data?: unknown }).data ?? '').trim();
       if (sid) void this.persistAionrsSessionId(sid);
@@ -633,5 +700,17 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
 
     super.confirm(id, callId, data);
     return this.postMessagePromise(callId, data);
+  }
+
+  override kill(_reason?: AgentKillReason): void {
+    this.suppressExitErrors = true;
+    void this.stop()
+      .catch(() => {})
+      .finally(() => {
+        super.kill();
+        setTimeout(() => {
+          this.suppressExitErrors = false;
+        }, 2000);
+      });
   }
 }

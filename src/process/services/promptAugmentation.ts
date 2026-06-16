@@ -16,6 +16,11 @@ import { buildGreetingReplyBlock, buildLanguageMatchBlock } from '@/common/chat/
 import { modelSupportsNativeVision } from '@/common/chat/modelVision';
 import { prefetchWebContextForUserMessage, shouldPrefetchWebContext } from '@/common/web/prefetchWebContext';
 import { buildAttachmentContextBlock } from '@process/services/attachmentTextExtractor';
+import {
+  buildImageAnalysisUnavailableBlock,
+  buildPrefetchedImageAnalysisBlock,
+} from '@process/services/imageAnalysisPrefetch';
+import type { TProviderWithModel } from '@/common/config/storage';
 
 export type PromptAugmentationInput = {
   /** User-visible message body (may include ONE_FILES_MARKER). */
@@ -26,6 +31,10 @@ export type PromptAugmentationInput = {
   modelId?: string;
   /** Agent backend — aionrs uses tool-based image analysis (files[] multimodal is unreliable). */
   agentType?: string;
+  /** Conversation workspace — required for aionrs image pre-analysis. */
+  workspaceDir?: string;
+  /** Active chat model — preferred vision provider for image pre-analysis. */
+  conversationModel?: TProviderWithModel;
   /** Whether to skip web prefetch (e.g. when caller already augmented). */
   skipWebPrefetch?: boolean;
 };
@@ -75,12 +84,27 @@ export async function buildPromptAugmentationPrefix(input: PromptAugmentationInp
     if (filesForTextExtract.length < input.files.filter((f) => !isImageFilePath(f)).length) {
       blocks.push(buildImagePriorityReminderBlock());
     }
-    const useToolBasedImages = input.agentType === 'aionrs' || !modelSupportsNativeVision(input.modelId);
-    const imageBlock = useToolBasedImages
-      ? buildToolBasedImageContextBlock(imagePaths)
-      : buildNativeVisionImageContextBlock(imagePaths);
-    if (imageBlock) {
-      blocks.push(imageBlock);
+
+    if (input.agentType === 'aionrs') {
+      if (!input.workspaceDir?.trim()) {
+        blocks.push(buildImageAnalysisUnavailableBlock('Workspace is not configured for image analysis.'));
+      } else {
+        const prefetched = await buildPrefetchedImageAnalysisBlock({
+          imagePaths,
+          userQuestion: userText,
+          workspaceDir: input.workspaceDir,
+          conversationModel: input.conversationModel,
+        });
+        blocks.push(prefetched);
+      }
+    } else {
+      const useToolBasedImages = !modelSupportsNativeVision(input.modelId);
+      const imageBlock = useToolBasedImages
+        ? buildToolBasedImageContextBlock(imagePaths)
+        : buildNativeVisionImageContextBlock(imagePaths);
+      if (imageBlock) {
+        blocks.push(imageBlock);
+      }
     }
   }
 

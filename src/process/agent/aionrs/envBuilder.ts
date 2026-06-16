@@ -108,8 +108,6 @@ export function buildSpawnConfig(
   // For OpenAI-compatible providers (custom/LiteLLM/Gemini), override the binary's
   // default Claude identity with a neutral system prompt.
   // Anthropic keeps its own default (no override needed).
-  const imageGuidance =
-    'When the user attaches images or screenshots, call one_image_generation with prompt "Analyze image: …" and image_uris set to the absolute file path(s). Answer from the tool output.';
   const neutralSystemPrompt =
     provider !== 'anthropic'
       ? [
@@ -117,7 +115,7 @@ export function buildSpawnConfig(
           'Only use file system tools when the user explicitly asks you to read, write, or execute files.',
           'For project/directory structure: ALWAYS use `git ls-files` first (fastest). If git is not available, run shallow one-level listings like `dir /b` or `ls` on specific subdirs — NEVER run `dir /s /b`, `dir /s`, `find` or any unbounded recursive command on the workspace root; these time out at 120 s and block all work.',
           'Do NOT read binary or image files with file_read or bash.',
-          imageGuidance,
+          'When images or screenshots are attached, their content is already described in the user message prefix. Answer from that analysis only; never call one_image_generation or read image files.',
           'Do NOT make up information. If you cannot retrieve real-time data (weather, stock prices, live URLs) because you have no web-search tool, tell the user clearly instead of guessing.',
         ].join(' ')
       : undefined;

@@ -107,6 +107,20 @@ export function buildStartupErrorMessage(
       (stderrCombined ? `原始错误：\n${stderrCombined}` : '');
   }
 
+  // Cursor Agent: CLI missing or misconfigured on PATH.
+  if (
+    backend === 'cursor' &&
+    /not recognized|not found|No such file|command not found|ENOENT/i.test(stderrCombined + (spawnErrorMessage ?? ''))
+  ) {
+    errMsg =
+      `Cursor Agent 连接失败：未找到可用的 'agent' CLI。\n` +
+      `请按顺序检查：\n` +
+      `1）在 Cursor 中打开命令面板，安装/启用 Cursor CLI（agent 命令）\n` +
+      `2）在系统终端运行 where agent，确认路径指向 agent.exe 或 agent.cmd（不是已删除的临时 .ps1）\n` +
+      `3）在 1ONE 设置 → Agent 中把 Cursor Agent 的 CLI 路径改为上一步得到的真实路径\n\n` +
+      (stderrCombined ? `原始错误：\n${stderrCombined}` : '');
+  }
+
   // Cursor Windows shim issue: `agent` resolves to a PowerShell wrapper that points to a missing *.ps1.
   // Provide actionable guidance instead of raw PowerShell error.
   if (

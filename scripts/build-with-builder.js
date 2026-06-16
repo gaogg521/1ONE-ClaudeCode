@@ -316,21 +316,31 @@ function cleanupWindowsPackOutput(currentVersion) {
   // Keeping historical installers/zips allows easy rollback and comparisons.
   const winArtifactFileRe =
     typeof currentVersion === 'string' && currentVersion
-      ? new RegExp(`-${currentVersion.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}-win-[^.]+\\.(?:exe|msi|zip|7z)$`, 'i')
+      ? new RegExp(
+          `-${currentVersion.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}-win-[^.]+\\.(?:exe|msi|zip|7z)$`,
+          'i'
+        )
       : null;
 
   for (const entry of fs.readdirSync(outDir, { withFileTypes: true })) {
     const fullPath = path.join(outDir, entry.name);
 
     if (entry.isDirectory() && winUnpackedDirRe.test(entry.name)) {
-      fs.rmSync(fullPath, { recursive: true, force: true });
-      removed.push(entry.name);
+      if (tryRemoveDir(fullPath)) {
+        removed.push(entry.name);
+      } else {
+        console.log(`⚠️  Skipped locked Windows output directory: ${entry.name}`);
+      }
       continue;
     }
 
     if (entry.isFile() && winArtifactFileRe && winArtifactFileRe.test(entry.name)) {
-      fs.rmSync(fullPath, { force: true });
-      removed.push(entry.name);
+      try {
+        fs.rmSync(fullPath, { force: true });
+        removed.push(entry.name);
+      } catch (error) {
+        console.log(`⚠️  Skipped locked Windows artifact: ${entry.name} (${error.message})`);
+      }
     }
   }
 
@@ -494,7 +504,7 @@ try {
   });
 
   // 3. Verify electron-vite output
-  const outDir = path.resolve(__dirname, '../out');
+  let outDir = path.resolve(__dirname, '../out');
   if (!fs.existsSync(outDir)) {
     throw new Error('electron-vite did not generate out/ directory');
   }
@@ -598,6 +608,7 @@ try {
     // Multi-arch builds: Architecture detection not supported yet
   }
 
+  let electronBuilderArgs = builderArgs;
   if (process.platform === 'win32' && builderArgs.includes('--win')) {
     const winUnpackedDir = path.join(outDir, 'win-unpacked');
     let cleaned = tryRemoveDir(winUnpackedDir);
@@ -612,14 +623,20 @@ try {
         }
       }
     }
+    if (!cleaned && fs.existsSync(winUnpackedDir)) {
+      const altOutput = path.join(outDir, `pack-${packageJson.version}-${Date.now()}`);
+      console.log(`⚠️  win-unpacked is locked; packaging to alternate output: ${altOutput}`);
+      electronBuilderArgs = `${builderArgs} --config.directories.output=${altOutput.replace(/\\/g, '/')}`;
+      outDir = altOutput;
+    }
   }
 
-  const isWindowsBuild = builderArgs.includes('--win') || builderArgs.includes('--all');
+  const isWindowsBuild = electronBuilderArgs.includes('--win') || electronBuilderArgs.includes('--all');
   if (isWindowsBuild) {
     cleanupWindowsPackOutput(packageJson.version);
   }
 
-  const builderCommand = `npx --no-install electron-builder ${builderArgs} ${archFlag} ${nsisInclude} ${publishArg}`;
+  const builderCommand = `npx --no-install electron-builder ${electronBuilderArgs} ${archFlag} ${nsisInclude} ${publishArg}`;
   try {
     buildWithDmgRetry(builderCommand, targetArch);
   } catch (error) {
