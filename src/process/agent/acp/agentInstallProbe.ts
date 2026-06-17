@@ -51,7 +51,10 @@ function collectEnvironmentHintKeysByBackend(): Partial<Record<AcpBackendAll, st
     if (safeExists(path.join(home, 'Library', 'Application Support', 'Cursor'))) {
       add('cursor', 'hintCursorUserData');
     }
-    if (safeExists('/Applications/Claude.app') || safeExists(path.join(home, 'Library', 'Application Support', 'Claude'))) {
+    if (
+      safeExists('/Applications/Claude.app') ||
+      safeExists(path.join(home, 'Library', 'Application Support', 'Claude'))
+    ) {
       add('claude', 'hintClaudeDesktopData');
     }
   } else {

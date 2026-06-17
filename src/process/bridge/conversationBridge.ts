@@ -5,7 +5,7 @@
  */
 
 import { GeminiAgent, GeminiApprovalStore } from '@process/agent/gemini';
-import type { TChatConversation } from '@/common/config/storage';
+import type { TChatConversation, TProviderWithModel } from '@/common/config/storage';
 import type { IAgentManager } from '@process/task/IAgentManager';
 import type { IConversationService, CreateConversationParams } from '@process/services/IConversationService';
 import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
@@ -38,9 +38,15 @@ import {
   isImageFilePath,
   stripFilesMarker,
 } from '@/common/chat/messageFiles';
+import {
+  DEFAULT_ATTACHMENT_ANALYSIS_PROMPT,
+  messageReferencesRecentAttachments,
+} from '@/common/chat/attachmentFollowUp';
+import { getRecentUserAttachmentPaths } from '@process/bridge/recentAttachmentPaths';
 import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 import { resolvePersonalAgentPreset } from '@process/digitalEmployee/resolvePersonalAgentPreset';
 import { buildPromptAugmentationPrefix, composeAgentPrompt } from '@process/services/promptAugmentation';
+import { resolveAionrsTaskForSend } from './aionrsTaskResolver';
 
 const refreshTrayMenuSafely = async (): Promise<void> => {
   try {
@@ -49,6 +55,19 @@ const refreshTrayMenuSafely = async (): Promise<void> => {
     console.warn('[conversationBridge] Failed to refresh tray menu:', error);
   }
 };
+
+function resolveTaskModelId(task: IAgentManager): string | undefined {
+  const candidate = task as {
+    model?: { useModel?: string };
+    persistedModelId?: string;
+    options?: { currentModelId?: string };
+  };
+  return candidate.model?.useModel ?? candidate.persistedModelId ?? candidate.options?.currentModelId;
+}
+
+function resolveTaskConversationModel(task: IAgentManager): TProviderWithModel | undefined {
+  return (task as { model?: TProviderWithModel }).model;
+}
 
 const VALID_CONVERSATION_TYPES = new Set<TChatConversation['type']>([
   'gemini',
@@ -396,8 +415,10 @@ export function initConversationBridge(
         }
       }
       const task = await workerTaskManager.getOrBuildTask(conversation_id);
-      if (task && task.type === 'acp') {
+      if (task.type === 'acp') {
         await (task as unknown as AcpAgentManager).initAgent();
+      } else if (task.type === 'aionrs') {
+        await (task as AionrsManager).bootstrap;
       }
     } catch {
       // Ignore errors — warmup is best-effort
@@ -539,7 +560,12 @@ export function initConversationBridge(
     const { conversation_id, files, ...other } = params;
     let task: IAgentManager | undefined;
     try {
-      task = await workerTaskManager.getOrBuildTask(conversation_id);
+      const conversation = await conversationService.getConversation(conversation_id);
+      if (conversation?.type === 'aionrs') {
+        task = await resolveAionrsTaskForSend(conversation_id, { conversationService, workerTaskManager });
+      } else {
+        task = await workerTaskManager.getOrBuildTask(conversation_id);
+      }
     } catch (err) {
       console.error(`[conversationBridge] sendMessage: failed to get/build task: ${conversation_id}`, err);
       return {
@@ -557,12 +583,13 @@ export function initConversationBridge(
     // aionrs binary reads files from the workspace cwd; raw cache paths work for text, but
     // binary/image files (PNG, JPG, …) must live inside the workspace so the binary can pass
     // them as vision attachments rather than leaving the model to call file_read on binary data.
-    let workspaceFiles: string[];
     const isGeminiAgent = task.type === 'gemini';
     const isAionrsAgent = task.type === 'aionrs';
     const cacheDir = getSystemDir().cacheDir;
     const hasTempUploads = (files ?? []).some((filePath) => isCacheTempFilePath(filePath, cacheDir));
 
+    const textOnly = stripFilesMarker(other.input);
+    let workspaceFiles: string[] = [];
     if (isGeminiAgent || isAionrsAgent || hasTempUploads) {
       // Copy files to workspace (required for gemini/aionrs; WebUI temp uploads for all agent types)
       try {
@@ -576,16 +603,21 @@ export function initConversationBridge(
       workspaceFiles = (files ?? []).filter((f) => path.isAbsolute(f));
     }
 
-    const textOnly = stripFilesMarker(other.input);
+    if (workspaceFiles.length === 0 && messageReferencesRecentAttachments(textOnly)) {
+      workspaceFiles = await getRecentUserAttachmentPaths(conversation_id);
+    }
+
+    const displayText = textOnly.trim();
     const resolvedInput =
-      workspaceFiles.length > 0
-        ? buildDisplayMessage(textOnly, workspaceFiles, task.workspace)
-        : textOnly;
+      workspaceFiles.length > 0 ? buildDisplayMessage(displayText, workspaceFiles, task.workspace) : displayText;
 
     // Precompute agent content with optional skill injection.
     // OpenClaw uses full-content mode: inject full skill text rather than index paths,
     // because the CLI may not proactively read SKILL.md files the way ACP agents do.
     let agentContent = resolvedInput;
+    if (!displayText && workspaceFiles.length > 0) {
+      agentContent = buildDisplayMessage(DEFAULT_ATTACHMENT_ANALYSIS_PROMPT, workspaceFiles, task.workspace);
+    }
     if (other.injectSkills?.length) {
       agentContent = await prepareFirstMessage(other.input, {
         enabledSkills: other.injectSkills,
@@ -603,6 +635,10 @@ export function initConversationBridge(
     const augmentationPrefix = await buildPromptAugmentationPrefix({
       displayContent: agentContent,
       files: workspaceFiles,
+      modelId: resolveTaskModelId(task),
+      agentType: task.type,
+      workspaceDir: task.workspace,
+      conversationModel: resolveTaskConversationModel(task),
     });
     const agentPrompt = composeAgentPrompt(agentContent, augmentationPrefix);
 

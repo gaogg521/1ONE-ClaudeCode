@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildIssueAssistantPath,
-  buildIssuePlanningPath,
-} from '@/renderer/pages/issues/issueCollaborationRouting';
+import { buildIssueAssistantPath, buildIssuePlanningPath } from '@/renderer/pages/issues/issueCollaborationRouting';
 
 describe('issue collaboration routing', () => {
   it('keeps personal issue planning inside issue detail', () => {

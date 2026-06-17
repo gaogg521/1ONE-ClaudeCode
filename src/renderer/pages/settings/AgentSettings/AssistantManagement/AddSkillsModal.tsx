@@ -99,9 +99,7 @@ const AddSkillsModal: React.FC<AddSkillsModalProps> = ({
                     onClick={() => setActiveSourceTab(source.source)}
                   >
                     {source.name}
-                    <span className='settings-modal-chip-count'>
-                      {source.skills.length}
-                    </span>
+                    <span className='settings-modal-chip-count'>{source.skills.length}</span>
                   </button>
                 );
               })}

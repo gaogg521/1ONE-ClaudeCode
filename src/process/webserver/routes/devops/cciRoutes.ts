@@ -7,11 +7,7 @@
 import type { Express } from 'express';
 import { apiRateLimiter } from '../../middleware/security';
 import { CciService } from '@process/services/devops/cci/cciService';
-import {
-  requireDevopsAdmin,
-  resolveDevopsTenantId,
-  type DevopsRouteAuth,
-} from './shared';
+import { requireDevopsAdmin, resolveDevopsTenantId, type DevopsRouteAuth } from './shared';
 
 export function registerCciRoutes(app: Express, auth: DevopsRouteAuth): void {
   app.get('/api/admin/pipelines', apiRateLimiter, auth, async (req, res) => {
@@ -30,16 +26,13 @@ export function registerCciRoutes(app: Express, auth: DevopsRouteAuth): void {
         tenantId: resolveDevopsTenantId(req),
         name: String(req.body?.name ?? ''),
         definition: req.body?.definition as { stages: unknown[] },
-        associatedTeamId: req.body?.associatedTeamId
-          ? String(req.body.associatedTeamId)
-          : null,
+        associatedTeamId: req.body?.associatedTeamId ? String(req.body.associatedTeamId) : null,
       });
       res.json({ success: true, data: pipeline });
     } catch (error) {
       if (
         error instanceof Error &&
-        (error.message === 'Pipeline name is required' ||
-          error.message === 'Invalid pipeline definition')
+        (error.message === 'Pipeline name is required' || error.message === 'Invalid pipeline definition')
       ) {
         res.status(400).json({ success: false, message: error.message });
         return;
@@ -56,16 +49,13 @@ export function registerCciRoutes(app: Express, auth: DevopsRouteAuth): void {
         pipelineId: String(req.params.pipelineId),
         name: String(req.body?.name ?? ''),
         definition: req.body?.definition as { stages: unknown[] },
-        associatedTeamId: req.body?.associatedTeamId
-          ? String(req.body.associatedTeamId)
-          : null,
+        associatedTeamId: req.body?.associatedTeamId ? String(req.body.associatedTeamId) : null,
       });
       res.json({ success: true, data: pipeline });
     } catch (error) {
       if (
         error instanceof Error &&
-        (error.message === 'Pipeline name is required' ||
-          error.message === 'Invalid pipeline definition')
+        (error.message === 'Pipeline name is required' || error.message === 'Invalid pipeline definition')
       ) {
         res.status(400).json({ success: false, message: error.message });
         return;
@@ -98,10 +88,7 @@ export function registerCciRoutes(app: Express, auth: DevopsRouteAuth): void {
 
   app.get('/api/admin/pipelines/runs/:runId', apiRateLimiter, auth, async (req, res) => {
     try {
-      const run = await CciService.getPipelineRun(
-        String(req.params.runId),
-        resolveDevopsTenantId(req)
-      );
+      const run = await CciService.getPipelineRun(String(req.params.runId), resolveDevopsTenantId(req));
       if (!run) {
         res.status(404).json({ success: false, message: 'Pipeline run not found' });
         return;

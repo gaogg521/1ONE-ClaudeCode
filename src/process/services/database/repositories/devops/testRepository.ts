@@ -9,10 +9,7 @@ import { getDatabase } from '@process/services/database';
 export class TestRepository {
   static async hasPlanInTenant(planId: string, tenantId: string): Promise<boolean> {
     const db = await getDatabase();
-    const row = db
-      .getDriver()
-      .prepare(`SELECT 1 FROM test_plans WHERE id = ? AND tenant_id = ?`)
-      .get(planId, tenantId);
+    const row = db.getDriver().prepare(`SELECT 1 FROM test_plans WHERE id = ? AND tenant_id = ?`).get(planId, tenantId);
     return Boolean(row);
   }
 
@@ -80,15 +77,7 @@ export class TestRepository {
         `INSERT INTO test_cases (id, plan_id, subject, steps, expected, assigned_to, created_at)
          VALUES (?,?,?,?,?,?,?)`
       )
-      .run(
-        input.id,
-        input.planId,
-        input.subject,
-        input.steps,
-        input.expected,
-        input.assignedTo,
-        input.createdAt
-      );
+      .run(input.id, input.planId, input.subject, input.steps, input.expected, input.assignedTo, input.createdAt);
   }
 
   static async updateCaseStatus(id: string, tenantId: string, status: string): Promise<void> {

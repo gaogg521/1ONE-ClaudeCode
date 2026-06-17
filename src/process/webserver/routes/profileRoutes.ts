@@ -64,29 +64,23 @@ export function registerProfileRoutes(app: Express, opts: RegisterProfileRoutesO
     }
   });
 
-  app.post(
-    '/api/auth/profile/avatar',
-    rateLimit,
-    auth,
-    avatarUpload.single('avatar'),
-    async (req, res) => {
-      try {
-        const file = req.file;
-        if (!file) {
-          res.status(400).json({ success: false, message: 'Avatar file is required' });
-          return;
-        }
-        const profile = await updateUserAvatar({
-          userId: req.user!.id,
-          buffer: file.buffer,
-          mimeType: file.mimetype,
-        });
-        res.json({ success: true, data: profile });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to update avatar';
-        console.error('[ProfileRoute] avatar upload error:', error);
-        res.status(400).json({ success: false, message });
+  app.post('/api/auth/profile/avatar', rateLimit, auth, avatarUpload.single('avatar'), async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({ success: false, message: 'Avatar file is required' });
+        return;
       }
+      const profile = await updateUserAvatar({
+        userId: req.user!.id,
+        buffer: file.buffer,
+        mimeType: file.mimetype,
+      });
+      res.json({ success: true, data: profile });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update avatar';
+      console.error('[ProfileRoute] avatar upload error:', error);
+      res.status(400).json({ success: false, message });
     }
-  );
+  });
 }

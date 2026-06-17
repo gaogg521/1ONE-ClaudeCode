@@ -94,12 +94,9 @@ vi.mock('@arco-design/web-react', () => ({
       <div data-testid='profile-menu'>{droplist}</div>
     </div>
   ),
-  Menu: Object.assign(
-    ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-    {
-      Item: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-    }
-  ),
+  Menu: Object.assign(({ children }: { children?: React.ReactNode }) => <div>{children}</div>, {
+    Item: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  }),
   Message: { success: vi.fn(), error: vi.fn() },
   Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
   Typography: {

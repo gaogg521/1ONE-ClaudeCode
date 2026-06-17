@@ -1,12 +1,7 @@
 import express from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  mockFindByUsername,
-  mockCreateUserWithRole,
-  mockUpdateTenantId,
-  mockHashPassword,
-} = vi.hoisted(() => ({
+const { mockFindByUsername, mockCreateUserWithRole, mockUpdateTenantId, mockHashPassword } = vi.hoisted(() => ({
   mockFindByUsername: vi.fn(),
   mockCreateUserWithRole: vi.fn(),
   mockUpdateTenantId: vi.fn(),
@@ -96,8 +91,9 @@ vi.mock('@process/webserver/auth/enterpriseJoinService', () => ({
 
 function getCreateUserHandler(app: express.Express): express.RequestHandler {
   const layer = app.router.stack.find(
-    (entry: { route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> } }) =>
-      entry.route?.path === '/api/admin/users' && entry.route?.methods?.post
+    (entry: {
+      route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> };
+    }) => entry.route?.path === '/api/admin/users' && entry.route?.methods?.post
   );
 
   return layer?.route?.stack?.at(-1)?.handle as express.RequestHandler;

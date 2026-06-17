@@ -71,9 +71,9 @@
   --color-guid-agent-bar: #eaecf7; /* 首页 Agent 选择条背景 - 亮色 */
 
   /* text-t-* 映射（UnoCSS shortcut 的 CSS 变量实体，供 arco-override 使用）*/
-  --text-t-primary:   #1d2129;
+  --text-t-primary: #1d2129;
   --text-t-secondary: #86909c;
-  --text-t-tertiary:  #c9cdd4;
+  --text-t-tertiary: #c9cdd4;
 
   /* Arco / Uno text-* and inline var(--color-text-*) — light (same role as dark block) */
   --color-text-1: var(--text-primary);
@@ -178,7 +178,7 @@
   --border-special: #60677e; /* 特殊边框色 */
 
   /* text-t-* 映射 - 暗色模式 */
-  --text-t-primary:   #e5e5e5;
+  --text-t-primary: #e5e5e5;
   --text-t-secondary: #a6a6a6;
-  --text-t-tertiary:  #737373;
+  --text-t-tertiary: #737373;
 }

@@ -14,8 +14,7 @@ describe('ldap directory entry mapping', () => {
   });
 
   it('prefers sAMAccountName over DN for username', () => {
-    const dn =
-      'CN=\\e8\\b5\\b5\\e4\\b9\\a6\\e6\\96\\b9,OU=users,DC=intranet,DC=example,DC=com';
+    const dn = 'CN=\\e8\\b5\\b5\\e4\\b9\\a6\\e6\\96\\b9,OU=users,DC=intranet,DC=example,DC=com';
     const row = ldapEntryToDirectoryRow(
       dn,
       {

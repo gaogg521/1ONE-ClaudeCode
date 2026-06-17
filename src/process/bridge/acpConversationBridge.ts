@@ -50,8 +50,9 @@ export function initAcpConversationBridge(workerTaskManager: IWorkerTaskManager)
   ipcBridge.acpConversation.getAvailableAgents.provider(async () => {
     try {
       // Get user-disabled detected agents from config
-      const disabledDetectedAgents =
-        ((await ProcessConfig.get('acp.disabledDetectedAgents').catch((): string[] => [])) || []) as string[];
+      const disabledDetectedAgents = ((await ProcessConfig.get('acp.disabledDetectedAgents').catch(
+        (): string[] => []
+      )) || []) as string[];
 
       const agents = acpDetector.getDetectedAgents();
 

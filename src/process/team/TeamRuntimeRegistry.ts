@@ -42,8 +42,7 @@ function parseJsonArray<T>(raw: string, fallback: T[]): T[] {
 }
 
 function rowToNode(row: TeamRuntimeRow, now: number): TeamRuntimeNode {
-  const status: TeamRuntimeNodeStatus =
-    now - row.last_seen_at <= OFFLINE_AFTER_MS ? 'online' : 'offline';
+  const status: TeamRuntimeNodeStatus = now - row.last_seen_at <= OFFLINE_AFTER_MS ? 'online' : 'offline';
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -142,9 +141,7 @@ export class TeamRuntimeRegistry {
       now,
       now
     );
-    const row = db
-      .prepare('SELECT * FROM team_runtime_nodes WHERE id = ?')
-      .get(id) as TeamRuntimeRow;
+    const row = db.prepare('SELECT * FROM team_runtime_nodes WHERE id = ?').get(id) as TeamRuntimeRow;
     return rowToNode(row, now);
   }
 

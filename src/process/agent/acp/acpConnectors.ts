@@ -358,7 +358,10 @@ export function spawnNpxBackendViaNode(
   };
 
   const stdout = execFileSync('where', ['node'], execOptions).trim();
-  const nodePath = stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)[0];
+  const nodePath = stdout
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)[0];
   if (!nodePath) {
     throw new Error('Node.js not found for npx fallback');
   }
@@ -622,7 +625,8 @@ export function connectClaude(workingDir: string, hooks: NpxConnectHooks): Promi
       const errMsg = error instanceof Error ? error.message : String(error);
       const shouldFallbackToNodeNpx =
         process.platform === 'win32' &&
-        (/claude-agent-acp/i.test(errMsg) && /(not recognized|CommandNotFound|ENOENT)/i.test(errMsg));
+        /claude-agent-acp/i.test(errMsg) &&
+        /(not recognized|CommandNotFound|ENOENT)/i.test(errMsg);
       if (!shouldFallbackToNodeNpx) {
         throw error;
       }
@@ -637,9 +641,7 @@ export function connectClaude(workingDir: string, hooks: NpxConnectHooks): Promi
         await hooks.setup(spawnNpxBackendViaNode('claude', CLAUDE_ACP_NPX_PACKAGE, cleanEnv, workingDir, true, opts));
       } catch (firstError) {
         await hooks.cleanup();
-        await hooks.setup(
-          spawnNpxBackendViaNode('claude', CLAUDE_ACP_NPX_PACKAGE, cleanEnv, workingDir, false, opts)
-        );
+        await hooks.setup(spawnNpxBackendViaNode('claude', CLAUDE_ACP_NPX_PACKAGE, cleanEnv, workingDir, false, opts));
       }
     }
   })();

@@ -59,7 +59,9 @@ const SECRET_KEYS_BY_PROVIDER: Record<AuthProviderType, string[]> = {
 };
 
 export const AuthProviderRepository = {
-  async getProvider(provider: AuthProviderType): Promise<(Omit<IAuthProviderRow, 'enabled'> & { enabled: boolean; config: AuthProviderConfig }) | null> {
+  async getProvider(
+    provider: AuthProviderType
+  ): Promise<(Omit<IAuthProviderRow, 'enabled'> & { enabled: boolean; config: AuthProviderConfig }) | null> {
     const db = await getDatabase();
     const row = db.getAuthProvider(provider);
     if (!row.success) throw new Error(row.error || 'Failed to load auth provider');
@@ -80,7 +82,9 @@ export const AuthProviderRepository = {
     if (!ok.success || !ok.data) throw new Error(ok.error || 'Failed to save auth provider');
   },
 
-  async listProviders(): Promise<Array<{ provider: AuthProviderType; enabled: boolean; updated_at: number; hasConfig: boolean }>> {
+  async listProviders(): Promise<
+    Array<{ provider: AuthProviderType; enabled: boolean; updated_at: number; hasConfig: boolean }>
+  > {
     const db = await getDatabase();
     const res = db.listAuthProviders();
     if (!res.success) throw new Error(res.error || 'Failed to list auth providers');
@@ -92,4 +96,3 @@ export const AuthProviderRepository = {
     }));
   },
 };
-

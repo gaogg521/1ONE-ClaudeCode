@@ -65,7 +65,9 @@ describe('resolveUploadWorkspace', () => {
       }),
     });
 
-    await expect(resolveUploadWorkspace('conv-2', undefined, baseUser)).resolves.toBe(path.resolve('/tmp/aion/workspace-2'));
+    await expect(resolveUploadWorkspace('conv-2', undefined, baseUser)).resolves.toBe(
+      path.resolve('/tmp/aion/workspace-2')
+    );
   });
 
   it('rejects uploads when the requested workspace does not match the conversation workspace', async () => {

@@ -33,10 +33,7 @@ export async function shouldInjectSkillsIndex(
 function prependRulesBlock(existing: string, block: string): string {
   const marker = '[User Request]';
   if (existing.includes(marker)) {
-    return existing.replace(
-      marker,
-      `${block}\n\n${marker}`
-    );
+    return existing.replace(marker, `${block}\n\n${marker}`);
   }
   return `[Assistant Rules - You MUST follow these instructions]\n${block}\n\n[User Request]\n${existing}`;
 }
@@ -57,9 +54,7 @@ export async function applyAgentToolkitFirstMessage(
   let result = content;
   const useSkillsIndex = await shouldInjectSkillsIndex(options.backend, options.customWorkspace);
   const nativeOnlyRules =
-    hasNativeSkillSupport(options.backend) &&
-    !options.customWorkspace &&
-    !toolkit.injectSkillsForAllAgents;
+    hasNativeSkillSupport(options.backend) && !options.customWorkspace && !toolkit.injectSkillsForAllAgents;
 
   if (useSkillsIndex) {
     result = await prepareFirstMessageWithSkillsIndex(result, config);

@@ -1169,7 +1169,9 @@ const migration_v24: IMigration = {
   },
   down: (db) => {
     // SQLite cannot drop columns; recreate table without role
-    db.exec(`CREATE TABLE IF NOT EXISTS users_backup AS SELECT id, username, email, password_hash, avatar_path, jwt_secret, created_at, updated_at, last_login FROM users`);
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS users_backup AS SELECT id, username, email, password_hash, avatar_path, jwt_secret, created_at, updated_at, last_login FROM users`
+    );
     db.exec(`DROP TABLE users`);
     db.exec(`ALTER TABLE users_backup RENAME TO users`);
     console.log('[Migration v24] Rolled back: Removed role column from users');
@@ -1270,10 +1272,18 @@ const migration_v27: IMigration = {
     };
 
     ensureColumn('users', 'tenant_id', `ALTER TABLE users ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
-    ensureColumn('conversations', 'tenant_id', `ALTER TABLE conversations ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+    ensureColumn(
+      'conversations',
+      'tenant_id',
+      `ALTER TABLE conversations ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`
+    );
     ensureColumn('teams', 'tenant_id', `ALTER TABLE teams ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
     ensureColumn('mailbox', 'tenant_id', `ALTER TABLE mailbox ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
-    ensureColumn('team_tasks', 'tenant_id', `ALTER TABLE team_tasks ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+    ensureColumn(
+      'team_tasks',
+      'tenant_id',
+      `ALTER TABLE team_tasks ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`
+    );
     ensureColumn('tasks', 'tenant_id', `ALTER TABLE tasks ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
 
     // 3) backfill null/empty tenant_id (older DBs)
@@ -1329,7 +1339,9 @@ const migration_v28: IMigration = {
     if (!cols.has('team_id')) {
       db.exec(`ALTER TABLE conversations ADD COLUMN team_id TEXT`);
     }
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_team_id ON conversations(tenant_id, team_id, updated_at DESC)`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_conversations_team_id ON conversations(tenant_id, team_id, updated_at DESC)`
+    );
     console.log('[Migration v28] Added team_id to conversations');
   },
   down: (db) => {
@@ -1511,9 +1523,17 @@ const migration_v32: IMigration = {
       const cols = new Set((db.pragma(`table_info(${table})`) as Array<{ name: string }>).map((c) => c.name));
       if (!cols.has(col)) db.exec(ddl);
     };
-    ensureColumn('rag_documents', 'scope', `ALTER TABLE rag_documents ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`);
+    ensureColumn(
+      'rag_documents',
+      'scope',
+      `ALTER TABLE rag_documents ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`
+    );
     ensureColumn('rag_documents', 'team_id', `ALTER TABLE rag_documents ADD COLUMN team_id TEXT`);
-    ensureColumn('rag_documents', 'created_by', `ALTER TABLE rag_documents ADD COLUMN created_by TEXT NOT NULL DEFAULT ''`);
+    ensureColumn(
+      'rag_documents',
+      'created_by',
+      `ALTER TABLE rag_documents ADD COLUMN created_by TEXT NOT NULL DEFAULT ''`
+    );
     ensureColumn('mcp_registry', 'scope', `ALTER TABLE mcp_registry ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`);
     ensureColumn('mcp_registry', 'team_id', `ALTER TABLE mcp_registry ADD COLUMN team_id TEXT`);
     console.log('[Migration v32] Added scope/team_id/created_by to rag_documents and mcp_registry');
@@ -1562,9 +1582,13 @@ const migration_v34: IMigration = {
   version: 34,
   name: 'Add milestones and code repos tables',
   up: (db) => {
-    db.exec(`CREATE TABLE IF NOT EXISTS milestones (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', name TEXT NOT NULL, description TEXT, due_date TEXT, epic_count INTEGER DEFAULT 0, completed_count INTEGER DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS milestones (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', name TEXT NOT NULL, description TEXT, due_date TEXT, epic_count INTEGER DEFAULT 0, completed_count INTEGER DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`
+    );
     db.exec('CREATE INDEX IF NOT EXISTS idx_milestones_tenant ON milestones(tenant_id)');
-    db.exec(`CREATE TABLE IF NOT EXISTS code_repos (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', name TEXT NOT NULL, url TEXT NOT NULL, provider TEXT NOT NULL DEFAULT 'gitlab', credential_id TEXT, default_branch TEXT DEFAULT 'main', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS code_repos (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', name TEXT NOT NULL, url TEXT NOT NULL, provider TEXT NOT NULL DEFAULT 'gitlab', credential_id TEXT, default_branch TEXT DEFAULT 'main', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`
+    );
     console.log('[Migration v34] Added milestones and code_repos tables');
   },
   down: (db) => {
@@ -1582,8 +1606,12 @@ const migration_v35: IMigration = {
   version: 35,
   name: 'Add CPack artifact repos and artifacts tables',
   up: (db) => {
-    db.exec(`CREATE TABLE IF NOT EXISTS artifact_repos (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', name TEXT NOT NULL, repo_type TEXT NOT NULL DEFAULT 'generic', endpoint TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
-    db.exec(`CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, repo_id TEXT NOT NULL, name TEXT NOT NULL, version TEXT NOT NULL, file_size INTEGER NOT NULL DEFAULT 0, checksum TEXT, scope TEXT NOT NULL DEFAULT 'personal', created_by TEXT NOT NULL, download_count INTEGER DEFAULT 0, created_at INTEGER NOT NULL, FOREIGN KEY(repo_id) REFERENCES artifact_repos(id) ON DELETE CASCADE)`);
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS artifact_repos (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', name TEXT NOT NULL, repo_type TEXT NOT NULL DEFAULT 'generic', endpoint TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`
+    );
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, repo_id TEXT NOT NULL, name TEXT NOT NULL, version TEXT NOT NULL, file_size INTEGER NOT NULL DEFAULT 0, checksum TEXT, scope TEXT NOT NULL DEFAULT 'personal', created_by TEXT NOT NULL, download_count INTEGER DEFAULT 0, created_at INTEGER NOT NULL, FOREIGN KEY(repo_id) REFERENCES artifact_repos(id) ON DELETE CASCADE)`
+    );
     db.exec('CREATE INDEX IF NOT EXISTS idx_artifacts_repo ON artifacts(repo_id)');
     console.log('[Migration v35] Added CPack artifact tables');
   },
@@ -1599,35 +1627,70 @@ const migration_v35: IMigration = {
  * Migration v35 -> v36: Add CTest test_plans and test_cases tables
  */
 const migration_v36: IMigration = {
-  version: 36, name: 'Add CTest tables', up: (db) => {
-    db.exec(`CREATE TABLE IF NOT EXISTS test_plans (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', name TEXT NOT NULL, description TEXT, linked_requirement_id TEXT, status TEXT DEFAULT 'active', created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
-    db.exec(`CREATE TABLE IF NOT EXISTS test_cases (id TEXT PRIMARY KEY, plan_id TEXT NOT NULL, subject TEXT NOT NULL, steps TEXT, expected TEXT, status TEXT DEFAULT 'pending', assigned_to TEXT, created_at INTEGER NOT NULL, FOREIGN KEY(plan_id) REFERENCES test_plans(id) ON DELETE CASCADE)`);
+  version: 36,
+  name: 'Add CTest tables',
+  up: (db) => {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS test_plans (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', name TEXT NOT NULL, description TEXT, linked_requirement_id TEXT, status TEXT DEFAULT 'active', created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`
+    );
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS test_cases (id TEXT PRIMARY KEY, plan_id TEXT NOT NULL, subject TEXT NOT NULL, steps TEXT, expected TEXT, status TEXT DEFAULT 'pending', assigned_to TEXT, created_at INTEGER NOT NULL, FOREIGN KEY(plan_id) REFERENCES test_plans(id) ON DELETE CASCADE)`
+    );
     db.exec('CREATE INDEX IF NOT EXISTS idx_test_cases_plan ON test_cases(plan_id)');
-    console.log('[Migration v36] Added CTest tables'); }, down: (db) => { db.exec('DROP TABLE IF EXISTS test_cases'); db.exec('DROP TABLE IF EXISTS test_plans'); }
+    console.log('[Migration v36] Added CTest tables');
+  },
+  down: (db) => {
+    db.exec('DROP TABLE IF EXISTS test_cases');
+    db.exec('DROP TABLE IF EXISTS test_plans');
+  },
 };
 
 const migration_v37: IMigration = {
-  version: 37, name: 'Add CMeas metrics table', up: (db) => {
-    db.exec(`CREATE TABLE IF NOT EXISTS metrics_snapshots (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', metric_type TEXT NOT NULL, metric_name TEXT NOT NULL, value REAL NOT NULL, period TEXT, recorded_at INTEGER NOT NULL)`);
+  version: 37,
+  name: 'Add CMeas metrics table',
+  up: (db) => {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS metrics_snapshots (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', metric_type TEXT NOT NULL, metric_name TEXT NOT NULL, value REAL NOT NULL, period TEXT, recorded_at INTEGER NOT NULL)`
+    );
     db.exec('CREATE INDEX IF NOT EXISTS idx_metrics_tenant_type ON metrics_snapshots(tenant_id, metric_type)');
-    console.log('[Migration v37] Added CMeas metrics table'); }, down: (db) => { db.exec('DROP TABLE IF EXISTS metrics_snapshots'); }
+    console.log('[Migration v37] Added CMeas metrics table');
+  },
+  down: (db) => {
+    db.exec('DROP TABLE IF EXISTS metrics_snapshots');
+  },
 };
 
 const migration_v38: IMigration = {
-  version: 38, name: 'Add CFlow value stream stages', up: (db) => {
-    db.exec(`CREATE TABLE IF NOT EXISTS value_stream_stages (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', requirement_id TEXT, stage_name TEXT NOT NULL, entry_time INTEGER, exit_time INTEGER, wait_duration_ms INTEGER DEFAULT 0, process_duration_ms INTEGER DEFAULT 0, FOREIGN KEY(requirement_id) REFERENCES requirements(id) ON DELETE CASCADE)`);
+  version: 38,
+  name: 'Add CFlow value stream stages',
+  up: (db) => {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS value_stream_stages (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', requirement_id TEXT, stage_name TEXT NOT NULL, entry_time INTEGER, exit_time INTEGER, wait_duration_ms INTEGER DEFAULT 0, process_duration_ms INTEGER DEFAULT 0, FOREIGN KEY(requirement_id) REFERENCES requirements(id) ON DELETE CASCADE)`
+    );
     db.exec('CREATE INDEX IF NOT EXISTS idx_flow_requirement ON value_stream_stages(requirement_id)');
-    console.log('[Migration v38] Added CFlow stages'); }, down: (db) => { db.exec('DROP TABLE IF EXISTS value_stream_stages'); }
+    console.log('[Migration v38] Added CFlow stages');
+  },
+  down: (db) => {
+    db.exec('DROP TABLE IF EXISTS value_stream_stages');
+  },
 };
 
 /**
  * Migration v38 -> v39: Add audit_logs table
  */
 const migration_v39: IMigration = {
-  version: 39, name: 'Add audit logs table', up: (db) => {
-    db.exec(`CREATE TABLE IF NOT EXISTS audit_logs (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', user_id TEXT, username TEXT, action TEXT NOT NULL, resource TEXT, ip_address TEXT, user_agent TEXT, created_at INTEGER NOT NULL)`);
+  version: 39,
+  name: 'Add audit logs table',
+  up: (db) => {
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS audit_logs (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL DEFAULT 'default', user_id TEXT, username TEXT, action TEXT NOT NULL, resource TEXT, ip_address TEXT, user_agent TEXT, created_at INTEGER NOT NULL)`
+    );
     db.exec('CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_logs(tenant_id, created_at DESC)');
-    console.log('[Migration v39] Added audit_logs'); }, down: (db) => { db.exec('DROP TABLE IF EXISTS audit_logs'); }
+    console.log('[Migration v39] Added audit_logs');
+  },
+  down: (db) => {
+    db.exec('DROP TABLE IF EXISTS audit_logs');
+  },
 };
 
 /**
@@ -1661,9 +1724,17 @@ const migration_v41: IMigration = {
       const cols = new Set((db.pragma(`table_info(${table})`) as Array<{ name: string }>).map((c) => c.name));
       if (!cols.has(col)) db.exec(ddl);
     };
-    ensureColumn('artifact_repos', 'scope', `ALTER TABLE artifact_repos ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`);
+    ensureColumn(
+      'artifact_repos',
+      'scope',
+      `ALTER TABLE artifact_repos ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`
+    );
     ensureColumn('artifact_repos', 'team_id', `ALTER TABLE artifact_repos ADD COLUMN team_id TEXT`);
-    ensureColumn('artifact_repos', 'created_by', `ALTER TABLE artifact_repos ADD COLUMN created_by TEXT NOT NULL DEFAULT ''`);
+    ensureColumn(
+      'artifact_repos',
+      'created_by',
+      `ALTER TABLE artifact_repos ADD COLUMN created_by TEXT NOT NULL DEFAULT ''`
+    );
     ensureColumn('artifacts', 'team_id', `ALTER TABLE artifacts ADD COLUMN team_id TEXT`);
     ensureColumn('code_repos', 'scope', `ALTER TABLE code_repos ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal'`);
     ensureColumn('code_repos', 'team_id', `ALTER TABLE code_repos ADD COLUMN team_id TEXT`);
@@ -1947,9 +2018,7 @@ const migration_v50: IMigration = {
     db.exec(
       'CREATE INDEX IF NOT EXISTS idx_team_runtime_nodes_tenant_seen ON team_runtime_nodes(tenant_id, last_seen_at DESC)'
     );
-    db.exec(
-      'CREATE INDEX IF NOT EXISTS idx_team_runtime_nodes_user ON team_runtime_nodes(tenant_id, user_id)'
-    );
+    db.exec('CREATE INDEX IF NOT EXISTS idx_team_runtime_nodes_user ON team_runtime_nodes(tenant_id, user_id)');
     console.log('[Migration v50] Added team_runtime_nodes table');
   },
   down: (db) => {

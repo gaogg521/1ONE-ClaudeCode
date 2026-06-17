@@ -25,10 +25,7 @@ export type EnterpriseNavItem = {
   comingSoon?: boolean;
 };
 
-const NAV_LABELS: Record<
-  EnterpriseNavKey,
-  Pick<EnterpriseNavItem, 'labelKey' | 'labelDefault' | 'comingSoon'>
-> = {
+const NAV_LABELS: Record<EnterpriseNavKey, Pick<EnterpriseNavItem, 'labelKey' | 'labelDefault' | 'comingSoon'>> = {
   home: { labelKey: 'settings.enterpriseConsole.navHome', labelDefault: '概览' },
   settings: { labelKey: 'settings.enterpriseConsole.navSettings', labelDefault: '企业设置' },
   users: { labelKey: 'settings.enterpriseConsole.navUsers', labelDefault: '用户管理' },
@@ -66,27 +63,20 @@ function toNavItem(key: EnterpriseNavKey): EnterpriseNavItem {
   };
 }
 
-export const ENTERPRISE_NAV_ITEMS: EnterpriseNavItem[] = ENTERPRISE_ROUTE_META
-  .filter((route) => route.visibleInNav !== false)
-  .map((route) => toNavItem(route.key));
+export const ENTERPRISE_NAV_ITEMS: EnterpriseNavItem[] = ENTERPRISE_ROUTE_META.filter(
+  (route) => route.visibleInNav !== false
+).map((route) => toNavItem(route.key));
 
-export function getEnterpriseNavItemByKey(
-  key: EnterpriseNavKey
-): EnterpriseNavItem | undefined {
+export function getEnterpriseNavItemByKey(key: EnterpriseNavKey): EnterpriseNavItem | undefined {
   return getEnterpriseRouteMetaByKey(key) ? toNavItem(key) : undefined;
 }
 
-export function getEnterpriseNavItemByPath(
-  pathname: string
-): EnterpriseNavItem | undefined {
+export function getEnterpriseNavItemByPath(pathname: string): EnterpriseNavItem | undefined {
   const route = getEnterpriseRouteMetaByPath(pathname);
   return route ? toNavItem(route.key) : undefined;
 }
 
-export function getVisibleEnterpriseNavItems(
-  role: string | undefined,
-  isDesktop: boolean
-): EnterpriseNavItem[] {
+export function getVisibleEnterpriseNavItems(role: string | undefined, isDesktop: boolean): EnterpriseNavItem[] {
   return getVisibleEnterpriseNavKeys(role, isDesktop).map((key) => toNavItem(key));
 }
 

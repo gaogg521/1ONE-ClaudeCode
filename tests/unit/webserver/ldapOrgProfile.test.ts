@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  parseOuChainFromDn,
-  resolveLdapOrgUnitPath,
-} from '@process/webserver/auth/orgProfile/ldapOrgProfile';
+import { parseOuChainFromDn, resolveLdapOrgUnitPath } from '@process/webserver/auth/orgProfile/ldapOrgProfile';
 
 describe('ldapOrgProfile', () => {
   it('builds org path from OU chain in DN', () => {
@@ -10,9 +7,9 @@ describe('ldapOrgProfile', () => {
       'Engineering',
       'Platform',
     ]);
-    expect(
-      resolveLdapOrgUnitPath('CN=Alice,OU=Platform,OU=Engineering,DC=corp,DC=com', {})
-    ).toBe('Engineering / Platform');
+    expect(resolveLdapOrgUnitPath('CN=Alice,OU=Platform,OU=Engineering,DC=corp,DC=com', {})).toBe(
+      'Engineering / Platform'
+    );
   });
 
   it('prefers department attribute and prefixes company', () => {

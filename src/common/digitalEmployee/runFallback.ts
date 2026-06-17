@@ -44,13 +44,9 @@ export function parsePersonalAgentSkillIds(agent: PersonalAgent): string[] {
 export function buildDigitalEmployeePresetBundle(agent: PersonalAgent): DigitalEmployeePresetBundle {
   const skillIds = parsePersonalAgentSkillIds(agent);
   const instructions =
-    typeof agent.automationConfig?.instructions === 'string'
-      ? agent.automationConfig.instructions.trim()
-      : '';
+    typeof agent.automationConfig?.instructions === 'string' ? agent.automationConfig.instructions.trim() : '';
   const preferredModelId =
-    typeof agent.automationConfig?.preferredModelId === 'string'
-      ? agent.automationConfig.preferredModelId
-      : undefined;
+    typeof agent.automationConfig?.preferredModelId === 'string' ? agent.automationConfig.preferredModelId : undefined;
 
   const sections: string[] = [];
   const rolePreset = buildDigitalEmployeePresetContext({

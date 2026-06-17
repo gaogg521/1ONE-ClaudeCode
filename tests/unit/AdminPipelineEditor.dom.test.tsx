@@ -34,20 +34,10 @@ vi.mock('@arco-design/web-react', () => {
     value?: string;
     onChange?: (value: string) => void;
     placeholder?: string;
-  }) => (
-    <input
-      value={value}
-      placeholder={placeholder}
-      onChange={(event) => onChange?.(event.currentTarget.value)}
-    />
+  }) => <input value={value} placeholder={placeholder} onChange={(event) => onChange?.(event.currentTarget.value)} />;
+  Input.TextArea = ({ value, onChange }: { value?: string; onChange?: (value: string) => void }) => (
+    <textarea value={value} onChange={(event) => onChange?.(event.currentTarget.value)} />
   );
-  Input.TextArea = ({
-    value,
-    onChange,
-  }: {
-    value?: string;
-    onChange?: (value: string) => void;
-  }) => <textarea value={value} onChange={(event) => onChange?.(event.currentTarget.value)} />;
 
   const Form = ({ children }: React.PropsWithChildren) => <form>{children}</form>;
   (Form as unknown as { Item: React.FC<React.PropsWithChildren<{ label?: React.ReactNode }>> }).Item = ({
@@ -61,14 +51,10 @@ vi.mock('@arco-design/web-react', () => {
   );
 
   return {
-    Button: ({
-      children,
-      onClick,
-    }: React.PropsWithChildren<{ onClick?: () => void }>) => <button onClick={onClick}>{children}</button>,
-    Card: ({
-      children,
-      title,
-    }: React.PropsWithChildren<{ title?: React.ReactNode }>) => (
+    Button: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => (
+      <button onClick={onClick}>{children}</button>
+    ),
+    Card: ({ children, title }: React.PropsWithChildren<{ title?: React.ReactNode }>) => (
       <section>
         {title}
         {children}
@@ -85,12 +71,9 @@ vi.mock('@arco-design/web-react', () => {
     },
     Modal: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
     Space: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-    Steps: Object.assign(
-      ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-      {
-        Step: ({ title }: { title?: React.ReactNode }) => <div>{title}</div>,
-      }
-    ),
+    Steps: Object.assign(({ children }: React.PropsWithChildren) => <div>{children}</div>, {
+      Step: ({ title }: { title?: React.ReactNode }) => <div>{title}</div>,
+    }),
     Switch: ({ checked }: { checked?: boolean }) => <span>{checked ? 'on' : 'off'}</span>,
     Tag: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
     Typography: {

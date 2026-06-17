@@ -25,7 +25,9 @@ function smtpFromEnv(): ResolvedSmtpConfig | null {
   const port = Number.parseInt(portRaw, 10);
   if (!Number.isFinite(port) || port <= 0) return null;
   const secure =
-    String(process.env.ONE_SMTP_SECURE ?? '').trim().toLowerCase() === 'true' || port === 465;
+    String(process.env.ONE_SMTP_SECURE ?? '')
+      .trim()
+      .toLowerCase() === 'true' || port === 465;
   return { host, port, secure, user, pass, from };
 }
 
@@ -40,7 +42,9 @@ export function resolvedSmtpFromConfig(cfg: Record<string, unknown>): ResolvedSm
   if (!Number.isFinite(port) || port <= 0) return null;
   const secure =
     cfg.secure === true ||
-    String(cfg.secure ?? '').trim().toLowerCase() === 'true' ||
+    String(cfg.secure ?? '')
+      .trim()
+      .toLowerCase() === 'true' ||
     port === 465;
   return { host, port, secure, user, pass, from };
 }

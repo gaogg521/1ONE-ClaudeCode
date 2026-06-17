@@ -25,9 +25,7 @@ const AgentFleetPage: React.FC = () => {
 
   return (
     <div className='h-full overflow-auto px-20px py-16px'>
-      <Card
-        title={t('common.agentFleet.title', { defaultValue: '组织节点' })}
-      >
+      <Card title={t('common.agentFleet.title', { defaultValue: '组织节点' })}>
         <div className='mb-12px text-12px text-t-tertiary'>
           {t('common.agentFleet.desc', {
             defaultValue:

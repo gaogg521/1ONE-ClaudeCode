@@ -116,13 +116,14 @@ async function optionalAuth(req: Request, res: Response, next: NextFunction): Pr
     res.status(401).json({ success: false, message: 'Authentication required' });
     return;
   }
-  const role = user.role === 'admin'
-    ? 'system_admin'
-    : user.role === 'user'
-      ? 'member'
-      : user.role === 'system_admin' || user.role === 'org_admin' || user.role === 'member'
-        ? user.role
-        : 'member';
+  const role =
+    user.role === 'admin'
+      ? 'system_admin'
+      : user.role === 'user'
+        ? 'member'
+        : user.role === 'system_admin' || user.role === 'org_admin' || user.role === 'member'
+          ? user.role
+          : 'member';
   req.user = {
     id: user.id,
     username: user.username,
@@ -226,7 +227,9 @@ export function registerDevOpsRoutes(app: Express): void {
       } else if (ext === '.html' || ext === '.htm') {
         content = extractHtmlText(file.buffer.toString('utf-8'));
       } else {
-        res.status(400).json({ success: false, message: `Unsupported: ${ext}. Supported: md, txt, docx, html, ts, json` });
+        res
+          .status(400)
+          .json({ success: false, message: `Unsupported: ${ext}. Supported: md, txt, docx, html, ts, json` });
         return;
       }
 
@@ -557,9 +560,7 @@ export function registerDevOpsRoutes(app: Express): void {
       values.push(tenantId);
 
       driver
-        .prepare(
-          `UPDATE requirements SET ${fieldsToUpdate.join(', ')} WHERE id = ? AND tenant_id = ?`
-        )
+        .prepare(`UPDATE requirements SET ${fieldsToUpdate.join(', ')} WHERE id = ? AND tenant_id = ?`)
         .run(...values);
 
       // CFlow 自动打点：当需求状态发生流转时，写入价值流阶段记录
@@ -586,9 +587,7 @@ export function registerDevOpsRoutes(app: Express): void {
             if (openStage) {
               const processMs = Math.max(0, nowFl - openStage.entry_time);
               driver
-                .prepare(
-                  `UPDATE value_stream_stages SET exit_time = ?, process_duration_ms = ? WHERE id = ?`
-                )
+                .prepare(`UPDATE value_stream_stages SET exit_time = ?, process_duration_ms = ? WHERE id = ?`)
                 .run(nowFl, processMs, openStage.id);
             }
 
@@ -599,7 +598,9 @@ export function registerDevOpsRoutes(app: Express): void {
                  VALUES (?,?,?,?,?,?,?,?)`
               )
               .run(randomUUID(), tenantId, id, stageName, nowFl, null, 0, 0);
-          } catch { /* ignore flow logging errors */ }
+          } catch {
+            /* ignore flow logging errors */
+          }
         }
       }
 
@@ -619,9 +620,7 @@ export function registerDevOpsRoutes(app: Express): void {
       const db = await getDatabase();
       const driver = db.getDriver();
 
-      const result = driver
-        .prepare(`DELETE FROM requirements WHERE id = ? AND tenant_id = ?`)
-        .run(id, tenantId);
+      const result = driver.prepare(`DELETE FROM requirements WHERE id = ? AND tenant_id = ?`).run(id, tenantId);
 
       if (result.changes === 0) {
         res.status(404).json({ success: false, message: 'Requirement not found' });
@@ -698,24 +697,22 @@ export function registerDevOpsRoutes(app: Express): void {
            LIMIT 50`
         )
         .all(requirementId, tenantId) as Array<{
-          id: string;
-          tenant_id: string;
-          requirement_id: string;
-          author_type: string;
-          author_id: string | null;
-          author_name: string;
-          body: string;
-          metadata: string | null;
-          created_at: number;
-        }>;
+        id: string;
+        tenant_id: string;
+        requirement_id: string;
+        author_type: string;
+        author_id: string | null;
+        author_name: string;
+        body: string;
+        metadata: string | null;
+        created_at: number;
+      }>;
 
       res.json(
         rows.map((row) => ({
           ...row,
           author_name:
-            row.author_id != null
-              ? resolveCreatorDisplayName(row.author_id, row.author_name)
-              : row.author_name,
+            row.author_id != null ? resolveCreatorDisplayName(row.author_id, row.author_name) : row.author_name,
           author_type: row.author_type as 'user' | 'agent' | 'autopilot',
           metadata: row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : null,
         }))
@@ -741,8 +738,16 @@ export function registerDevOpsRoutes(app: Express): void {
 
       // 管理员看全部，普通用户看组织共享 + 个人 + 所属团队
       const rows = isAdmin
-        ? driver.prepare(`SELECT id, tenant_id, title, file_path, file_size, mime_type, status, chunk_count, last_error, scope, team_id, created_by, created_at, updated_at FROM rag_documents WHERE tenant_id = ? ORDER BY created_at DESC`).all(tenantId)
-        : driver.prepare(`SELECT id, tenant_id, title, file_path, file_size, mime_type, status, chunk_count, last_error, scope, team_id, created_by, created_at, updated_at FROM rag_documents WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY created_at DESC`).all(tenantId, userId, tenantId, userId);
+        ? driver
+            .prepare(
+              `SELECT id, tenant_id, title, file_path, file_size, mime_type, status, chunk_count, last_error, scope, team_id, created_by, created_at, updated_at FROM rag_documents WHERE tenant_id = ? ORDER BY created_at DESC`
+            )
+            .all(tenantId)
+        : driver
+            .prepare(
+              `SELECT id, tenant_id, title, file_path, file_size, mime_type, status, chunk_count, last_error, scope, team_id, created_by, created_at, updated_at FROM rag_documents WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY created_at DESC`
+            )
+            .all(tenantId, userId, tenantId, userId);
 
       res.json({ success: true, data: rows });
     } catch (err) {
@@ -847,23 +852,25 @@ export function registerDevOpsRoutes(app: Express): void {
       const queryVector = await RAGService.getEmbedding(query);
 
       // 2. 从数据库加载当前用户可见的 Chunks
-      const rows = (isAdmin
-        ? driver
-          .prepare(
-            `SELECT c.content, c.chunk_index, c.embedding, d.title
+      const rows = (
+        isAdmin
+          ? driver
+              .prepare(
+                `SELECT c.content, c.chunk_index, c.embedding, d.title
              FROM rag_document_chunks c
              JOIN rag_documents d ON d.id = c.document_id
              WHERE d.tenant_id = ?`
-          )
-          .all(tenantId)
-        : driver
-          .prepare(
-            `SELECT c.content, c.chunk_index, c.embedding, d.title
+              )
+              .all(tenantId)
+          : driver
+              .prepare(
+                `SELECT c.content, c.chunk_index, c.embedding, d.title
              FROM rag_document_chunks c
              JOIN rag_documents d ON d.id = c.document_id
              WHERE d.tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE_ALIAS('d')}`
-          )
-          .all(tenantId, userId, tenantId, userId)) as any[];
+              )
+              .all(tenantId, userId, tenantId, userId)
+      ) as any[];
 
       // 3. 在内存中极速计算余弦相似度并排序
       const scoredResults = rows
@@ -903,9 +910,7 @@ export function registerDevOpsRoutes(app: Express): void {
         return;
       }
 
-      const result = driver
-        .prepare(`DELETE FROM rag_documents WHERE id = ? AND tenant_id = ?`)
-        .run(id, tenantId);
+      const result = driver.prepare(`DELETE FROM rag_documents WHERE id = ? AND tenant_id = ?`).run(id, tenantId);
 
       if (result.changes === 0) {
         res.status(404).json({ success: false, message: 'Document not found' });
@@ -932,9 +937,19 @@ export function registerDevOpsRoutes(app: Express): void {
       const db = await getDatabase();
       const driver = db.getDriver();
 
-      const rows = (isAdmin
-        ? driver.prepare(`SELECT id, tenant_id, name, type, endpoint, env_json, enabled, scope, team_id, created_by, created_at, updated_at FROM mcp_registry WHERE tenant_id = ? ORDER BY name ASC`).all(tenantId)
-        : driver.prepare(`SELECT id, tenant_id, name, type, endpoint, env_json, enabled, scope, team_id, created_by, created_at, updated_at FROM mcp_registry WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY name ASC`).all(tenantId, userId, tenantId, userId)) as any[];
+      const rows = (
+        isAdmin
+          ? driver
+              .prepare(
+                `SELECT id, tenant_id, name, type, endpoint, env_json, enabled, scope, team_id, created_by, created_at, updated_at FROM mcp_registry WHERE tenant_id = ? ORDER BY name ASC`
+              )
+              .all(tenantId)
+          : driver
+              .prepare(
+                `SELECT id, tenant_id, name, type, endpoint, env_json, enabled, scope, team_id, created_by, created_at, updated_at FROM mcp_registry WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY name ASC`
+              )
+              .all(tenantId, userId, tenantId, userId)
+      ) as any[];
 
       // 为了安全，不返回具体的 env_json 明文，仅以布尔标记其是否配置过
       const safeRows = rows.map((row) => {
@@ -944,7 +959,9 @@ export function registerDevOpsRoutes(app: Express): void {
             const parsed = JSON.parse(row.env_json);
             hasKeys = Object.keys(parsed).length > 0;
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
 
         return {
           id: row.id,
@@ -1007,9 +1024,9 @@ export function registerDevOpsRoutes(app: Express): void {
         }
 
         // 保存时如果合并，我们做增量合并
-        const oldRow = driver
-          .prepare(`SELECT env_json FROM mcp_registry WHERE id = ?`)
-          .get(id) as { env_json: string } | undefined;
+        const oldRow = driver.prepare(`SELECT env_json FROM mcp_registry WHERE id = ?`).get(id) as
+          | { env_json: string }
+          | undefined;
         let finalEnv = envJsonStr;
         try {
           if (oldRow?.env_json) {
@@ -1023,7 +1040,9 @@ export function registerDevOpsRoutes(app: Express): void {
             }
             finalEnv = JSON.stringify(newEnv);
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
 
         driver
           .prepare(
@@ -1031,7 +1050,18 @@ export function registerDevOpsRoutes(app: Express): void {
              SET name = ?, type = ?, endpoint = ?, env_json = ?, enabled = ?, scope = ?, team_id = ?, updated_at = ?
              WHERE id = ? AND tenant_id = ?`
           )
-          .run(name.trim(), type, endpoint.trim(), finalEnv, enabled ? 1 : 0, resolvedScope.scope, resolvedScope.teamId, now, id, tenantId);
+          .run(
+            name.trim(),
+            type,
+            endpoint.trim(),
+            finalEnv,
+            enabled ? 1 : 0,
+            resolvedScope.scope,
+            resolvedScope.teamId,
+            now,
+            id,
+            tenantId
+          );
       } else {
         // 新建模式
         const resolvedScope = resolveResourceScope(req, driver, tenantId, { scope, team_id });
@@ -1045,7 +1075,20 @@ export function registerDevOpsRoutes(app: Express): void {
             `INSERT INTO mcp_registry (id, tenant_id, name, type, endpoint, env_json, enabled, scope, team_id, created_by, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
-          .run(nextId, tenantId, name.trim(), type, endpoint.trim(), envJsonStr, enabled ? 1 : 0, resolvedScope.scope, resolvedScope.teamId, userId, now, now);
+          .run(
+            nextId,
+            tenantId,
+            name.trim(),
+            type,
+            endpoint.trim(),
+            envJsonStr,
+            enabled ? 1 : 0,
+            resolvedScope.scope,
+            resolvedScope.teamId,
+            userId,
+            now,
+            now
+          );
       }
 
       res.json({ success: true });
@@ -1070,9 +1113,7 @@ export function registerDevOpsRoutes(app: Express): void {
         return;
       }
 
-      const result = driver
-        .prepare(`DELETE FROM mcp_registry WHERE id = ? AND tenant_id = ?`)
-        .run(id, tenantId);
+      const result = driver.prepare(`DELETE FROM mcp_registry WHERE id = ? AND tenant_id = ?`).run(id, tenantId);
 
       if (result.changes === 0) {
         res.status(404).json({ success: false, message: 'MCP not found' });
@@ -1097,19 +1138,26 @@ export function registerDevOpsRoutes(app: Express): void {
       const isAdmin = isEnterpriseAdminRole(req.user!.role);
       const db = await getDatabase();
       const driver = db.getDriver();
-      const rows = (isAdmin
-        ? driver.prepare(`SELECT * FROM audit_logs WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 200`).all(tenantId)
-        : (() => {
-          const peerIds = getTeamPeerUserIds(driver, tenantId, userId);
-          const placeholders = peerIds.map(() => '?').join(',');
-          return driver
-            .prepare(`SELECT * FROM audit_logs WHERE tenant_id = ? AND user_id IN (${placeholders}) ORDER BY created_at DESC LIMIT 200`)
-            .all(tenantId, ...peerIds);
-        })()) as any[];
+      const rows = (
+        isAdmin
+          ? driver
+              .prepare(`SELECT * FROM audit_logs WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 200`)
+              .all(tenantId)
+          : (() => {
+              const peerIds = getTeamPeerUserIds(driver, tenantId, userId);
+              const placeholders = peerIds.map(() => '?').join(',');
+              return driver
+                .prepare(
+                  `SELECT * FROM audit_logs WHERE tenant_id = ? AND user_id IN (${placeholders}) ORDER BY created_at DESC LIMIT 200`
+                )
+                .all(tenantId, ...peerIds);
+            })()
+      ) as any[];
       res.json({ success: true, data: rows });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+    } catch (err) {
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
   });
-
 
   // ==========================================
   // 10. 批量导入 API (Skills / MCP / RAG)
@@ -1117,10 +1165,19 @@ export function registerDevOpsRoutes(app: Express): void {
 
   app.post('/api/admin/skills/batch', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
-      const tenantId = resolveTenantId(req); const userId = req.user!.id; const items = req.body?.items;
-      if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ success: false, message: 'items array required' }); return; }
-      const db = await getDatabase(); const driver = db.getDriver(); const now = Date.now();
-      const stmt = driver.prepare(`INSERT OR IGNORE INTO skills_registry (id, tenant_id, name, description, content, enabled, scope, created_by, created_at, updated_at) VALUES (?,?,?,?,?,1,'personal',?,?,?)`);
+      const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const items = req.body?.items;
+      if (!Array.isArray(items) || items.length === 0) {
+        res.status(400).json({ success: false, message: 'items array required' });
+        return;
+      }
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const now = Date.now();
+      const stmt = driver.prepare(
+        `INSERT OR IGNORE INTO skills_registry (id, tenant_id, name, description, content, enabled, scope, created_by, created_at, updated_at) VALUES (?,?,?,?,?,1,'personal',?,?,?)`
+      );
       let count = 0;
       driver.transaction(() => {
         for (const item of items) {
@@ -1143,19 +1200,49 @@ export function registerDevOpsRoutes(app: Express): void {
         }
       })();
       res.json({ success: true, data: { count } });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+    } catch (err) {
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
   });
 
   app.post('/api/admin/mcp/batch', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
-      const tenantId = resolveTenantId(req); const userId = req.user!.id; const items = req.body?.items;
-      if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ success: false, message: 'items array required' }); return; }
-      const db = await getDatabase(); const driver = db.getDriver(); const now = Date.now();
-      const stmt = driver.prepare(`INSERT OR IGNORE INTO mcp_registry (id, tenant_id, name, type, endpoint, env_json, enabled, scope, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,1,'personal',?,?,?)`);
+      const tenantId = resolveTenantId(req);
+      const userId = req.user!.id;
+      const items = req.body?.items;
+      if (!Array.isArray(items) || items.length === 0) {
+        res.status(400).json({ success: false, message: 'items array required' });
+        return;
+      }
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      const now = Date.now();
+      const stmt = driver.prepare(
+        `INSERT OR IGNORE INTO mcp_registry (id, tenant_id, name, type, endpoint, env_json, enabled, scope, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,1,'personal',?,?,?)`
+      );
       let count = 0;
-      driver.transaction(() => { for (const item of items) { if (item.name?.trim()) { stmt.run(randomUUID(), tenantId, item.name.trim(), item.type||'sse', item.endpoint||'', item.env_json||'{}', userId, now, now); count++; } } })();
+      driver.transaction(() => {
+        for (const item of items) {
+          if (item.name?.trim()) {
+            stmt.run(
+              randomUUID(),
+              tenantId,
+              item.name.trim(),
+              item.type || 'sse',
+              item.endpoint || '',
+              item.env_json || '{}',
+              userId,
+              now,
+              now
+            );
+            count++;
+          }
+        }
+      })();
       res.json({ success: true, data: { count } });
-    } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
+    } catch (err) {
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
   });
 
   // ==========================================
@@ -1170,9 +1257,19 @@ export function registerDevOpsRoutes(app: Express): void {
       const isAdmin = isEnterpriseAdminRole(req.user!.role);
       const db = await getDatabase();
       const driver = db.getDriver();
-      const rows = (isAdmin
-        ? driver.prepare(`SELECT id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at FROM skills_registry WHERE tenant_id = ? ORDER BY name ASC`).all(tenantId)
-        : driver.prepare(`SELECT id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at FROM skills_registry WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY name ASC`).all(tenantId, userId, tenantId, userId)) as any[];
+      const rows = (
+        isAdmin
+          ? driver
+              .prepare(
+                `SELECT id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at FROM skills_registry WHERE tenant_id = ? ORDER BY name ASC`
+              )
+              .all(tenantId)
+          : driver
+              .prepare(
+                `SELECT id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at FROM skills_registry WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY name ASC`
+              )
+              .all(tenantId, userId, tenantId, userId)
+      ) as any[];
       res.json({ success: true, data: rows });
     } catch (err) {
       console.error('[DevOpsRoute] list skills error:', err);
@@ -1186,7 +1283,10 @@ export function registerDevOpsRoutes(app: Express): void {
       const tenantId = resolveTenantId(req);
       const userId = req.user!.id;
       const { id, name, description, content, enabled, scope, team_id } = req.body;
-      if (!name?.trim()) { res.status(400).json({ success: false, message: 'name required' }); return; }
+      if (!name?.trim()) {
+        res.status(400).json({ success: false, message: 'name required' });
+        return;
+      }
       const db = await getDatabase();
       const driver = db.getDriver();
       const now = Date.now();
@@ -1200,13 +1300,29 @@ export function registerDevOpsRoutes(app: Express): void {
           res.status(403).json({ success: false, message: 'Forbidden' });
           return;
         }
-        const resolvedScope = resolveResourceScope(req, driver, tenantId, { scope: scope ?? existing.scope, team_id: team_id ?? existing.team_id });
+        const resolvedScope = resolveResourceScope(req, driver, tenantId, {
+          scope: scope ?? existing.scope,
+          team_id: team_id ?? existing.team_id,
+        });
         if (isScopeError(resolvedScope)) {
           res.status(resolvedScope.status).json({ success: false, message: resolvedScope.error });
           return;
         }
-        driver.prepare(`UPDATE skills_registry SET name=?, description=?, content=?, enabled=?, scope=?, team_id=?, updated_at=? WHERE id=? AND tenant_id=?`)
-          .run(name.trim(), description||'', content||'', enabled?1:0, resolvedScope.scope, resolvedScope.teamId, now, id, tenantId);
+        driver
+          .prepare(
+            `UPDATE skills_registry SET name=?, description=?, content=?, enabled=?, scope=?, team_id=?, updated_at=? WHERE id=? AND tenant_id=?`
+          )
+          .run(
+            name.trim(),
+            description || '',
+            content || '',
+            enabled ? 1 : 0,
+            resolvedScope.scope,
+            resolvedScope.teamId,
+            now,
+            id,
+            tenantId
+          );
       } else {
         const resolvedScope = resolveResourceScope(req, driver, tenantId, { scope, team_id });
         if (isScopeError(resolvedScope)) {
@@ -1214,8 +1330,23 @@ export function registerDevOpsRoutes(app: Express): void {
           return;
         }
         const nextId = randomUUID();
-        driver.prepare(`INSERT INTO skills_registry (id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
-          .run(nextId, tenantId, name.trim(), description||'', content||'', enabled?1:0, resolvedScope.scope, resolvedScope.teamId, userId, now, now);
+        driver
+          .prepare(
+            `INSERT INTO skills_registry (id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+          )
+          .run(
+            nextId,
+            tenantId,
+            name.trim(),
+            description || '',
+            content || '',
+            enabled ? 1 : 0,
+            resolvedScope.scope,
+            resolvedScope.teamId,
+            userId,
+            now,
+            now
+          );
       }
       res.json({ success: true });
     } catch (err) {
@@ -1253,5 +1384,4 @@ export function registerDevOpsRoutes(app: Express): void {
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
-
 }

@@ -43,6 +43,7 @@ vi.mock('@/renderer/hooks/ui/useLatestRef', async () => {
 
 vi.mock('@/renderer/pages/conversation/Messages/hooks', () => ({
   useAddOrUpdateMessage: () => mockAddOrUpdateMessage,
+  useRemoveMessageByMsgId: () => vi.fn(),
 }));
 
 vi.mock('@/renderer/pages/conversation/platforms/assertBridgeSuccess', () => ({
@@ -82,6 +83,7 @@ describe('useGeminiInitialMessage', () => {
         currentModelId: undefined,
         hasNoAuth: true,
         setContent,
+        setUploadFile: vi.fn(),
         setActiveMsgId: vi.fn(),
         setWaitingResponse: vi.fn(),
         autoSwitchTriggeredRef,
@@ -119,6 +121,7 @@ describe('useGeminiInitialMessage', () => {
         currentModelId: 'gemini-2.5',
         hasNoAuth: false,
         setContent: vi.fn(),
+        setUploadFile: vi.fn(),
         setActiveMsgId,
         setWaitingResponse,
         autoSwitchTriggeredRef: { current: false },

@@ -99,11 +99,7 @@ const AboutModalContent: React.FC = () => {
               </span>
               <div
                 className='text-t-primary cursor-pointer hover:text-t-secondary transition-colors p-4px'
-                onClick={() =>
-                  openLink(REPO).catch((error) =>
-                    console.error('Failed to open link:', error)
-                  )
-                }
+                onClick={() => openLink(REPO).catch((error) => console.error('Failed to open link:', error))}
               >
                 <Github theme='outline' size='20' />
               </div>

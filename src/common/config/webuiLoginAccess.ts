@@ -16,10 +16,7 @@ export function resolveWebuiAdminPort(memberPort = WEBUI_DEFAULT_PORT): number {
 /**
  * When the member port is taken, avoid bumping into the paired admin port (e.g. 25809→25810).
  */
-export function nextWebuiMemberPortAfterConflict(
-  occupiedPort: number,
-  baseMemberPort = WEBUI_DEFAULT_PORT
-): number {
+export function nextWebuiMemberPortAfterConflict(occupiedPort: number, baseMemberPort = WEBUI_DEFAULT_PORT): number {
   let next = occupiedPort + 1;
   const reservedAdminSlot = resolveWebuiAdminPort(baseMemberPort);
   if (next === reservedAdminSlot) {

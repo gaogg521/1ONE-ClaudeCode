@@ -58,9 +58,7 @@ export function useFeishuQrLogin(buildAuthorizePath: (mode: 'oauth' | 'qr') => s
     setFeishuQr(null);
     try {
       const path = buildAuthorizePath('qr');
-      const res = isElectronDesktop()
-        ? await fetchWebuiApi(path)
-        : await fetch(path, { credentials: 'include' });
+      const res = isElectronDesktop() ? await fetchWebuiApi(path) : await fetch(path, { credentials: 'include' });
       const raw = (await res.json().catch((): null => null)) as unknown;
       const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
       const data = obj?.data && typeof obj.data === 'object' ? (obj.data as Record<string, unknown>) : null;

@@ -9,13 +9,7 @@ import { AGENT_FLEET_PATH } from '@/renderer/pages/agentFleet/agentFleetRouting'
 
 export { AGENT_FLEET_PATH };
 
-export const SUPER_ASSISTANT_TABS = [
-  'overview',
-  'agents',
-  'issues',
-  'skills',
-  'settings',
-] as const;
+export const SUPER_ASSISTANT_TABS = ['overview', 'agents', 'issues', 'skills', 'settings'] as const;
 
 /** Legacy super-assistant tab; fleet UI lives at {@link AGENT_FLEET_PATH}. */
 export const LEGACY_SUPER_ASSISTANT_RUNTIMES_TAB = 'runtimes';
@@ -76,10 +70,7 @@ export function storeSuperAssistantTab(tab: SuperAssistantTab): void {
   sessionStorage.setItem(TAB_STORAGE_KEY, tab);
 }
 
-export function buildSuperAssistantPath(input: {
-  tab: SuperAssistantTab;
-  issueId?: string | null;
-}): string {
+export function buildSuperAssistantPath(input: { tab: SuperAssistantTab; issueId?: string | null }): string {
   const params = new URLSearchParams();
   params.set('tab', input.tab);
   if (input.issueId) {

@@ -59,12 +59,8 @@ describe('enterprise paths', () => {
       'security',
     ]);
 
-    expect(getVisibleEnterpriseNavItems('org_admin', false).map((item) => item.key)).toContain(
-      'teams'
-    );
-    expect(getVisibleEnterpriseNavItems('org_admin', false).map((item) => item.key)).toContain(
-      'settings'
-    );
+    expect(getVisibleEnterpriseNavItems('org_admin', false).map((item) => item.key)).toContain('teams');
+    expect(getVisibleEnterpriseNavItems('org_admin', false).map((item) => item.key)).toContain('settings');
   });
 
   it('does not expose secondary verification metadata on enterprise navigation items', () => {

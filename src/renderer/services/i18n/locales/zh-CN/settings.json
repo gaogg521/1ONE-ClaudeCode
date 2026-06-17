@@ -1351,8 +1351,7 @@
     "pendingTimeout": "审批请求已过期（5 分钟）。请重试。",
     "pendingCancel": "取消",
     "pendingTimeRemaining": "剩余时间：{{time}}"
-  }
-  ,
+  },
   "custom": "自定义",
   "modelProtocolCustom": "自定义协议/模式",
   "modelProtocolCustomTip": "用于厂商/网关的特殊模式标识，例如：compatible-mode。系统会基于该值解析成可用协议并进行路由/URL 规范化。",

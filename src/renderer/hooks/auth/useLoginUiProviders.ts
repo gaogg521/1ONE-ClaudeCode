@@ -140,13 +140,9 @@ export function useLoginUiProviders(): LoginUiProvidersState {
   }, [refresh]);
 
   return useMemo(() => {
-    const anyProviderEnabled =
-      flags.ldapEnabled || flags.feishuEnabled || flags.dingtalkEnabled || flags.wecomEnabled;
+    const anyProviderEnabled = flags.ldapEnabled || flags.feishuEnabled || flags.dingtalkEnabled || flags.wecomEnabled;
     const anyProviderConfigured =
-      flags.ldapConfigured ||
-      flags.feishuConfigured ||
-      flags.dingtalkConfigured ||
-      flags.wecomConfigured;
+      flags.ldapConfigured || flags.feishuConfigured || flags.dingtalkConfigured || flags.wecomConfigured;
 
     return {
       loading,
@@ -158,4 +154,4 @@ export function useLoginUiProviders(): LoginUiProvidersState {
       refresh,
     };
   }, [error, flags, loading, mode, refresh]);
-};
+}

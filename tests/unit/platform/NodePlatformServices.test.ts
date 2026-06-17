@@ -29,7 +29,9 @@ describe('NodePlatformServices.paths', () => {
 
   it('getLogsDir falls back to homedir/.1one-claudecode-server/logs', async () => {
     const { NodePlatformServices } = await import('../../../src/common/platform/NodePlatformServices');
-    expect(new NodePlatformServices().paths.getLogsDir()).toBe(path.join(os.homedir(), '.1one-claudecode-server', 'logs'));
+    expect(new NodePlatformServices().paths.getLogsDir()).toBe(
+      path.join(os.homedir(), '.1one-claudecode-server', 'logs')
+    );
   });
 
   it('getAppPath returns process.cwd()', async () => {

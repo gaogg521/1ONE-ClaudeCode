@@ -50,18 +50,13 @@ export function useEnterpriseNotifications(enabled: boolean) {
     }
   }, [enabled, refreshUnreadCount]);
 
-  const markRead = useCallback(
-    async (notificationId: string) => {
-      await markNotificationRead(notificationId);
-      setItems((current) =>
-        current.map((item) =>
-          item.id === notificationId ? { ...item, read_at: item.read_at ?? Date.now() } : item
-        )
-      );
-      setUnreadCount((current) => Math.max(0, current - 1));
-    },
-    []
-  );
+  const markRead = useCallback(async (notificationId: string) => {
+    await markNotificationRead(notificationId);
+    setItems((current) =>
+      current.map((item) => (item.id === notificationId ? { ...item, read_at: item.read_at ?? Date.now() } : item))
+    );
+    setUnreadCount((current) => Math.max(0, current - 1));
+  }, []);
 
   const markAllRead = useCallback(async () => {
     await markAllNotificationsRead();

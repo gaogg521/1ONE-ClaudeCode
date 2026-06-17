@@ -50,45 +50,54 @@ class ConversationManageWithDB {
     this.stack.push([type, message]);
     clearTimeout(this.timer);
     if (type === 'insert') {
-      this.flush();
+      void this.flush();
       return;
     }
     this.timer = setTimeout(() => {
-      this.flush();
-    }, 2000);
+      void this.flush();
+    }, 300);
   }
 
-  private async flush(): Promise<void> {
-    if (!this.initialized || this.flushing || this.stack.length === 0) return;
-    this.flushing = true;
-    try {
-      const db = await this.dbPromise;
-      const stack = this.stack.splice(0);
-      const messages = db.getConversationMessages(this.conversation_id, 0, 50, 'DESC');
-      let messageList = messages.data.toReversed();
-      for (const [type, msg] of stack) {
-        if (type === 'insert') {
-          db.insertMessage(msg);
-          messageList.push(msg);
-        } else {
-          messageList = composeMessage(msg, messageList, (opType, message) => {
-            if (opType === 'insert') db.insertMessage(message);
-            if (opType === 'update') {
-              db.updateMessage(message.id, message);
-            }
-          });
-        }
-      }
-      executePendingCallbacks();
-    } catch (err) {
-      console.error('[Message] flush error:', err);
-    } finally {
-      this.flushing = false;
-      // If new messages arrived during flush, process them
-      if (this.stack.length > 0) {
-        this.flush();
-      }
+  /** Flush pending accumulate writes immediately (call before UI sync on stream finish). */
+  flushPending(): Promise<void> {
+    clearTimeout(this.timer);
+    return this.flush();
+  }
+
+  private flush(): Promise<void> {
+    if (!this.initialized || this.flushing || this.stack.length === 0) {
+      return Promise.resolve();
     }
+    this.flushing = true;
+    return this.dbPromise
+      .then(async (db) => {
+        const stack = this.stack.splice(0);
+        const messages = db.getConversationMessages(this.conversation_id, 0, 50, 'DESC');
+        let messageList = messages.data.toReversed();
+        for (const [type, msg] of stack) {
+          if (type === 'insert') {
+            db.insertMessage(msg);
+            messageList.push(msg);
+          } else {
+            messageList = composeMessage(msg, messageList, (opType, message) => {
+              if (opType === 'insert') db.insertMessage(message);
+              if (opType === 'update') {
+                db.updateMessage(message.id, message);
+              }
+            });
+          }
+        }
+        executePendingCallbacks();
+      })
+      .catch((err) => {
+        console.error('[Message] flush error:', err);
+      })
+      .finally(() => {
+        this.flushing = false;
+        if (this.stack.length > 0) {
+          void this.flush();
+        }
+      });
   }
 }
 
@@ -164,6 +173,11 @@ export const addOrUpdateMessage = (
 
   ConversationManageWithDB.get(conversation_id).sync('accumulate', message);
 };
+
+/** Force pending message writes to SQLite before renderer reloads from DB. */
+export async function flushConversationMessages(conversation_id: string): Promise<void> {
+  await ConversationManageWithDB.get(conversation_id).flushPending();
+}
 
 /**
  * Execute a callback after the next async operation completes

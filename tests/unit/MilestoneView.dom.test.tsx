@@ -32,13 +32,9 @@ vi.mock('@arco-design/web-react', () => {
     onChange: (value: string) => void;
     placeholder?: string;
   }) => <input aria-label={placeholder || 'input'} value={value} onChange={(e) => onChange(e.target.value)} />;
-  Input.TextArea = ({
-    value,
-    onChange,
-  }: {
-    value?: string;
-    onChange: (value: string) => void;
-  }) => <textarea aria-label='textarea' value={value} onChange={(e) => onChange(e.target.value)} />;
+  Input.TextArea = ({ value, onChange }: { value?: string; onChange: (value: string) => void }) => (
+    <textarea aria-label='textarea' value={value} onChange={(e) => onChange(e.target.value)} />
+  );
 
   return {
     Button: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => (

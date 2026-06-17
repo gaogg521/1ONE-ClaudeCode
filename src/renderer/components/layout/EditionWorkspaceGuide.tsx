@@ -122,10 +122,7 @@ const EditionWorkspaceGuide: React.FC = () => {
     }
     if (!hasJoinedEnterprise) {
       const pendingDesktopEnterpriseLogin =
-        isElectronDesktop() &&
-        isDesktopOperatorUser(user) &&
-        hasInstanceEnterprise &&
-        managementMode === 'enterprise';
+        isElectronDesktop() && isDesktopOperatorUser(user) && hasInstanceEnterprise && managementMode === 'enterprise';
       return {
         type: 'warning' as const,
         line: pendingDesktopEnterpriseLogin

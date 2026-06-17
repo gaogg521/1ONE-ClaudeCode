@@ -38,9 +38,7 @@ function getBrowserMachineId(): string {
   return created;
 }
 
-async function listInstalledAgentsForChannel(
-  channel: TeamRuntimeClientChannel
-): Promise<TeamRuntimeInstalledAgent[]> {
+async function listInstalledAgentsForChannel(channel: TeamRuntimeClientChannel): Promise<TeamRuntimeInstalledAgent[]> {
   if (channel === 'desktop') {
     return [];
   }
@@ -94,10 +92,7 @@ export async function publishRuntimeToAdminBackend(input: {
   }
 
   const machineId = getBrowserMachineId();
-  const displayName =
-    typeof window !== 'undefined'
-      ? `Web · ${window.location.hostname || 'browser'}`
-      : 'Web client';
+  const displayName = typeof window !== 'undefined' ? `Web · ${window.location.hostname || 'browser'}` : 'Web client';
   const installedAgents = await listInstalledAgentsForChannel('browser');
 
   try {

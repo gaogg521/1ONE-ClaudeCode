@@ -31,9 +31,7 @@ type PersonalAgentRow = {
 function parseAutomationConfig(value: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
   } catch {
     return {};
   }
@@ -116,9 +114,7 @@ export class SqlitePersonalAgentRepository {
       ? (db.prepare('SELECT * FROM personal_agents WHERE id = ? AND owner_user_id = ?').get(id, ownerUserId) as
           | PersonalAgentRow
           | undefined)
-      : (db.prepare('SELECT * FROM personal_agents WHERE id = ?').get(id) as
-          | PersonalAgentRow
-          | undefined);
+      : (db.prepare('SELECT * FROM personal_agents WHERE id = ?').get(id) as PersonalAgentRow | undefined);
     return row ? rowToPersonalAgent(row) : null;
   }
 

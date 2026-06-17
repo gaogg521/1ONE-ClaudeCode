@@ -113,11 +113,7 @@ const EnterpriseHome: React.FC = () => {
       repoCount: codeRepos.length,
     };
   }, [canViewOverviewMetrics]);
-  const metricsState = useEnterpriseAsyncData(
-    loadMetrics,
-    DEFAULT_METRICS,
-    '加载企业概览指标失败'
-  );
+  const metricsState = useEnterpriseAsyncData(loadMetrics, DEFAULT_METRICS, '加载企业概览指标失败');
 
   const metricExtraText = canViewOverviewMetrics
     ? {
@@ -133,10 +129,7 @@ const EnterpriseHome: React.FC = () => {
         repo: '当前角色暂无代码资产概览权限',
       };
 
-  const tenantLabel = resolveEnterpriseTenantDisplayLabel(
-    enterpriseContext?.tenantId,
-    enterpriseContext?.tenantName
-  );
+  const tenantLabel = resolveEnterpriseTenantDisplayLabel(enterpriseContext?.tenantId, enterpriseContext?.tenantName);
   const handleOpenModule = useCallback(
     (path: string) => {
       void navigate(path);
@@ -304,7 +297,10 @@ const EnterpriseHome: React.FC = () => {
         </Row>
       </ModuleDataState>
 
-      <Typography.Title heading={6} className='mt-0 mb-16px text-14px font-700 text-t-secondary uppercase tracking-wider'>
+      <Typography.Title
+        heading={6}
+        className='mt-0 mb-16px text-14px font-700 text-t-secondary uppercase tracking-wider'
+      >
         {t('settings.enterpriseConsole.capabilityTitle', { defaultValue: '研发智能工作台' })}
       </Typography.Title>
 
@@ -339,7 +335,10 @@ const EnterpriseHome: React.FC = () => {
       </Row>
 
       {/* 3. 极简、严谨的后台管理快捷菜单 ( Arcodegree Border & Rounded-12px ) */}
-      <Typography.Title heading={6} className='mt-0 mb-16px text-14px font-700 text-t-secondary uppercase tracking-wider'>
+      <Typography.Title
+        heading={6}
+        className='mt-0 mb-16px text-14px font-700 text-t-secondary uppercase tracking-wider'
+      >
         {t('settings.enterpriseConsole.menuTitle', { defaultValue: '组织管理与平台配置' })}
       </Typography.Title>
 
@@ -371,7 +370,11 @@ const EnterpriseHome: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <Right theme='outline' size='14' className='text-t-tertiary group-hover:text-primary transition-colors' />
+                <Right
+                  theme='outline'
+                  size='14'
+                  className='text-t-tertiary group-hover:text-primary transition-colors'
+                />
               </div>
             </Card>
           </Col>

@@ -451,9 +451,7 @@ export function initSchema(db: ISqliteDriver): void {
 export function applyTenantAwareIndexes(db: ISqliteDriver): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_tenant_id ON conversations(tenant_id)');
-  db.exec(
-    'CREATE INDEX IF NOT EXISTS idx_conversations_team_id ON conversations(tenant_id, team_id, updated_at DESC)'
-  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_team_id ON conversations(tenant_id, team_id, updated_at DESC)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_teams_tenant_id ON teams(tenant_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_team_memberships_user ON team_memberships(tenant_id, user_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_team_memberships_team ON team_memberships(tenant_id, team_id)');

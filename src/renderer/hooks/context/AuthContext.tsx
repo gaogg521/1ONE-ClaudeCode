@@ -20,10 +20,7 @@ import {
   setWebuiDesktopSession,
   type WebuiDesktopSession,
 } from '@/renderer/utils/webuiDesktopSession';
-import {
-  ONE_WEBUI_CLIENT_DESKTOP,
-  ONE_WEBUI_CLIENT_HEADER,
-} from '@/common/config/webuiClientHeaders';
+import { ONE_WEBUI_CLIENT_DESKTOP, ONE_WEBUI_CLIENT_HEADER } from '@/common/config/webuiClientHeaders';
 import { dispatchWebuiConfigRefresh } from '@/renderer/utils/webuiConfigSync';
 import { syncBrowserWebuiSessionToDesktop } from '@/renderer/utils/syncBrowserWebuiSession';
 import { rememberEnterpriseApiOrigin } from '@/renderer/utils/rememberEnterpriseApiOrigin';
@@ -405,211 +402,217 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     };
   }, [refresh]);
 
-  const login = useCallback(async ({ username, password, remember }: LoginParams): Promise<LoginResult> => {
-    try {
-      if (isDesktopRuntime) {
-        const result = await loginViaWebui('/login', { username, password, remember });
-        if (!result.success) {
+  const login = useCallback(
+    async ({ username, password, remember }: LoginParams): Promise<LoginResult> => {
+      try {
+        if (isDesktopRuntime) {
+          const result = await loginViaWebui('/login', { username, password, remember });
+          if (!result.success) {
+            return result;
+          }
+          if (result.user) {
+            clearAuthUserRequestBackoff();
+            setUser(result.user);
+            setStatus('authenticated');
+            setReady(true);
+            dispatchWebuiConfigRefresh();
+            window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+          } else {
+            await refresh();
+          }
           return result;
         }
-        if (result.user) {
-          clearAuthUserRequestBackoff();
-          setUser(result.user);
-          setStatus('authenticated');
-          setReady(true);
-          dispatchWebuiConfigRefresh();
-          window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
-        } else {
-          await refresh();
-        }
-        return result;
-      }
 
-      // Check CSRF token availability before login
-      // If token is missing, clear cache and inform user
-      const csrfTokenValid = hasValidCsrfToken();
-      if (!csrfTokenValid) {
-        console.warn('CSRF token missing or invalid, clearing cache');
-        clearAuthCache();
-        // Allow login to proceed anyway - server will set new token
-      }
-
-      // P1 安全修复：登录请求需要 CSRF Token / P1 Security fix: Login needs CSRF token
-      const response = await fetch('/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(withCsrfToken({ username, password, remember })),
-      });
-
-      const contentType = response.headers.get('content-type') ?? '';
-      if (!contentType.includes('application/json')) {
-        console.error('[Auth] Login response is not JSON:', contentType, response.status);
-        return {
-          success: false,
-          message: 'WebUI API unavailable. Ensure WebUI is running and refresh the page.',
-          code: 'serverError',
-        };
-      }
-
-      const data = (await response.json()) as {
-        success: boolean;
-        message?: string;
-        code?: string;
-        user?: AuthUser;
-        token?: string;
-      };
-
-      captureCsrfTokenFromResponse(response);
-
-      if (!response.ok || !data.success || !data.user) {
-        let code: LoginErrorCode = 'unknown';
-        let message = data?.message ?? 'Login failed';
-        let shouldClearCache = false;
-
-        if (data.code === 'db_unavailable' || response.status === 503) {
-          code = 'dbUnavailable';
-        } else if (response.status === 401) {
-          code = 'invalidCredentials';
-        } else if (response.status === 403) {
-          // CSRF validation failed - clear cache
-          code = 'csrfError';
-          message = 'Security token expired. Please try again.';
-          shouldClearCache = true;
-        } else if (response.status === 429) {
-          code = 'tooManyAttempts';
-        } else if (response.status >= 500) {
-          code = 'serverError';
-        } else if (!csrfTokenValid) {
-          // If we knew CSRF was invalid and login failed, suggest cache clear
-          code = 'csrfError';
-          message = 'Login failed due to cached data. Please clear your browser cache and try again.';
-          shouldClearCache = true;
-        }
-
-        // Clear cache on CSRF-related errors
-        if (shouldClearCache) {
+        // Check CSRF token availability before login
+        // If token is missing, clear cache and inform user
+        const csrfTokenValid = hasValidCsrfToken();
+        if (!csrfTokenValid) {
+          console.warn('CSRF token missing or invalid, clearing cache');
           clearAuthCache();
+          // Allow login to proceed anyway - server will set new token
+        }
+
+        // P1 安全修复：登录请求需要 CSRF Token / P1 Security fix: Login needs CSRF token
+        const response = await fetch('/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify(withCsrfToken({ username, password, remember })),
+        });
+
+        const contentType = response.headers.get('content-type') ?? '';
+        if (!contentType.includes('application/json')) {
+          console.error('[Auth] Login response is not JSON:', contentType, response.status);
+          return {
+            success: false,
+            message: 'WebUI API unavailable. Ensure WebUI is running and refresh the page.',
+            code: 'serverError',
+          };
+        }
+
+        const data = (await response.json()) as {
+          success: boolean;
+          message?: string;
+          code?: string;
+          user?: AuthUser;
+          token?: string;
+        };
+
+        captureCsrfTokenFromResponse(response);
+
+        if (!response.ok || !data.success || !data.user) {
+          let code: LoginErrorCode = 'unknown';
+          let message = data?.message ?? 'Login failed';
+          let shouldClearCache = false;
+
+          if (data.code === 'db_unavailable' || response.status === 503) {
+            code = 'dbUnavailable';
+          } else if (response.status === 401) {
+            code = 'invalidCredentials';
+          } else if (response.status === 403) {
+            // CSRF validation failed - clear cache
+            code = 'csrfError';
+            message = 'Security token expired. Please try again.';
+            shouldClearCache = true;
+          } else if (response.status === 429) {
+            code = 'tooManyAttempts';
+          } else if (response.status >= 500) {
+            code = 'serverError';
+          } else if (!csrfTokenValid) {
+            // If we knew CSRF was invalid and login failed, suggest cache clear
+            code = 'csrfError';
+            message = 'Login failed due to cached data. Please clear your browser cache and try again.';
+            shouldClearCache = true;
+          }
+
+          // Clear cache on CSRF-related errors
+          if (shouldClearCache) {
+            clearAuthCache();
+          }
+
+          return {
+            success: false,
+            message,
+            code,
+            shouldClearCache,
+          };
+        }
+
+        setUser(data.user);
+        setStatus('authenticated');
+        setReady(true);
+        clearAuthUserRequestBackoff();
+        if (data.token) {
+          persistDesktopSessionFromUser(data.user, data.token);
+        }
+        dispatchWebuiConfigRefresh();
+        window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+
+        // Re-enable WebSocket reconnection after successful login (WebUI mode only)
+        if (typeof window !== 'undefined' && (window as any).__websocketReconnect) {
+          (window as any).__websocketReconnect();
+        }
+
+        return { success: true, user: data.user };
+      } catch (error) {
+        console.error('Login request failed:', error);
+
+        // Check if error is related to CSRF token parsing
+        const errorMessage = (error as Error).message;
+        if (errorMessage?.includes('parse') || errorMessage?.includes('csrf') || errorMessage?.includes('cookie')) {
+          // CSRF or cookie parsing error - clear cache
+          clearAuthCache();
+          return {
+            success: false,
+            message: 'Login failed due to cached data. Please clear your browser cache and try again.',
+            code: 'csrfError',
+            shouldClearCache: true,
+          };
         }
 
         return {
           success: false,
-          message,
-          code,
-          shouldClearCache,
+          message: 'Network error. Please try again.',
+          code: 'networkError',
         };
       }
+    },
+    [refresh]
+  );
 
-      setUser(data.user);
-      setStatus('authenticated');
-      setReady(true);
-      clearAuthUserRequestBackoff();
-      if (data.token) {
-        persistDesktopSessionFromUser(data.user, data.token);
-      }
-      dispatchWebuiConfigRefresh();
-      window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+  const loginWithLdap = useCallback(
+    async ({ username, password }: LoginParams): Promise<LoginResult> => {
+      try {
+        const trimmedUsername = username.trim();
+        if (!trimmedUsername || !password) {
+          return { success: false, message: 'Username and password are required', code: 'unknown' };
+        }
 
-      // Re-enable WebSocket reconnection after successful login (WebUI mode only)
-      if (typeof window !== 'undefined' && (window as any).__websocketReconnect) {
-        (window as any).__websocketReconnect();
-      }
-
-      return { success: true, user: data.user };
-    } catch (error) {
-      console.error('Login request failed:', error);
-
-      // Check if error is related to CSRF token parsing
-      const errorMessage = (error as Error).message;
-      if (errorMessage?.includes('parse') || errorMessage?.includes('csrf') || errorMessage?.includes('cookie')) {
-        // CSRF or cookie parsing error - clear cache
-        clearAuthCache();
-        return {
-          success: false,
-          message: 'Login failed due to cached data. Please clear your browser cache and try again.',
-          code: 'csrfError',
-          shouldClearCache: true,
-        };
-      }
-
-      return {
-        success: false,
-        message: 'Network error. Please try again.',
-        code: 'networkError',
-      };
-    }
-  }, [refresh]);
-
-  const loginWithLdap = useCallback(async ({ username, password }: LoginParams): Promise<LoginResult> => {
-    try {
-      const trimmedUsername = username.trim();
-      if (!trimmedUsername || !password) {
-        return { success: false, message: 'Username and password are required', code: 'unknown' };
-      }
-
-      if (isDesktopRuntime) {
-        const result = await loginViaWebui('/api/auth/ldap/login', {
-          username: trimmedUsername,
-          password,
-        });
-        if (!result.success) {
+        if (isDesktopRuntime) {
+          const result = await loginViaWebui('/api/auth/ldap/login', {
+            username: trimmedUsername,
+            password,
+          });
+          if (!result.success) {
+            return result;
+          }
+          if (result.user) {
+            clearAuthUserRequestBackoff();
+            setUser(result.user);
+            setStatus('authenticated');
+            setReady(true);
+            dispatchWebuiConfigRefresh();
+            window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+          } else {
+            await refresh();
+          }
           return result;
         }
-        if (result.user) {
-          clearAuthUserRequestBackoff();
-          setUser(result.user);
-          setStatus('authenticated');
-          setReady(true);
-          dispatchWebuiConfigRefresh();
-          window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
-        } else {
-          await refresh();
+
+        const response = await fetch('/api/auth/ldap/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify(withCsrfToken({ username: trimmedUsername, password })),
+        });
+
+        const data = (await response.json().catch((): null => null)) as {
+          success?: boolean;
+          message?: string;
+          code?: string;
+          user?: AuthUser;
+        } | null;
+        if (!response.ok || !data?.success || !data?.user) {
+          let code: LoginErrorCode = 'unknown';
+          let message = data?.message ?? 'Login failed';
+          if (data?.code === 'db_unavailable' || response.status === 503) code = 'dbUnavailable';
+          else if (response.status === 401) code = 'invalidCredentials';
+          else if (response.status === 429) code = 'tooManyAttempts';
+          else if (response.status >= 500) code = 'serverError';
+          return { success: false, code, message };
         }
-        return result;
-      }
 
-      const response = await fetch('/api/auth/ldap/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(withCsrfToken({ username: trimmedUsername, password })),
-      });
-
-      const data = (await response.json().catch((): null => null)) as {
-        success?: boolean;
-        message?: string;
-        code?: string;
-        user?: AuthUser;
-      } | null;
-      if (!response.ok || !data?.success || !data?.user) {
-        let code: LoginErrorCode = 'unknown';
-        let message = data?.message ?? 'Login failed';
-        if (data?.code === 'db_unavailable' || response.status === 503) code = 'dbUnavailable';
-        else if (response.status === 401) code = 'invalidCredentials';
-        else if (response.status === 429) code = 'tooManyAttempts';
-        else if (response.status >= 500) code = 'serverError';
-        return { success: false, code, message };
+        setUser(data.user);
+        setStatus('authenticated');
+        setReady(true);
+        clearAuthUserRequestBackoff();
+        dispatchWebuiConfigRefresh();
+        window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+        if (typeof window !== 'undefined' && (window as any).__websocketReconnect) {
+          (window as any).__websocketReconnect();
+        }
+        return { success: true, user: data.user };
+      } catch (error) {
+        console.error('LDAP login request failed:', error);
+        return { success: false, message: 'Network error. Please try again.', code: 'networkError' };
       }
-
-      setUser(data.user);
-      setStatus('authenticated');
-      setReady(true);
-      clearAuthUserRequestBackoff();
-      dispatchWebuiConfigRefresh();
-      window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
-      if (typeof window !== 'undefined' && (window as any).__websocketReconnect) {
-        (window as any).__websocketReconnect();
-      }
-      return { success: true, user: data.user };
-    } catch (error) {
-      console.error('LDAP login request failed:', error);
-      return { success: false, message: 'Network error. Please try again.', code: 'networkError' };
-    }
-  }, [refresh]);
+    },
+    [refresh]
+  );
 
   const logout = useCallback(async (options?: LogoutOptions) => {
     const forceSignOut = options?.force === true;

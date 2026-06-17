@@ -60,13 +60,7 @@ vi.mock('@arco-design/web-react', () => ({
     placeholder?: string;
     value?: string;
     onChange?: (value: string) => void;
-  }) => (
-    <input
-      placeholder={placeholder}
-      value={value ?? ''}
-      onChange={(event) => onChange?.(event.target.value)}
-    />
-  ),
+  }) => <input placeholder={placeholder} value={value ?? ''} onChange={(event) => onChange?.(event.target.value)} />,
   Tag: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
   Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Spin: () => <div>loading</div>,

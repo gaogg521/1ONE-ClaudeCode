@@ -5,10 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  isOneMillionContextModel,
-  resolveAcpContextLimit,
-} from '@/common/utils/resolveAcpContextLimit';
+import { isOneMillionContextModel, resolveAcpContextLimit } from '@/common/utils/resolveAcpContextLimit';
 
 describe('resolveAcpContextLimit', () => {
   it('prefers 1M model limit when bridge reports 200K', () => {

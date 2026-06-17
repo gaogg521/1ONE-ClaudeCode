@@ -31,9 +31,7 @@ export const DEFAULT_AGENT_TOOLKIT_CONFIG: AgentToolkitConfig = {
   injectSkillsForAllAgents: true,
 };
 
-export function normalizeAgentToolkitConfig(
-  value: Partial<AgentToolkitConfig> | undefined | null
-): AgentToolkitConfig {
+export function normalizeAgentToolkitConfig(value: Partial<AgentToolkitConfig> | undefined | null): AgentToolkitConfig {
   if (!value || typeof value !== 'object') {
     return { ...DEFAULT_AGENT_TOOLKIT_CONFIG };
   }

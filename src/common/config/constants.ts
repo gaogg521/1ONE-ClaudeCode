@@ -68,4 +68,3 @@ export const GOOGLE_AUTH_PROVIDER_ID = 'google-auth-gemini';
 
 /** Mask placeholder for hidden passwords in UI/config (LDAP, SMTP, etc.) */
 export const PASSWORD_MASK = '******';
-

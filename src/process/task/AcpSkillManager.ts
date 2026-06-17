@@ -366,14 +366,18 @@ export class AcpSkillManager {
     // 如果 body 还没加载，现在加载
     if (skill.body === undefined) {
       try {
-        const runtimeFiles = skill.runtimeFiles && skill.runtimeFiles.length > 0 ? skill.runtimeFiles : [skill.location];
+        const runtimeFiles =
+          skill.runtimeFiles && skill.runtimeFiles.length > 0 ? skill.runtimeFiles : [skill.location];
         const parts = await Promise.all(
           runtimeFiles.map(async (runtimeFile) => {
             const content = await fs.readFile(runtimeFile, 'utf-8');
             return extractBody(content);
           })
         );
-        skill.body = parts.filter((part) => part.trim().length > 0).join('\n\n').trim();
+        skill.body = parts
+          .filter((part) => part.trim().length > 0)
+          .join('\n\n')
+          .trim();
       } catch (error) {
         console.warn(`[AcpSkillManager] Failed to load skill body for ${name}:`, error);
         skill.body = '';

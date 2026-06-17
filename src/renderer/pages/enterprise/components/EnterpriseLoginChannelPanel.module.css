@@ -133,9 +133,7 @@
   padding: 16px;
   border-radius: 14px;
   border: 1px solid rgba(var(--primary-6), 0.12);
-  background:
-    radial-gradient(circle at 100% 0%, rgba(var(--primary-6), 0.06), transparent 42%),
-    var(--color-bg-2);
+  background: radial-gradient(circle at 100% 0%, rgba(var(--primary-6), 0.06), transparent 42%), var(--color-bg-2);
 }
 
 .form {

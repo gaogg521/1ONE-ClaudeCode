@@ -10,8 +10,7 @@ import { getEnterpriseRouteMetaByPath } from '@/common/auth/enterpriseRoutes';
 export type LoginIntent = 'standalone-webui' | 'enterprise-member' | 'webui-admin';
 
 function sanitizeLoginReturnTo(returnTo: string): string {
-  const safeReturn =
-    returnTo && returnTo.startsWith('/') && !returnTo.startsWith('/login') ? returnTo : '/sessions';
+  const safeReturn = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('/login') ? returnTo : '/sessions';
   return safeReturn;
 }
 
@@ -40,9 +39,8 @@ export function buildWebuiAdminLoginPath(returnTo: string): string {
 
 export function buildEnterpriseRouteLoginPath(returnTo: string): string {
   const route = getEnterpriseRouteMetaByPath(returnTo);
-  const intent = route?.requiresRole === 'admin' || route?.requiresRole === 'system_admin'
-    ? 'webui-admin'
-    : 'enterprise-member';
+  const intent =
+    route?.requiresRole === 'admin' || route?.requiresRole === 'system_admin' ? 'webui-admin' : 'enterprise-member';
   return buildLoginPath(returnTo, intent);
 }
 

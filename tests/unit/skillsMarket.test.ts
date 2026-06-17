@@ -38,10 +38,7 @@ vi.mock('@process/extensions/resolvers/utils/skillMetadata', () => ({
  */
 
 // Path to the bundled SKILL.md in the project
-const BUNDLED_SKILL_PATH = path.resolve(
-  __dirname,
-  '../../src/process/resources/skills/_builtin/1one-skills/SKILL.md'
-);
+const BUNDLED_SKILL_PATH = path.resolve(__dirname, '../../src/process/resources/skills/_builtin/1one-skills/SKILL.md');
 
 describe('Skills Market - Bundled SKILL.md', () => {
   it('bundled SKILL.md file exists', async () => {

@@ -18,14 +18,10 @@ export async function countSystemAdmins(): Promise<number> {
   return UserRepository.countByRole('system_admin');
 }
 
-export async function getInstanceGovernance(
-  userRole: string | undefined
-): Promise<InstanceGovernanceSnapshot> {
+export async function getInstanceGovernance(userRole: string | undefined): Promise<InstanceGovernanceSnapshot> {
   const hasSystemAdmin = (await countSystemAdmins()) > 0;
   const canClaimSystemAdmin =
-    !hasSystemAdmin &&
-    !isSystemAdminRole(userRole) &&
-    (userRole === 'org_admin' || userRole === 'admin');
+    !hasSystemAdmin && !isSystemAdminRole(userRole) && (userRole === 'org_admin' || userRole === 'admin');
   return { hasSystemAdmin, canClaimSystemAdmin };
 }
 

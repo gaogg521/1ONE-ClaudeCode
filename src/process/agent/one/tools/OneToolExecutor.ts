@@ -216,11 +216,7 @@ export class OneToolExecutor {
   /**
    * Execute a tool (auto-approved or waits for manual approval)
    */
-  async executeTool(
-    id: string,
-    name: string,
-    args: Record<string, unknown>
-  ): Promise<ToolResult> {
+  async executeTool(id: string, name: string, args: Record<string, unknown>): Promise<ToolResult> {
     if (this.autoApprove) {
       return this.runTool(name, args);
     }
@@ -274,21 +270,11 @@ export class OneToolExecutor {
         case 'write_file':
           return await this.writeFile(args.file_path as string, args.content as string);
         case 'edit_file':
-          return await this.editFile(
-            args.file_path as string,
-            args.old_string as string,
-            args.new_string as string
-          );
+          return await this.editFile(args.file_path as string, args.old_string as string, args.new_string as string);
         case 'list_directory':
-          return await this.listDirectory(
-            args.directory_path as string,
-            args.recursive as boolean
-          );
+          return await this.listDirectory(args.directory_path as string, args.recursive as boolean);
         case 'execute_command':
-          return await this.executeCommand(
-            args.command as string,
-            (args.timeout as number) || 30000
-          );
+          return await this.executeCommand(args.command as string, (args.timeout as number) || 30000);
         case 'search_files':
           return await this.searchFiles(args.pattern as string, args.path as string);
         case 'view_code_item':
@@ -298,11 +284,11 @@ export class OneToolExecutor {
             args.symbol_type as string
           );
         default:
-        return {
-          success: false,
-          output: `Unknown tool: ${name}`,
-          outputType: 'text',
-        };
+          return {
+            success: false,
+            output: `Unknown tool: ${name}`,
+            outputType: 'text',
+          };
       }
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
@@ -336,11 +322,7 @@ export class OneToolExecutor {
     };
   }
 
-  private async editFile(
-    filePath: string,
-    oldString: string,
-    newString: string
-  ): Promise<ToolResult> {
+  private async editFile(filePath: string, oldString: string, newString: string): Promise<ToolResult> {
     const resolvedPath = this.resolvePath(filePath);
     let content = await fs.readFile(resolvedPath, 'utf-8');
 
@@ -424,11 +406,7 @@ export class OneToolExecutor {
     };
   }
 
-  private async viewCodeItem(
-    filePath: string,
-    symbolName: string,
-    symbolType: string
-  ): Promise<ToolResult> {
+  private async viewCodeItem(filePath: string, symbolName: string, symbolType: string): Promise<ToolResult> {
     // Simple implementation - just read the file and search for the symbol
     const resolvedPath = this.resolvePath(filePath);
     const content = await fs.readFile(resolvedPath, 'utf-8');

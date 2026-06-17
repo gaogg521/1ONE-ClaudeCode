@@ -112,32 +112,38 @@ export function registerTeamTasksRoutes(app: Express, middlewares: { rateLimit: 
    * Create team task
    * POST /api/team-tasks
    */
-  app.post('/api/team-tasks', middlewares.rateLimit, middlewares.auth, requireTeamAccess('member'), async (req, res) => {
-    const tenantId = req.user?.tenant_id ?? 'default';
-    const teamId = typeof req.body?.teamId === 'string' ? req.body.teamId : '';
-    const subject = typeof req.body?.subject === 'string' ? req.body.subject.trim() : '';
-    const description = typeof req.body?.description === 'string' ? req.body.description : null;
-    const owner = typeof req.body?.owner === 'string' ? req.body.owner : null;
+  app.post(
+    '/api/team-tasks',
+    middlewares.rateLimit,
+    middlewares.auth,
+    requireTeamAccess('member'),
+    async (req, res) => {
+      const tenantId = req.user?.tenant_id ?? 'default';
+      const teamId = typeof req.body?.teamId === 'string' ? req.body.teamId : '';
+      const subject = typeof req.body?.subject === 'string' ? req.body.subject.trim() : '';
+      const description = typeof req.body?.description === 'string' ? req.body.description : null;
+      const owner = typeof req.body?.owner === 'string' ? req.body.owner : null;
 
-    if (!teamId || !subject) {
-      res.status(400).json({ success: false, error: 'Missing teamId or subject' });
-      return;
-    }
+      if (!teamId || !subject) {
+        res.status(400).json({ success: false, error: 'Missing teamId or subject' });
+        return;
+      }
 
-    const now = Date.now();
-    const id = `teamtask_${randomUUID()}`;
-    const db = await getDatabase();
-    const driver = db.getDriver();
-    driver
-      .prepare(
-        `INSERT INTO team_tasks (id, tenant_id, team_id, subject, description, status, owner, blocked_by, blocks, metadata, created_at, updated_at)
+      const now = Date.now();
+      const id = `teamtask_${randomUUID()}`;
+      const db = await getDatabase();
+      const driver = db.getDriver();
+      driver
+        .prepare(
+          `INSERT INTO team_tasks (id, tenant_id, team_id, subject, description, status, owner, blocked_by, blocks, metadata, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, 'pending', ?, '[]', '[]', '{}', ?, ?)`
-      )
-      .run(id, tenantId, teamId, subject, description, owner, now, now);
+        )
+        .run(id, tenantId, teamId, subject, description, owner, now, now);
 
-    const row = driver.prepare('SELECT * FROM team_tasks WHERE tenant_id = ? AND id = ?').get(tenantId, id);
-    res.json({ success: true, data: row });
-  });
+      const row = driver.prepare('SELECT * FROM team_tasks WHERE tenant_id = ? AND id = ?').get(tenantId, id);
+      res.json({ success: true, data: row });
+    }
+  );
 
   /**
    * Update team task
@@ -174,7 +180,8 @@ export function registerTeamTasksRoutes(app: Express, middlewares: { rateLimit: 
       if (typeof updates.description === 'string' || updates.description === null)
         fields.push({ col: 'description', val: updates.description });
       if (typeof updates.status === 'string') fields.push({ col: 'status', val: updates.status });
-      if (typeof updates.owner === 'string' || updates.owner === null) fields.push({ col: 'owner', val: updates.owner });
+      if (typeof updates.owner === 'string' || updates.owner === null)
+        fields.push({ col: 'owner', val: updates.owner });
       if (typeof updates.metadata === 'object' && updates.metadata)
         fields.push({ col: 'metadata', val: JSON.stringify(updates.metadata) });
 
@@ -189,7 +196,9 @@ export function registerTeamTasksRoutes(app: Express, middlewares: { rateLimit: 
 
       const db = await getDatabase();
       const driver = db.getDriver();
-      driver.prepare(`UPDATE team_tasks SET ${setSql}, updated_at = ? WHERE tenant_id = ? AND id = ?`).run(...args, now, tenantId, id);
+      driver
+        .prepare(`UPDATE team_tasks SET ${setSql}, updated_at = ? WHERE tenant_id = ? AND id = ?`)
+        .run(...args, now, tenantId, id);
       const row = driver.prepare('SELECT * FROM team_tasks WHERE tenant_id = ? AND id = ?').get(tenantId, id);
       res.json({ success: true, data: row });
     }
@@ -229,4 +238,3 @@ export function registerTeamTasksRoutes(app: Express, middlewares: { rateLimit: 
     }
   );
 }
-

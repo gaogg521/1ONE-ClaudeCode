@@ -5,10 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  canAccessEnterpriseRouteRole,
-  getEnterpriseRouteMetaByKey,
-} from '@/common/auth/enterpriseRoutes';
+import { canAccessEnterpriseRouteRole, getEnterpriseRouteMetaByKey } from '@/common/auth/enterpriseRoutes';
 
 describe('canAccessEnterpriseRouteRole', () => {
   it('restricts system_admin-only routes to system_admin', () => {

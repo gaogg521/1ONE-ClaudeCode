@@ -19,9 +19,7 @@ export function buildPersonalAgentConversationExtra(
     personalAgentId: agent.id,
     ownerUserId,
     tenantId: agent.tenantId ?? 'default',
-    ...(bundle.preferredModelId && !baseExtra?.currentModelId
-      ? { currentModelId: bundle.preferredModelId }
-      : {}),
+    ...(bundle.preferredModelId && !baseExtra?.currentModelId ? { currentModelId: bundle.preferredModelId } : {}),
     presetContext: bundle.presetContext,
     presetRules: bundle.presetContext,
     ...(bundle.enabledSkills?.length ? { enabledSkills: bundle.enabledSkills } : {}),

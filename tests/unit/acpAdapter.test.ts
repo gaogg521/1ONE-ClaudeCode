@@ -292,7 +292,9 @@ describe('AcpAdapter - agent_message_chunk extraction', () => {
 
     expect(messages).toHaveLength(1);
     expect(messages[0].type).toBe('text');
-    expect((messages[0] as any).content.content).toContain('![Generated Image](data:image/png;base64,ZmFrZS1pbWFnZQ==)');
+    expect((messages[0] as any).content.content).toContain(
+      '![Generated Image](data:image/png;base64,ZmFrZS1pbWFnZQ==)'
+    );
     expect(warnSpy).not.toHaveBeenCalled();
   });
 

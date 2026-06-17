@@ -179,6 +179,13 @@ const AcpModelSelector: React.FC<{
         .then((result) => {
           if (result.success && result.data?.modelInfo) {
             setModelInfo(result.data.modelInfo);
+          } else if (!result.success) {
+            hasUserChangedModel.current = false;
+            void ipcBridge.acpConversation.getModelInfo.invoke({ conversationId }).then((info) => {
+              if (info.success && info.data?.modelInfo) {
+                setModelInfo(info.data.modelInfo);
+              }
+            });
           }
         })
         .catch((error) => {

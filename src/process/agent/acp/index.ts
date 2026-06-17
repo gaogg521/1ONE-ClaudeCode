@@ -641,7 +641,12 @@ export class AcpAgent {
   }
 
   // 发送消息到ACP服务器
-  async sendMessage(data: { content: string; agentPrompt?: string; files?: string[]; msg_id?: string }): Promise<AcpResult> {
+  async sendMessage(data: {
+    content: string;
+    agentPrompt?: string;
+    files?: string[];
+    msg_id?: string;
+  }): Promise<AcpResult> {
     const sendStart = Date.now();
     try {
       this.turnHasThought = false;
@@ -756,9 +761,7 @@ export class AcpAgent {
         }
       }
 
-      const webToolsReminder = webPrefetchApplied
-        ? null
-        : buildWebToolsReminderForUserMessage(processedContent);
+      const webToolsReminder = webPrefetchApplied ? null : buildWebToolsReminderForUserMessage(processedContent);
       if (webToolsReminder) {
         processedContent = webToolsReminder + processedContent;
       }
@@ -788,6 +791,32 @@ export class AcpAgent {
           return {
             success: false,
             error: createAcpError(AcpErrorType.AUTHENTICATION_FAILED, enhancedMsg, false),
+          };
+        }
+        if (
+          this.extra.backend === 'claude' &&
+          (errorMsg.includes('issue with the selected model') || errorMsg.includes('may not exist'))
+        ) {
+          const modelMatch = errorMsg.match(/\*\*([^*]+)\*\*/);
+          const failedModel = modelMatch?.[1] || this.userModelOverride || 'unknown';
+          this.userModelOverride = null;
+          this.pendingModelSwitchNotice = null;
+          const enhancedMsg =
+            `模型「${failedModel}」不可用：当前 Claude 账户/API 可能没有该模型权限（常见于 Sonnet/Opus 的 [1m] 长上下文版本）。` +
+            `请在顶部模型下拉框切换到不带 [1m] 的 Sonnet 或 Opus 后重试，并确认 Claude Code 已登录且订阅有效。`;
+          this.emitErrorMessage(enhancedMsg);
+          this.emitModelInfo();
+          if (this.onSignalEvent) {
+            this.onSignalEvent({
+              type: 'finish',
+              conversation_id: this.id,
+              msg_id: uuid(),
+              data: null,
+            });
+          }
+          return {
+            success: false,
+            error: createAcpError(AcpErrorType.UNKNOWN, enhancedMsg, false),
           };
         }
       }
@@ -1151,9 +1180,14 @@ export class AcpAgent {
         return;
       }
 
-      const command =
-        typeof data.toolCall.rawInput?.command === 'string' ? data.toolCall.rawInput.command : undefined;
+      const command = typeof data.toolCall.rawInput?.command === 'string' ? data.toolCall.rawInput.command : undefined;
       if (data.toolCall.kind === 'execute' && isReadOnlyUrlFetchCommand(command)) {
+        resolve({ optionId: pickAllowOnceOptionId(data.options) });
+        return;
+      }
+
+      // Read-only file/image access inside the workspace should not block the turn.
+      if (data.toolCall.kind === 'read') {
         resolve({ optionId: pickAllowOnceOptionId(data.options) });
         return;
       }
@@ -1341,12 +1375,12 @@ export class AcpAgent {
     const toolCallId = uuid();
     const title = result.kind === 'fetch' ? 'one_web_fetch' : 'one_web_search';
     const rawInput =
-      result.kind === 'fetch'
-        ? { url: result.url }
-        : { query: result.query, url: result.searchUrl || undefined };
+      result.kind === 'fetch' ? { url: result.url } : { query: result.query, url: result.searchUrl || undefined };
     const previewText =
       result.kind === 'fetch'
-        ? (result.text ? result.text.slice(0, 500) : `Fetched ${result.url}`)
+        ? result.text
+          ? result.text.slice(0, 500)
+          : `Fetched ${result.url}`
         : `${result.query}\n${result.text.slice(0, 400)}`;
 
     return {
@@ -1670,9 +1704,7 @@ export class AcpAgent {
       }
 
       // Web fetch/search for all ACP backends (Kimi, Claude, Codex, …) — no Google login
-      const webToolsServer = buildOneWebToolsAcpSessionMcpServer(
-        getBuiltinMcpScriptPath('builtin-mcp-web-tools')
-      );
+      const webToolsServer = buildOneWebToolsAcpSessionMcpServer(getBuiltinMcpScriptPath('builtin-mcp-web-tools'));
       if (!servers.some((s) => s.name === webToolsServer.name)) {
         servers.push(webToolsServer);
         mainLog(`[ACP ${this.extra.backend}]`, 'Injecting built-in web tools MCP (one-web-tools)');

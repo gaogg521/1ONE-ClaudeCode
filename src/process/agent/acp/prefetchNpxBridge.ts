@@ -4,11 +4,7 @@
 
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import {
-  CLAUDE_ACP_NPX_PACKAGE,
-  CODEBUDDY_ACP_NPX_PACKAGE,
-  CODEX_ACP_NPX_PACKAGE,
-} from '@/common/types/acpTypes';
+import { CLAUDE_ACP_NPX_PACKAGE, CODEBUDDY_ACP_NPX_PACKAGE, CODEX_ACP_NPX_PACKAGE } from '@/common/types/acpTypes';
 import { prepareCleanEnv } from '@process/agent/acp/acpConnectors';
 import { resolveNpxPath, getWindowsShellExecutionOptions } from '@process/utils/shellEnv';
 import type { PrefetchableNpxBackend } from '@/common/config/agentPrefetchBackends';

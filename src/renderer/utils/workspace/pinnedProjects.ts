@@ -10,7 +10,10 @@ export function readPinnedProjects(): string[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is string => typeof item === 'string').map(normalizeProjectPath).filter(Boolean);
+    return parsed
+      .filter((item): item is string => typeof item === 'string')
+      .map(normalizeProjectPath)
+      .filter(Boolean);
   } catch {
     return [];
   }

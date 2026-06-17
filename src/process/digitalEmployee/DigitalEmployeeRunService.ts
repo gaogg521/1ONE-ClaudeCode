@@ -10,10 +10,7 @@ import type { ICronAgentConfig } from '@/common/adapter/ipcBridge';
 import type { TProviderWithModel } from '@/common/config/storage';
 import { resolvePersonalAgentCronConfig } from '@/common/digitalEmployee/agentCronConfig';
 import { buildPersonalDigitalEmployeeCronPrompt } from '@/common/digitalEmployee/runPrompt';
-import {
-  appendDigitalEmployeeRunHistory,
-  type DigitalEmployeeRunRecord,
-} from '@/common/types/digitalEmployeeRunTypes';
+import { appendDigitalEmployeeRunHistory, type DigitalEmployeeRunRecord } from '@/common/types/digitalEmployeeRunTypes';
 import type { PersonalAgent } from '@/common/types/personalAgentTypes';
 import {
   buildAgentConversationParams,
@@ -140,9 +137,8 @@ export class DigitalEmployeeRunService {
 
     const isPreset = Boolean(
       agentConfig.isPreset &&
-        agentConfig.customAgentId &&
-        (agentConfig.backend === 'gemini' ||
-          (ACP_ROUTED_PRESET_TYPES as readonly string[]).includes(agentConfig.backend))
+      agentConfig.customAgentId &&
+      (agentConfig.backend === 'gemini' || (ACP_ROUTED_PRESET_TYPES as readonly string[]).includes(agentConfig.backend))
     );
 
     const params = buildAgentConversationParams({
@@ -163,9 +159,7 @@ export class DigitalEmployeeRunService {
         personalAgentId: agent.id,
         ownerUserId: agent.ownerUserId,
         tenantId: agent.tenantId ?? 'default',
-        ...(preset.presetContext
-          ? { presetContext: preset.presetContext, presetRules: preset.presetContext }
-          : {}),
+        ...(preset.presetContext ? { presetContext: preset.presetContext, presetRules: preset.presetContext } : {}),
         ...(preset.enabledSkills?.length ? { enabledSkills: preset.enabledSkills } : {}),
       },
     });
@@ -257,13 +251,10 @@ export class DigitalEmployeeRunService {
 
     const finishedAt = Date.now();
     const updateRecord = (record: DigitalEmployeeRunRecord): DigitalEmployeeRunRecord =>
-      record.runId === runId
-        ? { ...record, ...patch, finishedAt }
-        : record;
+      record.runId === runId ? { ...record, ...patch, finishedAt } : record;
 
     const lastRun = agent.automationConfig?.lastRun;
-    const nextLastRun =
-      lastRun && lastRun.runId === runId ? updateRecord(lastRun) : lastRun;
+    const nextLastRun = lastRun && lastRun.runId === runId ? updateRecord(lastRun) : lastRun;
 
     const history = Array.isArray(agent.automationConfig?.runHistory)
       ? agent.automationConfig.runHistory.map(updateRecord)

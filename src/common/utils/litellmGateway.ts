@@ -63,7 +63,9 @@ export function liteLlmOpenAiProtocolHeaders(): Record<string, string> {
   return { Api: 'openai-completions', Protocol: 'openai' };
 }
 
-export function shouldAttachLiteLlmOpenAiProtocolHeader(provider: { platform: string } & LiteLlmProbeProvider): boolean {
+export function shouldAttachLiteLlmOpenAiProtocolHeader(
+  provider: { platform: string } & LiteLlmProbeProvider
+): boolean {
   return isNewApiPlatform(provider.platform) || isProviderLiteLlmProxy(provider);
 }
 

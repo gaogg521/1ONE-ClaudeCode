@@ -28,8 +28,9 @@ function createResponseMock() {
 
 function getRouteHandler(app: express.Express, method: string, path: string): RequestHandler {
   const layer = app.router.stack.find(
-    (entry: { route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: RequestHandler }> } }) =>
-      entry.route?.path === path && entry.route?.methods?.[method]
+    (entry: {
+      route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: RequestHandler }> };
+    }) => entry.route?.path === path && entry.route?.methods?.[method]
   );
   return layer?.route?.stack?.at(-1)?.handle as RequestHandler;
 }

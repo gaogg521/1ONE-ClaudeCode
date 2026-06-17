@@ -21,14 +21,7 @@ import {
   Tag,
   Typography,
 } from '@arco-design/web-react';
-import {
-  EveryUser,
-  Lightning,
-  Plus,
-  Refresh,
-  Setting,
-  Delete,
-} from '@icon-park/react';
+import { EveryUser, Lightning, Plus, Refresh, Setting, Delete } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
 import {
@@ -313,10 +306,7 @@ const AdminKanban: React.FC = () => {
       }
     } catch (error) {
       Message.error(
-        getEnterpriseActionError(
-          error,
-          t('admin.kanban.message.loadFailed', { defaultValue: '加载看板需求数据失败' })
-        )
+        getEnterpriseActionError(error, t('admin.kanban.message.loadFailed', { defaultValue: '加载看板需求数据失败' }))
       );
     } finally {
       setLoading(false);
@@ -380,10 +370,7 @@ const AdminKanban: React.FC = () => {
       await loadRequirements();
     } catch (error) {
       Message.error(
-        getEnterpriseActionError(
-          error,
-          t('admin.kanban.message.createFailed', { defaultValue: '创建失败' })
-        )
+        getEnterpriseActionError(error, t('admin.kanban.message.createFailed', { defaultValue: '创建失败' }))
       );
     } finally {
       setSaving(false);
@@ -404,10 +391,7 @@ const AdminKanban: React.FC = () => {
       await loadRequirements();
     } catch (error) {
       Message.error(
-        getEnterpriseActionError(
-          error,
-          t('admin.kanban.message.createFailed', { defaultValue: '创建失败' })
-        )
+        getEnterpriseActionError(error, t('admin.kanban.message.createFailed', { defaultValue: '创建失败' }))
       );
     } finally {
       setSaving(false);
@@ -439,10 +423,7 @@ const AdminKanban: React.FC = () => {
       await loadRequirements();
     } catch (error) {
       Message.error(
-        getEnterpriseActionError(
-          error,
-          t('admin.kanban.message.deleteFailed', { defaultValue: '删除失败' })
-        )
+        getEnterpriseActionError(error, t('admin.kanban.message.deleteFailed', { defaultValue: '删除失败' }))
       );
     }
   };
@@ -474,9 +455,7 @@ const AdminKanban: React.FC = () => {
       setBatchImportJson('');
       await loadRequirements();
     } catch (error) {
-      setBatchImportError(
-        error instanceof SyntaxError ? 'JSON格式错误' : getEnterpriseActionError(error, '导入失败')
-      );
+      setBatchImportError(error instanceof SyntaxError ? 'JSON格式错误' : getEnterpriseActionError(error, '导入失败'));
     } finally {
       setSaving(false);
     }
@@ -543,9 +522,7 @@ const AdminKanban: React.FC = () => {
   const handleEpicMilestoneChange = async (epicId: string, milestoneId?: string) => {
     try {
       await updateRequirement(epicId, { milestone_id: milestoneId ?? null });
-      Message.success(
-        t('admin.kanban.message.milestoneBound', { defaultValue: '已更新版本里程碑绑定' })
-      );
+      Message.success(t('admin.kanban.message.milestoneBound', { defaultValue: '已更新版本里程碑绑定' }));
       await loadRequirements();
     } catch (error) {
       Message.error(
@@ -593,7 +570,9 @@ const AdminKanban: React.FC = () => {
             {t('admin.kanban.pageTitle', { defaultValue: 'CTeam 敏捷协同看板' })}
           </Typography.Title>
           <Typography.Paragraph type='secondary' className='mb-0 text-12px'>
-            {t('admin.kanban.pageDesc', { defaultValue: '企业级需求管理：树形拆解、敏捷任务状态流转，融合 AI 智能自动拆单技术。' })}
+            {t('admin.kanban.pageDesc', {
+              defaultValue: '企业级需求管理：树形拆解、敏捷任务状态流转，融合 AI 智能自动拆单技术。',
+            })}
           </Typography.Paragraph>
         </div>
         <Space>
@@ -759,7 +738,10 @@ const AdminKanban: React.FC = () => {
                     Modal.confirm({
                       title: t('admin.kanban.modal.newEpicTitle', { defaultValue: '创建新史诗' }),
                       content: (
-                        <Input id='new-epic-name' placeholder={t('admin.kanban.form.epicPlaceholder', { defaultValue: '史诗名称' })} />
+                        <Input
+                          id='new-epic-name'
+                          placeholder={t('admin.kanban.form.epicPlaceholder', { defaultValue: '史诗名称' })}
+                        />
                       ),
                       onOk: () => {
                         const input = document.getElementById('new-epic-name') as HTMLInputElement;
@@ -859,7 +841,10 @@ const AdminKanban: React.FC = () => {
                       </div>
 
                       {/* Card Items Container */}
-                      <div className='flex-1 overflow-y-auto flex flex-col gap-10px' style={{ maxHeight: 'calc(100vh - 280px)' }}>
+                      <div
+                        className='flex-1 overflow-y-auto flex flex-col gap-10px'
+                        style={{ maxHeight: 'calc(100vh - 280px)' }}
+                      >
                         {columnCards.length === 0 ? (
                           <div className='flex flex-col items-center justify-center py-40px border-2px border-dashed border-border-2 rd-8px text-t-tertiary text-12px'>
                             {t('admin.kanban.column.empty', { defaultValue: '拖拽卡片至此' })}
@@ -879,13 +864,16 @@ const AdminKanban: React.FC = () => {
                                     card.type === 'feature'
                                       ? 'rgb(var(--primary-6))'
                                       : card.type === 'bug'
-                                      ? 'rgb(var(--danger-6))'
-                                      : '#f59e0b',
+                                        ? 'rgb(var(--danger-6))'
+                                        : '#f59e0b',
                                 }}
                                 onClick={() => handleCardClick(card)}
                               >
                                 <div className='flex justify-between items-start gap-8px mb-6px'>
-                                  <Tag size='small' color={card.type === 'feature' ? 'arcoblue' : card.type === 'bug' ? 'red' : 'gray'}>
+                                  <Tag
+                                    size='small'
+                                    color={card.type === 'feature' ? 'arcoblue' : card.type === 'bug' ? 'red' : 'gray'}
+                                  >
                                     {card.type.toUpperCase()}
                                   </Tag>
                                   <Tag size='small' color={priority.color}>
@@ -945,7 +933,8 @@ const AdminKanban: React.FC = () => {
         <Form layout='vertical'>
           <Form.Item
             label={t('admin.kanban.batchImportPrompt', {
-              defaultValue: '粘贴需求 JSON 数组:\n[{"type":"story","subject":"标题","description":"描述","priority":"medium","status":"backlog"}]',
+              defaultValue:
+                '粘贴需求 JSON 数组:\n[{"type":"story","subject":"标题","description":"描述","priority":"medium","status":"backlog"}]',
             })}
           >
             <Input.TextArea
@@ -954,9 +943,7 @@ const AdminKanban: React.FC = () => {
               autoSize={{ minRows: 8, maxRows: 16 }}
             />
           </Form.Item>
-          {batchImportError ? (
-            <Typography.Text type='error'>{batchImportError}</Typography.Text>
-          ) : null}
+          {batchImportError ? <Typography.Text type='error'>{batchImportError}</Typography.Text> : null}
         </Form>
       </Modal>
 
@@ -972,7 +959,10 @@ const AdminKanban: React.FC = () => {
       >
         <Form layout='vertical'>
           <Form.Item label={t('admin.kanban.form.type', { defaultValue: '类别' })} required>
-            <Select value={createForm.type} onChange={(v) => setCreateForm((s) => ({ ...s, type: v as RequirementType }))}>
+            <Select
+              value={createForm.type}
+              onChange={(v) => setCreateForm((s) => ({ ...s, type: v as RequirementType }))}
+            >
               <Select.Option value='feature'>Feature (特性)</Select.Option>
               <Select.Option value='story'>User Story (用户故事)</Select.Option>
               <Select.Option value='task'>Development Task (技术任务)</Select.Option>
@@ -992,7 +982,10 @@ const AdminKanban: React.FC = () => {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item label={t('admin.kanban.form.priority', { defaultValue: '优先级' })}>
-                <Select value={createForm.priority} onChange={(v) => setCreateForm((s) => ({ ...s, priority: v as RequirementPriority }))}>
+                <Select
+                  value={createForm.priority}
+                  onChange={(v) => setCreateForm((s) => ({ ...s, priority: v as RequirementPriority }))}
+                >
                   <Select.Option value='low'>Low</Select.Option>
                   <Select.Option value='medium'>Medium</Select.Option>
                   <Select.Option value='high'>High</Select.Option>
@@ -1002,7 +995,10 @@ const AdminKanban: React.FC = () => {
             </Col>
             <Col span={12}>
               <Form.Item label={t('admin.kanban.form.status', { defaultValue: '看板泳道' })}>
-                <Select value={createForm.status} onChange={(v) => setCreateForm((s) => ({ ...s, status: v as RequirementStatus }))}>
+                <Select
+                  value={createForm.status}
+                  onChange={(v) => setCreateForm((s) => ({ ...s, status: v as RequirementStatus }))}
+                >
                   {KANBAN_STATUSES.map((s) => (
                     <Select.Option key={s.key} value={s.key}>
                       {t(s.labelKey, { defaultValue: s.defaultLabel })}
@@ -1027,7 +1023,8 @@ const AdminKanban: React.FC = () => {
       >
         <Typography.Paragraph type='secondary' className='mb-12px'>
           {t('admin.kanban.ai.desc', {
-            defaultValue: '请输入宏观业务需求描述。AI 研发助手将全自动：1. 创建 Feature 特性主卡；2. 深度分析并级联衍生出多级 User Story 开发卡，分别自动滑入相应的开发、设计看板中，大幅减少人工录入开销。',
+            defaultValue:
+              '请输入宏观业务需求描述。AI 研发助手将全自动：1. 创建 Feature 特性主卡；2. 深度分析并级联衍生出多级 User Story 开发卡，分别自动滑入相应的开发、设计看板中，大幅减少人工录入开销。',
           })}
         </Typography.Paragraph>
         <Form layout='vertical'>
@@ -1036,7 +1033,8 @@ const AdminKanban: React.FC = () => {
               value={aiInput}
               onChange={setAiInput}
               placeholder={t('admin.kanban.ai.placeholder', {
-                defaultValue: '例如：在1ONE Code 企业版中加一个 RAG 本地知识库。它需要有解析、切片、余弦搜索 playground，并补齐管理员角色边界与回归测试，最后确保没有回归。',
+                defaultValue:
+                  '例如：在1ONE Code 企业版中加一个 RAG 本地知识库。它需要有解析、切片、余弦搜索 playground，并补齐管理员角色边界与回归测试，最后确保没有回归。',
               })}
               autoSize={{ minRows: 4, maxRows: 8 }}
             />

@@ -343,10 +343,13 @@ const destroyTrayInstance = (): void => {
 };
 
 const createTrayInstance = (icon: Electron.NativeImage): void => {
-  const useStableGuid = process.platform === 'win32' && app.isPackaged;
-  if (useStableGuid) {
-    tray = new Tray(icon, WIN_TRAY_GUID);
-    return;
+  if (process.platform === 'win32') {
+    try {
+      tray = new Tray(icon, WIN_TRAY_GUID);
+      return;
+    } catch (guidError) {
+      console.warn('[Tray] GUID tray failed (unsigned dev builds may ignore GUID):', guidError);
+    }
   }
   tray = new Tray(icon);
 };
@@ -356,10 +359,7 @@ const createTrayInstance = (icon: Electron.NativeImage): void => {
  */
 export const createOrUpdateTray = (): void => {
   const canReuse =
-    process.platform !== 'win32' &&
-    tray &&
-    typeof tray.isDestroyed === 'function' &&
-    !tray.isDestroyed();
+    process.platform !== 'win32' && tray && typeof tray.isDestroyed === 'function' && !tray.isDestroyed();
   if (canReuse) {
     void refreshTrayMenu();
     return;
@@ -373,10 +373,7 @@ export const createOrUpdateTray = (): void => {
       return;
     }
 
-    const tooltip =
-      process.platform === 'win32'
-        ? '1ONE — 左键/双击显示窗口，右键菜单，Ctrl+Shift+O'
-        : '1one';
+    const tooltip = process.platform === 'win32' ? '1ONE — 左键/双击显示窗口，右键菜单，Ctrl+Shift+O' : '1one';
     tray.setToolTip(tooltip);
 
     bindTrayInteractionHandlers();
@@ -387,7 +384,7 @@ export const createOrUpdateTray = (): void => {
 
     const guid = typeof tray.getGUID === 'function' ? tray.getGUID() : null;
     console.log(
-      `[Tray] created platform=${process.platform} packaged=${app.isPackaged} guid=${guid ?? 'none'}`
+      `[Tray] created platform=${process.platform} packaged=${app.isPackaged} pid=${process.pid} guid=${guid ?? 'none'}`
     );
   } catch (err) {
     console.error('[Tray] Failed to create tray:', err);

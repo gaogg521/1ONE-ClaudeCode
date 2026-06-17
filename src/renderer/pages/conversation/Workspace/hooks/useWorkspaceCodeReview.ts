@@ -25,7 +25,11 @@ export interface ICodeReviewResult {
 interface UseWorkspaceCodeReviewResult {
   reviewResult: ICodeReviewResult | null;
   reviewing: boolean;
-  runCodeReview: (workspace: string, staged: Array<{ filePath: string }>, unstaged: Array<{ filePath: string }>) => Promise<void>;
+  runCodeReview: (
+    workspace: string,
+    staged: Array<{ filePath: string }>,
+    unstaged: Array<{ filePath: string }>
+  ) => Promise<void>;
   clearReview: () => void;
 }
 
@@ -51,14 +55,54 @@ export function useWorkspaceCodeReview(): UseWorkspaceCodeReviewResult {
         }
 
         const issues: ICodeReviewResult['issues'] = [];
-        const patterns: Array<{ regex: RegExp; severity: 'critical' | 'warning' | 'info'; title: string; desc: string }> = [
-          { regex: /console\.(log|warn|error|debug)/g, severity: 'warning', title: '残留控制台输出', desc: '发现 console 调试输出，建议移除以保持生产代码清洁' },
-          { regex: /any(?!\w)/g, severity: 'critical', title: '使用 any 类型', desc: '发现 TypeScript any 类型声明，破坏类型安全性' },
-          { regex: /TODO|FIXME|HACK/gi, severity: 'info', title: '遗留 TODO 标记', desc: '发现技术债务标记，建议记录为任务卡片' },
-          { regex: /\bvar\b/g, severity: 'warning', title: '使用 var 声明', desc: '建议使用 const/let 替代 var 以获得安全的块级作用域' },
-          { regex: /\.innerHTML\s*=/g, severity: 'critical', title: 'XSS安全风险', desc: '直接赋值 innerHTML 存在 XSS 安全风险，建议使用 textContent 或 DOMPurify' },
-          { regex: /setTimeout\([^,]+,\s*0\)/g, severity: 'warning', title: 'setTimeout(fn, 0) 反模式', desc: 'setTimeout(fn, 0) 是 Hack 写法，建议使用 Promise 微任务或 requestAnimationFrame 替代' },
-          { regex: /!\s*important/g, severity: 'info', title: 'CSS !important', desc: '使用 !important 覆盖样式可能导致维护困难' },
+        const patterns: Array<{
+          regex: RegExp;
+          severity: 'critical' | 'warning' | 'info';
+          title: string;
+          desc: string;
+        }> = [
+          {
+            regex: /console\.(log|warn|error|debug)/g,
+            severity: 'warning',
+            title: '残留控制台输出',
+            desc: '发现 console 调试输出，建议移除以保持生产代码清洁',
+          },
+          {
+            regex: /any(?!\w)/g,
+            severity: 'critical',
+            title: '使用 any 类型',
+            desc: '发现 TypeScript any 类型声明，破坏类型安全性',
+          },
+          {
+            regex: /TODO|FIXME|HACK/gi,
+            severity: 'info',
+            title: '遗留 TODO 标记',
+            desc: '发现技术债务标记，建议记录为任务卡片',
+          },
+          {
+            regex: /\bvar\b/g,
+            severity: 'warning',
+            title: '使用 var 声明',
+            desc: '建议使用 const/let 替代 var 以获得安全的块级作用域',
+          },
+          {
+            regex: /\.innerHTML\s*=/g,
+            severity: 'critical',
+            title: 'XSS安全风险',
+            desc: '直接赋值 innerHTML 存在 XSS 安全风险，建议使用 textContent 或 DOMPurify',
+          },
+          {
+            regex: /setTimeout\([^,]+,\s*0\)/g,
+            severity: 'warning',
+            title: 'setTimeout(fn, 0) 反模式',
+            desc: 'setTimeout(fn, 0) 是 Hack 写法，建议使用 Promise 微任务或 requestAnimationFrame 替代',
+          },
+          {
+            regex: /!\s*important/g,
+            severity: 'info',
+            title: 'CSS !important',
+            desc: '使用 !important 覆盖样式可能导致维护困难',
+          },
         ];
 
         for (const { file, diff } of diffs) {
@@ -70,7 +114,9 @@ export function useWorkspaceCodeReview(): UseWorkspaceCodeReviewResult {
                 severity: pattern.severity,
                 title: pattern.title,
                 description: pattern.desc,
-                suggestion: t('admin.codeReview.autoFixSuggestion', { defaultValue: '已自动扫描并标记该问题，建议人工确认后清理' }),
+                suggestion: t('admin.codeReview.autoFixSuggestion', {
+                  defaultValue: '已自动扫描并标记该问题，建议人工确认后清理',
+                }),
               });
             }
           }
@@ -83,7 +129,11 @@ export function useWorkspaceCodeReview(): UseWorkspaceCodeReviewResult {
         const score = Math.max(0, 100 - totalDeduction);
 
         const finalResult: ICodeReviewResult = {
-          summary: t('admin.codeReview.scannedFiles', { count: diffs.length, issueCount: issues.length, defaultValue: '已全面扫描 {{count}} 个变更文件，共发现 {{issueCount}} 个潜在质量与安全风险点' }),
+          summary: t('admin.codeReview.scannedFiles', {
+            count: diffs.length,
+            issueCount: issues.length,
+            defaultValue: '已全面扫描 {{count}} 个变更文件，共发现 {{issueCount}} 个潜在质量与安全风险点',
+          }),
           issues,
           score,
           generatedAt: Date.now(),

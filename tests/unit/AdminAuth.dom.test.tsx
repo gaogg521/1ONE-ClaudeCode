@@ -17,11 +17,7 @@ vi.mock('@arco-design/web-react', () => ({
 vi.mock('@/renderer/components/settings/SettingsModal/contents/AuthProvidersModalContent', () => ({
   default: (props: { visibleProviders?: string[] }) => {
     authProvidersModalContentMock(props);
-    return (
-      <div data-testid='auth-providers-content'>
-        {(props.visibleProviders || []).join(',')}
-      </div>
-    );
+    return <div data-testid='auth-providers-content'>{(props.visibleProviders || []).join(',')}</div>;
   },
 }));
 

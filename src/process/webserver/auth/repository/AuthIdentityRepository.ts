@@ -47,4 +47,3 @@ export const AuthIdentityRepository = {
     if (!res.success) throw new Error(res.error || 'Failed to unbind auth identity');
   },
 };
-

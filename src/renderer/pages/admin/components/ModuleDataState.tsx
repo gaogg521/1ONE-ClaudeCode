@@ -15,13 +15,7 @@ type ModuleDataStateProps = {
   children: React.ReactNode;
 };
 
-const ModuleDataState: React.FC<ModuleDataStateProps> = ({
-  loading,
-  error,
-  empty,
-  emptyDescription,
-  children,
-}) => {
+const ModuleDataState: React.FC<ModuleDataStateProps> = ({ loading, error, empty, emptyDescription, children }) => {
   if (loading) {
     return (
       <div className='flex justify-center py-40px'>

@@ -92,7 +92,9 @@ export async function migrateFromElectronConfig(configStore: ConfigStore): Promi
     // Decode — if result is empty, the file is missing/corrupted; do NOT set flag
     const sourceData = decodeConfigFile(sourcePath);
     if (Object.keys(sourceData).length === 0) {
-      console.warn('[1ONE ClaudeCode] Config migration: source file appears empty or corrupted, will retry next startup');
+      console.warn(
+        '[1ONE ClaudeCode] Config migration: source file appears empty or corrupted, will retry next startup'
+      );
       return;
     }
 

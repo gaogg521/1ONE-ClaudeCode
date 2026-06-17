@@ -143,11 +143,7 @@ vi.mock('@arco-design/web-react', () => {
     onChange?: (value: boolean) => void;
   }>) => (
     <label>
-      <input
-        type='checkbox'
-        checked={checked}
-        onChange={(event) => onChange?.(event.target.checked)}
-      />
+      <input type='checkbox' checked={checked} onChange={(event) => onChange?.(event.target.checked)} />
       {children}
     </label>
   );

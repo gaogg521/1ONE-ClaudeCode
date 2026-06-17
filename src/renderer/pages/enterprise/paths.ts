@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-  ENTERPRISE_JOIN_PATH,
-  ENTERPRISE_WORKSPACE_PATH,
-} from '@/common/auth/enterpriseRoles';
+import { ENTERPRISE_JOIN_PATH, ENTERPRISE_WORKSPACE_PATH } from '@/common/auth/enterpriseRoles';
 import {
   ENTERPRISE_AUTH_PATH,
   ENTERPRISE_CAGENT_PATH,

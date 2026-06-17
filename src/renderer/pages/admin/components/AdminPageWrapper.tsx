@@ -13,15 +13,10 @@ const AdminPageWrapper: React.FC<{
   contentClassName?: string;
 }> = ({ children, className, contentClassName }) => {
   return (
-    <PageContentShell
-      className={className}
-      contentClassName={contentClassName}
-      disableOverflow
-    >
+    <PageContentShell className={className} contentClassName={contentClassName} disableOverflow>
       {children}
     </PageContentShell>
   );
 };
 
 export default AdminPageWrapper;
-

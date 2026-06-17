@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-  appendDigitalEmployeeRunHistory,
-  type DigitalEmployeeRunRecord,
-} from '@/common/types/digitalEmployeeRunTypes';
+import { appendDigitalEmployeeRunHistory, type DigitalEmployeeRunRecord } from '@/common/types/digitalEmployeeRunTypes';
 
 export type DigitalEmployeeRunCarrier = {
   lastRun?: DigitalEmployeeRunRecord;
@@ -35,11 +32,7 @@ export function withFinishedDigitalEmployeeRun<T extends DigitalEmployeeRunCarri
     if (match.runId && record.runId === match.runId) {
       return true;
     }
-    if (
-      match.conversationId &&
-      record.conversationId === match.conversationId &&
-      record.status === 'running'
-    ) {
+    if (match.conversationId && record.conversationId === match.conversationId && record.status === 'running') {
       return true;
     }
     return false;

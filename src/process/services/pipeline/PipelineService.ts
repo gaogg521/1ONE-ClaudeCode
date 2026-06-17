@@ -34,9 +34,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function normalizeCommands(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value
-      .map((item) => (typeof item === 'string' ? item.trim() : ''))
-      .filter((item) => item.length > 0);
+    return value.map((item) => (typeof item === 'string' ? item.trim() : '')).filter((item) => item.length > 0);
   }
 
   if (typeof value === 'string') {
@@ -214,9 +212,7 @@ export class PipelineService {
     const driver = db.getDriver();
     const row = (
       tenantId
-        ? driver
-            .prepare('SELECT * FROM devops_pipelines WHERE id = ? AND tenant_id = ?')
-            .get(pipelineId, tenantId)
+        ? driver.prepare('SELECT * FROM devops_pipelines WHERE id = ? AND tenant_id = ?').get(pipelineId, tenantId)
         : driver.prepare('SELECT * FROM devops_pipelines WHERE id = ?').get(pipelineId)
     ) as IPipeline | undefined;
     return row ?? null;
@@ -287,15 +283,7 @@ export class PipelineService {
          SET name = ?, associated_team_id = ?, definition_json = ?, enabled = ?, updated_at = ?
          WHERE id = ? AND tenant_id = ?`
       )
-      .run(
-        params.name,
-        associatedTeamId,
-        definitionJson,
-        enabled,
-        updatedAt,
-        params.pipelineId,
-        tenantId
-      );
+      .run(params.name, associatedTeamId, definitionJson, enabled, updatedAt, params.pipelineId, tenantId);
 
     return {
       ...existing,
@@ -482,7 +470,9 @@ export class PipelineService {
         logger.append(`>>> Stage [${stage.name}] failed (Duration: ${stageStatusObj.duration_ms}ms)\n\n`);
       } else {
         stageStatusObj.status = 'success';
-        logger.append(`>>> Stage [${stage.name}] completed successfully (Duration: ${stageStatusObj.duration_ms}ms)\n\n`);
+        logger.append(
+          `>>> Stage [${stage.name}] completed successfully (Duration: ${stageStatusObj.duration_ms}ms)\n\n`
+        );
       }
 
       // Update stages_status_json in DB

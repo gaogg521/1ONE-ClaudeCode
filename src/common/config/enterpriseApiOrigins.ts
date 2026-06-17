@@ -30,10 +30,7 @@ export function normalizeEnterpriseApiOrigin(url: string): string | null {
   return normalizeOrigin(url);
 }
 
-export function mergeEnterpriseApiOrigins(
-  stored: string[] | undefined,
-  candidates: string[]
-): string[] {
+export function mergeEnterpriseApiOrigins(stored: string[] | undefined, candidates: string[]): string[] {
   const merged: string[] = [];
   for (const value of [...(stored ?? []), ...candidates]) {
     const origin = normalizeOrigin(value);

@@ -55,7 +55,9 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
 
     if (variant === 'grid') {
       return (
-        <div className={`flex min-h-[154px] flex-col rounded-12px border border-solid border-[var(--color-border-2)] p-12px transition-colors hover:border-[var(--color-border-3)] ${enabled ? 'bg-[var(--color-bg-2)]' : 'bg-[var(--color-fill-1)] opacity-70'}`}>
+        <div
+          className={`flex min-h-[154px] flex-col rounded-12px border border-solid border-[var(--color-border-2)] p-12px transition-colors hover:border-[var(--color-border-3)] ${enabled ? 'bg-[var(--color-bg-2)]' : 'bg-[var(--color-fill-1)] opacity-70'}`}
+        >
           <div className='mb-10px flex justify-center relative'>
             <Avatar size={40} shape='square' style={{ flexShrink: 0, backgroundColor: 'transparent' }}>
               {logo ? <img src={logo} alt={agent.name} className='h-full w-full object-contain' /> : '🤖'}
@@ -68,7 +70,9 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
           </div>
 
           <div className='mb-10px flex-1 text-center'>
-            <Typography.Text className={`block text-13px font-medium leading-18px line-clamp-2 ${enabled ? '' : 'text-t-secondary'}`}>
+            <Typography.Text
+              className={`block text-13px font-medium leading-18px line-clamp-2 ${enabled ? '' : 'text-t-secondary'}`}
+            >
               {agent.name}
             </Typography.Text>
             <Typography.Text className='mt-4px block text-11px text-t-secondary'>
@@ -92,12 +96,16 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
     }
 
     return (
-      <div className={`flex items-center justify-between px-16px py-10px rd-8px ${enabled ? 'bg-aou-1 hover:bg-aou-2' : 'bg-fill-1 opacity-70'}`}>
+      <div
+        className={`flex items-center justify-between px-16px py-10px rd-8px ${enabled ? 'bg-aou-1 hover:bg-aou-2' : 'bg-fill-1 opacity-70'}`}
+      >
         <div className='flex items-center gap-12px min-w-0 flex-1'>
           <Avatar size={32} shape='square' style={{ flexShrink: 0, backgroundColor: 'transparent' }}>
             {logo ? <img src={logo} alt={agent.name} className='w-full h-full object-contain' /> : '🤖'}
           </Avatar>
-          <Typography.Text className={`font-medium text-14px ${enabled ? '' : 'text-t-secondary'}`}>{agent.name}</Typography.Text>
+          <Typography.Text className={`font-medium text-14px ${enabled ? '' : 'text-t-secondary'}`}>
+            {agent.name}
+          </Typography.Text>
         </div>
         <div className='flex items-center gap-8px'>
           {onToggle && <Switch size='small' checked={enabled} onChange={onToggle} />}

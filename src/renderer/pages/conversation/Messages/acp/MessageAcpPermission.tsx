@@ -48,8 +48,7 @@ const MessageAcpPermission: React.FC<MessageAcpPermissionProps> = React.memo(({ 
     };
   };
   const { title, icon } = getToolInfo();
-  const commandText =
-    typeof toolCall?.rawInput?.command === 'string' ? toolCall.rawInput.command : undefined;
+  const commandText = typeof toolCall?.rawInput?.command === 'string' ? toolCall.rawInput.command : undefined;
   const showWebToolsHint = isReadOnlyUrlFetchCommand(commandText);
   const [selected, setSelected] = useState<string | null>(null);
   const [isResponding, setIsResponding] = useState(false);
@@ -103,9 +102,7 @@ const MessageAcpPermission: React.FC<MessageAcpPermissionProps> = React.memo(({ 
             </code>
           </div>
         )}
-        {showWebToolsHint && (
-          <Text className='text-xs text-t-secondary'>{t('messages.permissionWebFetchHint')}</Text>
-        )}
+        {showWebToolsHint && <Text className='text-xs text-t-secondary'>{t('messages.permissionWebFetchHint')}</Text>}
         {!hasResponded && (
           <>
             <div className='mt-10px'>{t('messages.chooseAction')}</div>

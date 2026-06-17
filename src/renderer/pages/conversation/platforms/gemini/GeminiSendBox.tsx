@@ -26,8 +26,12 @@ import { allSupportedExts } from '@/renderer/services/FileService';
 import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
 import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiveWorkspace';
-import { buildDisplayMessage, collectSelectedFiles } from '@/renderer/utils/file/messageFiles';
-import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
+import { collectSelectedFiles } from '@/renderer/utils/file/messageFiles';
+import {
+  finalizeUserMessageAfterSend,
+  prepareUserMessageSend,
+  publishOptimisticUserMessage,
+} from '@/renderer/utils/file/sentMessageDisplay';
 import { getModelContextLimit } from '@/renderer/utils/model/modelContextLimits';
 import { Message, Tag } from '@arco-design/web-react';
 import { Shield } from '@icon-park/react';
@@ -153,6 +157,7 @@ const GeminiSendBox: React.FC<{
     currentModelId: currentModel?.useModel,
     hasNoAuth,
     setContent,
+    setUploadFile,
     setActiveMsgId,
     setWaitingResponse,
     autoSwitchTriggeredRef,
@@ -233,31 +238,26 @@ const GeminiSendBox: React.FC<{
       setActiveMsgId(msg_id);
       setWaitingResponse(true);
 
-      const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
-      addOrUpdateMessage(
-        {
-          id: msg_id,
-          type: 'text',
-          position: 'right',
-          conversation_id,
-          content: {
-            content: displayMessage,
-          },
-          createdAt: Date.now(),
-        },
-        true
-      );
+      const prepared = prepareUserMessageSend(input, files, effectiveWorkspace, msg_id, conversation_id);
+      publishOptimisticUserMessage(addOrUpdateMessage, prepared.optimisticMessage);
 
       try {
         void checkAndUpdateTitle(conversation_id, input);
         const result = await ipcBridge.geminiConversation.sendMessage.invoke({
-          input: displayMessage,
+          input: prepared.displayMessage,
           msg_id,
           conversation_id,
           files,
         });
         assertBridgeSuccess(result, 'Failed to send message to Gemini');
-        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
+        finalizeUserMessageAfterSend(
+          addOrUpdateMessage,
+          conversation_id,
+          msg_id,
+          result,
+          prepared.displayMessage,
+          prepared
+        );
         emitter.emit('chat.history.refresh');
         if (files.length > 0) {
           emitter.emit('gemini.workspace.refresh');
@@ -446,6 +446,7 @@ const GeminiSendBox: React.FC<{
                   <FilePreview
                     key={path}
                     path={path}
+                    conversationId={conversation_id}
                     onRemove={() => setUploadFile(uploadFile.filter((v) => v !== path))}
                   />
                 ))}
@@ -457,6 +458,7 @@ const GeminiSendBox: React.FC<{
                       <FilePreview
                         key={path}
                         path={path}
+                        conversationId={conversation_id}
                         onRemove={() => {
                           const newAtPath = atPath.filter((v) =>
                             typeof v === 'string' ? v !== path : v.path !== path

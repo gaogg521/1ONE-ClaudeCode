@@ -250,7 +250,7 @@ export class SpeechToTextService {
           ? await this.transcribeWithOpenAI(config, request)
           : config.provider === 'custom'
             ? await this.transcribeWithCustom(config, request)
-          : await this.transcribeWithDeepgram(config, request);
+            : await this.transcribeWithDeepgram(config, request);
 
       mainLog(STT_LOG_TAG, 'Transcription completed', {
         requestId,

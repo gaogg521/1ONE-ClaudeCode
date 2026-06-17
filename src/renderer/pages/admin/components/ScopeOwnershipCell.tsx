@@ -20,12 +20,24 @@ function renderScopeTag(
   t: (key: string, options?: { defaultValue?: string }) => string
 ): React.ReactNode {
   if (scope === 'organization') {
-    return <Tag size='small' color='arcoblue'>{t('admin.scope.organization', { defaultValue: '组织共享' })}</Tag>;
+    return (
+      <Tag size='small' color='arcoblue'>
+        {t('admin.scope.organization', { defaultValue: '组织共享' })}
+      </Tag>
+    );
   }
   if (scope === 'team') {
-    return <Tag size='small' color='green'>{t('admin.scope.team', { defaultValue: '团队共享' })}</Tag>;
+    return (
+      <Tag size='small' color='green'>
+        {t('admin.scope.team', { defaultValue: '团队共享' })}
+      </Tag>
+    );
   }
-  return <Tag size='small' color='gray'>{t('admin.scope.personal', { defaultValue: '个人' })}</Tag>;
+  return (
+    <Tag size='small' color='gray'>
+      {t('admin.scope.personal', { defaultValue: '个人' })}
+    </Tag>
+  );
 }
 
 const ScopeOwnershipCell: React.FC<ScopeOwnershipCellProps> = ({ scope, teamId, createdBy, getTeamName }) => {

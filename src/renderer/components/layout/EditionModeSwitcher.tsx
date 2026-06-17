@@ -112,7 +112,9 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
     if (variant === 'compact') {
       return (
         <div className={styles.compact}>
-          <Tag size='small' color='arcoblue'>{enterpriseTagLabel}</Tag>
+          <Tag size='small' color='arcoblue'>
+            {enterpriseTagLabel}
+          </Tag>
           {showEnterpriseAdminNav ? (
             <Button size='mini' type='text' onClick={() => void openAdminConsole()}>
               {enterpriseAdminConsoleLabel}
@@ -142,7 +144,9 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
   const enterpriseLabel = t('settings.edition.enterprise', { defaultValue: '企业团队版' });
   const helpContent = (
     <div className={styles.helpPopover}>
-      <p className={styles.helpTitle}>{t('settings.edition.helpTitle', { defaultValue: '个人版 / 企业团队版 / 管理后台 区别' })}</p>
+      <p className={styles.helpTitle}>
+        {t('settings.edition.helpTitle', { defaultValue: '个人版 / 企业团队版 / 管理后台 区别' })}
+      </p>
       <p className={styles.helpP}>
         {t('settings.edition.helpPersonal', {
           defaultValue: '个人版：本机/自己的账号与数据，界面即当前会话工作区。',
@@ -150,8 +154,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
       </p>
       <p className={styles.helpP}>
         {t('settings.edition.helpEnterprise', {
-          defaultValue:
-            '企业团队版：同一套工作区，但以企业身份使用（需先加入）。界面不会变成「管理页」。',
+          defaultValue: '企业团队版：同一套工作区，但以企业身份使用（需先加入）。界面不会变成「管理页」。',
         })}
       </p>
       <p className={styles.helpP}>
@@ -189,7 +192,11 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
           </Button>
         ) : null}
         <Popover position='bottom' content={helpContent}>
-          <button type='button' className={styles.helpBtn} aria-label={t('settings.edition.helpTitle', { defaultValue: '版本说明' })}>
+          <button
+            type='button'
+            className={styles.helpBtn}
+            aria-label={t('settings.edition.helpTitle', { defaultValue: '版本说明' })}
+          >
             <Help theme='outline' size={14} fill='currentColor' />
           </button>
         </Popover>
@@ -200,78 +207,76 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
   return (
     <div className={styles.bar}>
       <div className={styles.barTop}>
-      <div className={styles.barLeft}>
-        <span className={styles.barTitle}>
-          {t('settings.edition.switchTitle', { defaultValue: '工作区版本' })}
-        </span>
-        <Popover position='bottom' content={helpContent}>
-          <button type='button' className={styles.helpBtn} aria-label={t('settings.edition.helpTitle', { defaultValue: '版本说明' })}>
-            <Help theme='outline' size={14} fill='currentColor' />
-          </button>
-        </Popover>
-        <Radio.Group
-          type='button'
-          value={activeEdition}
-          onChange={(v) => switchEdition(v as WebuiManagementMode)}
-        >
-          <Radio value='standalone'>
-            {personalLabel}
-            <span className={styles.radioSub}>
-              {t('settings.edition.personalSub', { defaultValue: '个人身份 · 本机会话' })}
-            </span>
-          </Radio>
-          <Tooltip content={enterpriseEditionDisabled ? enterpriseDisabledHint : undefined}>
-            <Radio value='enterprise' disabled={enterpriseEditionDisabled}>
-              {enterpriseLabel}
+        <div className={styles.barLeft}>
+          <span className={styles.barTitle}>{t('settings.edition.switchTitle', { defaultValue: '工作区版本' })}</span>
+          <Popover position='bottom' content={helpContent}>
+            <button
+              type='button'
+              className={styles.helpBtn}
+              aria-label={t('settings.edition.helpTitle', { defaultValue: '版本说明' })}
+            >
+              <Help theme='outline' size={14} fill='currentColor' />
+            </button>
+          </Popover>
+          <Radio.Group type='button' value={activeEdition} onChange={(v) => switchEdition(v as WebuiManagementMode)}>
+            <Radio value='standalone'>
+              {personalLabel}
               <span className={styles.radioSub}>
-                {hasJoinedEnterprise
-                  ? t('settings.edition.enterpriseSubJoined', {
-                      defaultValue: '公司身份 · 同一工作区',
-                      tenant: tenantLabel ?? '',
-                    })
-                  : t('settings.edition.enterpriseSubInvite', { defaultValue: '需登录或邀请码' })}
+                {t('settings.edition.personalSub', { defaultValue: '个人身份 · 本机会话' })}
               </span>
             </Radio>
-          </Tooltip>
-        </Radio.Group>
-        {!hasInstanceEnterprise ? (
-          <Tag size='small' color='orangered'>
-            {t('settings.edition.needInvite', { defaultValue: '未加入企业' })}
-          </Tag>
-        ) : !hasJoinedEnterprise ? (
-          <Tag size='small' color='gold'>
-            {t('settings.edition.instanceConnected', {
-              defaultValue: '实例已接入 · 待登录',
+            <Tooltip content={enterpriseEditionDisabled ? enterpriseDisabledHint : undefined}>
+              <Radio value='enterprise' disabled={enterpriseEditionDisabled}>
+                {enterpriseLabel}
+                <span className={styles.radioSub}>
+                  {hasJoinedEnterprise
+                    ? t('settings.edition.enterpriseSubJoined', {
+                        defaultValue: '公司身份 · 同一工作区',
+                        tenant: tenantLabel ?? '',
+                      })
+                    : t('settings.edition.enterpriseSubInvite', { defaultValue: '需登录或邀请码' })}
+                </span>
+              </Radio>
+            </Tooltip>
+          </Radio.Group>
+          {!hasInstanceEnterprise ? (
+            <Tag size='small' color='orangered'>
+              {t('settings.edition.needInvite', { defaultValue: '未加入企业' })}
+            </Tag>
+          ) : !hasJoinedEnterprise ? (
+            <Tag size='small' color='gold'>
+              {t('settings.edition.instanceConnected', {
+                defaultValue: '实例已接入 · 待登录',
+              })}
+            </Tag>
+          ) : (
+            <Tag size='small' color='arcoblue'>
+              {tenantLabel || t('settings.edition.joined', { defaultValue: '已加入' })}
+            </Tag>
+          )}
+        </div>
+        {showEnterpriseAdminNav ? (
+          <Tooltip
+            content={t('settings.edition.adminConsoleHint', {
+              defaultValue: '企业团队版管理后台（成员、LDAP、邀请码、邮件）与上方「企业团队版」工作区是独立入口。',
             })}
-          </Tag>
-        ) : (
-          <Tag size='small' color='arcoblue'>
-            {tenantLabel || t('settings.edition.joined', { defaultValue: '已加入' })}
-          </Tag>
-        )}
-      </div>
-      {showEnterpriseAdminNav ? (
-        <Tooltip
-          content={t('settings.edition.adminConsoleHint', {
-            defaultValue: '企业团队版管理后台（成员、LDAP、邀请码、邮件）与上方「企业团队版」工作区是独立入口。',
-          })}
-        >
-          <Button size='small' type='outline' onClick={() => void openAdminConsole()}>
-            {enterpriseAdminConsoleLabel}
-          </Button>
-        </Tooltip>
-      ) : null}
-      {isDesktop && activeEdition === 'enterprise' && !hasJoinedEnterprise && !showEnterpriseAdminNav ? (
-        <Tooltip
-          content={t('settings.edition.desktopLoginHint', {
-            defaultValue: '桌面端需先在浏览器完成组织账号登录，再回到此页加入企业。',
-          })}
-        >
-          <Button size='small' type='text' onClick={handleEnterpriseLogin}>
-            {t('settings.edition.openLogin', { defaultValue: '登录企业账号' })}
-          </Button>
-        </Tooltip>
-      ) : null}
+          >
+            <Button size='small' type='outline' onClick={() => void openAdminConsole()}>
+              {enterpriseAdminConsoleLabel}
+            </Button>
+          </Tooltip>
+        ) : null}
+        {isDesktop && activeEdition === 'enterprise' && !hasJoinedEnterprise && !showEnterpriseAdminNav ? (
+          <Tooltip
+            content={t('settings.edition.desktopLoginHint', {
+              defaultValue: '桌面端需先在浏览器完成组织账号登录，再回到此页加入企业。',
+            })}
+          >
+            <Button size='small' type='text' onClick={handleEnterpriseLogin}>
+              {t('settings.edition.openLogin', { defaultValue: '登录企业账号' })}
+            </Button>
+          </Tooltip>
+        ) : null}
       </div>
     </div>
   );

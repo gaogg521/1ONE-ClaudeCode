@@ -5,7 +5,19 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Form, Input, Message, Modal, Popconfirm, Select, Space, Table, Tag } from '@arco-design/web-react';
+import {
+  Button,
+  Card,
+  Form,
+  Input,
+  Message,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+} from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
 import { getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
@@ -175,7 +187,9 @@ const AdminTeams: React.FC = () => {
         Message.success(t('admin.teams.messages.deleted', { defaultValue: '已删除' }));
         await tasksState.reload();
       } catch (e) {
-        Message.error(getEnterpriseActionError(e, t('admin.teams.messages.deleteFailed', { defaultValue: '删除失败' })));
+        Message.error(
+          getEnterpriseActionError(e, t('admin.teams.messages.deleteFailed', { defaultValue: '删除失败' }))
+        );
       } finally {
         setSaving(false);
       }
@@ -191,7 +205,9 @@ const AdminTeams: React.FC = () => {
         await updateTeamTask(taskId, { status });
         await tasksState.reload();
       } catch (e) {
-        Message.error(getEnterpriseActionError(e, t('admin.teams.messages.updateFailed', { defaultValue: '更新失败' })));
+        Message.error(
+          getEnterpriseActionError(e, t('admin.teams.messages.updateFailed', { defaultValue: '更新失败' }))
+        );
       } finally {
         setSaving(false);
       }
@@ -214,7 +230,9 @@ const AdminTeams: React.FC = () => {
         setAddVisible(false);
         await membersState.reload();
       } catch (e) {
-        Message.error(getEnterpriseActionError(e, t('admin.teams.messages.operationFailed', { defaultValue: '操作失败' })));
+        Message.error(
+          getEnterpriseActionError(e, t('admin.teams.messages.operationFailed', { defaultValue: '操作失败' }))
+        );
         throw e;
       } finally {
         setSaving(false);
@@ -232,7 +250,9 @@ const AdminTeams: React.FC = () => {
         Message.success(t('admin.teams.messages.roleUpdated', { defaultValue: '角色已更新' }));
         await membersState.reload();
       } catch (e) {
-        Message.error(getEnterpriseActionError(e, t('admin.teams.messages.updateFailed', { defaultValue: '更新失败' })));
+        Message.error(
+          getEnterpriseActionError(e, t('admin.teams.messages.updateFailed', { defaultValue: '更新失败' }))
+        );
       } finally {
         setSaving(false);
       }
@@ -249,7 +269,9 @@ const AdminTeams: React.FC = () => {
         Message.success(t('admin.teams.messages.memberRemoved', { defaultValue: '成员已移除' }));
         await membersState.reload();
       } catch (e) {
-        Message.error(getEnterpriseActionError(e, t('admin.teams.messages.removeFailed', { defaultValue: '移除失败' })));
+        Message.error(
+          getEnterpriseActionError(e, t('admin.teams.messages.removeFailed', { defaultValue: '移除失败' }))
+        );
       } finally {
         setSaving(false);
       }
@@ -272,7 +294,12 @@ const AdminTeams: React.FC = () => {
         title: t('admin.teams.table.actions', { defaultValue: '操作' }),
         render: (_: unknown, r: TeamMemberRow) => (
           <Space size='mini'>
-            <Select size='mini' value={r.role} style={{ width: 110 }} onChange={(v) => void handleUpdateRole(r.user_id, v as any)}>
+            <Select
+              size='mini'
+              value={r.role}
+              style={{ width: 110 }}
+              onChange={(v) => void handleUpdateRole(r.user_id, v as any)}
+            >
               <Select.Option value='owner'>Owner</Select.Option>
               <Select.Option value='admin'>Admin</Select.Option>
               <Select.Option value='member'>Member</Select.Option>
@@ -316,7 +343,10 @@ const AdminTeams: React.FC = () => {
       {
         title: t('admin.teams.table.actions', { defaultValue: '操作' }),
         render: (_: unknown, r: TeamTaskRow) => (
-          <Popconfirm title={t('admin.teams.confirm.deleteTask', { defaultValue: '确定删除该任务？' })} onOk={() => void handleDeleteTeamTask(r.id)}>
+          <Popconfirm
+            title={t('admin.teams.confirm.deleteTask', { defaultValue: '确定删除该任务？' })}
+            onOk={() => void handleDeleteTeamTask(r.id)}
+          >
             <Button size='mini' status='danger'>
               {t('admin.teams.button.delete', { defaultValue: '删除' })}
             </Button>
@@ -336,10 +366,12 @@ const AdminTeams: React.FC = () => {
         })}
         actions={
           <>
-          <Button onClick={() => void teamsState.reload()}>{t('admin.teams.button.refresh', { defaultValue: '刷新' })}</Button>
-          <Button type='primary' onClick={() => setCreateVisible(true)}>
-            {t('admin.teams.button.createTeam', { defaultValue: '创建团队' })}
-          </Button>
+            <Button onClick={() => void teamsState.reload()}>
+              {t('admin.teams.button.refresh', { defaultValue: '刷新' })}
+            </Button>
+            <Button type='primary' onClick={() => setCreateVisible(true)}>
+              {t('admin.teams.button.createTeam', { defaultValue: '创建团队' })}
+            </Button>
           </>
         }
       />
@@ -380,7 +412,11 @@ const AdminTeams: React.FC = () => {
 
         <Card
           bordered={false}
-          title={selectedTeam ? t('admin.teams.card.membersOf', { defaultValue: '成员：{{name}}', name: selectedTeam.name }) : t('admin.teams.card.members', { defaultValue: '成员' })}
+          title={
+            selectedTeam
+              ? t('admin.teams.card.membersOf', { defaultValue: '成员：{{name}}', name: selectedTeam.name })
+              : t('admin.teams.card.members', { defaultValue: '成员' })
+          }
           extra={
             selectedTeam ? (
               <Button type='primary' size='small' onClick={() => setAddVisible(true)}>
@@ -405,7 +441,9 @@ const AdminTeams: React.FC = () => {
               />
             </ModuleDataState>
           ) : (
-            <div className='text-t-tertiary text-13px'>{t('admin.teams.placeholder.selectTeam', { defaultValue: '从左侧选择一个团队以管理成员' })}</div>
+            <div className='text-t-tertiary text-13px'>
+              {t('admin.teams.placeholder.selectTeam', { defaultValue: '从左侧选择一个团队以管理成员' })}
+            </div>
           )}
         </Card>
       </div>
@@ -432,13 +470,7 @@ const AdminTeams: React.FC = () => {
             empty={tasksState.data.length === 0}
             emptyDescription={t('admin.teams.emptyTasks', { defaultValue: '当前团队暂无任务。' })}
           >
-            <Table
-              data={tasksState.data}
-              rowKey='id'
-              pagination={false}
-              size='small'
-              columns={taskColumns as any}
-            />
+            <Table data={tasksState.data} rowKey='id' pagination={false} size='small' columns={taskColumns as any} />
           </ModuleDataState>
         </Card>
       ) : null}
@@ -457,10 +489,17 @@ const AdminTeams: React.FC = () => {
             <Input value={createForm.name} onChange={(v) => setCreateForm((s) => ({ ...s, name: v }))} />
           </Form.Item>
           <Form.Item label={t('admin.teams.form.workspace', { defaultValue: '工作区' })} required>
-            <Input value={createForm.workspace} onChange={(v) => setCreateForm((s) => ({ ...s, workspace: v }))} placeholder={t('admin.teams.form.workspacePlaceholder', { defaultValue: '例如：D:\\workspace\\teamA' })} />
+            <Input
+              value={createForm.workspace}
+              onChange={(v) => setCreateForm((s) => ({ ...s, workspace: v }))}
+              placeholder={t('admin.teams.form.workspacePlaceholder', { defaultValue: '例如：D:\\workspace\\teamA' })}
+            />
           </Form.Item>
           <Form.Item label={t('admin.teams.form.workspaceMode', { defaultValue: '工作区模式' })}>
-            <Select value={createForm.workspace_mode} onChange={(v) => setCreateForm((s) => ({ ...s, workspace_mode: String(v) }))}>
+            <Select
+              value={createForm.workspace_mode}
+              onChange={(v) => setCreateForm((s) => ({ ...s, workspace_mode: String(v) }))}
+            >
               <Select.Option value='shared'>shared</Select.Option>
               <Select.Option value='isolated'>isolated</Select.Option>
             </Select>
@@ -526,4 +565,3 @@ const AdminTeams: React.FC = () => {
 };
 
 export default AdminTeams;
-

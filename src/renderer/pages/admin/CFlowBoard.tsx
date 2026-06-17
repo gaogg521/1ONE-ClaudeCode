@@ -13,12 +13,12 @@ import { listValueStreamStages, type FlowStageRecord } from '@/renderer/utils/en
 const STAGE_ORDER = ['需求分析', '设计规划', '开发编码', '代码评审', '测试验证', '部署发布'];
 
 const STAGE_COLORS: Record<string, string> = {
-  '需求分析': 'arcoblue',
-  '设计规划': 'purple',
-  '开发编码': 'blue',
-  '代码评审': 'orange',
-  '测试验证': 'gold',
-  '部署发布': 'green',
+  需求分析: 'arcoblue',
+  设计规划: 'purple',
+  开发编码: 'blue',
+  代码评审: 'orange',
+  测试验证: 'gold',
+  部署发布: 'green',
 };
 
 function formatMs(ms: number): string {
@@ -72,10 +72,7 @@ const CFlowBoard: React.FC = () => {
       .map((record) => resolveStageMetrics(record))
       .filter((metrics) => metrics.processMs > 0);
     if (records.length > 0) {
-      stageAvgProcess.set(
-        stage,
-        records.reduce((sum, metrics) => sum + metrics.processMs, 0) / records.length
-      );
+      stageAvgProcess.set(stage, records.reduce((sum, metrics) => sum + metrics.processMs, 0) / records.length);
     }
   });
   const maxAvgProcess = Math.max(0, ...Array.from(stageAvgProcess.values()));
@@ -86,13 +83,18 @@ const CFlowBoard: React.FC = () => {
         <ModulePageHeader
           title={t('admin.cflow.title', { defaultValue: '价值流' })}
           description={t('admin.cflow.desc', {
-            defaultValue: '端到端交付可视化。精细度量各阶段等待时间与处理时间，精准识别协作瓶颈。数据由 CTeam 需求状态流转自动打点。',
+            defaultValue:
+              '端到端交付可视化。精细度量各阶段等待时间与处理时间，精准识别协作瓶颈。数据由 CTeam 需求状态流转自动打点。',
           })}
         />
 
         {/* 瓶颈热力图 */}
         {stageAvgProcess.size > 0 && (
-          <Card bordered={false} className='rd-12px' title={t('admin.cflow.bottleneck', { defaultValue: '阶段平均处理时间（瓶颈识别）' })}>
+          <Card
+            bordered={false}
+            className='rd-12px'
+            title={t('admin.cflow.bottleneck', { defaultValue: '阶段平均处理时间（瓶颈识别）' })}
+          >
             <div className='flex gap-12px flex-wrap'>
               {STAGE_ORDER.map((stage) => {
                 const avg = stageAvgProcess.get(stage) ?? 0;
@@ -100,7 +102,9 @@ const CFlowBoard: React.FC = () => {
                 return (
                   <div key={stage} className='flex-1 min-w-120px'>
                     <div className='flex items-center justify-between mb-4px'>
-                      <Tag size='small' color={STAGE_COLORS[stage] ?? 'gray'}>{stage}</Tag>
+                      <Tag size='small' color={STAGE_COLORS[stage] ?? 'gray'}>
+                        {stage}
+                      </Tag>
                       <span className='text-11px text-t-secondary font-mono'>{formatMs(avg)}</span>
                     </div>
                     <Progress
@@ -121,24 +125,19 @@ const CFlowBoard: React.FC = () => {
           loading={stagesState.loading}
           error={stagesState.error}
           empty={byReq.size === 0}
-          emptyDescription={t('admin.cflow.empty', { defaultValue: '暂无价值流数据。在 CTeam 中推进需求状态后，数据将自动出现在这里。' })}
+          emptyDescription={t('admin.cflow.empty', {
+            defaultValue: '暂无价值流数据。在 CTeam 中推进需求状态后，数据将自动出现在这里。',
+          })}
         >
           <div className='flex flex-col gap-12px'>
             {Array.from(byReq.entries()).map(([reqId, flowStages]) => {
               const reqName = resolveRequirementTitle(reqId, flowStages);
               const sortedStages = [...flowStages].toSorted((a, b) => a.entry_time - b.entry_time);
               const completedStageNames = new Set(sortedStages.map((s) => s.stage_name));
-              const totalWait = sortedStages.reduce(
-                (sum, stage) => sum + resolveStageMetrics(stage).waitMs,
-                0
-              );
-              const totalProcess = sortedStages.reduce(
-                (sum, stage) => sum + resolveStageMetrics(stage).processMs,
-                0
-              );
-              const flowEfficiency = totalWait + totalProcess > 0
-                ? Math.round((totalProcess / (totalWait + totalProcess)) * 100)
-                : 0;
+              const totalWait = sortedStages.reduce((sum, stage) => sum + resolveStageMetrics(stage).waitMs, 0);
+              const totalProcess = sortedStages.reduce((sum, stage) => sum + resolveStageMetrics(stage).processMs, 0);
+              const flowEfficiency =
+                totalWait + totalProcess > 0 ? Math.round((totalProcess / (totalWait + totalProcess)) * 100) : 0;
 
               return (
                 <Card
@@ -149,11 +148,16 @@ const CFlowBoard: React.FC = () => {
                     <div className='flex items-center gap-10px'>
                       <span className='font-600 text-t-primary'>{reqName}</span>
                       <Tooltip content={`流动效率 = 处理时间 / (等待 + 处理)`}>
-                        <Tag size='small' color={flowEfficiency >= 60 ? 'green' : flowEfficiency >= 30 ? 'orange' : 'red'}>
+                        <Tag
+                          size='small'
+                          color={flowEfficiency >= 60 ? 'green' : flowEfficiency >= 30 ? 'orange' : 'red'}
+                        >
                           流动效率 {flowEfficiency}%
                         </Tag>
                       </Tooltip>
-                      <span className='text-11px text-t-tertiary'>总等待 {formatMs(totalWait)} · 总处理 {formatMs(totalProcess)}</span>
+                      <span className='text-11px text-t-tertiary'>
+                        总等待 {formatMs(totalWait)} · 总处理 {formatMs(totalProcess)}
+                      </span>
                     </div>
                   }
                 >
@@ -179,20 +183,26 @@ const CFlowBoard: React.FC = () => {
                             <Tag size='small' color={isCompleted ? (STAGE_COLORS[stage] ?? 'gray') : 'gray'}>
                               {stage}
                             </Tag>
-                            {record && (() => {
-                              const metrics = resolveStageMetrics(record);
-                              return (
-                                <div className='mt-4px text-10px text-t-tertiary'>
-                                  <div>等待 {formatMs(metrics.waitMs)}</div>
-                                  {metrics.processMs > 0 && (
-                                    <div>处理 {formatMs(metrics.processMs)}</div>
-                                  )}
-                                </div>
-                              );
-                            })()}
+                            {record &&
+                              (() => {
+                                const metrics = resolveStageMetrics(record);
+                                return (
+                                  <div className='mt-4px text-10px text-t-tertiary'>
+                                    <div>等待 {formatMs(metrics.waitMs)}</div>
+                                    {metrics.processMs > 0 && <div>处理 {formatMs(metrics.processMs)}</div>}
+                                  </div>
+                                );
+                              })()}
                           </div>
                           {idx < STAGE_ORDER.length - 1 && (
-                            <div className={['w-20px h-1px flex-shrink-0', isCompleted && completedStageNames.has(STAGE_ORDER[idx + 1]) ? 'bg-primary' : 'bg-[var(--color-border-2)]'].join(' ')} />
+                            <div
+                              className={[
+                                'w-20px h-1px flex-shrink-0',
+                                isCompleted && completedStageNames.has(STAGE_ORDER[idx + 1])
+                                  ? 'bg-primary'
+                                  : 'bg-[var(--color-border-2)]',
+                              ].join(' ')}
+                            />
                           )}
                         </React.Fragment>
                       );

@@ -12,6 +12,7 @@ import type { TProviderWithModel } from '@/common/config/storage';
 import { resolveAionrsBinary } from './binaryResolver';
 import { buildSpawnConfig } from './envBuilder';
 import type { AionrsEvent, AionrsCommand } from './protocol';
+import { formatAionrsProcessExitError } from './exitMessages';
 import { getEnhancedEnv, withNpxCommandOnPath } from '@process/utils/shellEnv';
 
 const AIONRS_PROJECT_CONFIG = '.aionrs.toml';
@@ -49,9 +50,15 @@ export function mapAionrsToolResultDisplay(event: AionrsToolResultEvent): unknow
   const parsedOutput = tryParseJsonRecord(event.output);
   const outputRecord = parsedOutput ?? {};
   const candidateImgUrl =
-    [outputRecord.img_url, outputRecord.image_url, metadata.img_url, metadata.image_url, metadata.file_path, metadata.path, metadata.uri].find(
-      (value) => typeof value === 'string' && value.trim().length > 0
-    ) ?? null;
+    [
+      outputRecord.img_url,
+      outputRecord.image_url,
+      metadata.img_url,
+      metadata.image_url,
+      metadata.file_path,
+      metadata.path,
+      metadata.uri,
+    ].find((value) => typeof value === 'string' && value.trim().length > 0) ?? null;
   const candidateRelativePath =
     [outputRecord.relative_path, metadata.relative_path, metadata.relativePath].find(
       (value) => typeof value === 'string' && value.trim().length > 0
@@ -85,6 +92,18 @@ export function mapAionrsToolResultDisplay(event: AionrsToolResultEvent): unknow
   return event.output;
 }
 
+/** Shared stall / bootstrap timeouts (exported for tests). */
+export const AIONRS_TIMEOUTS = {
+  /** Plain chat / first token — show error if upstream is silent this long. */
+  RESPONSE_STALL_MS: 20_000,
+  /** After a tool result, model must respond within this window. */
+  STALL_AFTER_TOOL_RESULT_MS: 20_000,
+  /** While a tool executes locally (build, npm install, etc.). */
+  STALL_DURING_TOOL_MS: 900_000,
+  /** aionrs binary must emit `ready` within this window during init. */
+  READY_MS: 20_000,
+} as const;
+
 export type AionrsAgentOptions = {
   workspace: string;
   model: TProviderWithModel;
@@ -101,26 +120,6 @@ export type AionrsAgentOptions = {
 };
 
 export class AionrsAgent {
-  /**
-   * Sliding window: no JSON event from aionrs binary for this long → synthetic error + finish.
-   *
-   * - Plain chat / first token: upstream should return first chunk within 90 s even for slow models.
-   *   If nothing comes back in 90 s the API connection is almost certainly broken (context overflow,
-   *   rate limit, network loss).  Previously 5 min — that made a stuck turn feel like a 7-min hang.
-   */
-  private static readonly RESPONSE_STALL_MS = 90_000; // 90 s — first token timeout
-  /**
-   * While a tool is waiting for approval or executing locally, aionrs may emit nothing to stdout
-   * (e.g. a slow build, npm install, git clone). Keep generous to avoid killing real work.
-   */
-  private static readonly STALL_DURING_TOOL_MS = 900_000; // 15 minutes
-  /**
-   * After a tool result the model must decide what to do next.  Even with a large context (e.g.
-   * large partial output from a timed-out dir), the upstream API should respond within 90 s.
-   * Reduced from 5 min — main culprit for 7-min frozen turns after tool timeouts.
-   */
-  private static readonly STALL_AFTER_TOOL_RESULT_MS = 90_000; // 90 s
-
   private childProcess: ChildProcess | null = null;
   private ready = false;
   private readyPromise: Promise<void>;
@@ -134,6 +133,8 @@ export class AionrsAgent {
   /** Last user message id for this turn — used when upstream events omit msg_id. */
   private pendingTurnMsgId: string | null = null;
   private responseStallTimer: NodeJS.Timeout | null = null;
+  private intentionalShutdown = false;
+  private stderrTail = '';
 
   constructor(options: AionrsAgentOptions) {
     this.options = options;
@@ -193,7 +194,9 @@ export class AionrsAgent {
 
     // Log stderr as diagnostics
     this.childProcess.stderr?.on('data', (chunk: Buffer) => {
-      console.error('[aionrs]', chunk.toString());
+      const text = chunk.toString();
+      this.stderrTail = `${this.stderrTail}${text}`.slice(-2000);
+      console.error('[aionrs]', text);
     });
 
     // Handle process exit
@@ -203,15 +206,16 @@ export class AionrsAgent {
 
       if (!this.ready) {
         // Exited before emitting ready — reject the bootstrap promise
-        this.readyReject(new Error(`aionrs exited with code ${code} during init`));
-      } else {
-        // Exited mid-conversation (context overflow, upstream crash, API auth failure, etc.).
-        // Unblock the UI immediately so the user sees an error rather than an infinite spinner.
+        const stderrHint = this.stderrTail.trim();
+        const detail = stderrHint ? `: ${stderrHint.slice(-400)}` : '';
+        this.readyReject(new Error(`aionrs exited with code ${code} during init${detail}`));
+      } else if (!this.intentionalShutdown) {
+        // Exited mid-conversation — unblock UI unless we deliberately killed the process.
         const msgId = this.activeMsgId || this.pendingTurnMsgId || '';
         if (msgId) {
           this.onStreamEvent({
             type: 'error',
-            data: `[aionrs] 进程意外退出（exit code ${code}）。可能原因：上下文超过模型限制、API 认证失败或上游服务异常。请重试或检查模型配置。`,
+            data: formatAionrsProcessExitError(code, this.stderrTail),
             msg_id: msgId,
           });
           this.onStreamEvent({ type: 'finish', data: '', msg_id: msgId });
@@ -220,12 +224,16 @@ export class AionrsAgent {
         }
       }
 
+      this.intentionalShutdown = false;
       this.childProcess = null;
     });
 
     // Wait for ready event with timeout
     const timeout = new Promise<void>((_, reject) => {
-      setTimeout(() => reject(new Error('aionrs ready timeout (30s)')), 30000);
+      setTimeout(
+        () => reject(new Error(`aionrs ready timeout (${AIONRS_TIMEOUTS.READY_MS / 1000}s)`)),
+        AIONRS_TIMEOUTS.READY_MS
+      );
     });
 
     try {
@@ -266,7 +274,7 @@ export class AionrsAgent {
    * If the aionrs binary emits nothing for too long after a user send, unblock the UI
    * (otherwise the renderer stays on "processing" forever).
    */
-  private slideResponseStallWatchdog(msgId: string, stallMs: number = AionrsAgent.RESPONSE_STALL_MS): void {
+  private slideResponseStallWatchdog(msgId: string, stallMs: number = AIONRS_TIMEOUTS.RESPONSE_STALL_MS): void {
     this.clearResponseStallTimer();
     if (!msgId) return;
     this.responseStallTimer = setTimeout(() => {
@@ -276,7 +284,7 @@ export class AionrsAgent {
       this.onStreamEvent({
         type: 'error',
         data:
-          stallMs >= AionrsAgent.STALL_DURING_TOOL_MS
+          stallMs >= AIONRS_TIMEOUTS.STALL_DURING_TOOL_MS
             ? `[aionrs] 已超过 ${minutes} 分钟未收到工具执行事件。若正在执行大目录扫描等耗时命令，请缩小路径范围后重试。`
             : `[aionrs] ${Math.round(stallMs / 1000)} 秒内未收到模型响应，连接可能已断开。常见原因：上下文超限、API Key 失效、网络或代理异常、上游服务不可用。请检查配置后重试。`,
         msg_id: id,
@@ -319,7 +327,7 @@ export class AionrsAgent {
         break;
 
       case 'tool_request':
-        this.slideResponseStallWatchdog(event.msg_id, AionrsAgent.STALL_DURING_TOOL_MS);
+        this.slideResponseStallWatchdog(event.msg_id, AIONRS_TIMEOUTS.STALL_DURING_TOOL_MS);
         this.onStreamEvent({
           type: 'tool_group',
           data: [
@@ -337,7 +345,7 @@ export class AionrsAgent {
         break;
 
       case 'tool_running':
-        this.slideResponseStallWatchdog(event.msg_id, AionrsAgent.STALL_DURING_TOOL_MS);
+        this.slideResponseStallWatchdog(event.msg_id, AIONRS_TIMEOUTS.STALL_DURING_TOOL_MS);
         this.onStreamEvent({
           type: 'tool_group',
           data: [
@@ -354,7 +362,7 @@ export class AionrsAgent {
         break;
 
       case 'tool_result':
-        this.slideResponseStallWatchdog(event.msg_id, AionrsAgent.STALL_AFTER_TOOL_RESULT_MS);
+        this.slideResponseStallWatchdog(event.msg_id, AIONRS_TIMEOUTS.STALL_AFTER_TOOL_RESULT_MS);
         this.onStreamEvent({
           type: 'tool_group',
           data: [
@@ -463,21 +471,41 @@ export class AionrsAgent {
     }
   }
 
-  sendCommand(cmd: AionrsCommand): void {
-    if (!this.childProcess?.stdin?.writable) return;
+  /** Returns false when the aionrs process stdin is closed (avoids silent no-op sends). */
+  sendCommand(cmd: AionrsCommand): boolean {
+    if (!this.childProcess?.stdin?.writable) {
+      return false;
+    }
     this.childProcess.stdin.write(JSON.stringify(cmd) + '\n');
+    return true;
+  }
+
+  private emitSendFailure(msgId: string, reason: string): void {
+    this.clearResponseStallTimer();
+    this.onStreamEvent({ type: 'error', data: reason, msg_id: msgId });
+    this.onStreamEvent({ type: 'finish', data: '', msg_id: msgId });
+    this.activeMsgId = null;
+    this.pendingTurnMsgId = null;
   }
 
   async send(input: string, msgId: string, files?: string[]): Promise<void> {
     await this.readyPromise;
     this.pendingTurnMsgId = msgId;
     this.slideResponseStallWatchdog(msgId);
-    this.sendCommand({
+    const sent = this.sendCommand({
       type: 'message',
       msg_id: msgId,
       input,
       files,
     });
+    if (!sent) {
+      const reason =
+        '[aionrs] 无法向 aionrs 进程发送消息（stdin 已关闭，进程可能已退出）。请停止后重试，或切换模型再发。';
+      this.emitSendFailure(msgId, reason);
+      throw new Error(reason);
+    }
+    // Unblock UI immediately — binary may take seconds before first stream_start/thinking delta.
+    this.onStreamEvent({ type: 'start', data: '', msg_id: msgId });
   }
 
   injectConversationHistory(text: string): Promise<void> {
@@ -500,8 +528,10 @@ export class AionrsAgent {
   }
 
   kill(): void {
+    this.intentionalShutdown = true;
     this.clearResponseStallTimer();
     this.pendingTurnMsgId = null;
+    this.activeMsgId = null;
     this.restoreProjectConfig();
     if (this.childProcess) {
       this.childProcess.kill('SIGTERM');
@@ -554,7 +584,11 @@ export class AionrsAgent {
       const dir = join(path, '..');
       const stale = readdirSync(dir).filter((f) => /^aionrs_ONE_.*\.toml$/.test(f));
       for (const f of stale) {
-        try { unlinkSync(join(dir, f)); } catch { /* ignore */ }
+        try {
+          unlinkSync(join(dir, f));
+        } catch {
+          /* ignore */
+        }
       }
     } catch {
       // Workspace may not be accessible; skip

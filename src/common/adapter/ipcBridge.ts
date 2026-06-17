@@ -56,10 +56,9 @@ export const conversation = {
   reset: bridge.buildProvider<void, IResetConversationParams>('reset-conversation'), // 重置对话
   warmup: bridge.buildProvider<void, { conversation_id: string }>('conversation.warmup'), // 预热对话 bootstrap
   stop: bridge.buildProvider<IBridgeResponse<{}>, { conversation_id: string }>('chat.stop.stream'), // 停止会话
-  sendMessage: bridge.buildProvider<
-    IBridgeResponse<{ input?: string; files?: string[] }>,
-    ISendMessageParams
-  >('chat.send.message'), // 发送消息（统一接口）
+  sendMessage: bridge.buildProvider<IBridgeResponse<{ input?: string; files?: string[] }>, ISendMessageParams>(
+    'chat.send.message'
+  ), // 发送消息（统一接口）
   getSlashCommands: bridge.buildProvider<
     IBridgeResponse<{ commands: SlashCommandItem[] }>,
     { conversation_id: string }
@@ -251,6 +250,9 @@ export const fs = {
   >('create-zip-file'), // 创建 zip 文件
   cancelZip: bridge.buildProvider<boolean, { requestId: string }>('cancel-zip-file'), // 取消 zip 创建任务
   getFileMetadata: bridge.buildProvider<IFileMetadata, { path: string }>('get-file-metadata'), // 获取文件元数据
+  resolveAttachmentDisplayPath: bridge.buildProvider<string, { path: string; conversationId?: string }>(
+    'resolve-attachment-display-path'
+  ), // Resolve stale temp paths to workspace copies for UI preview
   copyFilesToWorkspace: bridge.buildProvider<
     // 返回成功与部分失败的详细状态，便于前端提示用户 / Return details for successful and failed copies for better UI feedback
     IBridgeResponse<{ copiedFiles: string[]; failedFiles?: Array<{ path: string; error: string }> }>,
@@ -284,7 +286,9 @@ export const fs = {
   ),
   // 导入 skill 目录 / Import skill directory
   importSkill: bridge.buildProvider<IBridgeResponse<{ skillName: string }>, { skillPath: string }>('import-skill'),
-  previewSkillsFromUrl: bridge.buildProvider<IBridgeResponse<IUrlSkillPreview>, { url: string }>('preview-skills-from-url'),
+  previewSkillsFromUrl: bridge.buildProvider<IBridgeResponse<IUrlSkillPreview>, { url: string }>(
+    'preview-skills-from-url'
+  ),
   importSkillFromUrl: bridge.buildProvider<IBridgeResponse<{ skillName: string }>, { skillPath: string }>(
     'import-skill-from-url'
   ),
@@ -802,8 +806,14 @@ export const kanban = {
 
 // 用户管理接口（admin only）
 export const adminUsers = {
-  list: bridge.buildProvider<{ id: string; username: string; role: 'user' | 'admin'; created_at: number; last_login?: number | null }[], void>('admin.users.list'),
-  create: bridge.buildProvider<{ id: string; username: string; role: 'user' | 'admin' }, { username: string; password: string; role: 'user' | 'admin' }>('admin.users.create'),
+  list: bridge.buildProvider<
+    { id: string; username: string; role: 'user' | 'admin'; created_at: number; last_login?: number | null }[],
+    void
+  >('admin.users.list'),
+  create: bridge.buildProvider<
+    { id: string; username: string; role: 'user' | 'admin' },
+    { username: string; password: string; role: 'user' | 'admin' }
+  >('admin.users.create'),
   setRole: bridge.buildProvider<boolean, { id: string; role: 'user' | 'admin' }>('admin.users.set-role'),
   sendResetPasswordCode: bridge.buildProvider<{ maskedEmail: string }, void>('admin.users.send-reset-password-code'),
   resetPassword: bridge.buildProvider<boolean, { id: string; password: string; emailCode: string }>(
@@ -861,13 +871,13 @@ export const webui = {
     IBridgeResponse<{ tenantId: string; tenantName: string }>,
     { code: string }
   >('webui.preview-enterprise-invite'),
-  joinEnterprise: bridge.buildProvider<IBridgeResponse<{ tenantId: string; tenantName: string | null }>, { code: string }>(
-    'webui.join-enterprise'
+  joinEnterprise: bridge.buildProvider<
+    IBridgeResponse<{ tenantId: string; tenantName: string | null }>,
+    { code: string }
+  >('webui.join-enterprise'),
+  createEnterprise: bridge.buildProvider<IBridgeResponse<{ tenantId: string; tenantName: string }>, { name: string }>(
+    'webui.create-enterprise'
   ),
-  createEnterprise: bridge.buildProvider<
-    IBridgeResponse<{ tenantId: string; tenantName: string }>,
-    { name: string }
-  >('webui.create-enterprise'),
   setEnterpriseApiOrigins: bridge.buildProvider<IBridgeResponse<{ ok: true }>, { origins: string[] }>(
     'webui.set-enterprise-api-origins'
   ),
@@ -911,7 +921,9 @@ export const webui = {
   // 发送管理员重置密码验证码（邮箱）/ Send admin reset password verification code (email)
   sendResetCode: bridge.buildProvider<IBridgeResponse<{ maskedEmail: string }>, void>('webui.send-reset-code'),
   // 重置密码（生成新随机密码）/ Reset password (generate new random password)
-  resetPassword: bridge.buildProvider<IBridgeResponse<{ newPassword: string }>, { code: string }>('webui.reset-password'),
+  resetPassword: bridge.buildProvider<IBridgeResponse<{ newPassword: string }>, { code: string }>(
+    'webui.reset-password'
+  ),
   // 生成二维码登录 token / Generate QR login token
   generateQRToken: bridge.buildProvider<IBridgeResponse<{ token: string; expiresAt: number; qrUrl: string }>, void>(
     'webui.generate-qr-token'
@@ -930,9 +942,8 @@ export const webui = {
     adminLocalUrl?: string;
     adminNetworkUrl?: string;
   }>('webui.status-changed'),
-  orgConfigChanged: bridge.buildEmitter<import('@/common/types/orgConfigEvents').OrgConfigChangedPayload>(
-    'webui.org-config-changed'
-  ),
+  orgConfigChanged:
+    bridge.buildEmitter<import('@/common/types/orgConfigEvents').OrgConfigChangedPayload>('webui.org-config-changed'),
   // 密码重置结果事件（绕过 provider 返回值问题）/ Password reset result event (workaround for provider return value issue)
   resetPasswordResult: bridge.buildEmitter<{ success: boolean; newPassword?: string; msg?: string }>(
     'webui.reset-password-result'
@@ -941,14 +952,12 @@ export const webui = {
 
 export const workspaceProfile = {
   get: bridge.buildProvider<IBridgeResponse<WorkspaceUserProfile>, void>('workspace-profile.get'),
-  uploadAvatar: bridge.buildProvider<
-    IBridgeResponse<WorkspaceUserProfile>,
-    { mimeType: string; data: Uint8Array }
-  >('workspace-profile.upload-avatar'),
-  readAvatarBuffer: bridge.buildProvider<
-    IBridgeResponse<{ mimeType: string; base64: string }>,
-    void
-  >('workspace-profile.read-avatar'),
+  uploadAvatar: bridge.buildProvider<IBridgeResponse<WorkspaceUserProfile>, { mimeType: string; data: Uint8Array }>(
+    'workspace-profile.upload-avatar'
+  ),
+  readAvatarBuffer: bridge.buildProvider<IBridgeResponse<{ mimeType: string; base64: string }>, void>(
+    'workspace-profile.read-avatar'
+  ),
 };
 
 // Cron job management API / 定时任务管理接口
@@ -1448,9 +1457,10 @@ export const team = {
   addAgent: bridge.buildProvider<import('@process/team/types').TeamAgent, IAddTeamAgentParams>('team.add-agent'),
   removeAgent: bridge.buildProvider<void, { teamId: string; tenantId?: string; slotId: string }>('team.remove-agent'),
   sendMessage: bridge.buildProvider<void, { teamId: string; tenantId?: string; content: string }>('team.send-message'),
-  sendMessageToAgent: bridge.buildProvider<void, { teamId: string; tenantId?: string; slotId: string; content: string }>(
-    'team.send-message-to-agent'
-  ),
+  sendMessageToAgent: bridge.buildProvider<
+    void,
+    { teamId: string; tenantId?: string; slotId: string; content: string }
+  >('team.send-message-to-agent'),
   runDigitalEmployeeNow: bridge.buildProvider<
     { runId: string; conversationId: string },
     {
@@ -1462,7 +1472,9 @@ export const team = {
   >('team.run-digital-employee-now'),
   stop: bridge.buildProvider<void, { teamId: string }>('team.stop'),
   ensureSession: bridge.buildProvider<void, { teamId: string; tenantId?: string }>('team.ensure-session'),
-  renameAgent: bridge.buildProvider<void, { teamId: string; tenantId?: string; slotId: string; newName: string }>('team.rename-agent'),
+  renameAgent: bridge.buildProvider<void, { teamId: string; tenantId?: string; slotId: string; newName: string }>(
+    'team.rename-agent'
+  ),
   updateAgentSkillIds: bridge.buildProvider<
     void,
     { teamId: string; tenantId?: string; slotId: string; skillIds: string[] }
@@ -1499,10 +1511,9 @@ export const personalAgent = {
     import('@/common/types/personalAgentTypes').PersonalAgent,
     import('@/common/types/personalAgentTypes').CreatePersonalAgentInput
   >('personal-agent.create'),
-  list: bridge.buildProvider<
-    import('@/common/types/personalAgentTypes').PersonalAgent[],
-    { ownerUserId: string }
-  >('personal-agent.list'),
+  list: bridge.buildProvider<import('@/common/types/personalAgentTypes').PersonalAgent[], { ownerUserId: string }>(
+    'personal-agent.list'
+  ),
   get: bridge.buildProvider<
     import('@/common/types/personalAgentTypes').PersonalAgent | null,
     { id: string; ownerUserId: string }
@@ -1577,6 +1588,8 @@ export const memory = {
   writeProjectClaude: bridge.buildProvider<void, { content: string }>('memory.writeProjectClaude'),
   getScope: bridge.buildProvider<MemoryScopeInfo>('memory.getScope'),
   setClaudeProjectRoot: bridge.buildProvider<void, { path: string | null }>('memory.setClaudeProjectRoot'),
-  setClaudeProjectRoots: bridge.buildProvider<void, { path: string | null; extraRoots: string[] }>('memory.setClaudeProjectRoots'),
+  setClaudeProjectRoots: bridge.buildProvider<void, { path: string | null; extraRoots: string[] }>(
+    'memory.setClaudeProjectRoots'
+  ),
   suggestRoots: bridge.buildProvider<string[]>('memory.suggestRoots'),
 };

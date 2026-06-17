@@ -41,6 +41,7 @@ import { useAutoScroll } from './useAutoScroll';
 import { useAutoPreviewOfficeFiles } from '@/renderer/hooks/file/useAutoPreviewOfficeFiles';
 import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 import SelectionReplyButton from './components/SelectionReplyButton';
+import { useAddEventListener } from '@/renderer/utils/emitter';
 
 type TurnDiffContent = Extract<CodexToolCallUpdate, { subtype: 'turn_diff' }>;
 
@@ -98,11 +99,7 @@ export const ImagePreviewContext = createContext<{ inPreviewGroup: boolean }>({ 
 
 const VirtuosoScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div
-      {...props}
-      ref={ref}
-      className={classNames('conversation-message-scroller', className)}
-    />
+    <div {...props} ref={ref} className={classNames('conversation-message-scroller', className)} />
   )
 );
 
@@ -303,6 +300,18 @@ const MessageList: React.FC<{ className?: string }> = () => {
     messages: list,
     itemCount: processedList.length,
   });
+
+  useAddEventListener(
+    'conversation.messages.sync',
+    ({ conversationId }) => {
+      if (conversationId !== conversationContext?.conversationId) return;
+      requestAnimationFrame(() => {
+        scrollToBottom('smooth');
+        hideScrollButton();
+      });
+    },
+    [conversationContext?.conversationId, scrollToBottom, hideScrollButton]
+  );
 
   useEffect(() => {
     if (!targetMessageId || processedList.length === 0 || !virtuosoRef.current) {

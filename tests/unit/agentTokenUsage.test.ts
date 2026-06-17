@@ -24,26 +24,30 @@ describeOrSkip('aggregateAgentTokenUsageForTenant', () => {
     initSchema(driver);
     runMigrations(driver, 0, 100);
     const now = Date.now();
-    driver.prepare(
-      `INSERT INTO conversations (id, tenant_id, team_id, user_id, name, type, extra, model, status, source, created_at, updated_at)
+    driver
+      .prepare(
+        `INSERT INTO conversations (id, tenant_id, team_id, user_id, name, type, extra, model, status, source, created_at, updated_at)
        VALUES (?, ?, NULL, ?, ?, 'acp', ?, '{}', 'idle', '1one', ?, ?)`
-    ).run(
-      'conv-1',
-      'tenant-a',
-      'user-1',
-      '游戏安全专家 · 巡检',
-      JSON.stringify({
-        personalAgentId: 'agent-sec',
-        agentName: '游戏安全专家',
-        lastTokenUsage: { totalTokens: 12000 },
-      }),
-      now,
-      now
-    );
-    driver.prepare(
-      `INSERT INTO personal_agents (id, owner_user_id, tenant_id, name, description, agent_type, conversation_type, automation_config, created_at, updated_at)
+      )
+      .run(
+        'conv-1',
+        'tenant-a',
+        'user-1',
+        '游戏安全专家 · 巡检',
+        JSON.stringify({
+          personalAgentId: 'agent-sec',
+          agentName: '游戏安全专家',
+          lastTokenUsage: { totalTokens: 12000 },
+        }),
+        now,
+        now
+      );
+    driver
+      .prepare(
+        `INSERT INTO personal_agents (id, owner_user_id, tenant_id, name, description, agent_type, conversation_type, automation_config, created_at, updated_at)
        VALUES (?, ?, ?, ?, NULL, 'claude', 'acp', '{}', ?, ?)`
-    ).run('agent-sec', 'user-1', 'tenant-a', '游戏安全专家', now, now);
+      )
+      .run('agent-sec', 'user-1', 'tenant-a', '游戏安全专家', now, now);
   });
 
   afterEach(() => {

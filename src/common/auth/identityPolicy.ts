@@ -4,22 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type {
-  EnterpriseContextSnapshot,
-  WebuiManagementMode,
-} from '@/common/config/webuiEnterpriseConfig';
+import type { EnterpriseContextSnapshot, WebuiManagementMode } from '@/common/config/webuiEnterpriseConfig';
 import { isEnterpriseTenantId } from '@/common/config/webuiEnterpriseConfig';
-import {
-  DESKTOP_OPERATOR_USER_ID,
-  isEnterpriseAdminRole,
-} from '@/common/auth/enterpriseRoles';
+import { DESKTOP_OPERATOR_USER_ID, isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 
-export type IdentityKind =
-  | 'anonymous'
-  | 'desktop_operator'
-  | 'webui_local'
-  | 'enterprise_member'
-  | 'enterprise_admin';
+export type IdentityKind = 'anonymous' | 'desktop_operator' | 'webui_local' | 'enterprise_member' | 'enterprise_admin';
 
 export type EditionCapability =
   | 'personal.workspace'
@@ -94,8 +83,7 @@ export function resolveIdentitySnapshot({
 }: ResolveIdentitySnapshotInput): IdentitySnapshot {
   const tenantId = resolveTenantId(user, enterpriseContext);
   const role = resolveRole(user, enterpriseContext);
-  const joinedByUserIdentity =
-    user?.id !== DESKTOP_OPERATOR_USER_ID && isEnterpriseTenantId(user?.tenant_id);
+  const joinedByUserIdentity = user?.id !== DESKTOP_OPERATOR_USER_ID && isEnterpriseTenantId(user?.tenant_id);
   const joinedByInstanceContext = enterpriseContext?.joined === true;
   const joinedEnterprise = joinedByUserIdentity;
 
@@ -125,12 +113,8 @@ export function resolveIdentitySnapshot({
 }
 
 export function createEditionGate({ identity }: CreateEditionGateInput): EditionGate {
-  const isEnterpriseUser =
-    identity.kind === 'enterprise_member' || identity.kind === 'enterprise_admin';
-  const enterpriseWorkspace =
-    identity.managementMode === 'enterprise' &&
-    identity.joinedEnterprise &&
-    isEnterpriseUser;
+  const isEnterpriseUser = identity.kind === 'enterprise_member' || identity.kind === 'enterprise_admin';
+  const enterpriseWorkspace = identity.managementMode === 'enterprise' && identity.joinedEnterprise && isEnterpriseUser;
   const adminConsole = identity.kind === 'enterprise_admin';
 
   return {

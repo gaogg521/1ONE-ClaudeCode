@@ -10,6 +10,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export type AionrsModelSelection = {
   currentModel?: TProviderWithModel;
+  /** Last model persisted on the conversation (from DB / parent props). */
+  persistedModel?: TProviderWithModel;
   providers: IProvider[];
   getAvailableModels: (provider: IProvider) => string[];
   handleSelectModel: (provider: IProvider, modelName: string) => Promise<void>;
@@ -65,6 +67,7 @@ export const useAionrsModelSelection = ({
 
   return {
     currentModel,
+    persistedModel: initialModel,
     providers,
     getAvailableModels,
     handleSelectModel,

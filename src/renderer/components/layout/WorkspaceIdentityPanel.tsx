@@ -52,9 +52,7 @@ function buildOrgLine(
       return t('settings.workspaceIdentity.enterprisePendingLoginEdition', {
         defaultValue: '{{tenant}} · 请登录企业账号',
         tenant:
-          tenant && tenant !== 'default'
-            ? tenant
-            : t('settings.edition.enterprise', { defaultValue: '企业组织' }),
+          tenant && tenant !== 'default' ? tenant : t('settings.edition.enterprise', { defaultValue: '企业组织' }),
       });
     }
     return t('settings.edition.personal', { defaultValue: '个人版' });
@@ -103,8 +101,7 @@ const GuestProfileMenu: React.FC<{
         <Typography.Paragraph type='secondary' className={styles.menuSub}>
           {enterpriseConnected
             ? t('settings.workspaceIdentity.enterprisePendingLoginDesc', {
-                defaultValue:
-                  '当前实例已接入 {{tenant}}。登录企业账号后，将显示你的姓名、角色、组织架构与所属团队。',
+                defaultValue: '当前实例已接入 {{tenant}}。登录企业账号后，将显示你的姓名、角色、组织架构与所属团队。',
                 tenant: tenantLabel ?? t('settings.edition.enterprise', { defaultValue: '企业组织' }),
               })
             : t('settings.workspaceIdentity.guestDesc', {
@@ -239,9 +236,7 @@ const ProfileMenu: React.FC<{
       ) : null}
       <Divider style={{ margin: '8px 0' }} />
       {canUploadAvatar ? (
-        <Menu.Item key='avatar'>
-          {t('settings.workspaceIdentity.changeAvatar', { defaultValue: '更换头像' })}
-        </Menu.Item>
+        <Menu.Item key='avatar'>{t('settings.workspaceIdentity.changeAvatar', { defaultValue: '更换头像' })}</Menu.Item>
       ) : null}
       {hasJoinedEnterprise ? (
         isEnterpriseView ? (
@@ -342,16 +337,7 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
         }
       });
     },
-    [
-      auth,
-      auth.status,
-      auth.user,
-      enterpriseMode,
-      isDesktop,
-      location.pathname,
-      navigate,
-      t,
-    ]
+    [auth, auth.status, auth.user, enterpriseMode, isDesktop, location.pathname, navigate, t]
   );
 
   if (!visible || !profile) {
@@ -545,7 +531,9 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
               <span className={classNames(styles.name, surface === 'card' && styles.nameCard)}>{displayName}</span>
               <span className={classNames(styles.org, surface === 'card' && styles.orgCard)}>{orgLine}</span>
               {!isGuest && profile.orgUnitPath ? (
-                <span className={classNames(styles.dept, surface === 'card' && styles.deptCard)}>{profile.orgUnitPath}</span>
+                <span className={classNames(styles.dept, surface === 'card' && styles.deptCard)}>
+                  {profile.orgUnitPath}
+                </span>
               ) : null}
             </span>
           ) : null}

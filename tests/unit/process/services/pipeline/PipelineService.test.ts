@@ -149,9 +149,7 @@ describe('PipelineService', () => {
         })
       );
 
-      expect(mockDriver.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO devops_pipelines')
-      );
+      expect(mockDriver.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO devops_pipelines'));
       expect(mockPrepareInstance.run).toHaveBeenCalledWith(
         result.id,
         'default',
@@ -231,9 +229,7 @@ describe('PipelineService', () => {
         },
       });
 
-      expect(mockDriver.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE devops_pipelines')
-      );
+      expect(mockDriver.prepare).toHaveBeenCalledWith(expect.stringContaining('UPDATE devops_pipelines'));
       expect(result.id).toBe('pl-1');
       expect(result.name).toBe('Updated Pipeline');
       expect(result.definition_json).toBe(
@@ -294,9 +290,7 @@ describe('PipelineService', () => {
       expect(runId).toBeDefined();
 
       // Verify that the run record was initialized in DB
-      expect(mockDriver.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO devops_pipeline_runs')
-      );
+      expect(mockDriver.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO devops_pipeline_runs'));
 
       // Verify child process spawn was triggered
       expect(spawn).toHaveBeenCalled();
@@ -313,12 +307,7 @@ describe('PipelineService', () => {
       await vi.runAllTimersAsync();
 
       // Verify that the final success update was written
-      expect(mockPrepareInstance.run).toHaveBeenCalledWith(
-        'success',
-        expect.any(Number),
-        expect.any(Number),
-        runId
-      );
+      expect(mockPrepareInstance.run).toHaveBeenCalledWith('success', expect.any(Number), expect.any(Number), runId);
     });
 
     it('triggerPipelineRun should set status to failed if command returns non-zero code', async () => {
@@ -362,12 +351,7 @@ describe('PipelineService', () => {
       await vi.runAllTimersAsync();
 
       // Verify that the status failed update was written
-      expect(mockPrepareInstance.run).toHaveBeenCalledWith(
-        'failed',
-        expect.any(Number),
-        expect.any(Number),
-        runId
-      );
+      expect(mockPrepareInstance.run).toHaveBeenCalledWith('failed', expect.any(Number), expect.any(Number), runId);
     });
   });
 });

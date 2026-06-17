@@ -5,10 +5,7 @@
  */
 
 import type { TProviderWithModel } from '@/common/config/storage';
-import {
-  liteLlmOpenAiProtocolHeaders,
-  shouldAttachLiteLlmOpenAiProtocolHeader,
-} from '@/common/utils/litellmGateway';
+import { liteLlmOpenAiProtocolHeaders, shouldAttachLiteLlmOpenAiProtocolHeader } from '@/common/utils/litellmGateway';
 import type { AionrsEvent, AionrsCommand, OneAgentConfig, OpenAIMessage, OpenAIToolCall } from './types';
 import { EventEmitter } from 'events';
 import { OneToolExecutor } from './tools/OneToolExecutor';
@@ -204,7 +201,7 @@ export class OneAgent extends EventEmitter {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           ...(shouldAttachLiteLlmOpenAiProtocolHeader(model) ? liteLlmOpenAiProtocolHeaders() : {}),
         },
         body: JSON.stringify(buildBody(useMaxCompletionTokens)),
@@ -212,7 +209,7 @@ export class OneAgent extends EventEmitter {
       });
     };
 
-    const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+    const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
     let useMaxCompletionTokens = false;
     let response = await doFetch(useMaxCompletionTokens);
@@ -226,7 +223,7 @@ export class OneAgent extends EventEmitter {
       // Some OpenAI/Azure/LiteLLM routes reject `max_tokens` and require `max_completion_tokens`.
       const shouldRetryWithMaxCompletionTokens =
         !useMaxCompletionTokens &&
-        lower.includes("unsupported parameter") &&
+        lower.includes('unsupported parameter') &&
         lower.includes("'max_tokens'") &&
         lower.includes('max_completion_tokens');
       if (shouldRetryWithMaxCompletionTokens) {
@@ -236,8 +233,7 @@ export class OneAgent extends EventEmitter {
       }
 
       // Gateway upstream timeouts (e.g. LiteLLM wrapping Azure 503 as 502) — short backoff retry.
-      const isTransientHttp =
-        response.status === 502 || response.status === 503 || response.status === 504;
+      const isTransientHttp = response.status === 502 || response.status === 503 || response.status === 504;
       if (isTransientHttp && transientAttempt < maxTransientRetries) {
         transientAttempt++;
         await sleep(400 * transientAttempt);
@@ -307,7 +303,7 @@ export class OneAgent extends EventEmitter {
         const deltaToolCalls = delta?.tool_calls;
         if (Array.isArray(deltaToolCalls)) {
           for (const tc of deltaToolCalls as Array<Record<string, unknown>>) {
-            const existing = toolCalls.find(t => t.id === tc.id);
+            const existing = toolCalls.find((t) => t.id === tc.id);
             const rawArgs = (tc.function as Record<string, unknown> | undefined)?.arguments;
             const argText = typeof rawArgs === 'string' ? rawArgs : '{}';
             if (existing) {

@@ -46,9 +46,7 @@ describe('enterpriseJoinApi (browser)', () => {
 
     const data = await previewEnterpriseInvite('ABCD-1234');
     expect(data.tenantName).toBe('Acme');
-    expect(fetchWebuiApiJsonMock).toHaveBeenCalledWith(
-      '/api/auth/enterprise-invite/preview?code=ABCD-1234'
-    );
+    expect(fetchWebuiApiJsonMock).toHaveBeenCalledWith('/api/auth/enterprise-invite/preview?code=ABCD-1234');
   });
 
   it('joinEnterpriseWithCode posts code with CSRF body', async () => {

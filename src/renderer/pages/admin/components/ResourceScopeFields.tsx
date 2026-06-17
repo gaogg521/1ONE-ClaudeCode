@@ -22,13 +22,7 @@ type ResourceScopeFieldsProps = {
   onChange: (value: ResourceScopeValue) => void;
 };
 
-const ResourceScopeFields: React.FC<ResourceScopeFieldsProps> = ({
-  scope,
-  teamId,
-  teams,
-  isAdmin,
-  onChange,
-}) => {
+const ResourceScopeFields: React.FC<ResourceScopeFieldsProps> = ({ scope, teamId, teams, isAdmin, onChange }) => {
   const { t } = useTranslation();
 
   return (
@@ -44,12 +38,8 @@ const ResourceScopeFields: React.FC<ResourceScopeFieldsProps> = ({
             });
           }}
         >
-          <Select.Option value='personal'>
-            {t('admin.scope.personal', { defaultValue: '个人' })}
-          </Select.Option>
-          <Select.Option value='team'>
-            {t('admin.scope.team', { defaultValue: '团队共享' })}
-          </Select.Option>
+          <Select.Option value='personal'>{t('admin.scope.personal', { defaultValue: '个人' })}</Select.Option>
+          <Select.Option value='team'>{t('admin.scope.team', { defaultValue: '团队共享' })}</Select.Option>
           {isAdmin ? (
             <Select.Option value='organization'>
               {t('admin.scope.organization', { defaultValue: '组织共享' })}

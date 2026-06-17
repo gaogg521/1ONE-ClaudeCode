@@ -94,4 +94,3 @@ const WorkspaceSettings: React.FC<{ children: React.ReactNode }> = ({ children }
 };
 
 export default WorkspaceSettings;
-

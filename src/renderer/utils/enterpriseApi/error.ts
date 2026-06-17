@@ -67,11 +67,7 @@ export function normalizeEnterpriseApiError(
     };
   }
 
-  if (
-    err.name === 'TypeError' ||
-    /failed to fetch/i.test(message) ||
-    /network/i.test(message)
-  ) {
+  if (err.name === 'TypeError' || /failed to fetch/i.test(message) || /network/i.test(message)) {
     return {
       code: 'network',
       message: '无法连接企业后台服务，请检查网络或本地 WebUI 状态。',

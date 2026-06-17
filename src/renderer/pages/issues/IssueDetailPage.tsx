@@ -22,10 +22,7 @@ import CreateIssueModal from './components/CreateIssueModal';
 import IssueActivityTimeline, { buildIssueActivityItems } from './components/IssueActivityTimeline';
 import IssueAutomationCard from './components/IssueAutomationCard';
 import IssueCommentComposer from './components/IssueCommentComposer';
-import {
-  buildIssueAssistantPath,
-  buildIssuePlanningPath,
-} from './issueCollaborationRouting';
+import { buildIssueAssistantPath, buildIssuePlanningPath } from './issueCollaborationRouting';
 import {
   countNestedChildren,
   findRequirementById,
@@ -43,9 +40,11 @@ const IssueDetailPage: React.FC = () => {
   const { issueId } = useParams<{ issueId: string }>();
   const auth = useAuth();
   const { showTeamsFeature } = useEditionFeatures();
-  const { options: assigneeOptions, loading: assigneesLoading, resolveLabel } = useIssueAssigneeOptions(
-    showTeamsFeature
-  );
+  const {
+    options: assigneeOptions,
+    loading: assigneesLoading,
+    resolveLabel,
+  } = useIssueAssigneeOptions(showTeamsFeature);
   const [loading, setLoading] = useState(true);
   const [tree, setTree] = useState<RequirementRecord[]>([]);
   const [comments, setComments] = useState<RequirementCommentRecord[]>([]);
@@ -60,8 +59,8 @@ const IssueDetailPage: React.FC = () => {
       listRequirementsTree(),
       listRequirementComments(issueId),
     ]);
-    setTree(treeResult.status === 'fulfilled' ? treeResult.value ?? [] : []);
-    setComments(commentResult.status === 'fulfilled' ? commentResult.value ?? [] : []);
+    setTree(treeResult.status === 'fulfilled' ? (treeResult.value ?? []) : []);
+    setComments(commentResult.status === 'fulfilled' ? (commentResult.value ?? []) : []);
   }, [issueId]);
 
   useEffect(() => {
@@ -81,22 +80,14 @@ const IssueDetailPage: React.FC = () => {
     };
   }, [issueId, reload]);
 
-  const currentIssue = useMemo(
-    () => (issueId ? findRequirementById(tree, issueId) : null),
-    [issueId, tree]
-  );
+  const currentIssue = useMemo(() => (issueId ? findRequirementById(tree, issueId) : null), [issueId, tree]);
 
   const childCount = countNestedChildren(currentIssue);
 
   const activityItems = useMemo(
     () =>
       currentIssue
-        ? buildIssueActivityItems(
-            currentIssue,
-            comments,
-            t,
-            formatCreatorDisplayName(currentIssue, auth.user)
-          )
+        ? buildIssueActivityItems(currentIssue, comments, t, formatCreatorDisplayName(currentIssue, auth.user))
         : [],
     [auth.user, comments, currentIssue, t]
   );
@@ -157,10 +148,7 @@ const IssueDetailPage: React.FC = () => {
                     </Typography.Paragraph>
                   </div>
                   <Space wrap>
-                    <Button
-                      type='primary'
-                      onClick={() => navigate(buildIssueAssistantPath(currentIssue.id))}
-                    >
+                    <Button type='primary' onClick={() => navigate(buildIssueAssistantPath(currentIssue.id))}>
                       {t('common.issues.startWithAssistant', { defaultValue: '交给 Agent 助手处理' })}
                     </Button>
                     {showTeamsFeature ? (
@@ -245,7 +233,9 @@ const IssueDetailPage: React.FC = () => {
               <Card title={t('common.issues.propertiesTitle', { defaultValue: '属性' })}>
                 <div className='space-y-14px text-13px'>
                   <div>
-                    <div className='text-t-tertiary mb-6px'>{t('common.issues.propertyStatus', { defaultValue: '状态' })}</div>
+                    <div className='text-t-tertiary mb-6px'>
+                      {t('common.issues.propertyStatus', { defaultValue: '状态' })}
+                    </div>
                     <Select
                       value={currentIssue.status}
                       disabled={savingField}
@@ -259,7 +249,9 @@ const IssueDetailPage: React.FC = () => {
                     </Select>
                   </div>
                   <div>
-                    <div className='text-t-tertiary mb-6px'>{t('common.issues.propertyPriority', { defaultValue: '优先级' })}</div>
+                    <div className='text-t-tertiary mb-6px'>
+                      {t('common.issues.propertyPriority', { defaultValue: '优先级' })}
+                    </div>
                     <Select
                       value={currentIssue.priority}
                       disabled={savingField}
@@ -273,7 +265,9 @@ const IssueDetailPage: React.FC = () => {
                     </Select>
                   </div>
                   <div>
-                    <div className='text-t-tertiary mb-6px'>{t('common.issues.propertyAssignee', { defaultValue: '负责人' })}</div>
+                    <div className='text-t-tertiary mb-6px'>
+                      {t('common.issues.propertyAssignee', { defaultValue: '负责人' })}
+                    </div>
                     {showTeamsFeature && assigneeOptions.length > 0 ? (
                       <Select
                         allowClear
@@ -281,9 +275,7 @@ const IssueDetailPage: React.FC = () => {
                         value={currentIssue.assigned_to ?? undefined}
                         placeholder={t('common.issues.unassigned', { defaultValue: '未分配' })}
                         disabled={savingField}
-                        onChange={(value) =>
-                          void patchIssue({ assigned_to: value ? String(value) : null })
-                        }
+                        onChange={(value) => void patchIssue({ assigned_to: value ? String(value) : null })}
                       >
                         {assigneeOptions.map((member) => (
                           <Select.Option key={member.userId} value={member.userId}>
@@ -304,24 +296,27 @@ const IssueDetailPage: React.FC = () => {
                     <div className='mt-4px text-t-primary break-all'>{currentIssue.id}</div>
                   </div>
                   <div>
-                    <div className='text-t-tertiary'>{t('common.issues.propertyChildren', { defaultValue: '子项数量' })}</div>
+                    <div className='text-t-tertiary'>
+                      {t('common.issues.propertyChildren', { defaultValue: '子项数量' })}
+                    </div>
                     <div className='mt-4px text-t-primary'>{childCount}</div>
                   </div>
                   <div>
-                    <div className='text-t-tertiary'>{t('common.issues.propertyCreatedAt', { defaultValue: '创建时间' })}</div>
+                    <div className='text-t-tertiary'>
+                      {t('common.issues.propertyCreatedAt', { defaultValue: '创建时间' })}
+                    </div>
                     <div className='mt-4px text-t-primary'>{new Date(currentIssue.created_at).toLocaleString()}</div>
                   </div>
                   <div>
-                    <div className='text-t-tertiary'>{t('common.issues.propertyUpdatedAt', { defaultValue: '最近更新' })}</div>
+                    <div className='text-t-tertiary'>
+                      {t('common.issues.propertyUpdatedAt', { defaultValue: '最近更新' })}
+                    </div>
                     <div className='mt-4px text-t-primary'>{new Date(currentIssue.updated_at).toLocaleString()}</div>
                   </div>
                 </div>
               </Card>
 
-              <IssueAutomationCard
-                issueId={currentIssue.id}
-                issueSubject={currentIssue.subject}
-              />
+              <IssueAutomationCard issueId={currentIssue.id} issueSubject={currentIssue.subject} />
             </div>
           </div>
         )}

@@ -10,12 +10,16 @@ import type { IResponseMessage } from '@/common/adapter/ipcBridge';
 import type { TChatConversation, TokenUsageData } from '@/common/config/storage';
 import type { ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
+import { emitter } from '@/renderer/utils/emitter';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type TokenUsage = {
   input_tokens?: number;
   output_tokens?: number;
 };
+
+/** Poll DB while waiting so packaged builds still show replies without waiting for finish. */
+export const AIONRS_MESSAGE_SYNC_POLL_MS = 500;
 
 export const useAionrsMessage = (conversation_id: string, onError?: (message: IResponseMessage) => void) => {
   const addOrUpdateMessage = useAddOrUpdateMessage();
@@ -152,6 +156,9 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
             setStreamRunning(false);
             setWaitingResponse(false);
             setThought({ subject: '', description: '' });
+            requestAnimationFrame(() => {
+              emitter.emit('conversation.messages.sync', { conversationId: conversation_id });
+            });
           }
           break;
         case 'tool_group':
@@ -219,6 +226,9 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
             hasContentInTurnRef.current = false;
             // Clear active message id so next request won't be filtered
             activeMsgIdRef.current = null;
+            requestAnimationFrame(() => {
+              emitter.emit('conversation.messages.sync', { conversationId: conversation_id });
+            });
             onError?.(message as IResponseMessage);
           } else {
             // Mark that current turn has content output (exclude error type)
@@ -303,6 +313,29 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
     // Clear active message ID to prevent filtering events from new messages after stop
     activeMsgIdRef.current = null;
   }, []);
+
+  // Packaged builds may miss stream IPC events; poll DB while waiting so replies still appear.
+  useEffect(() => {
+    if (!waitingResponse && !streamRunning) {
+      return;
+    }
+    const sync = () => {
+      emitter.emit('conversation.messages.sync', { conversationId: conversation_id });
+    };
+    sync();
+    const timer = setInterval(sync, AIONRS_MESSAGE_SYNC_POLL_MS);
+    return () => clearInterval(timer);
+  }, [conversation_id, waitingResponse, streamRunning]);
+
+  // After turn completes, one more DB pull catches batched persistence.
+  useEffect(() => {
+    if (running) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      emitter.emit('conversation.messages.sync', { conversationId: conversation_id });
+    });
+  }, [conversation_id, running]);
 
   return {
     thought,

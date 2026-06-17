@@ -30,24 +30,11 @@ import { isDesktopOperatorUser, useAuth } from '@/renderer/hooks/context/AuthCon
 import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
 import { fetchWebuiApi, getWebuiAdminBrowserOrigin, getWebuiApiBaseUrl } from '@/renderer/utils/webuiApiBase';
 import { buildWebuiAdminLoginUrl } from '@/common/config/webuiLoginAccess';
-import {
-  getDesktopWebuiBearerToken,
-  syncBrowserWebuiSessionToDesktop,
-} from '@/renderer/utils/syncBrowserWebuiSession';
-import {
-  createEnterprise,
-  joinEnterpriseWithCode,
-} from '@/renderer/utils/enterpriseJoinApi';
+import { getDesktopWebuiBearerToken, syncBrowserWebuiSessionToDesktop } from '@/renderer/utils/syncBrowserWebuiSession';
+import { createEnterprise, joinEnterpriseWithCode } from '@/renderer/utils/enterpriseJoinApi';
 import { adminApi } from '@/renderer/utils/kanbanApi';
-import {
-  isEnterpriseAdminRole,
-  isSystemAdminRole,
-  resolveEnterpriseEditionPath,
-} from '@/common/auth/enterpriseRoles';
-import {
-  mergeDesktopEnterpriseContext,
-  persistEnterpriseWorkspaceEdition,
-} from '@/common/auth/enterpriseEditionSync';
+import { isEnterpriseAdminRole, isSystemAdminRole, resolveEnterpriseEditionPath } from '@/common/auth/enterpriseRoles';
+import { mergeDesktopEnterpriseContext, persistEnterpriseWorkspaceEdition } from '@/common/auth/enterpriseEditionSync';
 import { isEnterpriseTenantId } from '@/common/config/webuiEnterpriseConfig';
 import { setPostLoginRedirect } from '@/renderer/utils/postLoginRedirect';
 import { buildEnterpriseLoginPath, readCurrentHashPath } from '@/renderer/utils/enterpriseLoginNavigation';
@@ -326,13 +313,10 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   }, [isDesktop, refreshAuth, refreshEnterpriseContext]);
 
   const joinedByInstanceContext = enterpriseContext?.joined === true;
-  const joinedByUserIdentity =
-    Boolean(user && !isDesktopOperatorUser(user) && isEnterpriseTenantId(user.tenant_id));
+  const joinedByUserIdentity = Boolean(user && !isDesktopOperatorUser(user) && isEnterpriseTenantId(user.tenant_id));
   const hasInstanceEnterprise = joinedByInstanceContext;
   const hasJoinedEnterprise = joinedByUserIdentity;
-  const effectiveRole = isDesktop
-    ? (enterpriseContext?.role ?? user?.role)
-    : (user?.role ?? enterpriseContext?.role);
+  const effectiveRole = isDesktop ? (enterpriseContext?.role ?? user?.role) : (user?.role ?? enterpriseContext?.role);
 
   const authEditionSyncedRef = useRef(false);
   const prevWebUserIdRef = useRef<string | undefined>(undefined);
@@ -385,20 +369,23 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
     }
   }, [isDesktop, joinedByUserIdentity, loading, managementMode]);
 
-  const setManagementMode = useCallback(async (mode: WebuiManagementMode) => {
-    setManagementModeState(mode);
-    if (!isDesktop) {
-      writeBrowserWebuiManagementMode(mode);
-      return;
-    }
-    try {
-      await ConfigStorage.set(WEBUI_MANAGEMENT_MODE_KEY, mode);
-      await ConfigStorage.set(WEBUI_USER_CHOSE_STANDALONE_KEY, mode === 'standalone');
-    } catch {
-      const stored = await ConfigStorage.get(WEBUI_MANAGEMENT_MODE_KEY).catch((): undefined => undefined);
-      setManagementModeState(normalizeWebuiManagementMode(stored));
-    }
-  }, [isDesktop]);
+  const setManagementMode = useCallback(
+    async (mode: WebuiManagementMode) => {
+      setManagementModeState(mode);
+      if (!isDesktop) {
+        writeBrowserWebuiManagementMode(mode);
+        return;
+      }
+      try {
+        await ConfigStorage.set(WEBUI_MANAGEMENT_MODE_KEY, mode);
+        await ConfigStorage.set(WEBUI_USER_CHOSE_STANDALONE_KEY, mode === 'standalone');
+      } catch {
+        const stored = await ConfigStorage.get(WEBUI_MANAGEMENT_MODE_KEY).catch((): undefined => undefined);
+        setManagementModeState(normalizeWebuiManagementMode(stored));
+      }
+    },
+    [isDesktop]
+  );
 
   const openUrlInBrowser = useCallback(
     async (hashPath: string): Promise<'opened' | 'webui_not_running' | 'failed'> => {
@@ -471,8 +458,7 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   }, [isDesktop]);
 
   const showEnterpriseAdminNav = isEnterpriseAdminRole(effectiveRole);
-  const canUseEnterpriseEditionSwitcher =
-    editionSwitcherEnabled || isSystemAdminRole(effectiveRole);
+  const canUseEnterpriseEditionSwitcher = editionSwitcherEnabled || isSystemAdminRole(effectiveRole);
 
   const canCreateEnterprise = enterpriseContext?.canCreateEnterprise === true;
   const hasSystemAdmin = enterpriseContext?.hasSystemAdmin === true;

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  isWebFetchToolName,
-  normalizeWebFetchToolParams,
-} from '@/process/agent/gemini/cli/tools/web-fetch-params';
+import { isWebFetchToolName, normalizeWebFetchToolParams } from '@/process/agent/gemini/cli/tools/web-fetch-params';
 import { extractTextFromAgentQuery, normalizeToolParams } from '@/process/agent/gemini/utils';
 
 describe('normalizeWebFetchToolParams', () => {
@@ -40,8 +37,7 @@ describe('normalizeWebFetchToolParams', () => {
     const result = normalizeWebFetchToolParams(
       {},
       {
-        fallbackText:
-          'https://slaythespire2.gg/zh/ancients\n把这个页面里的先古选项整理成表格',
+        fallbackText: 'https://slaythespire2.gg/zh/ancients\n把这个页面里的先古选项整理成表格',
       }
     );
     expect(result.url).toBe('https://slaythespire2.gg/zh/ancients');

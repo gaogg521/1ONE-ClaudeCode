@@ -16,8 +16,7 @@ const DEFAULT_STATES_FILE = 'extension-states.json';
 
 function resolveStatesFile(): string {
   const override =
-    process.env[EXTENSION_STATES_FILE_ENV]?.trim() ||
-    process.env[LEGACY_EXTENSION_STATES_FILE_ENV]?.trim();
+    process.env[EXTENSION_STATES_FILE_ENV]?.trim() || process.env[LEGACY_EXTENSION_STATES_FILE_ENV]?.trim();
   if (override) {
     return path.resolve(override);
   }

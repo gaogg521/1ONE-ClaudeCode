@@ -26,9 +26,7 @@ function stubAgent(overrides: Partial<PersonalAgent> = {}): PersonalAgent {
 
 describe('buildPersonalDigitalEmployeeCronPrompt', () => {
   it('uses game security daily prompt for the preset name', () => {
-    const prompt = buildPersonalDigitalEmployeeCronPrompt(
-      stubAgent({ name: GAME_SECURITY_EXPERT_NAME })
-    );
+    const prompt = buildPersonalDigitalEmployeeCronPrompt(stubAgent({ name: GAME_SECURITY_EXPERT_NAME }));
     expect(prompt).toBe(GAME_SECURITY_DAILY_CRON_PROMPT);
   });
 

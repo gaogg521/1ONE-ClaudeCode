@@ -7,11 +7,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Form, Input, Message, Modal, Radio, Select, Space, Spin, Table } from '@arco-design/web-react';
 import { adminApi, type AdminUser } from '@/renderer/utils/kanbanApi';
-import {
-  enterpriseGet,
-  enterpriseMutate,
-  getEnterpriseActionError,
-} from '@/renderer/utils/enterpriseApi/client';
+import { enterpriseGet, enterpriseMutate, getEnterpriseActionError } from '@/renderer/utils/enterpriseApi/client';
 
 export type TeamMemberRole = 'owner' | 'admin' | 'member' | 'viewer';
 
@@ -103,11 +99,10 @@ const TeamAddMemberModal: React.FC<TeamAddMemberModalProps> = ({
     }
     setLdapSearching(true);
     try {
-      const data = await enterpriseMutate<LdapDirectoryEntry[]>(
-        '/api/admin/ldap/users/search',
-        'POST',
-        { query: q, limit: 30 }
-      );
+      const data = await enterpriseMutate<LdapDirectoryEntry[]>('/api/admin/ldap/users/search', 'POST', {
+        query: q,
+        limit: 30,
+      });
       setLdapResults(data ?? []);
       setSelectedLdapDn('');
       if (!data?.length) {

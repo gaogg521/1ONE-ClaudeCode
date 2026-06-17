@@ -70,8 +70,7 @@ vi.mock('@process/webserver/auth/middleware/TokenMiddleware', () => ({
   },
 }));
 
-const passThroughMiddleware = (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
-  next();
+const passThroughMiddleware = (_req: express.Request, _res: express.Response, next: express.NextFunction) => next();
 
 vi.mock('@process/webserver/middleware/rateLimiter', () => ({
   apiRateLimiter: passThroughMiddleware,
@@ -158,8 +157,9 @@ vi.mock('@process/webserver/auth/instanceGovernance', () => ({
 
 function getRouteHandler(app: express.Express, path: string, method: 'get' | 'patch'): express.RequestHandler {
   const layer = app.router.stack.find(
-    (entry: { route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> } }) =>
-      entry.route?.path === path && entry.route?.methods?.[method]
+    (entry: {
+      route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle: express.RequestHandler }> };
+    }) => entry.route?.path === path && entry.route?.methods?.[method]
   );
 
   return layer?.route?.stack?.at(-1)?.handle as express.RequestHandler;

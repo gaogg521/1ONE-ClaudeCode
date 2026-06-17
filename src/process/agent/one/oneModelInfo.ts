@@ -28,7 +28,9 @@ function isOpenAiCompatibleForOne(pwm: TProviderWithModel): boolean {
 
 export async function listOneAgentSelectableModels(): Promise<Array<{ id: string; label: string }>> {
   // Prefer ConfigStorage (intercepted) so updates are reflected immediately.
-  const providers = (await ConfigStorage.get('model.config').catch((): undefined => undefined)) as IProvider[] | undefined;
+  const providers = (await ConfigStorage.get('model.config').catch((): undefined => undefined)) as
+    | IProvider[]
+    | undefined;
   if (!Array.isArray(providers)) return [];
   const out: Array<{ id: string; label: string }> = [];
   for (const p of providers) {
@@ -54,7 +56,9 @@ export async function listOneAgentSelectableModels(): Promise<Array<{ id: string
 export async function resolveTProviderFromOneCompoundId(modelId: string): Promise<TProviderWithModel | null> {
   const parsed = parseOneCompoundModelId(modelId);
   if (!parsed) return null;
-  const providers = (await ConfigStorage.get('model.config').catch((): undefined => undefined)) as IProvider[] | undefined;
+  const providers = (await ConfigStorage.get('model.config').catch((): undefined => undefined)) as
+    | IProvider[]
+    | undefined;
   const p = providers?.find((x) => x.id === parsed.providerId);
   if (!p || p.enabled === false) return null;
   if (!p.model?.includes(parsed.modelName)) return null;

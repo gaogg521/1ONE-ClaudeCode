@@ -5,10 +5,7 @@
  */
 
 import { buildPersonalAgentAutopilotContext } from '@/common/digitalEmployee/agentCronConfig';
-import {
-  buildIssueAssignmentPrompt,
-  buildPersonalDigitalEmployeeCronPrompt,
-} from '@/common/digitalEmployee/runPrompt';
+import { buildIssueAssignmentPrompt, buildPersonalDigitalEmployeeCronPrompt } from '@/common/digitalEmployee/runPrompt';
 import type { AutopilotContext } from '@/common/types/autopilotContext';
 import type { PersonalAgent } from '@/common/types/personalAgentTypes';
 import type { TeamAgent } from '@/common/types/teamTypes';

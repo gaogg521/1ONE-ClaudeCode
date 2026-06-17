@@ -73,37 +73,27 @@ vi.mock('@/renderer/components/base/AionModal', () => ({
 
 vi.mock('@arco-design/web-react', () => ({
   Alert: ({ content }: { content?: React.ReactNode }) => <div>{content}</div>,
-  Button: ({
-    children,
-    onClick,
-    disabled,
-  }: React.PropsWithChildren<{ onClick?: () => void; disabled?: boolean }>) => (
+  Button: ({ children, onClick, disabled }: React.PropsWithChildren<{ onClick?: () => void; disabled?: boolean }>) => (
     <button onClick={onClick} disabled={disabled}>
       {children}
     </button>
   ),
-  Card: ({
-    title,
-    children,
-  }: React.PropsWithChildren<{ title?: React.ReactNode }>) => (
+  Card: ({ title, children }: React.PropsWithChildren<{ title?: React.ReactNode }>) => (
     <section>
       {title ? <div>{title}</div> : null}
       {children}
     </section>
   ),
   Empty: ({ description }: { description?: React.ReactNode }) => <div>{description}</div>,
-  Form: Object.assign(
-    ({ children }: React.PropsWithChildren) => <form>{children}</form>,
-    {
-      Item: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-      useForm: () => [
-        {
-          setFieldsValue: vi.fn(),
-          validate: vi.fn().mockResolvedValue({}),
-        },
-      ],
-    }
-  ),
+  Form: Object.assign(({ children }: React.PropsWithChildren) => <form>{children}</form>, {
+    Item: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+    useForm: () => [
+      {
+        setFieldsValue: vi.fn(),
+        validate: vi.fn().mockResolvedValue({}),
+      },
+    ],
+  }),
   Input: Object.assign(
     ({
       value,
@@ -141,14 +131,11 @@ vi.mock('@arco-design/web-react', () => ({
       {extra}
     </div>
   ),
-  Select: Object.assign(
-    ({ children }: React.PropsWithChildren) => <select>{children}</select>,
-    {
-      Option: ({ children, value }: React.PropsWithChildren<{ value: string }>) => (
-        <option value={value}>{children}</option>
-      ),
-    }
-  ),
+  Select: Object.assign(({ children }: React.PropsWithChildren) => <select>{children}</select>, {
+    Option: ({ children, value }: React.PropsWithChildren<{ value: string }>) => (
+      <option value={value}>{children}</option>
+    ),
+  }),
   Spin: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Tag: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
   Typography: {
@@ -279,7 +266,9 @@ describe('IssuesPage', () => {
     render(<IssuesPage />);
     await waitFor(() => {
       expect(
-        screen.getByText('当前实例已接入企业，但你尚未登录企业账号。登录后将显示你的姓名、组织架构，并启用「分配给我」等筛选。')
+        screen.getByText(
+          '当前实例已接入企业，但你尚未登录企业账号。登录后将显示你的姓名、组织架构，并启用「分配给我」等筛选。'
+        )
       ).toBeInTheDocument();
     });
 

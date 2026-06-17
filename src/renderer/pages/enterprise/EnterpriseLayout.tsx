@@ -5,28 +5,15 @@
  */
 
 import React, { useCallback } from 'react';
-import {
-  Alert,
-  Button,
-  Card,
-  Space,
-  Spin,
-  Typography,
-} from '@arco-design/web-react';
+import { Alert, Button, Card, Space, Spin, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Titlebar from '@/renderer/components/layout/Titlebar';
 import EditionModeSwitcher from '@/renderer/components/layout/EditionModeSwitcher';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
-import {
-  EnterpriseRuntimeProvider,
-  useEnterpriseRuntime,
-} from '@/renderer/hooks/enterprise/useEnterpriseRuntime';
+import { EnterpriseRuntimeProvider, useEnterpriseRuntime } from '@/renderer/hooks/enterprise/useEnterpriseRuntime';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
-import {
-  isWebuiBuiltinAdministrator,
-  resolveEnterpriseTenantDisplayLabel,
-} from '@/common/auth/enterpriseRoles';
+import { isWebuiBuiltinAdministrator, resolveEnterpriseTenantDisplayLabel } from '@/common/auth/enterpriseRoles';
 import { ENTERPRISE_JOIN_PATH } from '@/renderer/pages/enterprise/paths';
 import { EnterpriseGateProvider } from '@/renderer/pages/settings/enterpriseGateContext';
 import { getEnterpriseNavItemByPath } from '@/renderer/pages/enterprise/enterpriseNav';
@@ -47,19 +34,14 @@ const EnterpriseLayoutContent: React.FC = () => {
   const location = useLocation();
   const { enterpriseContext } = useWebuiEnterpriseMode();
   const runtime = useEnterpriseRuntime();
-  const tenantLabel = resolveEnterpriseTenantDisplayLabel(
-    enterpriseContext?.tenantId,
-    enterpriseContext?.tenantName
-  );
+  const tenantLabel = resolveEnterpriseTenantDisplayLabel(enterpriseContext?.tenantId, enterpriseContext?.tenantName);
 
   const handleNavClick = useCallback(
     (path: string) => {
       if (runtime.activeNavItem.path === path) {
         return;
       }
-      const matched =
-        runtime.visibleNavItems.find((item) => item.path === path) ??
-        getEnterpriseNavItemByPath(path);
+      const matched = runtime.visibleNavItems.find((item) => item.path === path) ?? getEnterpriseNavItemByPath(path);
       if (!matched) {
         void navigate(path);
         return;
@@ -107,10 +89,7 @@ const EnterpriseLayoutContent: React.FC = () => {
             </Button>
           ) : null}
           {runtime.status === 'not_authenticated' ? (
-            <Button
-              type='primary'
-              onClick={() => void navigate(buildEnterpriseRouteLoginPath(location.pathname))}
-            >
+            <Button type='primary' onClick={() => void navigate(buildEnterpriseRouteLoginPath(location.pathname))}>
               {t('settings.enterpriseConsole.goSignIn', { defaultValue: '前往登录' })}
             </Button>
           ) : null}
@@ -121,10 +100,7 @@ const EnterpriseLayoutContent: React.FC = () => {
 
   // 所有企业成员均可进入控制台，后端 API 按 scope 过滤数据权限
   return (
-    <div
-      className='app-shell flex flex-col size-full h-full min-h-screen bg-1'
-      data-enterprise-theme='true'
-    >
+    <div className='app-shell flex flex-col size-full h-full min-h-screen bg-1' data-enterprise-theme='true'>
       <Titlebar workspaceAvailable={false} />
       {authStatus !== 'authenticated' ? (
         <div className='px-16px pt-8px shrink-0'>
@@ -191,10 +167,7 @@ const EnterpriseLayout: React.FC = () => {
   const isDesktop = isElectronDesktop();
 
   if (!enterpriseModeLoading && isDesktop && location.pathname === ENTERPRISE_HOME_PATH) {
-    const tenantLabel = resolveEnterpriseTenantDisplayLabel(
-      enterpriseContext?.tenantId,
-      enterpriseContext?.tenantName
-    );
+    const tenantLabel = resolveEnterpriseTenantDisplayLabel(enterpriseContext?.tenantId, enterpriseContext?.tenantName);
     const enterpriseBrowserUrl = webuiApiBase
       ? `${webuiApiBase}/#${buildEnterpriseRouteLoginPath('/enterprise/auth')}`
       : '';
@@ -211,10 +184,7 @@ const EnterpriseLayout: React.FC = () => {
 
   if (enterpriseModeLoading) {
     return (
-      <div
-        className='app-shell flex flex-col size-full h-full min-h-screen'
-        data-enterprise-theme='true'
-      >
+      <div className='app-shell flex flex-col size-full h-full min-h-screen' data-enterprise-theme='true'>
         <Titlebar workspaceAvailable={false} />
         <div className='flex justify-center items-center flex-1 py-40px'>
           <Spin />

@@ -74,21 +74,15 @@ describe('resolvePostLoginRedirectPath', () => {
   });
 
   it('allows org admins into auth configuration after login', () => {
-    expect(resolvePostLoginRedirectPath('/enterprise/auth', 'org_admin', 'tenant-a')).toBe(
-      '/enterprise/auth'
-    );
+    expect(resolvePostLoginRedirectPath('/enterprise/auth', 'org_admin', 'tenant-a')).toBe('/enterprise/auth');
   });
 
   it('allows system admins into auth routes', () => {
-    expect(resolvePostLoginRedirectPath('/enterprise/auth', 'system_admin', 'tenant-a')).toBe(
-      '/enterprise/auth'
-    );
+    expect(resolvePostLoginRedirectPath('/enterprise/auth', 'system_admin', 'tenant-a')).toBe('/enterprise/auth');
   });
 
   it('allows org admins into user management', () => {
-    expect(resolvePostLoginRedirectPath('/enterprise/users', 'org_admin', 'tenant-a')).toBe(
-      '/enterprise/users'
-    );
+    expect(resolvePostLoginRedirectPath('/enterprise/users', 'org_admin', 'tenant-a')).toBe('/enterprise/users');
   });
 
   it('allows not-joined system admins targeting admin home to enter console', () => {

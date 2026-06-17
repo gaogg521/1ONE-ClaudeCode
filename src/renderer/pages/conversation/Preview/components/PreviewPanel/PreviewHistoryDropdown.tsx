@@ -89,9 +89,7 @@ const PreviewHistoryDropdown: React.FC<PreviewHistoryDropdownProps> = ({
         {historyLoading ? (
           <div className='py-16px text-center text-12px text-t-secondary'>{t('preview.loading')}</div>
         ) : historyError ? (
-          <div className='py-16px text-center text-12px text-[var(--danger)]'>
-            {historyError}
-          </div>
+          <div className='py-16px text-center text-12px text-[var(--danger)]'>{historyError}</div>
         ) : historyVersions.length === 0 ? (
           <div className='py-16px text-center text-12px text-t-secondary'>{t('preview.noHistory')}</div>
         ) : (

@@ -15,7 +15,10 @@ const MessageSkillSuggest: React.FC<{ message: IMessageSkillSuggest }> = ({ mess
   const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
 
   return (
-    <div className={stretchLayout ? 'w-full' : 'w-full mx-auto'} style={getChatRailSurfaceStyle('message', stretchLayout)}>
+    <div
+      className={stretchLayout ? 'w-full' : 'w-full mx-auto'}
+      style={getChatRailSurfaceStyle('message', stretchLayout)}
+    >
       <SkillSuggestCard suggestion={{ name, description, content: skillContent }} cronJobId={cronJobId} />
     </div>
   );

@@ -28,11 +28,7 @@ const EnterpriseCollaborationContextPanel: React.FC<EnterpriseCollaborationConte
   const { t } = useTranslation();
 
   if (loading) {
-    return (
-      <div className='text-12px text-t-tertiary'>
-        {t('common.loading', { defaultValue: '请稍候...' })}
-      </div>
-    );
+    return <div className='text-12px text-t-tertiary'>{t('common.loading', { defaultValue: '请稍候...' })}</div>;
   }
 
   return (

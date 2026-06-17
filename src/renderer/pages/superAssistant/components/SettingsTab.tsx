@@ -8,11 +8,7 @@ type SettingsTabProps = {
   onOpenWebuiSettings: () => void;
 };
 
-const SettingsTab: React.FC<SettingsTabProps> = ({
-  isAdmin,
-  onOpenEnterpriseConsole,
-  onOpenWebuiSettings,
-}) => {
+const SettingsTab: React.FC<SettingsTabProps> = ({ isAdmin, onOpenEnterpriseConsole, onOpenWebuiSettings }) => {
   const { t } = useTranslation();
 
   return (

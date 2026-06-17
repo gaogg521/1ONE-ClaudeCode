@@ -115,9 +115,7 @@ vi.mock('@arco-design/web-react', () => {
     value?: string;
     onChange?: (value: string) => void;
     placeholder?: string;
-  }) => (
-    <input value={value} placeholder={placeholder} onChange={(event) => onChange?.(event.target.value)} />
-  );
+  }) => <input value={value} placeholder={placeholder} onChange={(event) => onChange?.(event.target.value)} />;
   Input.Password = Input;
 
   return {
@@ -164,9 +162,7 @@ describe('EnterpriseLoginChannelPanel', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /飞书/ }));
 
-    expect(startOAuthAuthorize).toHaveBeenCalledWith(
-      expect.stringContaining('/api/auth/feishu/authorize')
-    );
+    expect(startOAuthAuthorize).toHaveBeenCalledWith(expect.stringContaining('/api/auth/feishu/authorize'));
   });
 
   it('warns before starting OAuth for unavailable providers', async () => {
@@ -174,12 +170,8 @@ describe('EnterpriseLoginChannelPanel', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /钉钉/ }));
 
-    expect(startOAuthAuthorize).not.toHaveBeenCalledWith(
-      expect.stringContaining('/api/auth/dingtalk/authorize')
-    );
-    expect(Message.warning).toHaveBeenCalledWith(
-      '您的企业尚未开通 钉钉 登录，请联系管理员或改用其他方式。'
-    );
+    expect(startOAuthAuthorize).not.toHaveBeenCalledWith(expect.stringContaining('/api/auth/dingtalk/authorize'));
+    expect(Message.warning).toHaveBeenCalledWith('您的企业尚未开通 钉钉 登录，请联系管理员或改用其他方式。');
   });
 
   it('submits LDAP login after selecting the LDAP channel', async () => {

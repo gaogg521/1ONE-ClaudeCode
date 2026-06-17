@@ -48,9 +48,7 @@ describe('oauthAuthorize', () => {
       })
     );
     expect(result).toEqual({ ok: true });
-    expect((globalThis.window as { location: { href: string } }).location.href).toBe(
-      'http://localhost/#/oauth-start'
-    );
+    expect((globalThis.window as { location: { href: string } }).location.href).toBe('http://localhost/#/oauth-start');
   });
 
   it('returns backend message when authorize is rejected', async () => {

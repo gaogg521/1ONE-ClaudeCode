@@ -33,10 +33,7 @@ type ChannelMeta = {
   icon: React.ReactNode;
 };
 
-function resolveChannelStatus(
-  channel: LoginChannel,
-  providers: ReturnType<typeof useLoginUiProviders>
-): ChannelStatus {
+function resolveChannelStatus(channel: LoginChannel, providers: ReturnType<typeof useLoginUiProviders>): ChannelStatus {
   if (channel === 'local') {
     return 'ready';
   }
@@ -170,10 +167,7 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
     [providers]
   );
 
-  const channelLabel = useCallback(
-    (item: ChannelMeta) => t(item.labelKey, { defaultValue: item.labelDefault }),
-    [t]
-  );
+  const channelLabel = useCallback((item: ChannelMeta) => t(item.labelKey, { defaultValue: item.labelDefault }), [t]);
 
   const showChannelUnavailableMessage = useCallback(
     (item: ChannelMeta) => {
@@ -209,8 +203,7 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
 
   const startOAuth = useCallback(
     async (provider: OAuthChannel) => {
-      const path =
-        provider === 'feishu' ? buildFeishuAuthorizePath('oauth') : buildOAuthAuthorizePath(provider);
+      const path = provider === 'feishu' ? buildFeishuAuthorizePath('oauth') : buildOAuthAuthorizePath(provider);
       const result = await startOAuthAuthorize(path);
       if (result.ok === false) {
         Message.error(formatOAuthAuthorizeError(result.message, t, result.code));
@@ -274,9 +267,8 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
           username: user?.username ?? '',
         })
       : t('settings.enterpriseConsole.loginChannels.localSessionHint', {
-        defaultValue:
-          '当前以本地账户 {{username}} 登录，尚未加入组织。请使用下方组织登录方式，或切换账号后再试。',
-        username: user?.username ?? '',
+          defaultValue: '当前以本地账户 {{username}} 登录，尚未加入组织。请使用下方组织登录方式，或切换账号后再试。',
+          username: user?.username ?? '',
         });
 
   const handleSwitchAccount = useCallback(async () => {
@@ -375,16 +367,9 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
     <div className={embedded ? undefined : styles.panel}>
       {showLocalSessionHint ? (
         <div className={styles.localSessionBar}>
-          <Typography.Paragraph className={styles.localSessionText}>
-            {localSessionHintText}
-          </Typography.Paragraph>
+          <Typography.Paragraph className={styles.localSessionText}>{localSessionHintText}</Typography.Paragraph>
           {!usingDesktopOperatorIdentity ? (
-            <Button
-              size='mini'
-              type='outline'
-              loading={switchingAccount}
-              onClick={() => void handleSwitchAccount()}
-            >
+            <Button size='mini' type='outline' loading={switchingAccount} onClick={() => void handleSwitchAccount()}>
               {t('settings.enterpriseConsole.loginChannels.switchAccount', { defaultValue: '切换账号' })}
             </Button>
           ) : null}

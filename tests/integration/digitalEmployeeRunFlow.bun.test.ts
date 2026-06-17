@@ -115,10 +115,7 @@ describe.skipIf(!isBetterSqliteAvailable())('digital employee run flow (integrat
     await teamRepo.create(team);
 
     const sendMessageToAgent = vi.fn().mockResolvedValue(undefined);
-    const runService = new TeamDigitalEmployeeRunService(
-      async () => ({ sendMessageToAgent }) as never,
-      teamRepo
-    );
+    const runService = new TeamDigitalEmployeeRunService(async () => ({ sendMessageToAgent }) as never, teamRepo);
 
     const result = await runService.runNow({
       teamId: 'team-1',

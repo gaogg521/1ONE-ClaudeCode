@@ -10,9 +10,7 @@ const openEnterpriseAdminInBrowserMock = vi.hoisted(() => vi.fn());
 const openAdminConsoleMock = vi.hoisted(() => vi.fn());
 const readPinnedProjectsMock = vi.hoisted(() => vi.fn(() => []));
 
-function buildEditionFeatures(
-  overrides: Record<string, unknown> = {}
-): Record<string, unknown> {
+function buildEditionFeatures(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   const merged = {
     hasJoinedEnterprise: false,
     hasInstanceEnterprise: false,
@@ -44,10 +42,9 @@ vi.mock('@arco-design/web-react', () => ({
   Button: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => (
     <button onClick={onClick}>{children}</button>
   ),
-  Card: ({
-    children,
-    onClick,
-  }: React.PropsWithChildren<{ onClick?: () => void }>) => <section onClick={onClick}>{children}</section>,
+  Card: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => (
+    <section onClick={onClick}>{children}</section>
+  ),
   Empty: ({ description }: { description?: React.ReactNode }) => <div>{description}</div>,
   Typography: {
     Ellipsis: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
@@ -163,7 +160,10 @@ describe('WorkspacePage', () => {
         tenantLabel: '欢乐互娱有限公司',
       })
     );
-    window.sessionStorage.setItem('workspace:last-active-team-scope', JSON.stringify({ teamId: 'team-1', teamName: 'Alpha Team' }));
+    window.sessionStorage.setItem(
+      'workspace:last-active-team-scope',
+      JSON.stringify({ teamId: 'team-1', teamName: 'Alpha Team' })
+    );
 
     render(<WorkspacePage />);
 

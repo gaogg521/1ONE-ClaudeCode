@@ -43,9 +43,7 @@ export function isReadOnlyUrlFetchCommand(command?: string): boolean {
   return true;
 }
 
-export function pickAllowOnceOptionId(
-  options: Array<{ optionId?: string; name?: string }> | undefined
-): string {
+export function pickAllowOnceOptionId(options: Array<{ optionId?: string; name?: string }> | undefined): string {
   if (!options?.length) {
     return 'allow_once';
   }

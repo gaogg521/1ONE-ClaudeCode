@@ -22,12 +22,7 @@ type SidebarModuleNavProps = {
   onNavigate?: () => void;
 };
 
-const SidebarModuleNav: React.FC<SidebarModuleNavProps> = ({
-  collapsed,
-  isMobile,
-  siderTooltipProps,
-  onNavigate,
-}) => {
+const SidebarModuleNav: React.FC<SidebarModuleNavProps> = ({ collapsed, isMobile, siderTooltipProps, onNavigate }) => {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
@@ -63,16 +58,12 @@ const SidebarModuleNav: React.FC<SidebarModuleNavProps> = ({
             onClick={() => handleNavigate(item.path)}
           >
             <span className={styles.moduleNavIcon}>{item.icon}</span>
-            {!iconOnly ? (
-              <span className={classNames('collapsed-hidden', styles.moduleNavLabel)}>{label}</span>
-            ) : null}
+            {!iconOnly ? <span className={classNames('collapsed-hidden', styles.moduleNavLabel)}>{label}</span> : null}
           </button>
         );
 
         if (!tooltipEnabled) {
-          return (
-            <React.Fragment key={item.path}>{row}</React.Fragment>
-          );
+          return <React.Fragment key={item.path}>{row}</React.Fragment>;
         }
 
         return (

@@ -49,6 +49,7 @@ vi.mock('@/common', () => {
         createZip: makeProvider('createZip'),
         cancelZip: makeProvider('cancelZip'),
         getFileMetadata: makeProvider('getFileMetadata'),
+        resolveAttachmentDisplayPath: makeProvider('resolveAttachmentDisplayPath'),
         copyFilesToWorkspace: makeProvider('copyFilesToWorkspace'),
         removeEntry: makeProvider('removeEntry'),
         renameEntry: makeProvider('renameEntry'),

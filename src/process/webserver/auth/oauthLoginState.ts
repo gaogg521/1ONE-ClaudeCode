@@ -62,9 +62,7 @@ export const OAUTH_STATE_INVALID_MESSAGE =
   'OAuth state expired or invalid. Please return to the app and start login again.';
 
 /** @deprecated Tests only — production callbacks must reject invalid state. */
-export function fallbackOAuthLoginStateEntry(
-  redirectTarget = DEFAULT_POST_LOGIN_TARGET
-): OAuthLoginStateEntry {
+export function fallbackOAuthLoginStateEntry(redirectTarget = DEFAULT_POST_LOGIN_TARGET): OAuthLoginStateEntry {
   return {
     expiresAt: Date.now() + OAUTH_LOGIN_STATE_TTL_MS,
     redirectTarget,

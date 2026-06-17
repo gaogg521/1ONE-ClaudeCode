@@ -11,6 +11,7 @@ import { ConfigStorage } from '@/common/config/storage';
 import type { AcpSessionConfigOption } from '@/common/types/acpTypes';
 import type { AcpBackend, AcpBackendConfig, AcpModelInfo, AvailableAgent, EffectiveAgentInfo } from '../types';
 import { getAgentModes } from '@/renderer/utils/model/agentModes';
+import { getDefaultSessionMode } from '@/common/config/defaultSessionMode';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { AVAILABLE_AGENTS_SWR_OPTIONS } from '@/renderer/utils/model/availableAgents';
@@ -73,7 +74,7 @@ export const useGuidAgentSelection = ({
 }: UseGuidAgentSelectionOptions): GuidAgentSelectionResult => {
   const [selectedAgentKey, _setSelectedAgentKey] = useState<string>('claude');
   const [availableAgents, setAvailableAgents] = useState<AvailableAgent[]>();
-  const [selectedMode, _setSelectedMode] = useState<string>('default');
+  const [selectedMode, _setSelectedMode] = useState<string>('yolo');
   // Track whether mode was loaded from preferences to avoid overwriting during initial load
   const selectedAgentRef = useRef<string | null>(null);
   const probedModelBackendsRef = useRef(new Set<string>());
@@ -394,7 +395,6 @@ export const useGuidAgentSelection = ({
 
   // Read preferred mode or fallback to legacy yoloMode config
   useEffect(() => {
-    _setSelectedMode('default');
     // For preset agents, use the effective backend type for config lookup and mode saving
     const configKey = isPresetAgent ? currentEffectiveAgentInfo.agentType : selectedAgent;
     selectedAgentRef.current = configKey;
@@ -440,7 +440,11 @@ export const useGuidAgentSelection = ({
             qwen: 'yolo',
           };
           _setSelectedMode(yoloValues[configKey] || 'yolo');
+          return;
         }
+
+        // 3. Product default — full auto until user picks another mode
+        _setSelectedMode(getDefaultSessionMode(configKey));
       } catch {
         /* silent */
       }

@@ -246,7 +246,8 @@ Line 2
     });
 
     it('should preserve markdown-leading blank lines when extracting think tags', () => {
-      const input = '<think>internal reasoning</think>\n\n当前服务：\n- `1one-claudecode-webui.service` 已运行约 15 分钟';
+      const input =
+        '<think>internal reasoning</think>\n\n当前服务：\n- `1one-claudecode-webui.service` 已运行约 15 分钟';
       const result = extractAndStripThinkTags(input);
       expect(result.thinking).toBe('internal reasoning');
       expect(result.content).toBe('\n\n当前服务：\n- `1one-claudecode-webui.service` 已运行约 15 分钟');

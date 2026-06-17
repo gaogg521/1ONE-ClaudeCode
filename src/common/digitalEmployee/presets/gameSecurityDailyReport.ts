@@ -6,8 +6,7 @@
 
 export const GAME_SECURITY_EXPERT_NAME = '游戏安全专家';
 
-export const GAME_SECURITY_EXPERT_DESCRIPTION =
-  '每日生成游戏安全日报，聚焦防御、风控与合规，不做攻击性利用。';
+export const GAME_SECURITY_EXPERT_DESCRIPTION = '每日生成游戏安全日报，聚焦防御、风控与合规，不做攻击性利用。';
 
 /** User-facing operating constraints injected as digital-employee instructions. */
 export const GAME_SECURITY_EXPERT_INSTRUCTIONS = `约束：只做防御、风控、合规分析，不写外挂/破解/漏洞利用代码。

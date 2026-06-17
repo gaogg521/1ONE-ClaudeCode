@@ -144,8 +144,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
         <Card title={t('common.superAssistant.enterpriseWorkspaceTitle', { defaultValue: '企业 Agent 工作台' })}>
           <div className='mb-12px text-12px text-t-secondary'>
             {t('common.superAssistant.enterpriseWorkspaceSummary', {
-              defaultValue:
-                '已将原 CAgent 的企业知识、交付链路与受控执行入口并入超级助手，当前组织：{{tenant}}。',
+              defaultValue: '已将原 CAgent 的企业知识、交付链路与受控执行入口并入超级助手，当前组织：{{tenant}}。',
               tenant: tenantLabel,
             })}
           </div>
@@ -173,8 +172,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
             <Card title={t('common.superAssistant.enterpriseDeliveryTitle', { defaultValue: '交付链路协同' })}>
               <div className='text-12px text-t-tertiary'>
                 {t('common.superAssistant.enterpriseDeliveryDesc', {
-                  defaultValue:
-                    '当前串联 {{repoCount}} 个代码库、{{pipelineCount}} 条流水线，并与团队协作入口联动。',
+                  defaultValue: '当前串联 {{repoCount}} 个代码库、{{pipelineCount}} 条流水线，并与团队协作入口联动。',
                   repoCount: codeRepoCount,
                   pipelineCount,
                 })}

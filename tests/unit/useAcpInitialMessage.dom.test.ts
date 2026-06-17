@@ -6,6 +6,7 @@
 
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ONE_FILES_MARKER } from '@/common/config/constants';
 
 const sendMessageMock = vi.hoisted(() => vi.fn());
 
@@ -21,6 +22,10 @@ vi.mock('@/common', () => ({
 
 vi.mock('@/renderer/utils/emitter', () => ({
   emitter: { emit: vi.fn() },
+}));
+
+vi.mock('@/renderer/pages/conversation/platforms/assertBridgeSuccess', () => ({
+  assertBridgeSuccess: (result: unknown) => result,
 }));
 
 vi.mock('@/common/utils', () => ({
@@ -44,9 +49,11 @@ describe('useAcpInitialMessage', () => {
       useAcpInitialMessage({
         conversationId: 'conv-1',
         backend: 'codex',
+        effectiveWorkspace: 'C:\\workspace',
         setAiProcessing: vi.fn(),
         checkAndUpdateTitle: vi.fn(),
         addOrUpdateMessage,
+        removeMessageByMsgId: vi.fn(),
       })
     );
 
@@ -63,5 +70,65 @@ describe('useAcpInitialMessage', () => {
       );
     });
     expect(sendMessageMock).toHaveBeenCalled();
+  });
+
+  it('marks attachment-only initial messages as pending before send resolves', async () => {
+    sendMessageMock.mockReturnValue(new Promise(() => {}));
+    sessionStorage.setItem(
+      'acp_initial_message_conv-1',
+      JSON.stringify({ input: '', files: ['C:\\cache\\temp\\photo.png'] })
+    );
+    const addOrUpdateMessage = vi.fn();
+
+    renderHook(() =>
+      useAcpInitialMessage({
+        conversationId: 'conv-1',
+        backend: 'codex',
+        effectiveWorkspace: 'C:\\workspace',
+        setAiProcessing: vi.fn(),
+        checkAndUpdateTitle: vi.fn(),
+        addOrUpdateMessage,
+        removeMessageByMsgId: vi.fn(),
+      })
+    );
+
+    await waitFor(() => {
+      expect(addOrUpdateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'pending',
+          content: { content: '' },
+        }),
+        true
+      );
+    });
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.stringContaining(ONE_FILES_MARKER),
+        files: ['C:\\cache\\temp\\photo.png'],
+      })
+    );
+  });
+
+  it('rolls back optimistic message when send fails', async () => {
+    sendMessageMock.mockRejectedValue(new Error('send failed'));
+    sessionStorage.setItem('acp_initial_message_conv-1', JSON.stringify({ input: 'hello', files: [] }));
+    const addOrUpdateMessage = vi.fn();
+    const removeMessageByMsgId = vi.fn();
+
+    renderHook(() =>
+      useAcpInitialMessage({
+        conversationId: 'conv-1',
+        backend: 'codex',
+        effectiveWorkspace: 'C:\\workspace',
+        setAiProcessing: vi.fn(),
+        checkAndUpdateTitle: vi.fn(),
+        addOrUpdateMessage,
+        removeMessageByMsgId,
+      })
+    );
+
+    await waitFor(() => {
+      expect(removeMessageByMsgId).toHaveBeenCalledWith('msg-optimistic');
+    });
   });
 });

@@ -32,10 +32,7 @@ function createDriver(memberships: Array<{ team_id: string; role?: string; peer_
           if (memberships.length === 0) {
             return [];
           }
-          return [
-            { user_id: 'user-1' },
-            { user_id: memberships[0]?.peer_id ?? 'user-2' },
-          ];
+          return [{ user_id: 'user-1' }, { user_id: memberships[0]?.peer_id ?? 'user-2' }];
         }
         return [];
       }),

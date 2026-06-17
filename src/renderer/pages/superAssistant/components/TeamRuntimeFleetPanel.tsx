@@ -54,14 +54,7 @@ const TeamRuntimeFleetPanel: React.FC<TeamRuntimeFleetPanelProps> = ({
       return nodes;
     }
     return nodes.filter((node) => {
-      const haystack = [
-        node.displayName,
-        ...node.hostnames,
-        ...node.ipAddresses,
-        node.userId,
-      ]
-        .join(' ')
-        .toLowerCase();
+      const haystack = [node.displayName, ...node.hostnames, ...node.ipAddresses, node.userId].join(' ').toLowerCase();
       return haystack.includes(query);
     });
   }, [keyword, nodes]);
@@ -114,9 +107,7 @@ const TeamRuntimeFleetPanel: React.FC<TeamRuntimeFleetPanelProps> = ({
               : t('common.superAssistant.runtimeFleet.offline', { defaultValue: '离线' })}
           </Tag>
         </div>
-        <div className='mt-4px text-11px text-t-tertiary truncate'>
-          {formatAddressList(node.ipAddresses)}
-        </div>
+        <div className='mt-4px text-11px text-t-tertiary truncate'>{formatAddressList(node.ipAddresses)}</div>
         <div className='mt-6px text-11px text-t-secondary'>
           {t('common.superAssistant.runtimeFleet.agentCount', {
             defaultValue: '{{count}} 个运行时',
@@ -131,7 +122,10 @@ const TeamRuntimeFleetPanel: React.FC<TeamRuntimeFleetPanelProps> = ({
     <div className='space-y-12px'>
       <div className='flex flex-wrap items-center justify-between gap-8px'>
         <div className='flex flex-wrap items-center gap-8px'>
-          <Badge count={stats.total} text={t('common.superAssistant.runtimeFleet.filterAll', { defaultValue: '全部' })} />
+          <Badge
+            count={stats.total}
+            text={t('common.superAssistant.runtimeFleet.filterAll', { defaultValue: '全部' })}
+          />
           <Tag color='green'>
             {t('common.superAssistant.runtimeFleet.filterOnline', {
               defaultValue: '在线 {{count}}',

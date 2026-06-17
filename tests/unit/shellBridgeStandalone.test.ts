@@ -8,15 +8,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // --- Mocks (vi.hoisted so factories can reference them) ---
 
-const { openFileProvider, showItemInFolderProvider, openExternalProvider, openFolderEnsureProvider, execFileMock, mkdirMock } =
-  vi.hoisted(() => ({
-    openFileProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
-    showItemInFolderProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
-    openExternalProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
-    openFolderEnsureProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
-    execFileMock: vi.fn(),
-    mkdirMock: vi.fn().mockResolvedValue(undefined),
-  }));
+const {
+  openFileProvider,
+  showItemInFolderProvider,
+  openExternalProvider,
+  openFolderEnsureProvider,
+  execFileMock,
+  mkdirMock,
+} = vi.hoisted(() => ({
+  openFileProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+  showItemInFolderProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+  openExternalProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+  openFolderEnsureProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+  execFileMock: vi.fn(),
+  mkdirMock: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('@/common', () => ({
   ipcBridge: {

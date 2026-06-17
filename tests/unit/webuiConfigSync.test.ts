@@ -5,10 +5,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ONE_WEBUI_CONFIG_REFRESH,
-  dispatchWebuiConfigRefresh,
-} from '@/renderer/utils/webuiConfigSync';
+import { ONE_WEBUI_CONFIG_REFRESH, dispatchWebuiConfigRefresh } from '@/renderer/utils/webuiConfigSync';
 
 describe('webuiConfigSync', () => {
   const listeners = new Map<string, Set<EventListener>>();

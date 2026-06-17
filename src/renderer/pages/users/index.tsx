@@ -22,7 +22,14 @@ import { Add, DeleteFour, Refresh, Key, Link, CloseSmall } from '@icon-park/reac
 import { useTranslation } from 'react-i18next';
 import { isSystemAdminRole } from '@/common/auth/enterpriseRoles';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
-import { adminApi, kanbanApi, type AdminUser, type AuthProviderId, type KanbanRole, type UserDbRole } from '@/renderer/utils/kanbanApi';
+import {
+  adminApi,
+  kanbanApi,
+  type AdminUser,
+  type AuthProviderId,
+  type KanbanRole,
+  type UserDbRole,
+} from '@/renderer/utils/kanbanApi';
 import { listMemberDashboard, type MemberDashboardRecord } from '@/renderer/utils/enterpriseApi/modules';
 
 const ROLE_TAG: Record<KanbanRole, { color: string; label: string }> = {
@@ -49,7 +56,10 @@ function isOrgAdminUser(role: string | undefined): boolean {
   return role === 'org_admin' || role === 'admin' || role === 'system_admin';
 }
 
-function resolveRoleLabel(role: string | undefined, t: (key: string, options?: { defaultValue?: string }) => string): string {
+function resolveRoleLabel(
+  role: string | undefined,
+  t: (key: string, options?: { defaultValue?: string }) => string
+): string {
   if (isSystemAdminUser(role)) {
     return t('settings.users.roleSystemAdmin', { defaultValue: '系统管理员' });
   }
@@ -160,7 +170,9 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
       setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role: dbRole } : u)));
       Message.success(t('settings.users.roleUpdated', { defaultValue: '角色已更新' }));
     } catch (err: unknown) {
-      Message.error(err instanceof Error ? err.message : t('settings.users.updateFailed', { defaultValue: '更新失败' }));
+      Message.error(
+        err instanceof Error ? err.message : t('settings.users.updateFailed', { defaultValue: '更新失败' })
+      );
     }
   };
 
@@ -181,7 +193,9 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
           );
           return;
         }
-        Message.error(err instanceof Error ? err.message : t('settings.users.updateFailed', { defaultValue: '更新失败' }));
+        Message.error(
+          err instanceof Error ? err.message : t('settings.users.updateFailed', { defaultValue: '更新失败' })
+        );
       }
     };
 
@@ -212,7 +226,10 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
   };
 
   const handleResetPwd = async () => {
-    if (!newPwd.trim()) { Message.warning('密码不能为空'); return; }
+    if (!newPwd.trim()) {
+      Message.warning('密码不能为空');
+      return;
+    }
     if (!pwdUserId) return;
     const code = resetEmailCode.trim();
     if (!/^\d{6}$/.test(code)) {
@@ -336,8 +353,7 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
       title: '最后登录',
       dataIndex: 'last_login',
       key: 'last_login',
-      render: (val: number | null | undefined) =>
-        val ? new Date(val).toLocaleString() : '未登录',
+      render: (val: number | null | undefined) => (val ? new Date(val).toLocaleString() : '未登录'),
     },
     {
       title: '绑定',
@@ -454,8 +470,7 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
       title: '最后登录',
       dataIndex: 'last_login',
       key: 'last_login',
-      render: (val: number | null | undefined) =>
-        val ? new Date(val).toLocaleString() : '未登录',
+      render: (val: number | null | undefined) => (val ? new Date(val).toLocaleString() : '未登录'),
     },
     {
       title: '任务进度',
@@ -474,15 +489,9 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
     },
   ];
 
-  const visibleColumns =
-    enterpriseAccess === 'profile'
-      ? profileColumns
-      : columns;
+  const visibleColumns = enterpriseAccess === 'profile' ? profileColumns : columns;
 
-  const title =
-    enterpriseAccess === 'profile'
-      ? '团队成员'
-      : '用户管理';
+  const title = enterpriseAccess === 'profile' ? '团队成员' : '用户管理';
 
   if (loading) {
     return (
@@ -508,10 +517,18 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
       <div className='flex items-center justify-between mb-16px'>
         <div className='flex items-center gap-10px'>
           <h2 className='m-0 text-18px font-700 text-t-primary'>{title}</h2>
-          {enterpriseAccess === 'full' ? <Tag color='arcoblue' size='small'>Admin</Tag> : <Tag size='small'>成员视图</Tag>}
+          {enterpriseAccess === 'full' ? (
+            <Tag color='arcoblue' size='small'>
+              Admin
+            </Tag>
+          ) : (
+            <Tag size='small'>成员视图</Tag>
+          )}
         </div>
         <Space>
-          <Button size='small' icon={<Refresh theme='outline' />} onClick={() => void loadData()}>{t('common.refresh', { defaultValue: '刷新' })}</Button>
+          <Button size='small' icon={<Refresh theme='outline' />} onClick={() => void loadData()}>
+            {t('common.refresh', { defaultValue: '刷新' })}
+          </Button>
           {enterpriseAccess === 'full' ? (
             <Button type='primary' size='small' icon={<Add theme='outline' />} onClick={() => setCreateVisible(true)}>
               {t('settings.users.createUser', { defaultValue: '创建用户' })}
@@ -531,14 +548,7 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
         />
       ) : null}
 
-      <Table
-        columns={visibleColumns}
-        data={users}
-        rowKey='id'
-        pagination={false}
-        size='small'
-        border={false}
-      />
+      <Table columns={visibleColumns} data={users} rowKey='id' pagination={false} size='small' border={false} />
 
       {/* 创建用户弹窗 */}
       <Modal
@@ -591,11 +601,7 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
       >
         <Form layout='vertical'>
           <Form.Item label='新密码' required>
-            <Input.Password
-              placeholder='输入新密码'
-              value={newPwd}
-              onChange={setNewPwd}
-            />
+            <Input.Password placeholder='输入新密码' value={newPwd} onChange={setNewPwd} />
           </Form.Item>
           <Form.Item label='邮箱验证码' required>
             <Input
@@ -619,7 +625,10 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
       <Modal
         title='绑定外部账号'
         visible={bindVisible}
-        onCancel={() => { setBindVisible(false); setBindUserId(null); }}
+        onCancel={() => {
+          setBindVisible(false);
+          setBindUserId(null);
+        }}
         onOk={handleBind}
         confirmLoading={saving}
         okText='绑定'

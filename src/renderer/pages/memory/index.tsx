@@ -2,7 +2,21 @@
  * Memory — Claude Code 记忆管理（项目范围可显式绑定仓库根目录）
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Card, Divider, Input, Message, Modal, Select, Space, Spin, Table, Tabs, Tag, Typography } from '@arco-design/web-react';
+import {
+  Button,
+  Card,
+  Divider,
+  Input,
+  Message,
+  Modal,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+} from '@arco-design/web-react';
 import { Add, Edit, Delete, FileText, Refresh, FileAddition } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -387,7 +401,10 @@ const MemoryPage: React.FC = () => {
   ];
 
   return (
-    <div className={styles.page} style={{ padding: '20px 24px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div
+      className={styles.page}
+      style={{ padding: '20px 24px', height: '100%', display: 'flex', flexDirection: 'column' }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{t('memory.title')}</h2>
       </div>
@@ -426,13 +443,21 @@ const MemoryPage: React.FC = () => {
                 onChange={setPathInput}
                 placeholder={t('memory.pathPlaceholder')}
               />
-              <Button size='small' icon={<FileAddition theme='outline' size={14} />} onClick={() => void pickProjectFileOrFolder()}>
+              <Button
+                size='small'
+                icon={<FileAddition theme='outline' size={14} />}
+                onClick={() => void pickProjectFileOrFolder()}
+              >
                 {t('memory.pickProject')}
               </Button>
               <Button type='primary' size='small' loading={saving} onClick={() => void applyProjectRoot()}>
                 {t('memory.applyRoot')}
               </Button>
-              <Button size='small' icon={<FileAddition theme='outline' size={14} />} onClick={() => void pickAdditionalFolder()}>
+              <Button
+                size='small'
+                icon={<FileAddition theme='outline' size={14} />}
+                onClick={() => void pickAdditionalFolder()}
+              >
                 {t('memory.addAdditionalRoot')}
               </Button>
               {scope?.configuredRoot ? (
@@ -447,11 +472,15 @@ const MemoryPage: React.FC = () => {
             <Space direction='vertical' size={4} style={{ fontSize: 12, color: 'var(--color-text-3)' }}>
               <div>
                 <Typography.Text style={{ fontSize: 12 }}>{t('memory.effectiveRoot')}:</Typography.Text>{' '}
-                <Typography.Text code style={{ fontSize: 11 }}>{scope?.effectiveRoot}</Typography.Text>
+                <Typography.Text code style={{ fontSize: 11 }}>
+                  {scope?.effectiveRoot}
+                </Typography.Text>
               </div>
               <div>
                 <Typography.Text style={{ fontSize: 12 }}>{t('memory.memoryDir')}:</Typography.Text>{' '}
-                <Typography.Text code style={{ fontSize: 11 }}>{scope?.absoluteMemoryDirs?.[0]}</Typography.Text>
+                <Typography.Text code style={{ fontSize: 11 }}>
+                  {scope?.absoluteMemoryDirs?.[0]}
+                </Typography.Text>
               </div>
               {scope?.additionalRoots?.length ? (
                 <div>
@@ -459,7 +488,9 @@ const MemoryPage: React.FC = () => {
                   <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {scope.additionalRoots.map((root) => (
                       <div key={root} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Typography.Text code style={{ fontSize: 11, flex: 1 }}>{root}</Typography.Text>
+                        <Typography.Text code style={{ fontSize: 11, flex: 1 }}>
+                          {root}
+                        </Typography.Text>
                         <Button size='mini' status='danger' onClick={() => void removeAdditionalRoot(root)}>
                           {t('memory.remove')}
                         </Button>
@@ -475,7 +506,9 @@ const MemoryPage: React.FC = () => {
                 {scope?.configuredRoot ? (
                   <>
                     {' '}
-                    <Typography.Text code style={{ fontSize: 11 }}>{scope.configuredRoot}</Typography.Text>
+                    <Typography.Text code style={{ fontSize: 11 }}>
+                      {scope.configuredRoot}
+                    </Typography.Text>
                   </>
                 ) : null}
               </div>
@@ -629,7 +662,12 @@ const MemoryPage: React.FC = () => {
         okButtonProps={{ loading: saving }}
         style={{ width: 600 }}
       >
-        <Input.TextArea value={editContent} onChange={setEditContent} rows={14} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+        <Input.TextArea
+          value={editContent}
+          onChange={setEditContent}
+          rows={14}
+          style={{ fontFamily: 'monospace', fontSize: 12 }}
+        />
       </Modal>
 
       <Modal
@@ -649,7 +687,12 @@ const MemoryPage: React.FC = () => {
           </div>
           <div>
             <div style={{ fontSize: 12, color: 'var(--color-text-3)', marginBottom: 6 }}>{t('memory.content')}</div>
-            <Input.TextArea value={newContent} onChange={setNewContent} rows={10} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+            <Input.TextArea
+              value={newContent}
+              onChange={setNewContent}
+              rows={10}
+              style={{ fontFamily: 'monospace', fontSize: 12 }}
+            />
           </div>
         </div>
       </Modal>

@@ -5,10 +5,7 @@
  */
 
 import type { Express, Request, Response, NextFunction } from 'express';
-import {
-  listTeamRuntimeNodesForApi,
-  upsertTeamRuntimeNodeForApi,
-} from '@process/bridge/teamRuntimeBridge';
+import { listTeamRuntimeNodesForApi, upsertTeamRuntimeNodeForApi } from '@process/bridge/teamRuntimeBridge';
 import type { UpsertTeamRuntimeNodeInput } from '@/common/types/teamRuntimeTypes';
 import { ADMIN_TEAM_RUNTIME_NODES_PATH } from '@/common/teamRuntime/syncChannels';
 import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';

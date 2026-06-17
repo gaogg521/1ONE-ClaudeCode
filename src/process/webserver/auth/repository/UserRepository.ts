@@ -248,11 +248,7 @@ export const UserRepository = {
     }
   },
 
-  async updateOrgProfile(
-    userId: string,
-    orgUnitPath: string,
-    source: 'ldap' | 'feishu'
-  ): Promise<void> {
+  async updateOrgProfile(userId: string, orgUnitPath: string, source: 'ldap' | 'feishu'): Promise<void> {
     const trimmed = orgUnitPath.trim();
     if (!trimmed) {
       return;

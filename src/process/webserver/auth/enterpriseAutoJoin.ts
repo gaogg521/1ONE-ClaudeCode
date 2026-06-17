@@ -16,9 +16,9 @@ import { UserRepository, type AuthUser } from '@process/webserver/auth/repositor
  */
 export async function resolveDefaultEnterpriseTenantId(): Promise<string | null> {
   const driver = (await getDatabase()).getDriver();
-  const row = driver
-    .prepare("SELECT id FROM tenants WHERE id <> 'default' ORDER BY created_at ASC LIMIT 1")
-    .get() as { id?: string } | undefined;
+  const row = driver.prepare("SELECT id FROM tenants WHERE id <> 'default' ORDER BY created_at ASC LIMIT 1").get() as
+    | { id?: string }
+    | undefined;
   const id = typeof row?.id === 'string' ? row.id.trim() : '';
   return isEnterpriseTenantId(id) ? id : null;
 }
@@ -46,10 +46,7 @@ export async function ensureUserJoinedDefaultEnterprise(userId: string): Promise
 /**
  * Admin directory import: assign explicit tenant when user is not in an enterprise yet.
  */
-export async function ensureUserJoinedEnterpriseTenant(
-  userId: string,
-  tenantId: string | undefined
-): Promise<void> {
+export async function ensureUserJoinedEnterpriseTenant(userId: string, tenantId: string | undefined): Promise<void> {
   const tid = (tenantId ?? '').trim();
   if (!isEnterpriseTenantId(tid)) {
     return;
@@ -74,10 +71,7 @@ export async function refreshUserAfterEnterpriseAutoJoin(user: AuthUser): Promis
 }
 
 /** LDAP 目录拉人：显式租户优先，否则落入实例默认企业。 */
-export async function assignEnterpriseOnDirectoryImport(
-  userId: string,
-  tenantId?: string
-): Promise<void> {
+export async function assignEnterpriseOnDirectoryImport(userId: string, tenantId?: string): Promise<void> {
   if (tenantId?.trim()) {
     await ensureUserJoinedEnterpriseTenant(userId, tenantId);
     return;

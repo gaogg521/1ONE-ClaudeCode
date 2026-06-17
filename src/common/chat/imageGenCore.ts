@@ -176,13 +176,15 @@ export interface ImageGenResult {
 
 function isLikelyImageGenerationModel(model: string): boolean {
   const normalized = model.trim().toLowerCase();
-  return /(?:^|[-_/])(image|images)(?:$|[-_/])/.test(normalized) ||
+  return (
+    /(?:^|[-_/])(image|images)(?:$|[-_/])/.test(normalized) ||
     normalized.includes('dall-e') ||
     normalized.includes('gpt-image') ||
     normalized.includes('flux') ||
     normalized.includes('seedream') ||
     normalized.includes('stable-image') ||
-    normalized.includes('imagen');
+    normalized.includes('imagen')
+  );
 }
 
 async function downloadImageAsDataUrl(imageUrl: string): Promise<string> {
@@ -198,7 +200,11 @@ async function downloadImageAsDataUrl(imageUrl: string): Promise<string> {
 function isLikelyGeminiNativeImageProvider(provider: TProviderWithModel): boolean {
   const model = provider.useModel?.trim().toLowerCase() || '';
   const baseUrl = provider.baseUrl?.trim().toLowerCase() || '';
-  return model.includes('gemini') && isLikelyImageGenerationModel(model) && (baseUrl.includes('litellm') || baseUrl.includes('/gemini'));
+  return (
+    model.includes('gemini') &&
+    isLikelyImageGenerationModel(model) &&
+    (baseUrl.includes('litellm') || baseUrl.includes('/gemini'))
+  );
 }
 
 function buildGeminiNativeEndpointCandidates(provider: TProviderWithModel): string[] {
@@ -223,15 +229,22 @@ function buildGeminiNativeEndpointCandidates(provider: TProviderWithModel): stri
   return [...roots]
     .map((root) => root.replace(/\/+$/, ''))
     .filter(Boolean)
-    .map((root) => `${root}/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`);
+    .map(
+      (root) => `${root}/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
+    );
 }
 
 function parseGeminiNativeImageResponse(response: unknown): {
   responseText: string;
   images?: Array<{ type: 'image_url'; image_url: { url: string } }>;
 } {
-  const candidate = (response as { candidates?: Array<{ content?: { parts?: Array<{ text?: string; inlineData?: { mimeType?: string; data?: string } }> } }> })
-    ?.candidates?.[0];
+  const candidate = (
+    response as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string; inlineData?: { mimeType?: string; data?: string } }> };
+      }>;
+    }
+  )?.candidates?.[0];
   const parts = candidate?.content?.parts || [];
   let responseText = '';
   const images: Array<{ type: 'image_url'; image_url: { url: string } }> = [];
@@ -414,10 +427,12 @@ export async function executeImageGeneration(
     let images: UnifiedChatCompletionResponse['choices'][number]['message']['images'];
     let rotatingClient: RotatingClient | null = null;
 
-    const geminiNativeResult = await tryGeminiNativeImageEndpoint(provider, enhancedPrompt, hasImages, signal).catch((error): null => {
-      console.warn('[ImageGen] Gemini native image generation failed, falling back:', error);
-      return null;
-    });
+    const geminiNativeResult = await tryGeminiNativeImageEndpoint(provider, enhancedPrompt, hasImages, signal).catch(
+      (error): null => {
+        console.warn('[ImageGen] Gemini native image generation failed, falling back:', error);
+        return null;
+      }
+    );
 
     if (geminiNativeResult) {
       responseText = geminiNativeResult.responseText;
@@ -429,12 +444,16 @@ export async function executeImageGeneration(
         rotatingOptions: { maxRetries: 3, retryDelay: 1000 },
       });
 
-      const imageEndpointResult = await tryOpenAiImageEndpoint(rotatingClient, provider, params.prompt, hasImages, signal).catch(
-        (error): null => {
-          console.warn('[ImageGen] images.generate failed, falling back to chat.completions:', error);
-          return null;
-        }
-      );
+      const imageEndpointResult = await tryOpenAiImageEndpoint(
+        rotatingClient,
+        provider,
+        params.prompt,
+        hasImages,
+        signal
+      ).catch((error): null => {
+        console.warn('[ImageGen] images.generate failed, falling back to chat.completions:', error);
+        return null;
+      });
 
       if (imageEndpointResult) {
         responseText = imageEndpointResult.responseText;

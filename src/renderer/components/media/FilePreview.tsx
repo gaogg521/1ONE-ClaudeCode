@@ -9,14 +9,12 @@ import React, { useEffect, useState } from 'react';
 import { getFileExtension } from '@/renderer/services/FileService';
 import { extname } from '@/common/chat/pathUtils';
 import { ipcBridge } from '@/common';
-import { Image } from '@arco-design/web-react';
+import { Image, Spin } from '@arco-design/web-react';
 import fileIcon from '@/renderer/assets/icons/file-icon.svg';
 import InlinePdfPreview from '@/renderer/components/media/InlinePdfPreview';
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']);
 
-// Substring from the base64-encoded "Image not found" placeholder SVG returned by getImageBase64 on ENOENT.
-// This is the aligned base64 encoding of ">Image not found<" within the SVG data URL.
 const IMAGE_NOT_FOUND_B64_MARKER = 'kltYWdlIG5vdCBmb3VuZD';
 const MAX_IMAGE_RETRIES = 5;
 const IMAGE_RETRY_DELAY_MS = 800;
@@ -26,51 +24,82 @@ const isImageFile = (path: string): boolean => {
   return IMAGE_EXTS.has(ext);
 };
 
-// 格式化文件大小
 const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0B';
+  if (bytes <= 0) return '...';
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`;
 };
 
+type FilePreviewVariant = 'thumb' | 'chat';
+
 interface FilePreviewProps {
   path: string;
   onRemove: () => void;
   readonly?: boolean;
+  conversationId?: string;
+  variant?: FilePreviewVariant;
 }
 
-const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = false }) => {
-  // Defensive check: ensure path is a string
+const FilePreview: React.FC<FilePreviewProps> = ({
+  path,
+  onRemove,
+  readonly = false,
+  conversationId,
+  variant = 'thumb',
+}) => {
   if (typeof path !== 'string') {
     console.error('[FilePreview] Invalid path type:', typeof path, path);
     return null;
   }
 
+  const isChat = variant === 'chat';
   const isImage = isImageFile(path);
   const isPdf = extname(path) === '.pdf';
-  // 直接从路径中提取文件名，不清理时间戳后缀
-  // Extract filename directly from path without cleaning timestamp suffix
   const fileName = path.split(/[\\/]/).pop() || '';
   const fileExt = getFileExtension(path).toUpperCase().replace('.', '');
   const [imageUrl, setImageUrl] = useState<string>('');
   const [fileSize, setFileSize] = useState<string>('');
+  const [resolvedPath, setResolvedPath] = useState(path);
+  const [resolvingPath, setResolvingPath] = useState(true);
 
   useEffect(() => {
-    // 获取文件大小
+    let cancelled = false;
+    setResolvingPath(true);
+    void ipcBridge.fs.resolveAttachmentDisplayPath
+      .invoke({ path, conversationId })
+      .then((nextPath) => {
+        if (!cancelled) {
+          setResolvedPath(nextPath);
+          setResolvingPath(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setResolvedPath(path);
+          setResolvingPath(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [path, conversationId]);
+
+  useEffect(() => {
+    if (resolvingPath) {
+      return undefined;
+    }
+
     ipcBridge.fs.getFileMetadata
-      .invoke({ path })
+      .invoke({ path: resolvedPath })
       .then((metadata) => {
         setFileSize(formatFileSize(metadata.size));
       })
       .catch((error) => {
-        console.error('[FilePreview] Failed to get file metadata:', { path, error });
+        console.error('[FilePreview] Failed to get file metadata:', { path: resolvedPath, error });
       });
 
-    // 如果是图片，获取图片的base64
-    // Retry when the file is not found yet (race condition: display message rendered
-    // before the backend finishes copying the pasted image to the workspace).
     if (isImage) {
       let cancelled = false;
       let retryCount = 0;
@@ -78,7 +107,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
 
       const loadImage = () => {
         ipcBridge.fs.getImageBase64
-          .invoke({ path })
+          .invoke({ path: resolvedPath })
           .then((base64) => {
             if (cancelled) return;
             if (base64.includes(IMAGE_NOT_FOUND_B64_MARKER) && retryCount < MAX_IMAGE_RETRIES) {
@@ -90,7 +119,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
           })
           .catch((error) => {
             if (cancelled) return;
-            console.error('[FilePreview] Failed to load image:', { path, error });
+            console.error('[FilePreview] Failed to load image:', { path: resolvedPath, error });
           });
       };
 
@@ -103,7 +132,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
     }
 
     return undefined;
-  }, [path, isImage]);
+  }, [resolvedPath, isImage, resolvingPath]);
 
   const handleRemove = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -113,25 +142,54 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
   if (isPdf && readonly) {
     return (
       <div className='relative inline-block'>
-        <InlinePdfPreview path={path} fileName={fileName} />
+        <InlinePdfPreview
+          path={resolvedPath}
+          fileName={fileName}
+          conversationId={conversationId}
+          height={isChat ? 320 : 240}
+          width={isChat ? 320 : 220}
+        />
       </div>
     );
   }
 
   if (isImage) {
+    const thumbSize = 60;
+    const chatMaxWidth = 280;
+    const chatMaxHeight = 240;
+
     return (
       <div className='relative inline-block'>
         <div className='rd-8px overflow-hidden border-1 border-solid b-color-border-2'>
-          <Image
-            src={imageUrl}
-            alt={fileName}
-            width={60}
-            height={60}
-            className='object-cover cursor-pointer'
-            style={{ display: imageUrl ? 'block' : 'none' }}
-            preview={imageUrl ? true : false}
-          />
-          {!imageUrl && <div className='w-60px h-60px bg-bg-3'></div>}
+          {resolvingPath || !imageUrl ? (
+            <div
+              className='flex items-center justify-center bg-bg-3'
+              style={{
+                width: isChat ? chatMaxWidth : thumbSize,
+                height: isChat ? chatMaxHeight : thumbSize,
+                minWidth: isChat ? 120 : thumbSize,
+                minHeight: isChat ? 120 : thumbSize,
+              }}
+            >
+              <Spin size={16} />
+            </div>
+          ) : (
+            <Image
+              src={imageUrl}
+              alt={fileName}
+              width={isChat ? undefined : thumbSize}
+              height={isChat ? undefined : thumbSize}
+              className={
+                isChat ? 'max-w-280px max-h-240px object-contain cursor-pointer' : 'object-cover cursor-pointer'
+              }
+              style={
+                isChat
+                  ? { display: 'block', maxWidth: chatMaxWidth, maxHeight: chatMaxHeight }
+                  : { display: 'block', width: thumbSize, height: thumbSize }
+              }
+              preview
+            />
+          )}
         </div>
         {!readonly && (
           <div

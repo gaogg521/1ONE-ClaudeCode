@@ -11,8 +11,8 @@ interface Theme {
   colorScheme: string;
   theme: string;
   label: string;
-  gradient: string;   // 小圆点渐变，与实际主题背景对应
-  bodyBg: string;     // 直接注入 body.style.background，确保切换彻底
+  gradient: string; // 小圆点渐变，与实际主题背景对应
+  bodyBg: string; // 直接注入 body.style.background，确保切换彻底
 }
 
 const THEMES: Theme[] = [
@@ -107,7 +107,7 @@ async function applyTheme(t: Theme) {
 const ThemeSwitcher: React.FC = () => {
   const [current, setCurrent] = useState<Theme>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return THEMES.find(t => t.id === saved) ?? THEMES[0];
+    return THEMES.find((t) => t.id === saved) ?? THEMES[0];
   });
 
   const handleSelect = useCallback((t: Theme) => {
@@ -144,14 +144,16 @@ const ThemeSwitcher: React.FC = () => {
               borderRadius: '50%',
               background: t.gradient,
               cursor: 'pointer',
-              border: current.id === t.id
-                ? `2px solid ${t.theme === 'light' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.9)'}`
-                : `2px solid ${t.theme === 'light' ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)'}`,
-              boxShadow: current.id === t.id
-                ? t.theme === 'light'
-                  ? `0 0 0 1px rgba(0,0,0,0.2), 0 0 8px rgba(0,0,0,0.15)`
-                  : `0 0 0 1px rgba(255,255,255,0.3), 0 0 8px rgba(255,255,255,0.25)`
-                : 'none',
+              border:
+                current.id === t.id
+                  ? `2px solid ${t.theme === 'light' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.9)'}`
+                  : `2px solid ${t.theme === 'light' ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)'}`,
+              boxShadow:
+                current.id === t.id
+                  ? t.theme === 'light'
+                    ? `0 0 0 1px rgba(0,0,0,0.2), 0 0 8px rgba(0,0,0,0.15)`
+                    : `0 0 0 1px rgba(255,255,255,0.3), 0 0 8px rgba(255,255,255,0.25)`
+                  : 'none',
               transition: 'all 0.18s ease',
               flexShrink: 0,
             }}

@@ -51,12 +51,7 @@ function formatFetchErrorBlock(url: string, message: string): string {
   );
 }
 
-function formatSearchBlock(
-  searchUrl: string,
-  query: string,
-  resultLinks: string[],
-  text: string
-): string {
+function formatSearchBlock(searchUrl: string, query: string, resultLinks: string[], text: string): string {
   const sources = formatSourcesBlock(searchUrl, resultLinks);
   return (
     `<1one-web-context>\n` +
@@ -67,8 +62,7 @@ function formatSearchBlock(
 
 function formatSearchErrorBlock(query: string, message: string): string {
   return (
-    `<1one-web-context>\n` +
-    `1ONE attempted web search for "${query}" but failed: ${message}\n</1one-web-context>\n\n`
+    `<1one-web-context>\n` + `1ONE attempted web search for "${query}" but failed: ${message}\n</1one-web-context>\n\n`
   );
 }
 

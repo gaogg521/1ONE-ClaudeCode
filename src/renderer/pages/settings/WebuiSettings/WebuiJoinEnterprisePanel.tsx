@@ -123,7 +123,8 @@ const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ emb
       Message.success(
         t('settings.webui.createEnterpriseSuccess', {
           tenant: name,
-          defaultValue: '已创建企业「{{tenant}}」。请在标题栏切换到「1ONE Code 企业版」进入工作区；组织管理请用侧栏「管理后台」。',
+          defaultValue:
+            '已创建企业「{{tenant}}」。请在标题栏切换到「1ONE Code 企业版」进入工作区；组织管理请用侧栏「管理后台」。',
         })
       );
       setOrgName('');
@@ -171,92 +172,82 @@ const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ emb
         />
       ) : null}
       {showCreateEnterpriseTab ? (
-      <Tabs activeTab={activeTab} onChange={(k) => setActiveTab(k as 'join' | 'create')}>
-        <Tabs.TabPane
-          key='join'
-          title={t('settings.webui.joinTabInvite', { defaultValue: '邀请码加入' })}
-        >
-          <Form layout='vertical' className='mt-8px'>
-            <Form.Item
-              label={t('settings.webui.inviteCodeLabel', { defaultValue: '企业邀请码' })}
-            >
-              <Input
-                value={inviteCode}
-                placeholder={t('settings.webui.inviteCodePlaceholder', {
-                  defaultValue: '例如 ABCD-EF12',
-                })}
-                onChange={(value) => {
-                  setInviteCode(value);
-                  setInvitePreview(null);
-                }}
-              />
-            </Form.Item>
-            {invitePreview ? (
-              <Alert
-                type='success'
-                className='mb-8px'
-                content={
-                  <div className='flex flex-col gap-4px'>
-                    <div>
-                      {t('settings.webui.invitePreviewTenant', {
-                        tenant: invitePreview.tenantName,
-                        defaultValue: '目标企业：{{tenant}}',
-                      })}
-                    </div>
-                    <div className='text-12px opacity-80'>
-                      {t('settings.webui.invitePreviewTenantId', {
-                        tenantId: invitePreview.tenantId,
-                        defaultValue: '组织 ID：{{tenantId}}',
-                      })}
-                    </div>
-                    <div className='text-12px opacity-80'>
-                      {t('settings.webui.invitePreviewConfirmHint', {
-                        defaultValue: '确认信息无误后，点击下方「加入企业」。',
-                      })}
-                    </div>
-                  </div>
-                }
-              />
-            ) : null}
-            <div className='flex gap-8px flex-wrap'>
-              <Button loading={previewLoading} onClick={() => void handlePreview()}>
-                {t('settings.webui.invitePreviewBtn', { defaultValue: '验证邀请码' })}
-              </Button>
-              <Button
-                type='primary'
-                loading={joinLoading}
-                disabled={!invitePreview}
-                onClick={() => void handleJoin()}
-              >
-                {t('settings.webui.joinConfirmBtn', { defaultValue: '加入企业' })}
-              </Button>
-            </div>
-          </Form>
-        </Tabs.TabPane>
-        {showCreateEnterpriseTab ? (
-          <Tabs.TabPane
-            key='create'
-            title={t('settings.webui.joinTabCreate', { defaultValue: '创建企业' })}
-          >
+        <Tabs activeTab={activeTab} onChange={(k) => setActiveTab(k as 'join' | 'create')}>
+          <Tabs.TabPane key='join' title={t('settings.webui.joinTabInvite', { defaultValue: '邀请码加入' })}>
             <Form layout='vertical' className='mt-8px'>
-              <Form.Item
-                label={t('settings.webui.createEnterpriseNameLabel', { defaultValue: '企业名称' })}
-              >
+              <Form.Item label={t('settings.webui.inviteCodeLabel', { defaultValue: '企业邀请码' })}>
                 <Input
-                  value={orgName}
-                  placeholder={t('settings.webui.createEnterpriseNamePlaceholder', {
-                    defaultValue: '例如：Acme 科技',
+                  value={inviteCode}
+                  placeholder={t('settings.webui.inviteCodePlaceholder', {
+                    defaultValue: '例如 ABCD-EF12',
                   })}
-                  onChange={setOrgName}
+                  onChange={(value) => {
+                    setInviteCode(value);
+                    setInvitePreview(null);
+                  }}
                 />
               </Form.Item>
-              <Button type='primary' loading={createLoading} onClick={() => void handleCreate()}>
-                {t('settings.webui.createEnterpriseBtn', { defaultValue: '创建并加入' })}
-              </Button>
+              {invitePreview ? (
+                <Alert
+                  type='success'
+                  className='mb-8px'
+                  content={
+                    <div className='flex flex-col gap-4px'>
+                      <div>
+                        {t('settings.webui.invitePreviewTenant', {
+                          tenant: invitePreview.tenantName,
+                          defaultValue: '目标企业：{{tenant}}',
+                        })}
+                      </div>
+                      <div className='text-12px opacity-80'>
+                        {t('settings.webui.invitePreviewTenantId', {
+                          tenantId: invitePreview.tenantId,
+                          defaultValue: '组织 ID：{{tenantId}}',
+                        })}
+                      </div>
+                      <div className='text-12px opacity-80'>
+                        {t('settings.webui.invitePreviewConfirmHint', {
+                          defaultValue: '确认信息无误后，点击下方「加入企业」。',
+                        })}
+                      </div>
+                    </div>
+                  }
+                />
+              ) : null}
+              <div className='flex gap-8px flex-wrap'>
+                <Button loading={previewLoading} onClick={() => void handlePreview()}>
+                  {t('settings.webui.invitePreviewBtn', { defaultValue: '验证邀请码' })}
+                </Button>
+                <Button
+                  type='primary'
+                  loading={joinLoading}
+                  disabled={!invitePreview}
+                  onClick={() => void handleJoin()}
+                >
+                  {t('settings.webui.joinConfirmBtn', { defaultValue: '加入企业' })}
+                </Button>
+              </div>
             </Form>
           </Tabs.TabPane>
-        ) : null}
-      </Tabs>
+          {showCreateEnterpriseTab ? (
+            <Tabs.TabPane key='create' title={t('settings.webui.joinTabCreate', { defaultValue: '创建企业' })}>
+              <Form layout='vertical' className='mt-8px'>
+                <Form.Item label={t('settings.webui.createEnterpriseNameLabel', { defaultValue: '企业名称' })}>
+                  <Input
+                    value={orgName}
+                    placeholder={t('settings.webui.createEnterpriseNamePlaceholder', {
+                      defaultValue: '例如：Acme 科技',
+                    })}
+                    onChange={setOrgName}
+                  />
+                </Form.Item>
+                <Button type='primary' loading={createLoading} onClick={() => void handleCreate()}>
+                  {t('settings.webui.createEnterpriseBtn', { defaultValue: '创建并加入' })}
+                </Button>
+              </Form>
+            </Tabs.TabPane>
+          ) : null}
+        </Tabs>
       ) : (
         <Form layout='vertical' className='mt-8px'>
           <Form.Item label={t('settings.webui.inviteCodeLabel', { defaultValue: '企业邀请码' })}>
@@ -302,12 +293,7 @@ const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ emb
             <Button loading={previewLoading} onClick={() => void handlePreview()}>
               {t('settings.webui.invitePreviewBtn', { defaultValue: '验证邀请码' })}
             </Button>
-            <Button
-              type='primary'
-              loading={joinLoading}
-              disabled={!invitePreview}
-              onClick={() => void handleJoin()}
-            >
+            <Button type='primary' loading={joinLoading} disabled={!invitePreview} onClick={() => void handleJoin()}>
               {t('settings.webui.joinConfirmBtn', { defaultValue: '加入企业' })}
             </Button>
           </div>

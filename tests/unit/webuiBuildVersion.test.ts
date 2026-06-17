@@ -10,13 +10,13 @@ describe('WebUI build version recovery', () => {
     expect(html).toContain('window.__ONE_WEBUI_BUILD_ID = buildId');
     expect(html).toContain('./webui-build.json?ts=');
     expect(html).toContain('__one_build_mismatch_recovery_at');
-    expect(html).toContain('url.searchParams.set(\'__one_cache_bust\'');
+    expect(html).toContain("url.searchParams.set('__one_cache_bust'");
   });
 
   it('configures the renderer build to emit webui-build.json', () => {
     const config = fs.readFileSync(path.resolve(__dirname, '../../electron.vite.config.ts'), 'utf8');
 
     expect(config).toContain('webuiBuildVersionPlugin');
-    expect(config).toContain('fileName: \'webui-build.json\'');
+    expect(config).toContain("fileName: 'webui-build.json'");
   });
 });

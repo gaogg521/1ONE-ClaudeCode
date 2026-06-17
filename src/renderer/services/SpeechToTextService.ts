@@ -66,7 +66,7 @@ const parseWebError = (response: XMLHttpRequest): Error => {
   return new Error(`STT_REQUEST_FAILED:${response.status} ${response.statusText}`);
 };
 
-const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
   let timer: number | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
     timer = window.setTimeout(() => reject(new Error('STT_NETWORK_ERROR:timeout')), timeoutMs);
@@ -108,32 +108,32 @@ export async function transcribeAudioBlob(blob: Blob, languageHint?: string): Pr
 
   return withTimeout(
     new Promise<SpeechToTextResult>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/stt');
-    xhr.withCredentials = true;
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/stt');
+      xhr.withCredentials = true;
 
-    xhr.addEventListener('load', () => {
-      if (xhr.status === 413) {
-        reject(new Error('STT_FILE_TOO_LARGE'));
-        return;
-      }
-      if (xhr.status < 200 || xhr.status >= 300) {
-        reject(parseWebError(xhr));
-        return;
-      }
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 413) {
+          reject(new Error('STT_FILE_TOO_LARGE'));
+          return;
+        }
+        if (xhr.status < 200 || xhr.status >= 300) {
+          reject(parseWebError(xhr));
+          return;
+        }
 
-      parseWebResponse(xhr).then(resolve).catch(reject);
-    });
+        parseWebResponse(xhr).then(resolve).catch(reject);
+      });
 
-    xhr.addEventListener('error', () => {
-      reject(new Error('STT_NETWORK_ERROR'));
-    });
+      xhr.addEventListener('error', () => {
+        reject(new Error('STT_NETWORK_ERROR'));
+      });
 
-    xhr.addEventListener('abort', () => {
-      reject(new Error('STT_ABORTED'));
-    });
+      xhr.addEventListener('abort', () => {
+        reject(new Error('STT_ABORTED'));
+      });
 
-    xhr.send(formData);
+      xhr.send(formData);
     }),
     TRANSCRIBE_TIMEOUT_MS
   );

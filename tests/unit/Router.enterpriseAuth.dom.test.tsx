@@ -59,9 +59,7 @@ vi.mock('@/renderer/utils/postLoginRedirect', () => ({
 }));
 
 vi.mock('@/common/auth/enterpriseRoles', async () => {
-  const actual = await vi.importActual<typeof import('@/common/auth/enterpriseRoles')>(
-    '@/common/auth/enterpriseRoles'
-  );
+  const actual = await vi.importActual<typeof import('@/common/auth/enterpriseRoles')>('@/common/auth/enterpriseRoles');
   return {
     ...actual,
     resolvePostLoginRedirectPath: vi.fn((target: string | null | undefined) => target ?? '/sessions'),

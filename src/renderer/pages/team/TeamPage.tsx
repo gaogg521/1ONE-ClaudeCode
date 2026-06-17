@@ -49,7 +49,11 @@ function parseTeamIssueContext(search: string): TeamIssueContext {
   };
 }
 
-function buildSharedWorkspaceScopePath(path: '/sessions' | '/tasks', team: TTeam, issueContext?: TeamIssueContext): string {
+function buildSharedWorkspaceScopePath(
+  path: '/sessions' | '/tasks',
+  team: TTeam,
+  issueContext?: TeamIssueContext
+): string {
   const params = new URLSearchParams({
     scope: 'team',
     teamId: team.id,
@@ -62,11 +66,7 @@ function buildSharedWorkspaceScopePath(path: '/sessions' | '/tasks', team: TTeam
   return `${path}?${params.toString()}`;
 }
 
-function buildIssueKanbanPath(
-  team: TTeam,
-  issueContext: TeamIssueContext,
-  teamsCollaborationEnabled: boolean
-): string {
+function buildIssueKanbanPath(team: TTeam, issueContext: TeamIssueContext, teamsCollaborationEnabled: boolean): string {
   if (!issueContext.issueId || !issueContext.issueSubject) {
     return '/issues';
   }
@@ -121,7 +121,17 @@ const AgentChatSlot: React.FC<{
   runtimeLastMessage?: string;
   onToggleFullscreen?: () => void;
   onRemove?: () => void;
-}> = ({ agent, teamId, tenantId, isLead, isFullscreen = false, runtimeStatus, runtimeLastMessage, onToggleFullscreen, onRemove }) => {
+}> = ({
+  agent,
+  teamId,
+  tenantId,
+  isLead,
+  isFullscreen = false,
+  runtimeStatus,
+  runtimeLastMessage,
+  onToggleFullscreen,
+  onRemove,
+}) => {
   const { data: conversation } = useSWR(agent.conversationId ? ['team-conversation', agent.conversationId] : null, () =>
     ipcBridge.conversation.get.invoke({ id: agent.conversationId })
   );
@@ -222,9 +232,7 @@ const AgentChatSlot: React.FC<{
         ) : (
           <div className='flex flex-1 items-center justify-center flex-col gap-12px text-t-secondary'>
             <Spin loading />
-            <span className='text-13px'>
-              {runtimeStatus === 'failed' ? 'Agent 启动失败' : '正在连接 Agent...'}
-            </span>
+            <span className='text-13px'>{runtimeStatus === 'failed' ? 'Agent 启动失败' : '正在连接 Agent...'}</span>
             {runtimeStatus === 'failed' ? (
               <span className='text-11px text-t-tertiary max-w-520px text-center px-16px break-words'>
                 {runtimeLastMessage}
@@ -451,31 +459,31 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
           </div>
         ) : null}
         <div className='flex items-center gap-8px'>
-        {issueContext.issueId && issueContext.issueSubject ? (
+          {issueContext.issueId && issueContext.issueSubject ? (
+            <Button
+              size='small'
+              type='primary'
+              onClick={() => void navigate(buildIssueKanbanPath(team, issueContext, showTeamsFeature))}
+            >
+              {t('common.workspace.issueOpenKanban', {
+                defaultValue: '打开当前 Issue 看板',
+              })}
+            </Button>
+          ) : null}
           <Button
             size='small'
-            type='primary'
-            onClick={() => void navigate(buildIssueKanbanPath(team, issueContext, showTeamsFeature))}
+            type='outline'
+            onClick={() => void navigate(buildSharedWorkspaceScopePath('/sessions', team, issueContext))}
           >
-            {t('common.workspace.issueOpenKanban', {
-              defaultValue: '打开当前 Issue 看板',
-            })}
+            {t('team.sharedSessions', { defaultValue: '共享会话' })}
           </Button>
-        ) : null}
-        <Button
-          size='small'
-          type='outline'
-          onClick={() => void navigate(buildSharedWorkspaceScopePath('/sessions', team, issueContext))}
-        >
-          {t('team.sharedSessions', { defaultValue: '共享会话' })}
-        </Button>
-        <Button
-          size='small'
-          type='outline'
-          onClick={() => void navigate(buildSharedWorkspaceScopePath('/tasks', team, issueContext))}
-        >
-          {t('team.sharedTasks', { defaultValue: '共享任务' })}
-        </Button>
+          <Button
+            size='small'
+            type='outline'
+            onClick={() => void navigate(buildSharedWorkspaceScopePath('/tasks', team, issueContext))}
+          >
+            {t('team.sharedTasks', { defaultValue: '共享任务' })}
+          </Button>
         </div>
       </div>
     ),
@@ -567,7 +575,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onAddAgent, onR
                       <AgentChatSlot
                         agent={agent}
                         teamId={team.id}
-                      tenantId={team.tenantId}
+                        tenantId={team.tenantId}
                         isLead={isLeadSlot}
                         runtimeStatus={statusMap.get(agent.slotId)?.status}
                         runtimeLastMessage={statusMap.get(agent.slotId)?.lastMessage}

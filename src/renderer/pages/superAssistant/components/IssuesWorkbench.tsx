@@ -61,20 +61,24 @@ type IssuesWorkbenchProps = {
   issueCommentsRefreshToken?: number;
 };
 
-function getStatusTag(
-  status: IssueBoardFeedback['assignedStatus'],
-  t: ReturnType<typeof useTranslation>['t']
-) {
+function getStatusTag(status: IssueBoardFeedback['assignedStatus'], t: ReturnType<typeof useTranslation>['t']) {
   if (!status) return null;
   const map: Record<string, { color: string; label: string }> = {
     active: { color: 'green', label: t('common.superAssistant.agentStatus.active', { defaultValue: '执行中' }) },
     failed: { color: 'orangered', label: t('common.superAssistant.agentStatus.failed', { defaultValue: '已阻塞' }) },
-    completed: { color: 'arcoblue', label: t('common.superAssistant.agentStatus.completed', { defaultValue: '已完成' }) },
+    completed: {
+      color: 'arcoblue',
+      label: t('common.superAssistant.agentStatus.completed', { defaultValue: '已完成' }),
+    },
     pending: { color: 'gold', label: t('common.superAssistant.agentStatus.pending', { defaultValue: '准备中' }) },
     idle: { color: 'gray', label: t('common.superAssistant.agentStatus.idle', { defaultValue: '待领取' }) },
   };
   const meta = map[status] ?? map.idle;
-  return <Tag size='small' color={meta.color}>{meta.label}</Tag>;
+  return (
+    <Tag size='small' color={meta.color}>
+      {meta.label}
+    </Tag>
+  );
 }
 
 const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
@@ -132,15 +136,11 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
   const allIssues = boardColumns.flatMap((col) => col.items);
 
   // 按 Agent 分组：未分配 + 每个 Agent 一列
-  const unassignedIssues = allIssues.filter(
-    (issue) => !issueBoardFeedbackById[issue.id]?.assignedAgentName
-  );
+  const unassignedIssues = allIssues.filter((issue) => !issueBoardFeedbackById[issue.id]?.assignedAgentName);
 
   const agentColumns = assignableAgents.map((agent) => ({
     agent,
-    issues: allIssues.filter(
-      (issue) => issueBoardFeedbackById[issue.id]?.assignedAgentName === agent.agentName
-    ),
+    issues: allIssues.filter((issue) => issueBoardFeedbackById[issue.id]?.assignedAgentName === agent.agentName),
   }));
 
   const renderIssueCard = (issue: SuperAssistantIssueItem) => {
@@ -158,19 +158,22 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
         onClick={() => onSelectIssue(issue.id)}
       >
         <div className='text-13px font-600 text-t-primary truncate'>{issue.subject}</div>
-        {issue.description && (
-          <div className='mt-4px text-11px text-t-tertiary truncate'>{issue.description}</div>
-        )}
+        {issue.description && <div className='mt-4px text-11px text-t-tertiary truncate'>{issue.description}</div>}
         <div className='mt-6px flex items-center gap-6px flex-wrap'>
           {issue.priority && (
-            <Tag size='small' color={issue.priority === 'high' ? 'red' : issue.priority === 'medium' ? 'orange' : 'gray'}>
+            <Tag
+              size='small'
+              color={issue.priority === 'high' ? 'red' : issue.priority === 'medium' ? 'orange' : 'gray'}
+            >
               {issue.priority}
             </Tag>
           )}
           {feedback?.assignedStatus && getStatusTag(feedback.assignedStatus, t)}
           {feedback?.blockerMessage && (
             <Tooltip content={feedback.blockerMessage}>
-              <Tag size='small' color='orangered'>阻塞</Tag>
+              <Tag size='small' color='orangered'>
+                阻塞
+              </Tag>
             </Tooltip>
           )}
         </div>
@@ -185,7 +188,9 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
         title={
           <div className='flex items-center gap-10px'>
             <span>{t('common.superAssistant.issuesBoardTitle', { defaultValue: '共享 Issue 看板' })}</span>
-            <Tag size='small' color='arcoblue'>{allIssues.length} Issues</Tag>
+            <Tag size='small' color='arcoblue'>
+              {allIssues.length} Issues
+            </Tag>
           </div>
         }
         extra={
@@ -200,7 +205,9 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
         }
       >
         {loading ? (
-          <div className='text-12px text-t-tertiary py-20px text-center'>{t('common.loading', { defaultValue: '请稍候...' })}</div>
+          <div className='text-12px text-t-tertiary py-20px text-center'>
+            {t('common.loading', { defaultValue: '请稍候...' })}
+          </div>
         ) : allIssues.length === 0 ? (
           <Empty description={t('common.superAssistant.noIssues', { defaultValue: '暂无共享 Issue' })} />
         ) : (
@@ -269,7 +276,9 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
                     })}
                   </Tag>
                 ) : (
-                  <Tag color='gray' size='small'>{t('common.superAssistant.activity.unassigned', { defaultValue: '未分配' })}</Tag>
+                  <Tag color='gray' size='small'>
+                    {t('common.superAssistant.activity.unassigned', { defaultValue: '未分配' })}
+                  </Tag>
                 )}
                 {getStatusTag(currentIssueActivityFeedback.assignedStatus, t)}
               </div>
@@ -281,10 +290,7 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
                   })}
                 </div>
               )}
-              <IssueCommentsPanel
-                requirementId={currentIssue.id}
-                refreshToken={issueCommentsRefreshToken}
-              />
+              <IssueCommentsPanel requirementId={currentIssue.id} refreshToken={issueCommentsRefreshToken} />
             </div>
           </Card>
 
@@ -309,7 +315,9 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
                     </Button>
                   ))}
                   {assignableAgents.length === 0 && (
-                    <span className='text-11px text-t-tertiary'>{t('common.superAssistant.noAgents', { defaultValue: '团队暂无 Agent' })}</span>
+                    <span className='text-11px text-t-tertiary'>
+                      {t('common.superAssistant.noAgents', { defaultValue: '团队暂无 Agent' })}
+                    </span>
                   )}
                 </div>
               </div>
@@ -338,7 +346,8 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
                       {t('common.superAssistant.markIssueDone', { defaultValue: '标记完成' })}
                     </Button>
                   )}
-                  {(currentIssueActivityFeedback.assignedStatus === 'failed' || currentIssueActivityFeedback.blockerMessage) && (
+                  {(currentIssueActivityFeedback.assignedStatus === 'failed' ||
+                    currentIssueActivityFeedback.blockerMessage) && (
                     <Button size='small' status='success' onClick={onClearIssueBlocked}>
                       {t('common.superAssistant.clearIssueBlocked', { defaultValue: '解除阻塞' })}
                     </Button>
@@ -377,12 +386,24 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
                   {t('common.superAssistant.moduleActionsTitle', { defaultValue: '快捷入口' })}
                 </div>
                 <div className='flex flex-wrap gap-6px'>
-                  <Button size='small' onClick={onOpenTeamFlow}>{t('common.superAssistant.launchTeamFlow', { defaultValue: 'Team 协作' })}</Button>
-                  <Button size='small' onClick={onOpenSharedTasks}>{t('common.superAssistant.createSharedTask', { defaultValue: '共享任务' })}</Button>
-                  <Button size='small' onClick={onOpenSharedSessions}>{t('common.superAssistant.createSharedSession', { defaultValue: '共享会话' })}</Button>
-                  <Button size='small' onClick={onOpenSkills}>{t('common.superAssistant.openSkills', { defaultValue: 'Skills' })}</Button>
-                  <Button size='small' onClick={onOpenMcp}>{t('common.superAssistant.openMcp', { defaultValue: 'MCP' })}</Button>
-                  <Button size='small' onClick={onOpenEnterpriseModule}>{t('common.superAssistant.openEnterpriseModule', { defaultValue: '企业模块' })}</Button>
+                  <Button size='small' onClick={onOpenTeamFlow}>
+                    {t('common.superAssistant.launchTeamFlow', { defaultValue: 'Team 协作' })}
+                  </Button>
+                  <Button size='small' onClick={onOpenSharedTasks}>
+                    {t('common.superAssistant.createSharedTask', { defaultValue: '共享任务' })}
+                  </Button>
+                  <Button size='small' onClick={onOpenSharedSessions}>
+                    {t('common.superAssistant.createSharedSession', { defaultValue: '共享会话' })}
+                  </Button>
+                  <Button size='small' onClick={onOpenSkills}>
+                    {t('common.superAssistant.openSkills', { defaultValue: 'Skills' })}
+                  </Button>
+                  <Button size='small' onClick={onOpenMcp}>
+                    {t('common.superAssistant.openMcp', { defaultValue: 'MCP' })}
+                  </Button>
+                  <Button size='small' onClick={onOpenEnterpriseModule}>
+                    {t('common.superAssistant.openEnterpriseModule', { defaultValue: '企业模块' })}
+                  </Button>
                 </div>
               </div>
             </div>
@@ -401,7 +422,9 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
         <div className='space-y-12px text-13px text-t-secondary'>
           <div className='p-12px bg-fill-2 rd-8px'>
             <div className='font-600 text-t-primary mb-4px'>
-              {t('common.superAssistant.autopilotDesc', { defaultValue: '像 Multica 的 db-boy 一样，让 Agent 按计划自动干活' })}
+              {t('common.superAssistant.autopilotDesc', {
+                defaultValue: '像 Multica 的 db-boy 一样，让 Agent 按计划自动干活',
+              })}
             </div>
             <div className='text-12px'>
               {t('common.superAssistant.autopilotDescDetail', {
@@ -456,7 +479,14 @@ const IssuesWorkbench: React.FC<IssuesWorkbenchProps> = ({
             >
               自定义 Autopilot…
             </Button>
-            <Button type='text' long onClick={() => { setAutopilotVisible(false); navigate('/scheduled'); }}>
+            <Button
+              type='text'
+              long
+              onClick={() => {
+                setAutopilotVisible(false);
+                navigate('/scheduled');
+              }}
+            >
               管理全部定时任务
             </Button>
           </div>

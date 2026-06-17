@@ -53,11 +53,9 @@ export function useEditionFeatures(): EditionFeatures {
     const gate = createEditionGate({ identity });
     const isEnterpriseEdition = managementMode === 'enterprise';
     const isPersonalEdition = !isEnterpriseEdition;
-    const tenantLabel =
-      enterpriseContext?.tenantName ?? enterpriseContext?.tenantId ?? null;
+    const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId ?? null;
     const showTeamsFeature = gate.can('teams.collaboration');
-    const showEnterpriseWorkspaceHub =
-      hasJoinedEnterprise || hasInstanceEnterprise || showEnterpriseAdminNav;
+    const showEnterpriseWorkspaceHub = hasJoinedEnterprise || hasInstanceEnterprise || showEnterpriseAdminNav;
 
     return {
       managementMode,

@@ -7,8 +7,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDisplayMessage,
+  filterValidAttachmentPaths,
   isCacheTempFilePath,
   isImageFilePath,
+  parseDisplayMessageFiles,
   stripFilesMarker,
 } from '@/common/chat/messageFiles';
 import { ONE_FILES_MARKER } from '@/common/config/constants';
@@ -63,5 +65,31 @@ describe('stripFilesMarker', () => {
   it('removes embedded file paths from the message body', () => {
     const body = `hello\n\n${ONE_FILES_MARKER}\n/tmp/a.png`;
     expect(stripFilesMarker(body)).toBe('hello');
+  });
+});
+
+describe('parseDisplayMessageFiles', () => {
+  it('keeps real attachment paths and drops extracted document text lines', () => {
+    const body = [
+      'hello',
+      '',
+      ONE_FILES_MARKER,
+      'C:/workspace/invoice.pdf',
+      '- **公司**: GoDaddy LLC',
+      '## 📝 总结',
+      '你通过支付宝支付了 21 元',
+    ].join('\n');
+    expect(parseDisplayMessageFiles(body)).toEqual(['C:/workspace/invoice.pdf']);
+  });
+
+  it('salvages a path when PDF text was concatenated without a newline', () => {
+    const body = `hello\n\n${ONE_FILES_MARKER}\nC:/workspace/invoice.pdf这是一份来自 GoDaddy 的账单`;
+    expect(parseDisplayMessageFiles(body)).toEqual(['C:/workspace/invoice.pdf']);
+  });
+});
+
+describe('filterValidAttachmentPaths', () => {
+  it('accepts image paths', () => {
+    expect(filterValidAttachmentPaths(['D:/photos/test.png'])).toEqual(['D:/photos/test.png']);
   });
 });

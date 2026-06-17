@@ -163,9 +163,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, conversations, users, me, onE
           </div>
         )}
       </div>
-      {task.active_form && (
-        <div className='text-11px mt-4px pl-13px text-[var(--warning)]'>▶ {task.active_form}</div>
-      )}
+      {task.active_form && <div className='text-11px mt-4px pl-13px text-[var(--warning)]'>▶ {task.active_form}</div>}
       {conv && (
         <div className='mt-4px pl-13px'>
           <Button
@@ -208,7 +206,8 @@ const TasksPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [scope, setScope] = useState<WorkspaceScope>(() => resolveWorkspaceScope(location.search));
-  const { hasJoinedEnterprise, isEnterpriseEdition, showTeamsFeature, tenantLabel, showEnterpriseAdminNav } = useEditionFeatures();
+  const { hasJoinedEnterprise, isEnterpriseEdition, showTeamsFeature, tenantLabel, showEnterpriseAdminNav } =
+    useEditionFeatures();
   const enterpriseMode = useWebuiEnterpriseMode();
   const {
     teamId: scopedTeamId,
@@ -258,7 +257,13 @@ const TasksPage: React.FC = () => {
       const old: IKanbanTask[] = JSON.parse(raw);
       if (!Array.isArray(old) || old.length === 0) return;
       for (const task of old) {
-        await kanbanApi.create({ subject: task.subject, status: task.status, active_form: task.active_form, session_name: task.session_name, assigned_to: task.assigned_to });
+        await kanbanApi.create({
+          subject: task.subject,
+          status: task.status,
+          active_form: task.active_form,
+          session_name: task.session_name,
+          assigned_to: task.assigned_to,
+        });
       }
       localStorage.removeItem('1one_tasks');
     } catch {
@@ -274,7 +279,9 @@ const TasksPage: React.FC = () => {
     const run = async () => {
       try {
         await Promise.race([migrateLocalStorage(), new Promise((_, r) => setTimeout(r, 3000))]);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       await Promise.all([
         withTimeout(loadMe(), undefined).catch(() => {}),
         withTimeout(loadTasks(), undefined).catch(() => {}),
@@ -302,19 +309,41 @@ const TasksPage: React.FC = () => {
 
   const openEdit = (t: IKanbanTask) => {
     setEditing(t);
-    setForm({ subject: t.subject, status: t.status, active_form: t.active_form ?? '', session_name: t.session_name ?? '', assigned_to: t.assigned_to ?? '' });
+    setForm({
+      subject: t.subject,
+      status: t.status,
+      active_form: t.active_form ?? '',
+      session_name: t.session_name ?? '',
+      assigned_to: t.assigned_to ?? '',
+    });
     setModalVisible(true);
   };
 
   const handleSubmit = async () => {
-    if (!form.subject.trim()) { Message.warning('请填写任务名称'); return; }
+    if (!form.subject.trim()) {
+      Message.warning('请填写任务名称');
+      return;
+    }
     setSaving(true);
     try {
       if (editing) {
-        await kanbanApi.update({ id: editing.id, subject: form.subject.trim(), status: form.status, active_form: form.active_form.trim() || undefined, session_name: form.session_name || undefined, assigned_to: form.assigned_to || undefined });
+        await kanbanApi.update({
+          id: editing.id,
+          subject: form.subject.trim(),
+          status: form.status,
+          active_form: form.active_form.trim() || undefined,
+          session_name: form.session_name || undefined,
+          assigned_to: form.assigned_to || undefined,
+        });
         Message.success('任务已更新');
       } else {
-        await kanbanApi.create({ subject: form.subject.trim(), status: form.status, active_form: form.active_form.trim() || undefined, session_name: form.session_name || undefined, assigned_to: form.assigned_to || undefined });
+        await kanbanApi.create({
+          subject: form.subject.trim(),
+          status: form.status,
+          active_form: form.active_form.trim() || undefined,
+          session_name: form.session_name || undefined,
+          assigned_to: form.assigned_to || undefined,
+        });
         Message.success('任务已创建');
       }
       setModalVisible(false);
@@ -383,8 +412,7 @@ const TasksPage: React.FC = () => {
   const convList = Array.from(conversations.values()).filter((conversation) =>
     matchesConversationScope(conversation, !showTeamsFeature && scope === 'team' ? 'personal' : scope, scopedTeamId)
   );
-  const defaultScopedConversationId =
-    scope === 'team' && scopedTeamId ? (convList[0]?.id ?? '') : '';
+  const defaultScopedConversationId = scope === 'team' && scopedTeamId ? (convList[0]?.id ?? '') : '';
   const userList = Array.from(users.values());
 
   const applyScope = (nextScope: WorkspaceScope) => {
@@ -407,7 +435,9 @@ const TasksPage: React.FC = () => {
         <div className='flex items-center gap-10px'>
           <h2 className='m-0 text-18px font-700 text-t-primary'>任务看板</h2>
           {me.role === 'admin' && (
-            <Tag color='arcoblue' size='small'>Admin</Tag>
+            <Tag color='arcoblue' size='small'>
+              Admin
+            </Tag>
           )}
         </div>
         <Space>
@@ -421,11 +451,17 @@ const TasksPage: React.FC = () => {
               size='small'
             >
               {userList.map((u) => (
-                <AionSelect.Option key={u.id} value={u.id}>{u.username}</AionSelect.Option>
+                <AionSelect.Option key={u.id} value={u.id}>
+                  {u.username}
+                </AionSelect.Option>
               ))}
             </AionSelect>
           )}
-          <Button size='small' icon={<Refresh theme='outline' />} onClick={() => void Promise.all([loadTasks(), loadUsers()])}>
+          <Button
+            size='small'
+            icon={<Refresh theme='outline' />}
+            onClick={() => void Promise.all([loadTasks(), loadUsers()])}
+          >
             刷新
           </Button>
           <Button type='primary' size='small' icon={<Add theme='outline' />} onClick={openAdd}>
@@ -435,9 +471,7 @@ const TasksPage: React.FC = () => {
       </div>
 
       {hasJoinedEnterprise ? (
-        <div
-          className='mb-16px p-12px rd-10px border border-border-2 bg-fill-1 flex items-center justify-between gap-12px flex-wrap'
-        >
+        <div className='mb-16px p-12px rd-10px border border-border-2 bg-fill-1 flex items-center justify-between gap-12px flex-wrap'>
           <div className='min-w-0 flex-1'>
             <div className='text-14px font-600 text-t-primary mb-4px'>
               {t('common.workspace.hub.enterpriseTitle', {
@@ -576,7 +610,16 @@ const TasksPage: React.FC = () => {
               </div>
               <div className='flex-1 overflow-y-auto'>
                 {col.map((t) => (
-                  <TaskCard key={t.id} task={t} conversations={conversations} users={users} me={me} onEdit={openEdit} onDelete={handleDelete} onStatusChange={handleStatusChange} />
+                  <TaskCard
+                    key={t.id}
+                    task={t}
+                    conversations={conversations}
+                    users={users}
+                    me={me}
+                    onEdit={openEdit}
+                    onDelete={handleDelete}
+                    onStatusChange={handleStatusChange}
+                  />
                 ))}
                 {col.length === 0 && <div className='text-12px text-t-tertiary text-center py-16px'>暂无任务</div>}
               </div>
@@ -596,17 +639,27 @@ const TasksPage: React.FC = () => {
       >
         <Form layout='vertical'>
           <Form.Item label='任务名称' required>
-            <Input placeholder='例如: 修复登录 Bug' value={form.subject} onChange={(v) => setForm((f) => ({ ...f, subject: v }))} />
+            <Input
+              placeholder='例如: 修复登录 Bug'
+              value={form.subject}
+              onChange={(v) => setForm((f) => ({ ...f, subject: v }))}
+            />
           </Form.Item>
           <Form.Item label='状态'>
             <AionSelect value={form.status} onChange={(v) => setForm((f) => ({ ...f, status: v as TaskStatus }))}>
               {(Object.keys(STATUS_CONFIG) as TaskStatus[]).map((s) => (
-                <AionSelect.Option key={s} value={s}>{STATUS_CONFIG[s].label}</AionSelect.Option>
+                <AionSelect.Option key={s} value={s}>
+                  {STATUS_CONFIG[s].label}
+                </AionSelect.Option>
               ))}
             </AionSelect>
           </Form.Item>
           <Form.Item label='当前进度 (可选)'>
-            <Input placeholder='例如: 正在分析代码' value={form.active_form} onChange={(v) => setForm((f) => ({ ...f, active_form: v }))} />
+            <Input
+              placeholder='例如: 正在分析代码'
+              value={form.active_form}
+              onChange={(v) => setForm((f) => ({ ...f, active_form: v }))}
+            />
           </Form.Item>
           <Form.Item label='关联会话 (可选)'>
             <AionSelect
@@ -621,7 +674,9 @@ const TasksPage: React.FC = () => {
               }}
             >
               {convList.map((conv) => (
-                <AionSelect.Option key={conv.id} value={conv.id}>{conv.name}</AionSelect.Option>
+                <AionSelect.Option key={conv.id} value={conv.id}>
+                  {conv.name}
+                </AionSelect.Option>
               ))}
             </AionSelect>
           </Form.Item>
@@ -633,7 +688,9 @@ const TasksPage: React.FC = () => {
               allowClear
             >
               {userList.map((user) => (
-                <AionSelect.Option key={user.id} value={user.id}>{user.username}</AionSelect.Option>
+                <AionSelect.Option key={user.id} value={user.id}>
+                  {user.username}
+                </AionSelect.Option>
               ))}
             </AionSelect>
           </Form.Item>

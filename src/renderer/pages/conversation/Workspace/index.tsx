@@ -378,9 +378,7 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
                         {searchHook.searchText ? '' : t('conversation.workspace.emptyDescription')}
                       </div>
                       {!searchHook.searchText && (
-                        <div className='text-t-tertiary text-12px mt-12px'>
-                          {t('conversation.workspace.emptyHint')}
-                        </div>
+                        <div className='text-t-tertiary text-12px mt-12px'>{t('conversation.workspace.emptyHint')}</div>
                       )}
                     </div>
                   }
@@ -561,11 +559,7 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
                   type='primary'
                   loading={codeReviewHook.reviewing}
                   onClick={() =>
-                    void codeReviewHook.runCodeReview(
-                      workspace,
-                      fileChangesHook.staged,
-                      fileChangesHook.unstaged
-                    )
+                    void codeReviewHook.runCodeReview(workspace, fileChangesHook.staged, fileChangesHook.unstaged)
                   }
                 >
                   {codeReviewHook.reviewing
@@ -578,30 +572,43 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
                   <div className='flex items-center gap-8px mb-6px'>
                     <Tag
                       size='small'
-                      color={codeReviewHook.reviewResult.score >= 80 ? 'green' : codeReviewHook.reviewResult.score >= 60 ? 'orange' : 'red'}
+                      color={
+                        codeReviewHook.reviewResult.score >= 80
+                          ? 'green'
+                          : codeReviewHook.reviewResult.score >= 60
+                            ? 'orange'
+                            : 'red'
+                      }
                     >
-                      {t('admin.codeReview.score', { score: codeReviewHook.reviewResult.score, defaultValue: '{{score}} 分' })}
+                      {t('admin.codeReview.score', {
+                        score: codeReviewHook.reviewResult.score,
+                        defaultValue: '{{score}} 分',
+                      })}
                     </Tag>
                     <span className='text-12px text-t-secondary'>{codeReviewHook.reviewResult.summary}</span>
                   </div>
                   {codeReviewHook.reviewResult.issues.length > 0 && (
                     <div className='flex flex-col gap-4px'>
-                      {codeReviewHook.reviewResult.issues.map((issue: ICodeReviewResult['issues'][number], idx: number) => (
-                        <div
-                          key={idx}
-                          className={`text-11px px-8px py-4px rd-4px ${
-                            issue.severity === 'critical'
-                              ? 'bg-[rgb(var(--danger-1))] text-[rgb(var(--danger-6))]'
-                              : issue.severity === 'warning'
-                              ? 'bg-[rgb(var(--warning-1))] text-[rgb(var(--warning-6))]'
-                              : 'bg-fill-3 text-t-secondary'
-                          }`}
-                        >
-                          <span className='font-600'>{issue.severity === 'critical' ? '🔴' : issue.severity === 'warning' ? '⚠️' : 'ℹ️'}</span>{' '}
-                          <span className='font-600'>{issue.title}</span> — {issue.description}
-                          {issue.suggestion && <span className='block mt-2px opacity-75'>{issue.suggestion}</span>}
-                        </div>
-                      ))}
+                      {codeReviewHook.reviewResult.issues.map(
+                        (issue: ICodeReviewResult['issues'][number], idx: number) => (
+                          <div
+                            key={idx}
+                            className={`text-11px px-8px py-4px rd-4px ${
+                              issue.severity === 'critical'
+                                ? 'bg-[rgb(var(--danger-1))] text-[rgb(var(--danger-6))]'
+                                : issue.severity === 'warning'
+                                  ? 'bg-[rgb(var(--warning-1))] text-[rgb(var(--warning-6))]'
+                                  : 'bg-fill-3 text-t-secondary'
+                            }`}
+                          >
+                            <span className='font-600'>
+                              {issue.severity === 'critical' ? '🔴' : issue.severity === 'warning' ? '⚠️' : 'ℹ️'}
+                            </span>{' '}
+                            <span className='font-600'>{issue.title}</span> — {issue.description}
+                            {issue.suggestion && <span className='block mt-2px opacity-75'>{issue.suggestion}</span>}
+                          </div>
+                        )
+                      )}
                     </div>
                   )}
                 </div>
@@ -628,7 +635,10 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
 
         {/* CTeam 敏捷协同看板工作区集成 / CTeam Kanban tab content */}
         {!isWorkspaceCollapsed && activeTab === 'kanban' && (
-          <div className='flex-1 overflow-hidden bg-bg-1 flex flex-col min-h-0' style={{ height: 'calc(100% - 40px)', padding: '12px' }}>
+          <div
+            className='flex-1 overflow-hidden bg-bg-1 flex flex-col min-h-0'
+            style={{ height: 'calc(100% - 40px)', padding: '12px' }}
+          >
             <AdminKanban />
           </div>
         )}

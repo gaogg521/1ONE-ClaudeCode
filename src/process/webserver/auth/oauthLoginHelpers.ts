@@ -58,11 +58,7 @@ export async function finalizeOAuthBrowserLogin(
     maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,
   });
   registerBrowserWebuiLoginSession(req, authUser, sessionToken, authUser.role);
-  const target = resolveOAuthPostLoginRedirectPath(
-    input.redirectTarget,
-    authUser.role,
-    authUser.tenant_id
-  );
+  const target = resolveOAuthPostLoginRedirectPath(input.redirectTarget, authUser.role, authUser.tenant_id);
   res.redirect(`/#${target}`);
 }
 
@@ -74,11 +70,7 @@ export function shouldReturnOAuthAuthorizeJson(req: Pick<Request, 'headers' | 'q
   return isElectronDesktopWebuiRequest(req.headers as Record<string, unknown>);
 }
 
-export function sendOAuthAuthorizeRedirect(
-  res: Response,
-  req: Pick<Request, 'headers' | 'query'>,
-  goto: string
-): void {
+export function sendOAuthAuthorizeRedirect(res: Response, req: Pick<Request, 'headers' | 'query'>, goto: string): void {
   if (shouldReturnOAuthAuthorizeJson(req)) {
     res.json({ success: true, data: { goto } });
     return;

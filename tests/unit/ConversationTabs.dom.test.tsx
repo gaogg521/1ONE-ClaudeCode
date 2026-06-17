@@ -104,12 +104,18 @@ vi.mock('@/common', () => ({
 
 vi.mock('@arco-design/web-react', () => {
   const MenuComponent = ({ children }: React.PropsWithChildren) => <div>{children}</div>;
-  (MenuComponent as unknown as { Item: React.FC<React.PropsWithChildren>; ItemGroup: React.FC<React.PropsWithChildren> }).Item = ({
-    children,
-  }: React.PropsWithChildren) => <div>{children}</div>;
-  (MenuComponent as unknown as { Item: React.FC<React.PropsWithChildren>; ItemGroup: React.FC<React.PropsWithChildren> }).ItemGroup = ({
-    children,
-  }: React.PropsWithChildren) => <div>{children}</div>;
+  (
+    MenuComponent as unknown as {
+      Item: React.FC<React.PropsWithChildren>;
+      ItemGroup: React.FC<React.PropsWithChildren>;
+    }
+  ).Item = ({ children }: React.PropsWithChildren) => <div>{children}</div>;
+  (
+    MenuComponent as unknown as {
+      Item: React.FC<React.PropsWithChildren>;
+      ItemGroup: React.FC<React.PropsWithChildren>;
+    }
+  ).ItemGroup = ({ children }: React.PropsWithChildren) => <div>{children}</div>;
 
   return {
     Dropdown: ({ children }: React.PropsWithChildren) => <>{children}</>,

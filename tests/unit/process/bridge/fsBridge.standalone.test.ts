@@ -42,6 +42,7 @@ vi.mock('@/common', () => ({
       createZip: { provider: vi.fn() },
       cancelZip: { provider: vi.fn() },
       getFileMetadata: { provider: vi.fn() },
+      resolveAttachmentDisplayPath: { provider: vi.fn() },
       copyFilesToWorkspace: { provider: vi.fn() },
       removeEntry: { provider: vi.fn() },
       renameEntry: { provider: vi.fn() },

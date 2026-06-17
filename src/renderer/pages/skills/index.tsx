@@ -35,8 +35,8 @@ const SkillsPage: React.FC = () => {
       ipcBridge.fs.listAvailableSkills.invoke(),
       canUseOrgSkills ? listSkills() : Promise.resolve([]),
     ]);
-    setLocalSkills(localResult.status === 'fulfilled' ? localResult.value ?? [] : []);
-    setOrgSkills(orgResult.status === 'fulfilled' ? orgResult.value ?? [] : []);
+    setLocalSkills(localResult.status === 'fulfilled' ? (localResult.value ?? []) : []);
+    setOrgSkills(orgResult.status === 'fulfilled' ? (orgResult.value ?? []) : []);
     setLoading(false);
   }, [canUseOrgSkills]);
 
@@ -117,10 +117,7 @@ const SkillsPage: React.FC = () => {
       if (!query) {
         return true;
       }
-      return (
-        item.title.toLowerCase().includes(query) ||
-        item.subtitle.toLowerCase().includes(query)
-      );
+      return item.title.toLowerCase().includes(query) || item.subtitle.toLowerCase().includes(query);
     });
   }, [filter, items, search]);
 
@@ -133,8 +130,7 @@ const SkillsPage: React.FC = () => {
           </div>
           <div className='mt-4px text-13px text-t-tertiary'>
             {t('common.skills.subtitle', {
-              defaultValue:
-                '浏览、导入和复用你的能力包。把能稳定复用的流程沉淀成 Skill，再分发给助手或团队。',
+              defaultValue: '浏览、导入和复用你的能力包。把能稳定复用的流程沉淀成 Skill，再分发给助手或团队。',
             })}
           </div>
         </div>
@@ -164,13 +160,15 @@ const SkillsPage: React.FC = () => {
             style={{ width: 320 }}
           />
           <div className='flex items-center gap-8px flex-wrap'>
-            {([
-              ['all', t('common.skills.filterAll', { defaultValue: '全部' })],
-              ['local', t('common.skills.filterLocal', { defaultValue: '本地技能' })],
-              ...(canUseOrgSkills
-                ? ([['org', t('common.skills.filterOrg', { defaultValue: '团队技能' })]] as const)
-                : []),
-            ] as const).map(([key, label]) => (
+            {(
+              [
+                ['all', t('common.skills.filterAll', { defaultValue: '全部' })],
+                ['local', t('common.skills.filterLocal', { defaultValue: '本地技能' })],
+                ...(canUseOrgSkills
+                  ? ([['org', t('common.skills.filterOrg', { defaultValue: '团队技能' })]] as const)
+                  : []),
+              ] as const
+            ).map(([key, label]) => (
               <Button
                 key={key}
                 size='small'
@@ -256,11 +254,7 @@ const SkillsPage: React.FC = () => {
               defaultValue: '支持 GitHub 仓库、目录链接或直接指向 SKILL.md 的链接。先预览，再选择导入。',
             })}
           </Typography.Paragraph>
-          <Input
-            value={githubUrlInput}
-            onChange={setGithubUrlInput}
-            placeholder='https://github.com/...'
-          />
+          <Input value={githubUrlInput} onChange={setGithubUrlInput} placeholder='https://github.com/...' />
           <Button
             type='primary'
             loading={githubPreviewLoading}
@@ -276,7 +270,12 @@ const SkillsPage: React.FC = () => {
                 <div key={skill.name} className='rd-10px border border-solid border-[var(--color-border-2)] p-12px'>
                   <div className='text-13px font-600 text-t-primary'>{skill.name}</div>
                   <div className='mt-6px text-12px text-t-tertiary'>{skill.description}</div>
-                  <Button className='mt-10px' size='small' type='primary' onClick={() => void handleImportSkillFromUrl(skill)}>
+                  <Button
+                    className='mt-10px'
+                    size='small'
+                    type='primary'
+                    onClick={() => void handleImportSkillFromUrl(skill)}
+                  >
                     {t('common.import', { defaultValue: '导入' })}
                   </Button>
                 </div>

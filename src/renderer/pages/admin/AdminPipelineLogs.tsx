@@ -51,13 +51,18 @@ const AdminPipelineLogs: React.FC = () => {
 
   // 2. 轮询流水线最新执行状态与实时日志 (每 1.5 秒更新)
   useEffect(() => {
-    if (!activeRun || activeRun.status === 'success' || activeRun.status === 'failed' || activeRun.status === 'cancelled') {
+    if (
+      !activeRun ||
+      activeRun.status === 'success' ||
+      activeRun.status === 'failed' ||
+      activeRun.status === 'cancelled'
+    ) {
       return;
     }
 
     const timer = setInterval(async () => {
       try {
-        const run = await getPipelineRun(activeRun.id) as IPipelineRun;
+        const run = (await getPipelineRun(activeRun.id)) as IPipelineRun;
         setActiveRun(run);
         // 滚动到终端最底部
         consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -89,10 +94,7 @@ const AdminPipelineLogs: React.FC = () => {
       });
     } catch (error) {
       Message.error(
-        getEnterpriseActionError(
-          error,
-          t('admin.pipeline.message.triggerFailed', { defaultValue: '触发执行失败' })
-        )
+        getEnterpriseActionError(error, t('admin.pipeline.message.triggerFailed', { defaultValue: '触发执行失败' }))
       );
     } finally {
       setTriggering(false);
@@ -152,7 +154,9 @@ const AdminPipelineLogs: React.FC = () => {
       <div className='flex flex-col flex-1 size-full min-h-0 bg-1 box-border'>
         <ModulePageHeader
           title={t('admin.pipeline.title', { defaultValue: 'CCI 持续集成流水线' })}
-          description={t('admin.pipeline.desc', { defaultValue: '国产高性能、强管控的编译构建流水线。自动卡控代码 Lint 规范与质量红线门槛。' })}
+          description={t('admin.pipeline.desc', {
+            defaultValue: '国产高性能、强管控的编译构建流水线。自动卡控代码 Lint 规范与质量红线门槛。',
+          })}
           actions={
             <>
               <Button size='small' icon={<Refresh />} onClick={() => void pipelinesState.reload()} />
@@ -191,63 +195,64 @@ const AdminPipelineLogs: React.FC = () => {
           loading={pipelinesState.loading}
           error={pipelinesState.error}
           empty={pipelinesState.data.length === 0}
-          emptyDescription={t('admin.pipeline.empty', { defaultValue: '未配置任何流水线，请先在管理员控制台中完成流水线注册。' })}
+          emptyDescription={t('admin.pipeline.empty', {
+            defaultValue: '未配置任何流水线，请先在管理员控制台中完成流水线注册。',
+          })}
         >
           <div className='flex-1 flex flex-col min-h-0 gap-16px'>
-          {/* Stage 步骤进度拓扑 */}
-          <Card bordered={false} className='bg-fill-2 rd-8px'>
-            <Steps size='small' current={activeRun ? stages.findIndex((_, i) => getStageStatus(i) === 'process') + 1 : 0}>
-              {stages.map((stage, index) => {
-                const status = getStageStatus(index);
-                return (
-                  <Steps.Step
-                    key={stage.name}
-                    title={stage.name}
-                    description={stage.command}
-                    status={status as any}
-                  />
-                );
-              })}
-            </Steps>
-          </Card>
+            {/* Stage 步骤进度拓扑 */}
+            <Card bordered={false} className='bg-fill-2 rd-8px'>
+              <Steps
+                size='small'
+                current={activeRun ? stages.findIndex((_, i) => getStageStatus(i) === 'process') + 1 : 0}
+              >
+                {stages.map((stage, index) => {
+                  const status = getStageStatus(index);
+                  return (
+                    <Steps.Step
+                      key={stage.name}
+                      title={stage.name}
+                      description={stage.command}
+                      status={status as any}
+                    />
+                  );
+                })}
+              </Steps>
+            </Card>
 
-          {/* 实时流控制台日志终端 */}
-          <div className='flex-1 flex flex-col min-h-0 rd-8px overflow-hidden border border-border-2'>
-            {/* Console Header */}
-            <div className='h-32px px-12px bg-fill-3 flex items-center justify-between shrink-0 border-b border-border-2'>
-              <div className='flex items-center gap-6px text-12px font-700 text-t-secondary'>
-                <Robot size='14' />
-                <span>{t('admin.pipeline.consoleTitle', { defaultValue: '持续集成构建控制台日志' })}</span>
-              </div>
-              {activeRun?.status && (
-                <Tag
-                  size='small'
-                  color={
-                    activeRun.status === 'success'
-                      ? 'green'
-                      : activeRun.status === 'failed'
-                      ? 'red'
-                      : 'blue'
-                  }
-                  className='font-600'
-                >
-                  {activeRun.status.toUpperCase()}
-                </Tag>
-              )}
-            </div>
-
-            {/* Terminal Monospace Logs Output */}
-            <div className='flex-1 p-12px overflow-y-auto bg-black font-mono text-12px text-green-400 select-text leading-18px whitespace-pre-wrap word-break-break-all'>
-              {activeRun?.log_content ? (
-                activeRun.log_content
-              ) : (
-                <div className='text-t-tertiary text-center py-40px'>
-                  {t('admin.pipeline.consolePlaceholder', { defaultValue: '控制台就绪。点击上方“运行”开始流式监控编译状态...' })}
+            {/* 实时流控制台日志终端 */}
+            <div className='flex-1 flex flex-col min-h-0 rd-8px overflow-hidden border border-border-2'>
+              {/* Console Header */}
+              <div className='h-32px px-12px bg-fill-3 flex items-center justify-between shrink-0 border-b border-border-2'>
+                <div className='flex items-center gap-6px text-12px font-700 text-t-secondary'>
+                  <Robot size='14' />
+                  <span>{t('admin.pipeline.consoleTitle', { defaultValue: '持续集成构建控制台日志' })}</span>
                 </div>
-              )}
-              <div ref={consoleEndRef} />
+                {activeRun?.status && (
+                  <Tag
+                    size='small'
+                    color={activeRun.status === 'success' ? 'green' : activeRun.status === 'failed' ? 'red' : 'blue'}
+                    className='font-600'
+                  >
+                    {activeRun.status.toUpperCase()}
+                  </Tag>
+                )}
+              </div>
+
+              {/* Terminal Monospace Logs Output */}
+              <div className='flex-1 p-12px overflow-y-auto bg-black font-mono text-12px text-green-400 select-text leading-18px whitespace-pre-wrap word-break-break-all'>
+                {activeRun?.log_content ? (
+                  activeRun.log_content
+                ) : (
+                  <div className='text-t-tertiary text-center py-40px'>
+                    {t('admin.pipeline.consolePlaceholder', {
+                      defaultValue: '控制台就绪。点击上方“运行”开始流式监控编译状态...',
+                    })}
+                  </div>
+                )}
+                <div ref={consoleEndRef} />
+              </div>
             </div>
-          </div>
           </div>
         </ModuleDataState>
       </div>

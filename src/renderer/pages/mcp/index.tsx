@@ -22,10 +22,29 @@ function getTransportLabel(server: IMcpServer): string {
 }
 
 function getStatusTag(server: IMcpServer) {
-  if (server.status === 'testing') return <Tag color='orange' size='small'>连接中</Tag>;
-  if (server.status === 'connected') return <Tag color='green' size='small'>已连接</Tag>;
-  if (server.status === 'error') return <Tag color='red' size='small'>连接失败</Tag>;
-  return <Tag color='gray' size='small'>未测试</Tag>;
+  if (server.status === 'testing')
+    return (
+      <Tag color='orange' size='small'>
+        连接中
+      </Tag>
+    );
+  if (server.status === 'connected')
+    return (
+      <Tag color='green' size='small'>
+        已连接
+      </Tag>
+    );
+  if (server.status === 'error')
+    return (
+      <Tag color='red' size='small'>
+        连接失败
+      </Tag>
+    );
+  return (
+    <Tag color='gray' size='small'>
+      未测试
+    </Tag>
+  );
 }
 
 const MCPPage: React.FC = () => {
@@ -34,10 +53,30 @@ const MCPPage: React.FC = () => {
   const { agentInstallStatus, setAgentInstallStatus, checkSingleServerInstallStatus } = useMcpAgentStatus();
   const { syncMcpToAgents, removeMcpFromAgents } = useMcpOperations(mcpServers, msg);
   const { testingServers, handleTestMcpConnection } = useMcpConnection(mcpServers, saveMcpServers, msg, () => {});
-  const { showMcpModal, editingMcpServer, deleteConfirmVisible, serverToDelete,
-    showAddMcpModal, showEditMcpModal, hideMcpModal, showDeleteConfirm, hideDeleteConfirm } = useMcpModal();
-  const { handleAddMcpServer, handleBatchImportMcpServers, handleEditMcpServer, handleDeleteMcpServer, handleToggleMcpServer } = useMcpServerCRUD(
-    mcpServers, saveMcpServers, syncMcpToAgents, removeMcpFromAgents, checkSingleServerInstallStatus, setAgentInstallStatus
+  const {
+    showMcpModal,
+    editingMcpServer,
+    deleteConfirmVisible,
+    serverToDelete,
+    showAddMcpModal,
+    showEditMcpModal,
+    hideMcpModal,
+    showDeleteConfirm,
+    hideDeleteConfirm,
+  } = useMcpModal();
+  const {
+    handleAddMcpServer,
+    handleBatchImportMcpServers,
+    handleEditMcpServer,
+    handleDeleteMcpServer,
+    handleToggleMcpServer,
+  } = useMcpServerCRUD(
+    mcpServers,
+    saveMcpServers,
+    syncMcpToAgents,
+    removeMcpFromAgents,
+    checkSingleServerInstallStatus,
+    setAgentInstallStatus
   );
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -47,20 +86,35 @@ const MCPPage: React.FC = () => {
 
   const wrappedAdd = async (data: Omit<IMcpServer, 'id' | 'createdAt' | 'updatedAt'>) => {
     const s = await handleAddMcpServer(data);
-    if (s) { void handleTestMcpConnection(s); if (data.enabled) void syncMcpToAgents(s, true); }
+    if (s) {
+      void handleTestMcpConnection(s);
+      if (data.enabled) void syncMcpToAgents(s, true);
+    }
   };
-  const wrappedEdit = async (serverToEdit: IMcpServer | undefined, data: Omit<IMcpServer, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const wrappedEdit = async (
+    serverToEdit: IMcpServer | undefined,
+    data: Omit<IMcpServer, 'id' | 'createdAt' | 'updatedAt'>
+  ) => {
     const s = await handleEditMcpServer(serverToEdit, data);
-    if (s) { void handleTestMcpConnection(s); if (data.enabled) void syncMcpToAgents(s, true); }
+    if (s) {
+      void handleTestMcpConnection(s);
+      if (data.enabled) void syncMcpToAgents(s, true);
+    }
   };
   const wrappedBatch = async (data: Omit<IMcpServer, 'id' | 'createdAt' | 'updatedAt'>[]) => {
     const added = await handleBatchImportMcpServers(data);
-    if (added) added.forEach(s => { void handleTestMcpConnection(s); if (s.enabled) void syncMcpToAgents(s, true); });
+    if (added)
+      added.forEach((s) => {
+        void handleTestMcpConnection(s);
+        if (s.enabled) void syncMcpToAgents(s, true);
+      });
   };
 
   // Auto-test on load
   useEffect(() => {
-    mcpServers.forEach(s => { if (s.enabled && s.status !== 'connected') void handleTestMcpConnection(s); });
+    mcpServers.forEach((s) => {
+      if (s.enabled && s.status !== 'connected') void handleTestMcpConnection(s);
+    });
   }, []); // eslint-disable-line
 
   return (
@@ -94,21 +148,25 @@ const MCPPage: React.FC = () => {
                 </td>
               </tr>
             )}
-            {allServers.map(server => {
+            {allServers.map((server) => {
               const toolCount = (server as any).tools?.length ?? 0;
               const isExpanded = expandedId === server.id;
               const isBuiltinWebTools = server.builtin === true && server.name === 'one-web-tools';
-              const isReadOnly =
-                isBuiltinWebTools || extensionMcpServers.some((e) => e.id === server.id);
+              const isReadOnly = isBuiltinWebTools || extensionMcpServers.some((e) => e.id === server.id);
               return (
                 <React.Fragment key={server.id}>
                   <tr
-                    style={{ borderBottom: '1px solid var(--color-fill-2)', cursor: toolCount > 0 ? 'pointer' : 'default' }}
+                    style={{
+                      borderBottom: '1px solid var(--color-fill-2)',
+                      cursor: toolCount > 0 ? 'pointer' : 'default',
+                    }}
                     onClick={() => toolCount > 0 && setExpandedId(isExpanded ? null : server.id)}
                   >
                     <td style={{ padding: '12px', fontWeight: 600 }}>{server.name}</td>
                     <td style={{ padding: '12px' }}>
-                      <code style={{ fontSize: 11, background: 'var(--color-fill-2)', padding: '2px 6px', borderRadius: 3 }}>
+                      <code
+                        style={{ fontSize: 11, background: 'var(--color-fill-2)', padding: '2px 6px', borderRadius: 3 }}
+                      >
                         {getTransportLabel(server)}
                       </code>
                     </td>
@@ -118,25 +176,42 @@ const MCPPage: React.FC = () => {
                         <Badge
                           count={toolCount}
                           style={{ background: 'var(--danger)', cursor: 'pointer' }}
-                          onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : server.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedId(isExpanded ? null : server.id);
+                          }}
                         />
                       )}
                     </td>
                     <td style={{ padding: '12px' }}>
-                      <Tag color='purple' size='small'>全局</Tag>
+                      <Tag color='purple' size='small'>
+                        全局
+                      </Tag>
                     </td>
-                    <td style={{ padding: '12px' }} onClick={e => e.stopPropagation()}>
+                    <td style={{ padding: '12px' }} onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Button
-                          size='mini' icon={<Refresh size={13} />}
+                          size='mini'
+                          icon={<Refresh size={13} />}
                           loading={testingServers[server.id]}
                           title='重新连接'
                           onClick={() => handleTestMcpConnection(server)}
                         />
                         {!isReadOnly && (
                           <>
-                            <Button size='mini' icon={<Setting size={13} />} title='编辑' onClick={() => showEditMcpModal(server)} />
-                            <Button size='mini' status='danger' icon={<Delete size={13} />} title='删除' onClick={() => showDeleteConfirm(server.id)} />
+                            <Button
+                              size='mini'
+                              icon={<Setting size={13} />}
+                              title='编辑'
+                              onClick={() => showEditMcpModal(server)}
+                            />
+                            <Button
+                              size='mini'
+                              status='danger'
+                              icon={<Delete size={13} />}
+                              title='删除'
+                              onClick={() => showDeleteConfirm(server.id)}
+                            />
                           </>
                         )}
                       </div>
@@ -151,7 +226,15 @@ const MCPPage: React.FC = () => {
                           </div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                             {((server as any).tools ?? []).map((tool: any) => (
-                              <code key={tool.name ?? tool} style={{ fontSize: 11, background: 'var(--color-fill-2)', padding: '2px 8px', borderRadius: 3 }}>
+                              <code
+                                key={tool.name ?? tool}
+                                style={{
+                                  fontSize: 11,
+                                  background: 'var(--color-fill-2)',
+                                  padding: '2px 8px',
+                                  borderRadius: 3,
+                                }}
+                              >
                                 {tool.name ?? tool}
                               </code>
                             ))}
@@ -180,9 +263,13 @@ const MCPPage: React.FC = () => {
         title='删除 MCP 服务'
         visible={deleteConfirmVisible}
         onCancel={hideDeleteConfirm}
-        onOk={async () => { hideDeleteConfirm(); if (serverToDelete) await handleDeleteMcpServer(serverToDelete); }}
+        onOk={async () => {
+          hideDeleteConfirm();
+          if (serverToDelete) await handleDeleteMcpServer(serverToDelete);
+        }}
         okButtonProps={{ status: 'danger' }}
-        okText='删除' cancelText='取消'
+        okText='删除'
+        cancelText='取消'
       >
         <p>确认删除此 MCP 服务？</p>
       </Modal>

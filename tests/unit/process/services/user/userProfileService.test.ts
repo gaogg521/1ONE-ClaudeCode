@@ -56,9 +56,7 @@ describe('userProfileService', () => {
       tenantName: 'Acme Corp',
       joined: true,
     });
-    mockAll.mockReturnValue([
-      { team_id: 'team-1', team_name: 'Platform', role: 'member' },
-    ]);
+    mockAll.mockReturnValue([{ team_id: 'team-1', team_name: 'Platform', role: 'member' }]);
   });
 
   it('buildAvatarPublicPath includes cache buster', () => {

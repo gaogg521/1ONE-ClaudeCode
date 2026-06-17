@@ -70,7 +70,10 @@ const AgentsTab: React.FC<AgentsTabProps> = ({
     return map;
   }, [executionGroups, jobs]);
 
-  const toAgentRef = (group: SuperAssistantAgentExecutionGroup, agent: (typeof group.agents)[number]): AgentCardRef => ({
+  const toAgentRef = (
+    group: SuperAssistantAgentExecutionGroup,
+    agent: (typeof group.agents)[number]
+  ): AgentCardRef => ({
     teamId: group.teamId,
     teamName: group.teamName,
     slotId: agent.slotId,
@@ -83,12 +86,16 @@ const AgentsTab: React.FC<AgentsTabProps> = ({
       <Card title={t('common.superAssistant.agentsExecutionTitle', { defaultValue: '数字员工' })}>
         <div className='text-12px text-t-tertiary'>
           {t('common.superAssistant.agentsExecutionDesc', {
-            defaultValue:
-              '在每个数字员工卡片上可直接编辑、立即执行或配置定时任务，实现 7×24 持续跟进 Issues。',
+            defaultValue: '在每个数字员工卡片上可直接编辑、立即执行或配置定时任务，实现 7×24 持续跟进 Issues。',
           })}
         </div>
         <div className='mt-12px'>
-          <Button type='primary' size='small' icon={<Plus theme='outline' size='14' />} onClick={() => onCreateAgent?.()}>
+          <Button
+            type='primary'
+            size='small'
+            icon={<Plus theme='outline' size='14' />}
+            onClick={() => onCreateAgent?.()}
+          >
             {t('common.superAssistant.createDigitalEmployeeTitle', { defaultValue: '创建数字员工' })}
           </Button>
         </div>
@@ -211,7 +218,11 @@ const AgentsTab: React.FC<AgentsTabProps> = ({
                         ))}
                       </div>
                       <div className='mt-12px flex flex-wrap gap-8px'>
-                        <Button size='mini' icon={<Edit theme='outline' size='14' />} onClick={() => onManageAgent?.(agentRef)}>
+                        <Button
+                          size='mini'
+                          icon={<Edit theme='outline' size='14' />}
+                          onClick={() => onManageAgent?.(agentRef)}
+                        >
                           {t('common.superAssistant.agentEdit', { defaultValue: '编辑' })}
                         </Button>
                         <Button
@@ -248,8 +259,7 @@ const AgentsTab: React.FC<AgentsTabProps> = ({
                               defaultValue: '删除数字员工？',
                             })}
                             content={t('common.superAssistant.deleteAgentConfirmDesc', {
-                              defaultValue:
-                                '将删除「{{agent}}」及其关联的定时任务，且不可恢复。',
+                              defaultValue: '将删除「{{agent}}」及其关联的定时任务，且不可恢复。',
                               agent: agent.agentName,
                             })}
                             okButtonProps={{ status: 'danger' }}

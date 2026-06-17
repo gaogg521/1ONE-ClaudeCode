@@ -220,12 +220,7 @@ function getConfiguredOrigins(port: number, allowRemote: boolean, additionalPort
   return baseOrigins;
 }
 
-export function setupCors(
-  app: Express,
-  port: number,
-  allowRemote: boolean,
-  additionalPorts: number[] = []
-): void {
+export function setupCors(app: Express, port: number, allowRemote: boolean, additionalPorts: number[] = []): void {
   const allowedOrigins = getConfiguredOrigins(port, allowRemote, additionalPorts);
 
   app.use(

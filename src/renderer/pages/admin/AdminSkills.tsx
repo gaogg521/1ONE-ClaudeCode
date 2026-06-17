@@ -50,11 +50,7 @@ const AdminSkills: React.FC = () => {
     teamId: null as string | null,
   });
 
-  const rowsState = useEnterpriseAsyncData(
-    listSkills,
-    [],
-    t('admin.skills.loadFailed', { defaultValue: '加载失败' })
-  );
+  const rowsState = useEnterpriseAsyncData(listSkills, [], t('admin.skills.loadFailed', { defaultValue: '加载失败' }));
 
   const { getTeamName, teams } = useTeamNameMap();
 
@@ -77,7 +73,10 @@ const AdminSkills: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { Message.warning(t('admin.skills.nameRequired', { defaultValue: '名称不能为空' })); return; }
+    if (!form.name.trim()) {
+      Message.warning(t('admin.skills.nameRequired', { defaultValue: '名称不能为空' }));
+      return;
+    }
     if (form.scope === 'team' && !form.teamId) {
       Message.warning(t('admin.scope.teamRequired', { defaultValue: '请选择团队' }));
       return;
@@ -93,13 +92,18 @@ const AdminSkills: React.FC = () => {
         scope: form.scope,
         ...(form.scope === 'team' && form.teamId ? { team_id: form.teamId } : {}),
       });
-      Message.success(editId ? t('admin.skills.updated', { defaultValue: '已更新' }) : t('admin.skills.created', { defaultValue: '已创建' }));
+      Message.success(
+        editId
+          ? t('admin.skills.updated', { defaultValue: '已更新' })
+          : t('admin.skills.created', { defaultValue: '已创建' })
+      );
       setModalVisible(false);
       await rowsState.reload();
     } catch (error) {
       Message.error(getEnterpriseActionError(error, t('admin.skills.saveFailed', { defaultValue: '保存失败' })));
+    } finally {
+      setBatchSaving(false);
     }
-    finally { setBatchSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
@@ -114,22 +118,22 @@ const AdminSkills: React.FC = () => {
 
   const columns = [
     { title: t('admin.skills.name', { defaultValue: '名称' }), dataIndex: 'name' },
-    { title: t('admin.skills.description', { defaultValue: '描述' }), dataIndex: 'description', render: (v: string) => v || '—' },
+    {
+      title: t('admin.skills.description', { defaultValue: '描述' }),
+      dataIndex: 'description',
+      render: (v: string) => v || '—',
+    },
     {
       title: t('admin.skills.scope', { defaultValue: '归属' }),
       dataIndex: 'scope',
       render: (_: unknown, r: SkillRecord) => (
-        <ScopeOwnershipCell
-          scope={r.scope}
-          teamId={r.team_id}
-          createdBy={r.created_by}
-          getTeamName={getTeamName}
-        />
+        <ScopeOwnershipCell scope={r.scope} teamId={r.team_id} createdBy={r.created_by} getTeamName={getTeamName} />
       ),
     },
     {
-      title: t('admin.skills.enabled', { defaultValue: '启用' }), dataIndex: 'enabled',
-      render: (_: unknown, r: SkillRecord) => (
+      title: t('admin.skills.enabled', { defaultValue: '启用' }),
+      dataIndex: 'enabled',
+      render: (_: unknown, r: SkillRecord) =>
         canManageSkill(r) ? (
           <Switch
             size='small'
@@ -147,14 +151,15 @@ const AdminSkills: React.FC = () => {
                 });
                 await rowsState.reload();
               } catch (error) {
-                Message.error(getEnterpriseActionError(error, t('admin.skills.saveFailed', { defaultValue: '保存失败' })));
+                Message.error(
+                  getEnterpriseActionError(error, t('admin.skills.saveFailed', { defaultValue: '保存失败' }))
+                );
               }
             }}
           />
         ) : (
           <Switch size='small' checked={r.enabled === 1} disabled />
-        )
-      ),
+        ),
     },
     {
       title: t('admin.skills.actions', { defaultValue: '操作' }),
@@ -162,7 +167,10 @@ const AdminSkills: React.FC = () => {
         <Space size='mini'>
           {canManageSkill(r) ? <Button size='mini' icon={<Edit />} onClick={() => openEdit(r)} /> : null}
           {canManageSkill(r) ? (
-            <Popconfirm title={t('admin.skills.confirmDelete', { defaultValue: '确定删除？' })} onOk={() => void handleDelete(r.id)}>
+            <Popconfirm
+              title={t('admin.skills.confirmDelete', { defaultValue: '确定删除？' })}
+              onOk={() => void handleDelete(r.id)}
+            >
               <Button size='mini' status='danger' icon={<Delete />} />
             </Popconfirm>
           ) : null}
@@ -175,12 +183,44 @@ const AdminSkills: React.FC = () => {
     <AdminPageWrapper>
       <ModulePageHeader
         title={t('admin.skills.title', { defaultValue: '企业 Skills 技能仓库' })}
-        description={t('admin.skills.desc', { defaultValue: '统一管理团队 AI 技能。成员可创建个人或团队共享技能，管理员可设为组织共享。' })}
+        description={t('admin.skills.desc', {
+          defaultValue: '统一管理团队 AI 技能。成员可创建个人或团队共享技能，管理员可设为组织共享。',
+        })}
         actions={
           <>
-            <Button icon={<Refresh />} onClick={() => void rowsState.reload()}>{t('common.refresh', { defaultValue: '刷新' })}</Button>
-            <Button type='outline' onClick={() => { setBatchJson(JSON.stringify([{name:'代码审查Skill',description:'自动审查代码规范和安全',content:'# Code Review Skill\n\n检查: console.log, any类型, XSS, setTimeout(0)'},{name:'API文档生成Skill',description:'自动生成REST API文档',content:'# API Doc Skill\n\n解析Express路由生成OpenAPI文档'}],null,2)); setBatchError(null); setBatchVisible(true); }}>{t('admin.skills.batchImport', { defaultValue: '批量导入' })}</Button>
-            <Button type='primary' icon={<Plus />} onClick={openCreate}>{t('admin.skills.create', { defaultValue: '新建技能' })}</Button>
+            <Button icon={<Refresh />} onClick={() => void rowsState.reload()}>
+              {t('common.refresh', { defaultValue: '刷新' })}
+            </Button>
+            <Button
+              type='outline'
+              onClick={() => {
+                setBatchJson(
+                  JSON.stringify(
+                    [
+                      {
+                        name: '代码审查Skill',
+                        description: '自动审查代码规范和安全',
+                        content: '# Code Review Skill\n\n检查: console.log, any类型, XSS, setTimeout(0)',
+                      },
+                      {
+                        name: 'API文档生成Skill',
+                        description: '自动生成REST API文档',
+                        content: '# API Doc Skill\n\n解析Express路由生成OpenAPI文档',
+                      },
+                    ],
+                    null,
+                    2
+                  )
+                );
+                setBatchError(null);
+                setBatchVisible(true);
+              }}
+            >
+              {t('admin.skills.batchImport', { defaultValue: '批量导入' })}
+            </Button>
+            <Button type='primary' icon={<Plus />} onClick={openCreate}>
+              {t('admin.skills.create', { defaultValue: '新建技能' })}
+            </Button>
           </>
         }
       />
@@ -195,11 +235,33 @@ const AdminSkills: React.FC = () => {
         </ModuleDataState>
       </Card>
 
-      <Modal title={editId ? t('admin.skills.editTitle', { defaultValue: '编辑技能' }) : t('admin.skills.createTitle', { defaultValue: '新建技能' })} visible={modalVisible} onCancel={() => setModalVisible(false)} onOk={handleSave} confirmLoading={batchSaving} okText={t('common.confirm', { defaultValue: '确定' })} cancelText={t('common.cancel', { defaultValue: '取消' })}>
+      <Modal
+        title={
+          editId
+            ? t('admin.skills.editTitle', { defaultValue: '编辑技能' })
+            : t('admin.skills.createTitle', { defaultValue: '新建技能' })
+        }
+        visible={modalVisible}
+        onCancel={() => setModalVisible(false)}
+        onOk={handleSave}
+        confirmLoading={batchSaving}
+        okText={t('common.confirm', { defaultValue: '确定' })}
+        cancelText={t('common.cancel', { defaultValue: '取消' })}
+      >
         <Form layout='vertical'>
-          <Form.Item label={t('admin.skills.name', { defaultValue: '名称' })} required><Input value={form.name} onChange={(v) => setForm((s) => ({ ...s, name: v }))} /></Form.Item>
-          <Form.Item label={t('admin.skills.description', { defaultValue: '描述' })}><Input value={form.description} onChange={(v) => setForm((s) => ({ ...s, description: v }))} /></Form.Item>
-          <Form.Item label={t('admin.skills.content', { defaultValue: 'Skill 内容 (Markdown)' })}><Input.TextArea value={form.content} onChange={(v) => setForm((s) => ({ ...s, content: v }))} autoSize={{ minRows: 4, maxRows: 12 }} /></Form.Item>
+          <Form.Item label={t('admin.skills.name', { defaultValue: '名称' })} required>
+            <Input value={form.name} onChange={(v) => setForm((s) => ({ ...s, name: v }))} />
+          </Form.Item>
+          <Form.Item label={t('admin.skills.description', { defaultValue: '描述' })}>
+            <Input value={form.description} onChange={(v) => setForm((s) => ({ ...s, description: v }))} />
+          </Form.Item>
+          <Form.Item label={t('admin.skills.content', { defaultValue: 'Skill 内容 (Markdown)' })}>
+            <Input.TextArea
+              value={form.content}
+              onChange={(v) => setForm((s) => ({ ...s, content: v }))}
+              autoSize={{ minRows: 4, maxRows: 12 }}
+            />
+          </Form.Item>
           <ResourceScopeFields
             scope={form.scope}
             teamId={form.teamId}
@@ -210,10 +272,49 @@ const AdminSkills: React.FC = () => {
         </Form>
       </Modal>
 
-      <Modal title={t('admin.skills.batchImport', { defaultValue: '批量导入技能 (JSON)' })} visible={batchVisible} onCancel={() => setBatchVisible(false)} onOk={async () => { try { const items = JSON.parse(batchJson); if (!Array.isArray(items)) { setBatchError('必须是JSON数组'); return; } setBatchSaving(true); setBatchError(null); try { const res = await importSkillsBatch(items); Message.success(`成功导入 ${res.count ?? items.length} 个技能`); setBatchVisible(false); setBatchJson(''); await rowsState.reload(); } catch (error) { setBatchError(getEnterpriseActionError(error, '导入失败')); } finally { setBatchSaving(false); } } catch { setBatchError('JSON格式错误'); } }} confirmLoading={batchSaving} okText={t('common.import', { defaultValue: '导入' })} cancelText={t('common.cancel', { defaultValue: '取消' })}>
-        <Form layout='vertical'><Form.Item label='JSON (数组)'>
-          <Input.TextArea value={batchJson} onChange={setBatchJson} autoSize={{ minRows: 8, maxRows: 20 }} placeholder='[{"name":"Skill名称","description":"描述","content":"Markdown内容"},...]' />
-        </Form.Item>{batchError ? <div className='text-13px text-red-500'>{batchError}</div> : null}</Form>
+      <Modal
+        title={t('admin.skills.batchImport', { defaultValue: '批量导入技能 (JSON)' })}
+        visible={batchVisible}
+        onCancel={() => setBatchVisible(false)}
+        onOk={async () => {
+          try {
+            const items = JSON.parse(batchJson);
+            if (!Array.isArray(items)) {
+              setBatchError('必须是JSON数组');
+              return;
+            }
+            setBatchSaving(true);
+            setBatchError(null);
+            try {
+              const res = await importSkillsBatch(items);
+              Message.success(`成功导入 ${res.count ?? items.length} 个技能`);
+              setBatchVisible(false);
+              setBatchJson('');
+              await rowsState.reload();
+            } catch (error) {
+              setBatchError(getEnterpriseActionError(error, '导入失败'));
+            } finally {
+              setBatchSaving(false);
+            }
+          } catch {
+            setBatchError('JSON格式错误');
+          }
+        }}
+        confirmLoading={batchSaving}
+        okText={t('common.import', { defaultValue: '导入' })}
+        cancelText={t('common.cancel', { defaultValue: '取消' })}
+      >
+        <Form layout='vertical'>
+          <Form.Item label='JSON (数组)'>
+            <Input.TextArea
+              value={batchJson}
+              onChange={setBatchJson}
+              autoSize={{ minRows: 8, maxRows: 20 }}
+              placeholder='[{"name":"Skill名称","description":"描述","content":"Markdown内容"},...]'
+            />
+          </Form.Item>
+          {batchError ? <div className='text-13px text-red-500'>{batchError}</div> : null}
+        </Form>
       </Modal>
     </AdminPageWrapper>
   );

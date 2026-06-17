@@ -103,9 +103,7 @@ export const restoreDesktopWebUIFromPreferences = async (): Promise<void> => {
     const { getAdminWebListenPort } = await import('../webserver/index');
     const adminPort = getAdminWebListenPort();
     const adminLine =
-      adminPort != null
-        ? ` admin=http://localhost:${adminPort}`
-        : ' admin=not-listening (see warnings above)';
+      adminPort != null ? ` admin=http://localhost:${adminPort}` : ' admin=not-listening (see warnings above)';
     console.log(
       `[WebUI] Auto-restored member=http://localhost:${instance.port} allowRemote=${allowRemote}${adminLine}`
     );

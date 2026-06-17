@@ -122,7 +122,9 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({ conversation, hideSendBox, 
       case 'aionrs':
         return <AionrsTeamChat key={conversation.id} conversation={conversation as AionrsConversation} stretchLayout />;
       case 'gemini':
-        return <GeminiTeamChat key={conversation.id} conversation={conversation} hideSendBox={hideSendBox} stretchLayout />;
+        return (
+          <GeminiTeamChat key={conversation.id} conversation={conversation} hideSendBox={hideSendBox} stretchLayout />
+        );
       case 'openclaw-gateway':
         return (
           <OpenClawChat

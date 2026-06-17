@@ -249,11 +249,7 @@ export async function closeAdminWebListener(): Promise<void> {
   });
 }
 
-function listenHttpServer(
-  server: import('http').Server,
-  port: number,
-  host: string
-): Promise<void> {
+function listenHttpServer(server: import('http').Server, port: number, host: string): Promise<void> {
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, host, () => {

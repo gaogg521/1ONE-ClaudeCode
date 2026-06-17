@@ -205,5 +205,4 @@ export function initApplicationBridge(workerTaskManager: IWorkerTaskManager): vo
       return { success: false, msg };
     }
   });
-
 }

@@ -47,9 +47,7 @@ describe('digitalEmployee run fallback', () => {
   });
 
   it('mapPersonalAgentToPreset aligns with bundle for process-side injection', () => {
-    const preset = mapPersonalAgentToPreset(
-      makeAgent({ automationConfig: { instructions: '只做安全巡检' } })
-    );
+    const preset = mapPersonalAgentToPreset(makeAgent({ automationConfig: { instructions: '只做安全巡检' } }));
     expect(preset.presetContext).toContain('只做安全巡检');
     expect(preset.presetContext).toContain(DIGITAL_EMPLOYEE_GLOBAL_MCP_HINT);
   });

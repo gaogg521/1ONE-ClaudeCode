@@ -55,10 +55,9 @@ const VALID_PRIORITIES = new Set(['low', 'medium', 'high', 'urgent']);
 
 async function resolveTeamContext(teamId: string): Promise<TeamContext | null> {
   const db = await getDatabase();
-  const row = db
-    .getDriver()
-    .prepare(`SELECT tenant_id, user_id FROM teams WHERE id = ?`)
-    .get(teamId) as { tenant_id: string; user_id: string } | undefined;
+  const row = db.getDriver().prepare(`SELECT tenant_id, user_id FROM teams WHERE id = ?`).get(teamId) as
+    | { tenant_id: string; user_id: string }
+    | undefined;
   if (!row) {
     return null;
   }
@@ -164,7 +163,10 @@ export async function escalateEnterpriseIssue(
     assignedAgentName = input.assignToAgent;
   }
 
-  const descriptionParts = [input.description?.trim(), input.blockerReason ? `阻塞原因：${input.blockerReason.trim()}` : '']
+  const descriptionParts = [
+    input.description?.trim(),
+    input.blockerReason ? `阻塞原因：${input.blockerReason.trim()}` : '',
+  ]
     .filter(Boolean)
     .join('\n\n');
 
@@ -289,9 +291,7 @@ export async function escalateEnterpriseIssue(
   }
 
   if (input.parentRequirementId) {
-    const ownerRecipients = [teamContext.ownerUserId].filter(
-      (userId) => userId && userId !== assignedMember?.id
-    );
+    const ownerRecipients = [teamContext.ownerUserId].filter((userId) => userId && userId !== assignedMember?.id);
     if (ownerRecipients.length > 0) {
       void notifyEnterpriseUsers(
         teamContext.tenantId,

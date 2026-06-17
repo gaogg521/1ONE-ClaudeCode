@@ -44,15 +44,13 @@ type LdapSearchStream = {
 
 function escapeLdapFilterValue(value: string): string {
   // Basic LDAP filter escaping
-  return value
-    .replace(/\\/g, '\\5c')
-    .replace(/\*/g, '\\2a')
-    .replace(/\(/g, '\\28')
-    .replace(/\)/g, '\\29');
+  return value.replace(/\\/g, '\\5c').replace(/\*/g, '\\2a').replace(/\(/g, '\\28').replace(/\)/g, '\\29');
 }
 
 function normalizeDn(dn: string): string {
-  return String(dn || '').trim().toLowerCase();
+  return String(dn || '')
+    .trim()
+    .toLowerCase();
 }
 
 /** `DC=intranet,DC=example,DC=com` → `intranet.example.com` */
@@ -174,10 +172,9 @@ function ldapAttributesToRecord(entry: unknown): Record<string, unknown> {
     legacy && typeof legacy === 'object' && Object.keys(legacy).length > 0 ? { ...legacy } : {};
   const attrs =
     e.attributes ??
-    ((e.object as { attributes?: Array<{ type?: string; values?: string[]; vals?: string[] }> } | undefined)
+    (e.object as { attributes?: Array<{ type?: string; values?: string[]; vals?: string[] }> } | undefined)
       ?.attributes ??
-      (e.pojo as { attributes?: Array<{ type?: string; values?: string[]; vals?: string[] }> } | undefined)
-        ?.attributes);
+    (e.pojo as { attributes?: Array<{ type?: string; values?: string[]; vals?: string[] }> } | undefined)?.attributes;
   if (!Array.isArray(attrs)) return record;
 
   for (const attr of attrs) {
@@ -199,10 +196,7 @@ function readEntryObject(entry: unknown): { dn: string; entry: SearchEntryObject
     dn?: { toString(): string };
     objectName?: { toString(): string } | string;
   };
-  const dn =
-    e.dn?.toString?.() ??
-    (typeof e.objectName === 'string' ? e.objectName : e.objectName?.toString?.()) ??
-    '';
+  const dn = e.dn?.toString?.() ?? (typeof e.objectName === 'string' ? e.objectName : e.objectName?.toString?.()) ?? '';
   return { dn, entry: ldapAttributesToRecord(entry) as unknown as SearchEntryObject };
 }
 
@@ -221,11 +215,7 @@ function isInvalidCredentialError(error: unknown): boolean {
   return /invalidcredentials|invalid credentials/i.test(message);
 }
 
-function ldapEntryToDirectoryRow(
-  dn: string,
-  entry: SearchEntryObject,
-  loginAttr: string
-): LdapDirectoryEntry {
+function ldapEntryToDirectoryRow(dn: string, entry: SearchEntryObject, loginAttr: string): LdapDirectoryEntry {
   const record = entry as unknown as Record<string, unknown>;
   const mail = pickAttr(record, 'mail');
   const sam = pickAttr(record, 'sAMAccountName');
@@ -287,7 +277,9 @@ function searchUsersAsync(
       res.on('error', (error) => reject(error));
       res.on('end', (result) => {
         if (result?.status !== undefined && result.status !== 0) {
-          reject(Object.assign(new Error(`LDAP search ended with status ${result.status}`), { code: 'LDAP_SEARCH_FAILED' }));
+          reject(
+            Object.assign(new Error(`LDAP search ended with status ${result.status}`), { code: 'LDAP_SEARCH_FAILED' })
+          );
           return;
         }
         resolve(found);
@@ -332,7 +324,18 @@ export async function searchLdapDirectory(
   const safe = escapeLdapFilterValue(q);
   const filter = `(&(|(objectClass=user)(objectClass=person)(objectClass=inetOrgPerson)(objectClass=organizationalPerson))(|(${loginAttr}=*${safe}*)(sAMAccountName=*${safe}*)(cn=*${safe}*)(displayName=*${safe}*)(sn=*${safe}*)(givenName=*${safe}*)(mail=*${safe}*)(userPrincipalName=*${safe}*)))`;
   const attrs = Array.from(
-    new Set(['dn', loginAttr, 'sAMAccountName', 'userPrincipalName', 'uid', 'cn', 'displayName', 'mail', 'department', 'company'])
+    new Set([
+      'dn',
+      loginAttr,
+      'sAMAccountName',
+      'userPrincipalName',
+      'uid',
+      'cn',
+      'displayName',
+      'mail',
+      'department',
+      'company',
+    ])
   );
 
   const bindPrincipal = resolveLdapBindPrincipal(config);
@@ -364,67 +367,76 @@ export async function authenticateWithLdap(
   orgUnitPath: string | null;
   debug?: { memberOf?: string[] };
 }> {
-    const loginAttr = resolveLoginAttribute(config);
-    const defaultFilter = username.includes('@')
-      ? `(|(${loginAttr}={{username}})(userPrincipalName={{username}})(mail={{username}}))`
-      : `(|(${loginAttr}={{username}})(sAMAccountName={{username}})(uid={{username}}))`;
-    const rawFilter = (config.searchFilter || defaultFilter).trim();
-    const safeUser = escapeLdapFilterValue(username.trim());
-    const filter = rawFilter.replace(/\{\{\s*username\s*\}\}/gi, safeUser);
-    const attrs = Array.from(
-      new Set(['dn', loginAttr, 'memberOf', 'department', 'company', ...(config.externalIdAttribute ? [config.externalIdAttribute] : [])])
+  const loginAttr = resolveLoginAttribute(config);
+  const defaultFilter = username.includes('@')
+    ? `(|(${loginAttr}={{username}})(userPrincipalName={{username}})(mail={{username}}))`
+    : `(|(${loginAttr}={{username}})(sAMAccountName={{username}})(uid={{username}}))`;
+  const rawFilter = (config.searchFilter || defaultFilter).trim();
+  const safeUser = escapeLdapFilterValue(username.trim());
+  const filter = rawFilter.replace(/\{\{\s*username\s*\}\}/gi, safeUser);
+  const attrs = Array.from(
+    new Set([
+      'dn',
+      loginAttr,
+      'memberOf',
+      'department',
+      'company',
+      ...(config.externalIdAttribute ? [config.externalIdAttribute] : []),
+    ])
+  );
+
+  // 1) service bind (optional) + search user dn
+  const serviceClient = createClient(config);
+  try {
+    const bindPrincipal = resolveLdapBindPrincipal(config);
+    if (bindPrincipal && config.bindPassword && String(config.bindPassword).trim() !== PASSWORD_MASK) {
+      await bindAsync(serviceClient, bindPrincipal, String(config.bindPassword));
+    }
+    const { dn: userDn, entry } = await searchUserAsync(serviceClient, config.baseDN, filter, attrs);
+    const entryRecord = entry as unknown as Record<string, unknown>;
+    const memberOf = toArray(entryRecord.memberOf);
+    const isAdmin = Boolean(
+      config.adminGroupDN && memberOf.map(normalizeDn).includes(normalizeDn(config.adminGroupDN))
     );
 
-    // 1) service bind (optional) + search user dn
-    const serviceClient = createClient(config);
+    const externalId = (() => {
+      const key = (config.externalIdAttribute || '').trim();
+      if (key) {
+        const v = entryRecord[key];
+        const arr = toArray(v);
+        if (arr.length > 0 && arr[0].trim() !== '') return arr[0].trim();
+      }
+      return userDn;
+    })();
+
+    // 2) verify password by binding as user
+    const userClient = createClient(config);
     try {
-      const bindPrincipal = resolveLdapBindPrincipal(config);
-      if (bindPrincipal && config.bindPassword && String(config.bindPassword).trim() !== PASSWORD_MASK) {
-        await bindAsync(serviceClient, bindPrincipal, String(config.bindPassword));
-      }
-      const { dn: userDn, entry } = await searchUserAsync(serviceClient, config.baseDN, filter, attrs);
-      const entryRecord = entry as unknown as Record<string, unknown>;
-      const memberOf = toArray(entryRecord.memberOf);
-      const isAdmin = Boolean(config.adminGroupDN && memberOf.map(normalizeDn).includes(normalizeDn(config.adminGroupDN)));
-
-      const externalId = (() => {
-        const key = (config.externalIdAttribute || '').trim();
-        if (key) {
-          const v = entryRecord[key];
-          const arr = toArray(v);
-          if (arr.length > 0 && arr[0].trim() !== '') return arr[0].trim();
-        }
-        return userDn;
-      })();
-
-      // 2) verify password by binding as user
-      const userClient = createClient(config);
       try {
-        try {
-          await bindAsync(userClient, userDn, password);
-        } catch (error) {
-          const userPrincipalName = pickAttr(entryRecord, 'userPrincipalName');
-          const loginPrincipal = pickAttr(entryRecord, loginAttr);
-          const fallbackPrincipal = userPrincipalName || loginPrincipal;
-          if (!isInvalidCredentialError(error) || !fallbackPrincipal || fallbackPrincipal === userDn) {
-            throw error;
-          }
-          await bindAsync(userClient, fallbackPrincipal, password);
+        await bindAsync(userClient, userDn, password);
+      } catch (error) {
+        const userPrincipalName = pickAttr(entryRecord, 'userPrincipalName');
+        const loginPrincipal = pickAttr(entryRecord, loginAttr);
+        const fallbackPrincipal = userPrincipalName || loginPrincipal;
+        if (!isInvalidCredentialError(error) || !fallbackPrincipal || fallbackPrincipal === userDn) {
+          throw error;
         }
-      } finally {
-        unbindSafe(userClient);
+        await bindAsync(userClient, fallbackPrincipal, password);
       }
-
-      return {
-        externalId,
-        isAdmin,
-        userDn,
-        orgUnitPath: resolveLdapOrgUnitPath(userDn, entryRecord),
-        debug: { memberOf },
-      };
     } finally {
-      unbindSafe(serviceClient);
+      unbindSafe(userClient);
     }
+
+    return {
+      externalId,
+      isAdmin,
+      userDn,
+      orgUnitPath: resolveLdapOrgUnitPath(userDn, entryRecord),
+      debug: { memberOf },
+    };
+  } finally {
+    unbindSafe(serviceClient);
+  }
 }
 
 /**
@@ -492,10 +504,7 @@ export async function testLdapConnection(config: LdapProviderConfig): Promise<vo
   }
 }
 
-export function formatLdapConnectionError(
-  error: unknown,
-  config?: Pick<LdapProviderConfig, 'url'>
-): string {
+export function formatLdapConnectionError(error: unknown, config?: Pick<LdapProviderConfig, 'url'>): string {
   const err = error as { code?: string; message?: string };
   const code = String(err?.code ?? '').toUpperCase();
   const message = error instanceof Error ? error.message : String(error);
@@ -522,4 +531,3 @@ export function formatLdapConnectionError(
 }
 
 export { decodeLdapEscapedUtf8, parseCnFromDn, ldapEntryToDirectoryRow };
-

@@ -11,15 +11,18 @@ import { uuid } from '@/common/utils';
 import SendBox from '@/renderer/components/chat/sendbox';
 import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/chat/useSendBoxDraft';
 import { createSetUploadFile } from '@/renderer/hooks/chat/useSendBoxFiles';
-import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
+import { useAddOrUpdateMessage, useRemoveMessageByMsgId } from '@/renderer/pages/conversation/Messages/hooks';
 import { allSupportedExts, type FileMetadata } from '@/renderer/services/FileService';
 import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiveWorkspace';
-import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
-import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
+import {
+  finalizeUserMessageAfterSend,
+  prepareUserMessageSend,
+  publishOptimisticUserMessage,
+} from '@/renderer/utils/file/sentMessageDisplay';
 import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import FilePreview from '@/renderer/components/media/FilePreview';
 import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
@@ -54,6 +57,7 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
   const effectiveWorkspace = useEffectiveWorkspace(conversation_id);
   const { checkAndUpdateTitle } = useAutoTitle();
   const addOrUpdateMessage = useAddOrUpdateMessage();
+  const removeMessageByMsgId = useRemoveMessageByMsgId();
   const { setSendBoxHandler } = usePreviewContext();
 
   const [agentName, setAgentName] = useState('Remote Agent');
@@ -235,36 +239,37 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
       if (!stored) return;
       if (sessionStorage.getItem(processedKey)) return;
 
+      let msg_id = '';
       try {
         sessionStorage.setItem(processedKey, 'true');
         const { input, files = [] } = JSON.parse(stored) as { input: string; files?: string[] };
-        const msg_id = `initial_${conversation_id}_${Date.now()}`;
-        const initialDisplayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
-
-        const userMessage: TMessage = {
-          id: msg_id,
-          msg_id,
-          conversation_id,
-          type: 'text',
-          position: 'right',
-          content: { content: initialDisplayMessage },
-          createdAt: Date.now(),
-        };
-        addOrUpdateMessage(userMessage, true);
+        msg_id = `initial_${conversation_id}_${Date.now()}`;
+        const prepared = prepareUserMessageSend(input, files, effectiveWorkspace, msg_id, conversation_id);
+        publishOptimisticUserMessage(addOrUpdateMessage, prepared.optimisticMessage);
         setAiProcessing(true);
         aiProcessingRef.current = true;
 
         void checkAndUpdateTitle(conversation_id, input);
         const result = await ipcBridge.conversation.sendMessage.invoke({
-          input: initialDisplayMessage,
+          input: prepared.displayMessage,
           msg_id,
           conversation_id,
           files,
         });
-        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
+        finalizeUserMessageAfterSend(
+          addOrUpdateMessage,
+          conversation_id,
+          msg_id,
+          result,
+          prepared.displayMessage,
+          prepared
+        );
         emitter.emit('chat.history.refresh');
         sessionStorage.removeItem(storageKey);
       } catch {
+        if (msg_id) {
+          removeMessageByMsgId(msg_id);
+        }
         sessionStorage.removeItem(processedKey);
         setAiProcessing(false);
         aiProcessingRef.current = false;
@@ -274,7 +279,7 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
     // Small delay to let the component mount and response stream listener attach
     const timer = setTimeout(() => void processInitialMessage(), 300);
     return () => clearTimeout(timer);
-  }, [conversation_id, effectiveWorkspace, addOrUpdateMessage, checkAndUpdateTitle]);
+  }, [conversation_id, effectiveWorkspace, addOrUpdateMessage, checkAndUpdateTitle, removeMessageByMsgId]);
 
   const handleFilesAdded = useCallback(
     (pastedFiles: FileMetadata[]) => {
@@ -312,32 +317,30 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
         ...currentUploadFile,
         ...currentAtPath.map((item) => (typeof item === 'string' ? item : item.path)),
       ];
-      const displayMessage = buildDisplayMessage(message, filePaths, effectiveWorkspace);
-
-      const userMessage: TMessage = {
-        id: msg_id,
-        msg_id,
-        conversation_id,
-        type: 'text',
-        position: 'right',
-        content: { content: displayMessage },
-        createdAt: Date.now(),
-      };
-      addOrUpdateMessage(userMessage, true);
+      const prepared = prepareUserMessageSend(message, filePaths, effectiveWorkspace, msg_id, conversation_id);
+      publishOptimisticUserMessage(addOrUpdateMessage, prepared.optimisticMessage);
       setAiProcessing(true);
       aiProcessingRef.current = true;
       try {
         void checkAndUpdateTitle(conversation_id, message);
         const atPathStrings = currentAtPath.map((item) => (typeof item === 'string' ? item : item.path));
         const result = await ipcBridge.conversation.sendMessage.invoke({
-          input: displayMessage,
+          input: prepared.displayMessage,
           msg_id,
           conversation_id,
           files: [...currentUploadFile, ...atPathStrings],
         });
-        patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
+        finalizeUserMessageAfterSend(
+          addOrUpdateMessage,
+          conversation_id,
+          msg_id,
+          result,
+          prepared.displayMessage,
+          prepared
+        );
         emitter.emit('chat.history.refresh');
       } catch {
+        removeMessageByMsgId(msg_id);
         setAiProcessing(false);
         aiProcessingRef.current = false;
       }
@@ -349,6 +352,7 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
       effectiveWorkspace,
       addOrUpdateMessage,
       checkAndUpdateTitle,
+      removeMessageByMsgId,
       setAtPath,
       setUploadFile,
     ]
@@ -409,6 +413,7 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
                 <FilePreview
                   key={path}
                   path={path}
+                  conversationId={conversation_id}
                   onRemove={() => setUploadFile(uploadFile.filter((v) => v !== path))}
                 />
               ))}
@@ -420,6 +425,7 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
                     <FilePreview
                       key={path}
                       path={path}
+                      conversationId={conversation_id}
                       onRemove={() => {
                         const newAtPath = atPath.filter((v) => (typeof v === 'string' ? v !== path : v.path !== path));
                         setAtPath(newAtPath);

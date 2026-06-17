@@ -153,9 +153,17 @@ const ImageGenerationSettingsSection: React.FC<{
   isUpdating: boolean;
   onModelChange: (value: Partial<IConfigStorageRefer['tools.imageGenerationModel']>) => void;
   onToggle: (checked: boolean) => Promise<void>;
-}> = ({ imageGenerationModel, builtinImageGenServer, agentInstallStatus, isServerLoading, isUpdating, onModelChange, onToggle }) => {
+}> = ({
+  imageGenerationModel,
+  builtinImageGenServer,
+  agentInstallStatus,
+  isServerLoading,
+  isUpdating,
+  onModelChange,
+  onToggle,
+}) => {
   const { t } = useTranslation();
-  const noDragStyle = useMemo(() => ({ WebkitAppRegion: 'no-drag' } as React.CSSProperties), []);
+  const noDragStyle = useMemo(() => ({ WebkitAppRegion: 'no-drag' }) as React.CSSProperties, []);
 
   const initPreset = detectPreset(imageGenerationModel?.baseUrl, imageGenerationModel?.useModel);
   const [selectedPresetId, setSelectedPresetId] = React.useState<string>(initPreset);
@@ -234,14 +242,18 @@ const ImageGenerationSettingsSection: React.FC<{
       <div className='flex items-center justify-between mb-16px'>
         <div className='flex flex-col gap-4px'>
           <span className='settings-card-header__title'>{t('settings.imageGeneration')}</span>
-          <span className='settings-content-summary'>{'配置 AI 图像生成服务，支持 DALL-E、Stability AI 等提供商。'}</span>
+          <span className='settings-content-summary'>
+            {'配置 AI 图像生成服务，支持 DALL-E、Stability AI 等提供商。'}
+          </span>
         </div>
         <div className='flex items-center gap-8px'>
           {builtinImageGenServer?.enabled && builtinImageGenServer.name && (
             <McpAgentStatusDisplay
               serverName={builtinImageGenServer.name}
               agentInstallStatus={agentInstallStatus}
-              isLoadingAgentStatus={isServerLoading(builtinImageGenServer.name) && imageGenerationInstalledAgents.length === 0}
+              isLoadingAgentStatus={
+                isServerLoading(builtinImageGenServer.name) && imageGenerationInstalledAgents.length === 0
+              }
               alwaysVisible
             />
           )}
@@ -260,7 +272,9 @@ const ImageGenerationSettingsSection: React.FC<{
           <div style={noDragStyle}>
             <AionSelect value={selectedPresetId} onChange={handlePresetChange}>
               {IMAGE_GEN_PRESETS.map((p) => (
-                <AionSelect.Option key={p.id} value={p.id}>{p.label}</AionSelect.Option>
+                <AionSelect.Option key={p.id} value={p.id}>
+                  {p.label}
+                </AionSelect.Option>
               ))}
             </AionSelect>
           </div>
@@ -288,7 +302,7 @@ const ImageGenerationSettingsSection: React.FC<{
         <Form.Item label={renderLabel('模型', 'optional')}>
           <Input
             value={model}
-            placeholder={IMAGE_GEN_PRESETS.find(p => p.id === selectedPresetId)?.defaultModel ?? 'dall-e-3'}
+            placeholder={IMAGE_GEN_PRESETS.find((p) => p.id === selectedPresetId)?.defaultModel ?? 'dall-e-3'}
             onChange={handleModelChange}
             style={noDragStyle}
           />
@@ -299,9 +313,15 @@ const ImageGenerationSettingsSection: React.FC<{
           <div className='settings-note-card mt-4px text-12px space-y-6px'>
             <div className='settings-note-card__title'>💡 使用 LiteLLM 代理时的填写格式</div>
             <div className='settings-note-card__code font-mono space-y-2px'>
-              <div><span className='text-t-tertiary'>Base URL: </span>https://your-litellm.com</div>
-              <div><span className='text-t-tertiary'>API Key:  </span>sk-your-litellm-key</div>
-              <div><span className='text-t-tertiary'>模型:     </span>dall-e-3</div>
+              <div>
+                <span className='text-t-tertiary'>Base URL: </span>https://your-litellm.com
+              </div>
+              <div>
+                <span className='text-t-tertiary'>API Key: </span>sk-your-litellm-key
+              </div>
+              <div>
+                <span className='text-t-tertiary'>模型: </span>dall-e-3
+              </div>
             </div>
             <div className='text-11px'>
               {'模型名填写 LiteLLM 中配置的图像模型别名即可，例如 '}
@@ -508,9 +528,15 @@ const SpeechToTextSettingsSection: React.FC<{
             <div className='settings-note-card text-12px space-y-6px'>
               <div className='settings-note-card__title'>💡 使用 LiteLLM 代理时的填写格式</div>
               <div className='settings-note-card__code font-mono space-y-2px'>
-                <div><span className='text-t-tertiary'>Base URL: </span>https://your-litellm.com/v1</div>
-                <div><span className='text-t-tertiary'>API Key:  </span>sk-your-litellm-key</div>
-                <div><span className='text-t-tertiary'>模型:     </span>whisper-1</div>
+                <div>
+                  <span className='text-t-tertiary'>Base URL: </span>https://your-litellm.com/v1
+                </div>
+                <div>
+                  <span className='text-t-tertiary'>API Key: </span>sk-your-litellm-key
+                </div>
+                <div>
+                  <span className='text-t-tertiary'>模型: </span>whisper-1
+                </div>
               </div>
               <div className='text-11px'>
                 {'LiteLLM 代理语音转文字走 '}
@@ -520,7 +546,7 @@ const SpeechToTextSettingsSection: React.FC<{
                 {'，模型填 LiteLLM 中配置的别名即可。'}
               </div>
             </div>
-</>
+          </>
         )}
       </Form>
     </div>
@@ -690,9 +716,7 @@ const ModalMcpManagementSection: React.FC<{
 
       <div className='flex-1 min-h-0'>
         {visibleMcpServers.length === 0 && extensionMcpServers.length === 0 ? (
-          <div className='settings-empty-state'>
-            {t('settings.mcpNoServersFound')}
-          </div>
+          <div className='settings-empty-state'>{t('settings.mcpNoServersFound')}</div>
         ) : (
           <AionScrollArea
             className={classNames('max-h-360px', isPageMode && 'max-h-none')}
@@ -925,7 +949,10 @@ const ToolsModalContent: React.FC = () => {
       setImageGenerationModel((prev) => {
         const newImageGenerationModel = {
           ...prev,
-          platform: value.platform || prev?.platform || getImageGenPlatformForPreset(detectPreset(prev?.baseUrl, prev?.useModel)),
+          platform:
+            value.platform ||
+            prev?.platform ||
+            getImageGenPlatformForPreset(detectPreset(prev?.baseUrl, prev?.useModel)),
           ...value,
         };
         ConfigStorage.set('tools.imageGenerationModel', newImageGenerationModel).catch((error) => {

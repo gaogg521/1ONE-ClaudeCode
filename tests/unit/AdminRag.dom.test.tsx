@@ -6,10 +6,8 @@ const useEnterpriseAsyncDataMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (
-      _key: string,
-      options?: { defaultValue?: string; message?: string }
-    ) => options?.defaultValue?.replace('{{message}}', options?.message ?? '') || _key,
+    t: (_key: string, options?: { defaultValue?: string; message?: string }) =>
+      options?.defaultValue?.replace('{{message}}', options?.message ?? '') || _key,
   }),
 }));
 
@@ -21,9 +19,15 @@ vi.mock('@icon-park/react', () => ({
 }));
 
 vi.mock('@arco-design/web-react', () => {
-  const Input = ({ value, onChange, placeholder }: { value?: string; onChange?: (value: string) => void; placeholder?: string }) => (
-    <input value={value} placeholder={placeholder} onChange={(event) => onChange?.(event.currentTarget.value)} />
-  );
+  const Input = ({
+    value,
+    onChange,
+    placeholder,
+  }: {
+    value?: string;
+    onChange?: (value: string) => void;
+    placeholder?: string;
+  }) => <input value={value} placeholder={placeholder} onChange={(event) => onChange?.(event.currentTarget.value)} />;
   Input.TextArea = ({ value, onChange }: { value?: string; onChange?: (value: string) => void }) => (
     <textarea value={value} onChange={(event) => onChange?.(event.currentTarget.value)} />
   );
@@ -38,7 +42,11 @@ vi.mock('@arco-design/web-react', () => {
       {children}
     </label>
   );
-  (Form as unknown as { useForm: () => [{ resetFields: () => void; validate: () => Promise<{ title: string; content: string }> }] }).useForm = () => [
+  (
+    Form as unknown as {
+      useForm: () => [{ resetFields: () => void; validate: () => Promise<{ title: string; content: string }> }];
+    }
+  ).useForm = () => [
     {
       resetFields: () => undefined,
       validate: async () => ({ title: 'title', content: 'content' }),
@@ -51,10 +59,17 @@ vi.mock('@arco-design/web-react', () => {
 
   return {
     Alert: ({ title, content }: { title?: React.ReactNode; content?: React.ReactNode }) => (
-      <div role='alert'>{title}{content}</div>
+      <div role='alert'>
+        {title}
+        {content}
+      </div>
     ),
     Button: ({ children }: React.PropsWithChildren) => <button>{children}</button>,
-    Card: ({ children, title, extra }: React.PropsWithChildren<{ title?: React.ReactNode; extra?: React.ReactNode }>) => (
+    Card: ({
+      children,
+      title,
+      extra,
+    }: React.PropsWithChildren<{ title?: React.ReactNode; extra?: React.ReactNode }>) => (
       <section>
         {title}
         {extra}
@@ -64,7 +79,17 @@ vi.mock('@arco-design/web-react', () => {
     Form,
     Input,
     InputNumber: ({ value }: { value?: number }) => <span>{value}</span>,
-    List: ({ header, noDataElement, dataSource, render }: { header?: React.ReactNode; noDataElement?: React.ReactNode; dataSource?: unknown[]; render?: (item: any, index: number) => React.ReactNode }) => (
+    List: ({
+      header,
+      noDataElement,
+      dataSource,
+      render,
+    }: {
+      header?: React.ReactNode;
+      noDataElement?: React.ReactNode;
+      dataSource?: unknown[];
+      render?: (item: any, index: number) => React.ReactNode;
+    }) => (
       <div>
         {header}
         {(dataSource?.length ?? 0) > 0 ? dataSource?.map((item, index) => render?.(item, index)) : noDataElement}
@@ -78,7 +103,13 @@ vi.mock('@arco-design/web-react', () => {
     Modal: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
     Popconfirm: ({ children }: React.PropsWithChildren) => <>{children}</>,
     Space: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
-    Table: ({ data, columns }: { data?: any[]; columns?: Array<{ render?: (value: unknown, record: any) => React.ReactNode; dataIndex?: string }> }) => (
+    Table: ({
+      data,
+      columns,
+    }: {
+      data?: any[];
+      columns?: Array<{ render?: (value: unknown, record: any) => React.ReactNode; dataIndex?: string }>;
+    }) => (
       <div>
         {data?.map((record, rowIndex) => (
           <div key={record.id ?? rowIndex}>

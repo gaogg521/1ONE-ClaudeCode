@@ -49,11 +49,7 @@ const EnterpriseOnboarding: React.FC = () => {
             </Typography.Paragraph>
           </div>
           <div className={styles.heroVisual} aria-hidden='true'>
-            <img
-              src={heroIllustration}
-              alt=''
-              className={styles.heroVisualImg}
-            />
+            <img src={heroIllustration} alt='' className={styles.heroVisualImg} />
           </div>
         </header>
 

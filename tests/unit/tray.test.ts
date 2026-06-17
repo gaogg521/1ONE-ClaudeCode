@@ -200,9 +200,7 @@ describe('tray module', () => {
       createOrUpdateTray();
 
       if (process.platform === 'win32') {
-        expect(mockTrayInstance.setToolTip).toHaveBeenCalledWith(
-          expect.stringContaining('Ctrl+Shift+O')
-        );
+        expect(mockTrayInstance.setToolTip).toHaveBeenCalledWith(expect.stringContaining('Ctrl+Shift+O'));
       } else {
         expect(mockTrayInstance.setToolTip).toHaveBeenCalledWith('1one');
       }

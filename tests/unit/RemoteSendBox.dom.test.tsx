@@ -85,8 +85,10 @@ vi.mock('../../src/renderer/hooks/chat/useSendBoxFiles', () => ({
 }));
 
 const mockAddOrUpdateMessage = vi.fn();
+const mockRemoveMessageByMsgId = vi.fn();
 vi.mock('../../src/renderer/pages/conversation/Messages/hooks', () => ({
   useAddOrUpdateMessage: () => mockAddOrUpdateMessage,
+  useRemoveMessageByMsgId: () => mockRemoveMessageByMsgId,
 }));
 
 vi.mock('../../src/renderer/services/FileService', () => ({
