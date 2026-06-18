@@ -497,7 +497,8 @@ async function fetchAndReplaceConversationMessages(
     if (messageListsEquivalentForSync(baseline, messages)) {
       return currentList;
     }
-    return replaceMessageListFromDb(messages);
+    const otherConversations = currentList.filter((m) => m.conversation_id !== conversationId);
+    return otherConversations.length ? [...otherConversations, ...messages] : replaceMessageListFromDb(messages);
   });
 }
 

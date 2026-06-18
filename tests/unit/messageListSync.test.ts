@@ -108,4 +108,65 @@ describe('messageListSync', () => {
     const b = [textMessage('a1', 'conv-1', 'complete answer')];
     expect(messageListsEquivalentForSync(a, b)).toBe(false);
   });
+
+  it('merge prefers longer in-flight thinking content by msg_id', () => {
+    const db = [
+      {
+        id: 'think-db',
+        msg_id: 'think-1',
+        conversation_id: 'conv-1',
+        type: 'thinking',
+        position: 'left',
+        content: { content: 'Analy', status: 'thinking' },
+      } as TMessage,
+    ];
+    const stream = [
+      {
+        id: 'think-stream',
+        msg_id: 'think-1',
+        conversation_id: 'conv-1',
+        type: 'thinking',
+        position: 'left',
+        content: { content: 'Analyzing image...', status: 'thinking' },
+      } as TMessage,
+    ];
+    const merged = mergeDbMessagesWithStreaming('conv-1', db, stream);
+    expect((merged[0] as { content: { content: string } }).content.content).toBe('Analyzing image...');
+  });
+
+  it('messageListsEquivalentForSync returns false when thinking content differs', () => {
+    const a = [
+      {
+        ...textMessage('a1', 'conv-1', 'x'),
+        type: 'thinking',
+        content: { content: 'short', status: 'thinking' },
+      } as TMessage,
+    ];
+    const b = [
+      {
+        ...textMessage('a1', 'conv-1', 'x'),
+        type: 'thinking',
+        content: { content: 'longer thinking body', status: 'thinking' },
+      } as TMessage,
+    ];
+    expect(messageListsEquivalentForSync(a, b)).toBe(false);
+  });
+
+  it('messageListSyncSignature changes when thinking tail grows', () => {
+    const partial = [
+      {
+        ...textMessage('t1', 'conv-1', ''),
+        type: 'thinking',
+        content: { content: 'think', status: 'thinking' },
+      } as TMessage,
+    ];
+    const full = [
+      {
+        ...textMessage('t1', 'conv-1', ''),
+        type: 'thinking',
+        content: { content: 'thinking more', status: 'thinking' },
+      } as TMessage,
+    ];
+    expect(messageListSyncSignature(partial)).not.toBe(messageListSyncSignature(full));
+  });
 });

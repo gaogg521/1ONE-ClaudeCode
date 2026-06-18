@@ -44,7 +44,7 @@ export function useConversationMessageSync(conversationId: string) {
 
   useEffect(() => {
     return () => clearScheduledConversationMessageSync(timerRef);
-  }, []);
+  }, [conversationId]);
 
   return scheduleMessageSync;
 }
