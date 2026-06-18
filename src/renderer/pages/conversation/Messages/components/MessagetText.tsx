@@ -177,20 +177,18 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
             'bg-3 p-8px': isTeammateMessage,
             'w-full': !(isUserMessage || cronMeta || isTeammateMessage),
           })}
-          style={
-            {
-              ...(stretchLayout
-                ? !isUserMessage
-                  ? { width: '100%', maxWidth: 'none' }
-                  : {}
-                : { maxWidth: CONTENT_RAIL.chatMessageMaxWidth }),
-              ...(isUserMessage || cronMeta
-                ? { borderRadius: '8px 0 8px 8px' }
-                : isTeammateMessage
-                  ? { borderRadius: '0 8px 8px 8px' }
-                  : {}),
-            }
-          }
+          style={{
+            ...(stretchLayout
+              ? !isUserMessage
+                ? { width: '100%', maxWidth: 'none' }
+                : {}
+              : { maxWidth: CONTENT_RAIL.chatMessageMaxWidth }),
+            ...(isUserMessage || cronMeta
+              ? { borderRadius: '8px 0 8px 8px' }
+              : isTeammateMessage
+                ? { borderRadius: '0 8px 8px 8px' }
+                : {}),
+          }}
         >
           {/* JSON 内容使用折叠组件 Use CollapsibleContent for JSON content */}
           {json ? (
