@@ -77,6 +77,28 @@ export function replaceMessageListFromDb(messages: TMessage[]): TMessage[] {
   return messages;
 }
 
+/** Replace one conversation's messages in a multi-conversation cache list. */
+export function replaceConversationMessagesInList(
+  currentList: TMessage[],
+  conversationId: string,
+  messages: TMessage[]
+): TMessage[] {
+  if (!messages.length) {
+    const hasConversationMessages = currentList.some((m) => m.conversation_id === conversationId);
+    return hasConversationMessages ? currentList.filter((m) => m.conversation_id !== conversationId) : currentList;
+  }
+  const sameConversation = currentList.filter((m) => m.conversation_id === conversationId);
+  const baseline = sameConversation.length ? sameConversation : currentList;
+  if (messageListSyncSignature(baseline) === messageListSyncSignature(messages)) {
+    return currentList;
+  }
+  if (messageListsEquivalentForSync(baseline, messages)) {
+    return currentList;
+  }
+  const otherConversations = currentList.filter((m) => m.conversation_id !== conversationId);
+  return otherConversations.length ? [...otherConversations, ...messages] : replaceMessageListFromDb(messages);
+}
+
 function textContentLength(message: TMessage): number {
   if (message.type !== 'text' || typeof message.content !== 'object' || !('content' in message.content)) {
     return 0;

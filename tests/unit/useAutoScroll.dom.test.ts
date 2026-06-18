@@ -354,7 +354,7 @@ describe('useAutoScroll - streaming guard refresh (#2017)', () => {
     expect(result.current.handleFollowOutput(false)).toBe(false);
   });
 
-  it('atBottomStateChange(true) should reset userScrolled and close residual gap', () => {
+  it('atBottomStateChange(true) should close residual gap without resetting userScrolled', () => {
     const { result } = renderHook(({ messages, itemCount }) => useAutoScroll({ messages, itemCount }), {
       initialProps: { messages: [createMessage('left', '1')], itemCount: 1 },
     });
@@ -382,14 +382,18 @@ describe('useAutoScroll - streaming guard refresh (#2017)', () => {
     // User scrolled - followOutput returns false
     expect(result.current.handleFollowOutput(false)).toBe(false);
 
-    // atBottomStateChange(true) should reset
     act(() => {
       result.current.handleAtBottomStateChange(true);
     });
 
     // Should close the gap: scrollTop = scrollHeight - clientHeight
     expect(scrollerEl.scrollTop).toBe(1050 - 504);
-    // followOutput should return 'auto' again
+    // User scroll lock should remain — avoid snapping back to auto-follow while reading
+    expect(result.current.handleFollowOutput(false)).toBe(false);
+
+    act(() => {
+      result.current.hideScrollButton();
+    });
     expect(result.current.handleFollowOutput(false)).toBe('auto');
   });
 

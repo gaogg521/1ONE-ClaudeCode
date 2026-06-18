@@ -10,6 +10,7 @@ import {
   mergeDbMessagesWithStreaming,
   messageListSyncSignature,
   messageListsEquivalentForSync,
+  replaceConversationMessagesInList,
   replaceMessageListFromDb,
 } from '@/renderer/pages/conversation/Messages/messageListSync';
 
@@ -168,5 +169,22 @@ describe('messageListSync', () => {
       } as TMessage,
     ];
     expect(messageListSyncSignature(partial)).not.toBe(messageListSyncSignature(full));
+  });
+
+  it('replaceConversationMessagesInList preserves other conversations', () => {
+    const other = textMessage('other-1', 'conv-other', 'keep me');
+    const current = [other, textMessage('a1', 'conv-1', 'stale')];
+    const db = [textMessage('a1', 'conv-1', 'fresh from db')];
+    const next = replaceConversationMessagesInList(current, 'conv-1', db);
+    expect(next).toHaveLength(2);
+    expect(next[0]?.conversation_id).toBe('conv-other');
+    expect((next[1] as { content: { content: string } }).content.content).toBe('fresh from db');
+  });
+
+  it('replaceConversationMessagesInList skips no-op when signature matches', () => {
+    const current = [textMessage('a1', 'conv-1', 'same')];
+    const db = [textMessage('a1', 'conv-1', 'same')];
+    const next = replaceConversationMessagesInList(current, 'conv-1', db);
+    expect(next).toBe(current);
   });
 });
