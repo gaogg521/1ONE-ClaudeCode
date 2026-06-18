@@ -21,6 +21,8 @@ import type { TMessage } from '@/common/chat/chatLib';
 
 // Ignore scroll events within this window after a programmatic scroll (ms)
 const PROGRAMMATIC_SCROLL_GUARD_MS = 150;
+// Only snap residual gaps within Virtuoso atBottomThreshold (matches MessageList config)
+const BOTTOM_GAP_SNAP_MAX_PX = 100;
 
 interface UseAutoScrollOptions {
   /** Message list for detecting new messages */
@@ -44,8 +46,10 @@ interface UseAutoScrollReturn {
   showScrollButton: boolean;
   /** Manually scroll to bottom (e.g., when clicking button) */
   scrollToBottom: (behavior?: 'smooth' | 'auto') => void;
-  /** Hide the scroll button */
+  /** Hide the scroll button and re-enable auto-follow (e.g. user clicked scroll-to-bottom) */
   hideScrollButton: () => void;
+  /** Hide the scroll button without changing follow mode (e.g. DB sync while user reads history) */
+  dismissScrollButton: () => void;
 }
 
 export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): UseAutoScrollReturn {
@@ -59,7 +63,6 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
   const previousListLengthRef = useRef(messages.length);
   const lastProgrammaticScrollTimeRef = useRef(0);
   const scrollerElRef = useRef<HTMLElement | null>(null);
-  const followOutputTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Capture Virtuoso's scroll container
   const handleScrollerRef = useCallback((ref: HTMLElement | Window | null) => {
@@ -87,27 +90,20 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
       if (delta !== 0 && !userScrolledRef.current) {
         lastProgrammaticScrollTimeRef.current = Date.now();
 
-        // Container grew (e.g. ThoughtDisplay disappeared) — scroll to true bottom
-        // after Virtuoso finishes its rAF-based processing (~16ms). Using 50ms
-        // as first pass for fast correction, then 250ms to catch any re-layout.
-        // NOTE: immediate/rAF scrolls conflict with Virtuoso's internal adjustments,
-        // so we must wait until Virtuoso settles before correcting.
+        // Container grew (e.g. ThoughtDisplay collapsed) — one deferred snap after layout settles.
         if (delta < 0) {
           if (growTimer) clearTimeout(growTimer);
-          const scrollToTrueBottom = () => {
+          growTimer = setTimeout(() => {
+            growTimer = null;
             if (!userScrolledRef.current && scrollerElRef.current) {
               const el = scrollerElRef.current;
               const gap = el.scrollHeight - el.clientHeight - el.scrollTop;
-              if (gap > 2) {
+              if (gap > 0 && gap <= BOTTOM_GAP_SNAP_MAX_PX) {
                 lastProgrammaticScrollTimeRef.current = Date.now();
                 el.scrollTop = el.scrollHeight - el.clientHeight;
               }
             }
-          };
-          growTimer = setTimeout(() => {
-            scrollToTrueBottom();
-            growTimer = setTimeout(scrollToTrueBottom, 200);
-          }, 50);
+          }, 80);
         }
       }
     });
@@ -144,17 +140,6 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
   const handleFollowOutput = useCallback((_isAtBottom: boolean): false | 'auto' => {
     if (userScrolledRef.current) return false;
     lastProgrammaticScrollTimeRef.current = Date.now();
-    if (followOutputTimerRef.current) clearTimeout(followOutputTimerRef.current);
-    followOutputTimerRef.current = setTimeout(() => {
-      if (!userScrolledRef.current && scrollerElRef.current) {
-        const el = scrollerElRef.current;
-        const gap = el.scrollHeight - el.clientHeight - el.scrollTop;
-        if (gap > 2) {
-          lastProgrammaticScrollTimeRef.current = Date.now();
-          el.scrollTop = el.scrollHeight - el.clientHeight;
-        }
-      }
-    }, 500);
     return 'auto';
   }, []);
 
@@ -179,16 +164,10 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
       const el = scrollerElRef.current;
       if (el) {
         const gap = el.scrollHeight - el.clientHeight - el.scrollTop;
-        if (gap > 2) {
+        if (gap > 0 && gap <= BOTTOM_GAP_SNAP_MAX_PX) {
+          lastProgrammaticScrollTimeRef.current = Date.now();
           el.scrollTop = el.scrollHeight - el.clientHeight;
         }
-      }
-    } else if (!userScrolledRef.current) {
-      // Layout shift pushed us off bottom — scroll back to bottom immediately.
-      const el = scrollerElRef.current;
-      if (el) {
-        lastProgrammaticScrollTimeRef.current = Date.now();
-        el.scrollTop = el.scrollHeight - el.clientHeight;
       }
     }
   }, []);
@@ -225,20 +204,22 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     lastScrollTopRef.current = currentScrollTop;
   }, []);
 
-  // Force scroll when user sends a message
-  useEffect(() => {
-    const currentListLength = messages.length;
-    const prevLength = previousListLengthRef.current;
-    const isNewMessage = currentListLength > prevLength;
+  // Force scroll when user sends a message (new list item with position=right)
+  const listLength = messages.length;
+  const lastMessage = listLength > 0 ? messages[listLength - 1] : undefined;
+  const lastMessageId = lastMessage?.id;
+  const lastMessagePosition = lastMessage?.position;
 
-    previousListLengthRef.current = currentListLength;
+  useEffect(() => {
+    const prevLength = previousListLengthRef.current;
+    const isNewMessage = listLength > prevLength;
+
+    previousListLengthRef.current = listLength;
 
     if (!isNewMessage) return;
 
-    const lastMessage = messages[messages.length - 1];
-
     // User sent a message - force scroll regardless of userScrolled state
-    if (lastMessage?.position === 'right') {
+    if (lastMessagePosition === 'right') {
       userScrolledRef.current = false;
       // Use double RAF to ensure DOM is updated before scrolling (#977)
       requestAnimationFrame(() => {
@@ -254,9 +235,13 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
         });
       });
     }
-  }, [messages]);
+  }, [listLength, lastMessageId, lastMessagePosition]);
 
   // Hide scroll button handler
+  const dismissScrollButton = useCallback(() => {
+    setShowScrollButton(false);
+  }, []);
+
   const hideScrollButton = useCallback(() => {
     userScrolledRef.current = false;
     setShowScrollButton(false);
@@ -271,5 +256,6 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     showScrollButton,
     scrollToBottom,
     hideScrollButton,
+    dismissScrollButton,
   };
 }

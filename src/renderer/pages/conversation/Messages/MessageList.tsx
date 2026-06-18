@@ -13,7 +13,7 @@ import { Down } from '@icon-park/react';
 import MessageAcpPermission from '@renderer/pages/conversation/Messages/acp/MessageAcpPermission';
 import MessageAcpToolCall from '@renderer/pages/conversation/Messages/acp/MessageAcpToolCall';
 import classNames from 'classnames';
-import React, { createContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { Virtuoso } from 'react-virtuoso';
@@ -41,6 +41,7 @@ import { useAutoScroll } from './useAutoScroll';
 import { useAutoPreviewOfficeFiles } from '@/renderer/hooks/file/useAutoPreviewOfficeFiles';
 import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 import SelectionReplyButton from './components/SelectionReplyButton';
+import { useAddEventListener } from '@/renderer/utils/emitter';
 
 type TurnDiffContent = Extract<CodexToolCallUpdate, { subtype: 'turn_diff' }>;
 
@@ -98,15 +99,20 @@ export const ImagePreviewContext = createContext<{ inPreviewGroup: boolean }>({ 
 
 const VirtuosoScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div
-      {...props}
-      ref={ref}
-      className={classNames('conversation-message-scroller', className)}
-    />
+    <div {...props} ref={ref} className={classNames('conversation-message-scroller', className)} />
   )
 );
 
 VirtuosoScroller.displayName = 'VirtuosoScroller';
+
+const VirtuosoListHeader = () => <div className='h-10px' />;
+const VirtuosoListFooter = () => <div className='h-20px' />;
+
+const virtuosoListComponents = {
+  Scroller: VirtuosoScroller,
+  Header: VirtuosoListHeader,
+  Footer: VirtuosoListFooter,
+};
 
 const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean }> = React.memo(
   HOC((props) => {
@@ -175,6 +181,7 @@ const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean }> = Reac
     prev.message.content === next.message.content &&
     prev.message.position === next.message.position &&
     prev.message.type === next.message.type &&
+    prev.message.status === next.message.status &&
     prev.highlighted === next.highlighted
 );
 
@@ -299,10 +306,20 @@ const MessageList: React.FC<{ className?: string }> = () => {
     showScrollButton,
     scrollToBottom,
     hideScrollButton,
+    dismissScrollButton,
   } = useAutoScroll({
     messages: list,
     itemCount: processedList.length,
   });
+
+  useAddEventListener(
+    'conversation.messages.sync',
+    ({ conversationId }) => {
+      if (conversationId !== conversationContext?.conversationId) return;
+      dismissScrollButton();
+    },
+    [conversationContext?.conversationId, dismissScrollButton]
+  );
 
   useEffect(() => {
     if (!targetMessageId || processedList.length === 0 || !virtuosoRef.current) {
@@ -381,30 +398,39 @@ const MessageList: React.FC<{ className?: string }> = () => {
     scrollToBottom('smooth');
   };
 
-  const renderItem = (_index: number, item: (typeof processedList)[0]) => {
-    const highlighted = matchesTargetMessage(item, highlightedMessageId);
-    if ('type' in item && ['file_summary', 'tool_summary', 'web_sources'].includes(item.type)) {
+  const renderItem = useCallback(
+    (_index: number, item: IMessageVO) => {
+      const highlighted = matchesTargetMessage(item, highlightedMessageId);
+      if ('type' in item && ['file_summary', 'tool_summary', 'web_sources'].includes(item.type)) {
+        return (
+          <div
+            key={item.id}
+            id={`message-${getProcessedItemAnchorId(item)}`}
+            className={classNames('min-w-0 message-item px-8px m-t-10px max-w-full', item.type, {
+              'mx-auto': !stretchLayout,
+              'w-full': stretchLayout,
+            })}
+            style={{
+              ...getChatRailSurfaceStyle('message', stretchLayout),
+              ...(highlighted ? highlightStyle : {}),
+            }}
+          >
+            {item.type === 'file_summary' && <MessageFileChanges diffsChanges={item.diffs} />}
+            {item.type === 'tool_summary' && (
+              <MessageToolGroupSummary messages={item.messages}></MessageToolGroupSummary>
+            )}
+            {item.type === 'web_sources' && <WebSourcesCitationBar sources={item.sources} />}
+          </div>
+        );
+      }
       return (
-        <div
-          key={item.id}
-          id={`message-${getProcessedItemAnchorId(item)}`}
-          className={classNames('min-w-0 message-item px-8px m-t-10px max-w-full', item.type, {
-            'mx-auto': !stretchLayout,
-            'w-full': stretchLayout,
-          })}
-          style={{
-            ...getChatRailSurfaceStyle('message', stretchLayout),
-            ...(highlighted ? highlightStyle : {}),
-          }}
-        >
-          {item.type === 'file_summary' && <MessageFileChanges diffsChanges={item.diffs} />}
-          {item.type === 'tool_summary' && <MessageToolGroupSummary messages={item.messages}></MessageToolGroupSummary>}
-          {item.type === 'web_sources' && <WebSourcesCitationBar sources={item.sources} />}
-        </div>
+        <MessageItem message={item as TMessage} key={(item as TMessage).id} highlighted={highlighted}></MessageItem>
       );
-    }
-    return <MessageItem message={item as TMessage} key={(item as TMessage).id} highlighted={highlighted}></MessageItem>;
-  };
+    },
+    [highlightedMessageId, stretchLayout]
+  );
+
+  const computeItemKey = useCallback((_index: number, item: IMessageVO) => item.id, []);
 
   return (
     <div className='relative flex-1 h-full'>
@@ -412,23 +438,22 @@ const MessageList: React.FC<{ className?: string }> = () => {
       <Image.PreviewGroup actionsLayout={['zoomIn', 'zoomOut', 'originalSize', 'rotateLeft', 'rotateRight']}>
         <ImagePreviewContext.Provider value={{ inPreviewGroup: true }}>
           <Virtuoso
+            key={conversationContext?.conversationId ?? 'conversation'}
             ref={virtuosoRef}
             scrollerRef={handleScrollerRef}
             className='flex-1 h-full pb-10px box-border'
             data={processedList}
+            alignToBottom
             initialTopMostItemIndex={processedList.length - 1}
-            defaultItemHeight={40}
+            defaultItemHeight={64}
             atBottomThreshold={100}
-            increaseViewportBy={1200}
+            increaseViewportBy={{ top: 400, bottom: 600 }}
+            computeItemKey={computeItemKey}
             itemContent={renderItem}
             followOutput={handleFollowOutput}
             onScroll={handleScroll}
             atBottomStateChange={handleAtBottomStateChange}
-            components={{
-              Scroller: VirtuosoScroller,
-              Header: () => <div className='h-10px' />,
-              Footer: () => <div className='h-20px' />,
-            }}
+            components={virtuosoListComponents}
           />
         </ImagePreviewContext.Provider>
       </Image.PreviewGroup>

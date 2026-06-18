@@ -85,4 +85,14 @@ const MessageThinking: React.FC<{ message: IMessageThinking }> = ({ message }) =
   );
 };
 
-export default MessageThinking;
+export default React.memo(MessageThinking, (prev, next) => {
+  const a = prev.message;
+  const b = next.message;
+  return (
+    a.id === b.id &&
+    a.content.content === b.content.content &&
+    a.content.status === b.content.status &&
+    a.content.duration === b.content.duration &&
+    a.content.subject === b.content.subject
+  );
+});

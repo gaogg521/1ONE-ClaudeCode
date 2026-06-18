@@ -230,4 +230,18 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
   );
 };
 
-export default MessageText;
+export default React.memo(MessageText, (prev, next) => {
+  const a = prev.message;
+  const b = next.message;
+  return (
+    a.id === b.id &&
+    a.position === b.position &&
+    a.status === b.status &&
+    a.createdAt === b.createdAt &&
+    a.content.content === b.content.content &&
+    a.content.teammateMessage === b.content.teammateMessage &&
+    a.content.senderName === b.content.senderName &&
+    a.content.senderAgentType === b.content.senderAgentType &&
+    a.content.cronMeta === b.content.cronMeta
+  );
+});

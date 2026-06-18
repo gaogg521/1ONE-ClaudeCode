@@ -4,12 +4,17 @@ import type { IResponseMessage } from '@/common/adapter/ipcBridge';
 import type { TChatConversation, TokenUsageData } from '@/common/config/storage';
 import type { ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
+import {
+  useConversationMessageSync,
+  useSyncOnRunningComplete,
+} from '@/renderer/pages/conversation/Messages/conversationMessageSync';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export const useGeminiMessage = (conversation_id: string, onError?: (message: IResponseMessage) => void) => {
   const { t } = useTranslation();
   const addOrUpdateMessage = useAddOrUpdateMessage();
+  const scheduleMessageSync = useConversationMessageSync(conversation_id);
   const [streamRunning, setStreamRunning] = useState(false); // API 流是否在运行
   const [hasActiveTools, setHasActiveTools] = useState(false); // 是否有工具在执行或等待确认
   const [waitingResponse, setWaitingResponse] = useState(false); // 等待后端响应（发送消息后到收到 start 之前）
@@ -169,6 +174,7 @@ export const useGeminiMessage = (conversation_id: string, onError?: (message: IR
               );
               requestTraceRef.current = null;
             }
+            scheduleMessageSync();
           }
           break;
         case 'tool_group':
@@ -296,6 +302,7 @@ export const useGeminiMessage = (conversation_id: string, onError?: (message: IR
               );
               requestTraceRef.current = null;
             }
+            scheduleMessageSync();
           } else {
             // Mark that current turn has content output (exclude error type)
             hasContentInTurnRef.current = true;
@@ -317,7 +324,7 @@ export const useGeminiMessage = (conversation_id: string, onError?: (message: IR
       }
     });
     // Note: hasActiveTools and streamRunning are accessed via refs to avoid re-subscription
-  }, [conversation_id, addOrUpdateMessage, onError, t]);
+  }, [conversation_id, addOrUpdateMessage, onError, scheduleMessageSync, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -383,6 +390,8 @@ export const useGeminiMessage = (conversation_id: string, onError?: (message: IR
     // Clear active message ID to prevent filtering events from new messages after stop
     activeMsgIdRef.current = null;
   }, []);
+
+  useSyncOnRunningComplete(conversation_id, running, scheduleMessageSync);
 
   return {
     thought,

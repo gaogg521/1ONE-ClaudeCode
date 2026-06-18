@@ -1446,9 +1446,24 @@ export class OneCmdDatabase {
    * Get message by msg_id and conversation_id
    * Used for finding existing messages to update (e.g., streaming text accumulation)
    */
-  getMessageByMsgId(conversationId: string, msgId: string, type: TMessage['type']): IQueryResult<TMessage | null> {
+  getMessageByMsgId(
+    conversationId: string,
+    msgId: string,
+    type: TMessage['type'],
+    position?: TMessage['position']
+  ): IQueryResult<TMessage | null> {
     try {
-      const stmt = this.db.prepare(`
+      const stmt = position
+        ? this.db.prepare(`
+        SELECT *
+        FROM messages
+        WHERE conversation_id = ?
+          AND msg_id = ?
+          AND type = ?
+          AND position = ?
+        ORDER BY created_at DESC LIMIT 1
+      `)
+        : this.db.prepare(`
         SELECT *
         FROM messages
         WHERE conversation_id = ?
@@ -1457,7 +1472,9 @@ export class OneCmdDatabase {
         ORDER BY created_at DESC LIMIT 1
       `);
 
-      const row = stmt.get(conversationId, msgId, type) as IMessageRow | undefined;
+      const row = position
+        ? (stmt.get(conversationId, msgId, type, position) as IMessageRow | undefined)
+        : (stmt.get(conversationId, msgId, type) as IMessageRow | undefined);
 
       return {
         success: true,
