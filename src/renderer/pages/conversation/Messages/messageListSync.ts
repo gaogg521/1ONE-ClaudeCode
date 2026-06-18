@@ -19,7 +19,7 @@ export function mergeDbMessagesWithStreaming(key: string, messages: TMessage[], 
   if (!sameConversation.length) return messages;
   const dbIds = new Set(messages.map((m) => m.id));
   const dbStreamKeys = new Set(
-    messages.map((m) => textMessageStreamKey(m)).filter((key): key is string => Boolean(key))
+    messages.map((m) => textMessageStreamKey(m)).filter((streamKey): streamKey is string => Boolean(streamKey))
   );
 
   const streamingByKey = new Map<string, TMessage>();
@@ -70,6 +70,60 @@ export function mergeDbMessagesWithStreaming(key: string, messages: TMessage[], 
   });
   if (!streamingOnly.length && !streamingByKey.size && !streamingThinkingByMsgId.size) return messages;
   return [...mergedMessages, ...streamingOnly];
+}
+
+/** UI-only messages not yet persisted (tool calls, in-flight thinking, etc.). */
+export function hasStreamingOnlyMessages(baseline: TMessage[], dbMessages: TMessage[]): boolean {
+  const dbIds = new Set(dbMessages.map((m) => m.id));
+  const dbStreamKeys = new Set(
+    dbMessages.map((m) => textMessageStreamKey(m)).filter((streamKey): streamKey is string => Boolean(streamKey))
+  );
+  return baseline.some((m) => {
+    if (dbIds.has(m.id)) return false;
+    const streamKey = textMessageStreamKey(m);
+    if (streamKey && dbStreamKeys.has(streamKey)) return false;
+    if (m.type === 'thinking' && m.msg_id) {
+      return !dbMessages.some((db) => db.type === 'thinking' && db.msg_id === m.msg_id);
+    }
+    return true;
+  });
+}
+
+/** Merge DB snapshot into the cached list; preserve reference when nothing changes. */
+export function mergeConversationMessagesFromDb(
+  conversationId: string,
+  dbMessages: TMessage[],
+  currentList: TMessage[]
+): TMessage[] {
+  if (!dbMessages.length) {
+    const hasConversationMessages = currentList.some((m) => m.conversation_id === conversationId);
+    return hasConversationMessages
+      ? currentList.filter((m) => m.conversation_id !== conversationId)
+      : currentList;
+  }
+
+  const sameConversation = currentList.filter((m) => m.conversation_id === conversationId);
+  const baseline = sameConversation.length ? sameConversation : currentList;
+
+  if (
+    messageListSyncSignature(baseline) === messageListSyncSignature(dbMessages) &&
+    !hasStreamingOnlyMessages(baseline, dbMessages)
+  ) {
+    return currentList;
+  }
+
+  const merged = mergeDbMessagesWithStreaming(conversationId, dbMessages, currentList);
+  const mergedBaseline =
+    merged.length && merged.every((m) => m.conversation_id === conversationId)
+      ? merged
+      : merged.filter((m) => m.conversation_id === conversationId);
+
+  if (messageListsEquivalentForSync(baseline, mergedBaseline)) {
+    return currentList;
+  }
+
+  const otherConversations = currentList.filter((m) => m.conversation_id !== conversationId);
+  return otherConversations.length ? [...otherConversations, ...mergedBaseline] : merged;
 }
 
 /** After turn finish, DB is authoritative (avoids stale batched stream chunks). */

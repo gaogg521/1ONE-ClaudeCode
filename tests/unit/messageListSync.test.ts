@@ -7,6 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import type { TMessage } from '@/common/chat/chatLib';
 import {
+  hasStreamingOnlyMessages,
+  mergeConversationMessagesFromDb,
   mergeDbMessagesWithStreaming,
   messageListSyncSignature,
   messageListsEquivalentForSync,
@@ -186,5 +188,28 @@ describe('messageListSync', () => {
     const db = [textMessage('a1', 'conv-1', 'same')];
     const next = replaceConversationMessagesInList(current, 'conv-1', db);
     expect(next).toBe(current);
+  });
+
+  it('mergeConversationMessagesFromDb keeps list reference when DB matches UI', () => {
+    const current = [textMessage('a1', 'conv-1', 'same')];
+    const db = [textMessage('a1', 'conv-1', 'same')];
+    const next = mergeConversationMessagesFromDb('conv-1', db, current);
+    expect(next).toBe(current);
+  });
+
+  it('mergeConversationMessagesFromDb still merges longer streaming tail', () => {
+    const db = [textMessage('a1', 'conv-1', 'hello')];
+    const current = [textMessage('a1', 'conv-1', 'hello world')];
+    const next = mergeConversationMessagesFromDb('conv-1', db, current);
+    expect((next[0] as { content: { content: string } }).content.content).toBe('hello world');
+  });
+
+  it('hasStreamingOnlyMessages detects tool rows not yet in DB', () => {
+    const db = [textMessage('a1', 'conv-1', 'done')];
+    const ui = [
+      textMessage('a1', 'conv-1', 'done'),
+      { ...textMessage('tool-1', 'conv-1', ''), type: 'tool_group', content: [] } as TMessage,
+    ];
+    expect(hasStreamingOnlyMessages(ui, db)).toBe(true);
   });
 });

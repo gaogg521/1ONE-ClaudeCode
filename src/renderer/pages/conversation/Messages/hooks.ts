@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { addEventListener } from '@/renderer/utils/emitter';
 import { createContext } from '@renderer/utils/ui/createContext';
 import {
-  mergeDbMessagesWithStreaming,
+  mergeConversationMessagesFromDb,
   replaceConversationMessagesInList,
   textMessageStreamKey,
 } from '@renderer/pages/conversation/Messages/messageListSync';
@@ -519,14 +519,7 @@ async function fetchAndMergeConversationMessages(
   update: (fn: (list: TMessage[]) => TMessage[]) => void
 ): Promise<void> {
   const messages = await fetchConversationMessages(conversationId);
-  if (!messages.length) {
-    update((currentList) => {
-      const hasConversationMessages = currentList.some((m) => m.conversation_id === conversationId);
-      return hasConversationMessages ? [] : currentList;
-    });
-    return;
-  }
-  update((currentList) => mergeDbMessagesWithStreaming(conversationId, messages, currentList));
+  update((currentList) => mergeConversationMessagesFromDb(conversationId, messages, currentList));
 }
 
 /** After stream finish or explicit sync, DB is authoritative (avoids stale batched stream chunks). */
