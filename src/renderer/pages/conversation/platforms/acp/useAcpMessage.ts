@@ -11,6 +11,10 @@ import type { TokenUsageData } from '@/common/config/storage';
 import type { AcpModelInfo } from '@/common/types/acpTypes';
 import { resolveAcpContextLimit } from '@/common/utils/resolveAcpContextLimit';
 import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
+import {
+  useConversationMessageSync,
+  useSyncOnRunningComplete,
+} from '@/renderer/pages/conversation/Messages/conversationMessageSync';
 import type { ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -30,6 +34,7 @@ type UseAcpMessageReturn = {
 
 export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
   const addOrUpdateMessage = useAddOrUpdateMessage();
+  const scheduleMessageSync = useConversationMessageSync(conversation_id);
   const [running, setRunning] = useState(false);
   const [hasHydratedRunningState, setHasHydratedRunningState] = useState(false);
   const [thought, setThought] = useState<ThoughtData>({
@@ -183,6 +188,7 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
               );
               requestTraceRef.current = null;
             }
+            scheduleMessageSync();
           }
           break;
         case 'content': {
@@ -309,6 +315,7 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
             );
             requestTraceRef.current = null;
           }
+          scheduleMessageSync();
           break;
         default:
           // Auto-recover running state only if turn hasn't finished
@@ -329,6 +336,7 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
       setAiProcessing,
       setAcpStatus,
       applyContextUsage,
+      scheduleMessageSync,
     ]
   );
 
@@ -408,6 +416,8 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
     hasThinkingMessageRef.current = false;
     setHasThinkingMessage(false);
   }, []);
+
+  useSyncOnRunningComplete(conversation_id, running, scheduleMessageSync);
 
   return {
     thought,

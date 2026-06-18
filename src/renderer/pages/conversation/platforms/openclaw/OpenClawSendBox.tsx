@@ -14,6 +14,10 @@ import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/cha
 import { createSetUploadFile } from '@/renderer/hooks/chat/useSendBoxFiles';
 import { useAddOrUpdateMessage, useRemoveMessageByMsgId } from '@/renderer/pages/conversation/Messages/hooks';
 import {
+  useConversationMessageSync,
+  useSyncOnRunningComplete,
+} from '@/renderer/pages/conversation/Messages/conversationMessageSync';
+import {
   shouldEnqueueConversationCommand,
   useConversationCommandQueue,
   type ConversationCommandQueueItem,
@@ -127,6 +131,7 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
   const isCommandQueueEnabled = useCommandQueueEnabled();
   const addOrUpdateMessage = useAddOrUpdateMessage();
   const removeMessageByMsgId = useRemoveMessageByMsgId();
+  const scheduleMessageSync = useConversationMessageSync(conversation_id);
   const { setSendBoxHandler } = usePreviewContext();
 
   const [aiProcessing, setAiProcessing] = useState(false);
@@ -315,6 +320,7 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
               emitter.emit('staroffice.install.finished', { conversationId: conversation_id });
             }
             hasContentInTurnRef.current = false;
+            scheduleMessageSync();
           }
           break;
         case 'content':
@@ -351,7 +357,9 @@ const OpenClawSendBox: React.FC<{ conversation_id: string }> = ({ conversation_i
         }
       }
     });
-  }, [conversation_id, addOrUpdateMessage]);
+  }, [conversation_id, addOrUpdateMessage, scheduleMessageSync]);
+
+  useSyncOnRunningComplete(conversation_id, aiProcessing, scheduleMessageSync);
 
   useAddEventListener(
     'staroffice.install.request',

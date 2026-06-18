@@ -418,6 +418,35 @@ describe('composeMessage - cronMeta preservation', () => {
   });
 });
 
+describe('composeMessage - text position isolation', () => {
+  it('does not merge assistant chunks into user message when turn msg_id matches', () => {
+    const userMessage: IMessageText = {
+      id: 'turn-1',
+      type: 'text',
+      conversation_id: 'conv-1',
+      msg_id: 'turn-1',
+      position: 'right',
+      content: { content: '你好' },
+    };
+    const assistantChunk: IMessageText = {
+      id: 'asst-chunk',
+      type: 'text',
+      conversation_id: 'conv-1',
+      msg_id: 'turn-1',
+      position: 'left',
+      content: { content: '你好呀' },
+    };
+
+    const result = composeMessage(assistantChunk, [userMessage]);
+
+    expect(result).toHaveLength(2);
+    expect((result[0] as IMessageText).position).toBe('right');
+    expect((result[0] as IMessageText).content.content).toBe('你好');
+    expect((result[1] as IMessageText).position).toBe('left');
+    expect((result[1] as IMessageText).content.content).toBe('你好呀');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // composeMessage - skill_suggest and cron_trigger
 // ---------------------------------------------------------------------------

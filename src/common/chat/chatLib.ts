@@ -733,6 +733,10 @@ export const composeMessage = (
     return pushMessage(message);
   }
   if (message.type === 'text' && last.type === 'text') {
+    // User and assistant share turn msg_id — never merge across positions.
+    if (last.position !== message.position) {
+      return pushMessage(message);
+    }
     message.content.content = last.content.content + message.content.content;
   }
   return updateMessage(list.length - 1, Object.assign({}, last, message));

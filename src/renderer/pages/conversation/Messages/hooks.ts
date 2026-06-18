@@ -8,13 +8,27 @@ import { ipcBridge } from '@/common';
 import type { TMessage } from '@/common/chat/chatLib';
 import { composeMessage } from '@/common/chat/chatLib';
 import { useCallback, useEffect, useRef } from 'react';
+import { addEventListener } from '@/renderer/utils/emitter';
 import { createContext } from '@renderer/utils/ui/createContext';
+import {
+  mergeDbMessagesWithStreaming,
+  messageListsEquivalentForSync,
+  replaceMessageListFromDb,
+  textMessageStreamKey,
+} from '@renderer/pages/conversation/Messages/messageListSync';
 
 const [useMessageList, MessageListProvider, useUpdateMessageList] = createContext([] as TMessage[]);
 
 const [useChatKey, ChatKeyProvider] = createContext('');
 
 const beforeUpdateMessageListStack: Array<(list: TMessage[]) => TMessage[]> = [];
+
+/** Clears batched stream updates so a DB sync can replace the list without stale chunks winning. */
+let cancelPendingMessageUpdatesImpl: (() => void) | null = null;
+
+export function cancelPendingMessageUpdates(): void {
+  cancelPendingMessageUpdatesImpl?.();
+}
 
 // 消息索引缓存类型定义
 // Message index cache type definitions
@@ -37,7 +51,14 @@ function buildMessageIndex(list: TMessage[]): MessageIndex {
 
   for (let i = 0; i < list.length; i++) {
     const msg = list[i];
-    if (msg.msg_id) msgIdIndex.set(msg.msg_id, i);
+    const streamKey = textMessageStreamKey(msg);
+    if (streamKey) {
+      msgIdIndex.set(streamKey, i);
+    } else if (msg.msg_id) {
+      msgIdIndex.set(msg.msg_id, i);
+    } else if (msg.type === 'text' && msg.position === 'right' && msg.id) {
+      msgIdIndex.set(msg.id, i);
+    }
     if (msg.type === 'tool_call' && msg.content?.callId) {
       callIdIndex.set(msg.content.callId, i);
     }
@@ -153,34 +174,76 @@ function composeMessageWithIndex(message: TMessage, list: TMessage[], index: Mes
 
   // text message: use msgIdIndex for fast lookup (handles interleaved messages)
   // text 消息: 使用 msgIdIndex 快速查找（处理消息交错的情况）
-  if (message.type === 'text' && message.msg_id) {
-    const existingIdx = index.msgIdIndex.get(message.msg_id);
+  if (message.type === 'text' && (message.msg_id || message.id)) {
+    const lookupKey = message.msg_id ?? message.id;
+    const roleKey = textMessageStreamKey(message) ?? lookupKey;
+    let existingIdx = index.msgIdIndex.get(roleKey);
+    if (existingIdx === undefined && message.msg_id) {
+      const legacyIdx = index.msgIdIndex.get(lookupKey);
+      if (legacyIdx !== undefined && legacyIdx < list.length) {
+        const legacyMsg = list[legacyIdx];
+        if (legacyMsg.type === 'text' && legacyMsg.position === message.position) {
+          existingIdx = legacyIdx;
+        }
+      }
+    }
+    if (existingIdx === undefined && message.id) {
+      existingIdx = list.findIndex(
+        (item) => item.id === message.id && item.type === 'text' && item.position === message.position
+      );
+    }
     if (existingIdx !== undefined && existingIdx < list.length) {
       const existingMsg = list[existingIdx];
-      if (existingMsg.type === 'text') {
-        // User messages (right position) are complete — skip if already exists to prevent duplicates
-        if (message.position === 'right') {
-          return list;
+      if (!existingMsg || existingMsg.type !== 'text') {
+        const newIdx = list.length;
+        index.msgIdIndex.set(roleKey, newIdx);
+        return list.concat(message);
+      }
+      if (existingMsg.position !== message.position) {
+        const newIdx = list.length;
+        index.msgIdIndex.set(roleKey, newIdx);
+        return list.concat(message);
+      }
+      // User messages are complete once sent, but file paths may be patched after copy-to-workspace.
+      if (message.position === 'right') {
+        const existingContent =
+          typeof existingMsg.content === 'object' && 'content' in existingMsg.content
+            ? String(existingMsg.content.content)
+            : '';
+        const nextContent =
+          typeof message.content === 'object' && 'content' in message.content ? String(message.content.content) : '';
+        if (existingContent === nextContent) {
+          const statusChanged = existingMsg.status !== message.status;
+          if (!statusChanged) {
+            return list;
+          }
         }
-        // Complete teammate messages are not streaming chunks — skip if already exists
-        if ((message.content as { teammateMessage?: boolean })?.teammateMessage) {
-          return list;
-        }
-        // AI streaming messages (left position) — append chunks
         const newList = list.slice();
         newList[existingIdx] = {
           ...existingMsg,
-          content: {
-            ...existingMsg.content,
-            content: existingMsg.content.content + message.content.content,
-          },
-        };
+          ...message,
+          content: message.content,
+        } as TMessage;
         return newList;
       }
+      // Complete teammate messages are not streaming chunks — skip if already exists
+      if ((message.content as { teammateMessage?: boolean })?.teammateMessage) {
+        return list;
+      }
+      // AI streaming messages (left position) — append chunks
+      const newList = list.slice();
+      newList[existingIdx] = {
+        ...existingMsg,
+        content: {
+          ...existingMsg.content,
+          content: existingMsg.content.content + message.content.content,
+        },
+      };
+      return newList;
     }
     // Not found in index, add as new message
     const newIdx = list.length;
-    index.msgIdIndex.set(message.msg_id, newIdx);
+    index.msgIdIndex.set(roleKey, newIdx);
     return list.concat(message);
   }
 
@@ -261,7 +324,12 @@ function composeMessageWithIndex(message: TMessage, list: TMessage[], index: Mes
   // Other types: fallback to last message check
   // 其他类型: 回退到检查最后一条消息
   const last = list[list.length - 1];
-  if (last.msg_id !== message.msg_id || last.type !== message.type) {
+  if (
+    !last ||
+    last.msg_id !== message.msg_id ||
+    last.type !== message.type ||
+    (message.type === 'text' && last.type === 'text' && last.position !== message.position)
+  ) {
     // Add new message and update index
     const newIdx = list.length;
     if (message.msg_id) index.msgIdIndex.set(message.msg_id, newIdx);
@@ -278,27 +346,47 @@ function composeMessageWithIndex(message: TMessage, list: TMessage[], index: Mes
 export const useAddOrUpdateMessage = () => {
   const update = useUpdateMessageList();
   const pendingRef = useRef<Array<{ message: TMessage; add: boolean }>>([]);
-  const rafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    cancelPendingMessageUpdatesImpl = () => {
+      if (flushFrameRef.current !== null) {
+        cancelAnimationFrame(flushFrameRef.current);
+        flushFrameRef.current = null;
+      }
+      pendingRef.current = [];
+    };
+    return () => {
+      if (cancelPendingMessageUpdatesImpl) {
+        cancelPendingMessageUpdatesImpl = null;
+      }
+    };
+  }, []);
 
   const flush = useCallback(() => {
-    rafRef.current = null;
+    flushFrameRef.current = null;
 
     const pending = pendingRef.current;
     if (!pending.length) return;
     pendingRef.current = [];
     update((list) => {
-      // 获取或构建索引用于快速查找 (O(1) instead of O(n))
-      // Get or build index for fast lookup
-      const index = getOrBuildIndex(list);
       let newList = list;
 
       for (const item of pending) {
+        const index = getOrBuildIndex(newList);
         if (item.add) {
           // 新增消息，更新索引
           // New message, update index
           const msg = item.message;
           const newIdx = newList.length;
-          if (msg.msg_id) index.msgIdIndex.set(msg.msg_id, newIdx);
+          const streamKey = textMessageStreamKey(msg);
+          if (streamKey) {
+            index.msgIdIndex.set(streamKey, newIdx);
+          } else if (msg.msg_id) {
+            index.msgIdIndex.set(msg.msg_id, newIdx);
+          } else if (msg.type === 'text' && msg.position === 'right' && msg.id) {
+            index.msgIdIndex.set(msg.id, newIdx);
+          }
           if (msg.type === 'tool_call' && msg.content?.callId) {
             index.callIdIndex.set(msg.content.callId, newIdx);
           }
@@ -322,13 +410,15 @@ export const useAddOrUpdateMessage = () => {
       return newList;
     });
 
-    rafRef.current = setTimeout(flush);
-  }, []);
+    if (pendingRef.current.length > 0) {
+      flushFrameRef.current = requestAnimationFrame(flush);
+    }
+  }, [update]);
 
   useEffect(() => {
     return () => {
-      if (rafRef.current !== null) {
-        clearTimeout(rafRef.current);
+      if (flushFrameRef.current !== null) {
+        cancelAnimationFrame(flushFrameRef.current);
       }
     };
   }, []);
@@ -336,8 +426,8 @@ export const useAddOrUpdateMessage = () => {
   return useCallback(
     (message: TMessage, add = false) => {
       pendingRef.current.push({ message, add });
-      if (rafRef.current === null) {
-        rafRef.current = setTimeout(flush);
+      if (flushFrameRef.current === null) {
+        flushFrameRef.current = requestAnimationFrame(flush);
       }
     },
     [flush]
@@ -349,78 +439,105 @@ export const useRemoveMessageByMsgId = () => {
 
   return useCallback(
     (msgId: string) => {
-      update((list) => list.filter((message) => message.msg_id !== msgId));
+      update((list) =>
+        list.filter((message) => {
+          if (message.id === msgId) {
+            return false;
+          }
+          // Turn id is shared with assistant reply — only roll back the user bubble.
+          if (message.msg_id === msgId && message.position === 'right') {
+            return false;
+          }
+          return true;
+        })
+      );
     },
     [update]
   );
 };
 
+async function fetchConversationMessages(conversationId: string): Promise<TMessage[]> {
+  const messages = await ipcBridge.database.getConversationMessages.invoke({
+    conversation_id: conversationId,
+    page: 0,
+    pageSize: 10000,
+  });
+  return messages && Array.isArray(messages) ? messages : [];
+}
+
+async function fetchAndMergeConversationMessages(
+  conversationId: string,
+  update: (fn: (list: TMessage[]) => TMessage[]) => void
+): Promise<void> {
+  const messages = await fetchConversationMessages(conversationId);
+  if (!messages.length) {
+    update((currentList) => {
+      const hasConversationMessages = currentList.some((m) => m.conversation_id === conversationId);
+      return hasConversationMessages ? [] : currentList;
+    });
+    return;
+  }
+  update((currentList) => mergeDbMessagesWithStreaming(conversationId, messages, currentList));
+}
+
+/** After stream finish or explicit sync, DB is authoritative (avoids stale batched stream chunks). */
+async function fetchAndReplaceConversationMessages(
+  conversationId: string,
+  update: (fn: (list: TMessage[]) => TMessage[]) => void
+): Promise<void> {
+  cancelPendingMessageUpdates();
+  const messages = await fetchConversationMessages(conversationId);
+  update((currentList) => {
+    if (!messages.length) {
+      const hasConversationMessages = currentList.some((m) => m.conversation_id === conversationId);
+      return hasConversationMessages ? [] : currentList;
+    }
+    const sameConversation = currentList.filter((m) => m.conversation_id === conversationId);
+    const baseline = sameConversation.length ? sameConversation : currentList;
+    if (messageListsEquivalentForSync(baseline, messages)) {
+      return currentList;
+    }
+    return replaceMessageListFromDb(messages);
+  });
+}
+
+const MESSAGE_CACHE_SYNC_DEBOUNCE_MS = 150;
+
 export const useMessageLstCache = (key: string) => {
   const update = useUpdateMessageList();
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!key) return;
-    void ipcBridge.database.getConversationMessages
-      .invoke({
-        conversation_id: key,
-        page: 0,
-        pageSize: 10000, // Load all messages (up to 10k per conversation)
-      })
-      .then((messages) => {
-        if (messages && Array.isArray(messages)) {
-          // Merge DB messages with any real-time streaming messages already in the list.
-          // This prevents a race condition where streaming messages (added via IPC before
-          // the DB load completes) could cause DB-only messages (e.g. cron user messages
-          // whose IPC event was emitted before the component mounted) to be lost.
-          // Use both msg_id and id for deduplication since DB messages and streaming
-          // messages share the same msg_id but may have different id values
-          // (streaming messages get new UUIDs from transformMessage).
-          update((currentList) => {
-            if (!currentList.length) return messages;
-            // Only keep streaming messages that belong to the current conversation
-            // to prevent messages from a previous conversation leaking into the new one
-            const sameConversation = currentList.filter((m) => m.conversation_id === key);
-            if (!sameConversation.length) return messages;
-            const dbIds = new Set(messages.map((m) => m.id));
-            const dbMsgIds = new Set(messages.map((m) => m.msg_id).filter(Boolean));
+    cancelPendingMessageUpdates();
+    update((currentList) => currentList.filter((m) => m.conversation_id === key));
+    void fetchAndMergeConversationMessages(key, update).catch((error) => {
+      console.error('[useMessageLstCache] Failed to load messages from database:', error);
+    });
+    return () => {
+      cancelPendingMessageUpdates();
+      if (syncTimerRef.current) {
+        clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
+    };
+  }, [key, update]);
 
-            // Build a map of streaming messages by msg_id for content-length comparison.
-            // During streaming, the DB may have an older snapshot (due to 2000ms save debounce),
-            // so we keep whichever version has more content to avoid losing streamed data.
-            const streamingByMsgId = new Map<string, TMessage>();
-            for (const m of sameConversation) {
-              if (m.msg_id && m.type === 'text' && dbMsgIds.has(m.msg_id)) {
-                streamingByMsgId.set(m.msg_id, m);
-              }
-            }
-
-            // Replace DB messages with streaming versions when streaming has more content
-            const mergedMessages = messages.map((dbMsg) => {
-              if (!dbMsg.msg_id || dbMsg.type !== 'text') return dbMsg;
-              const streamMsg = streamingByMsgId.get(dbMsg.msg_id);
-              if (!streamMsg) return dbMsg;
-              const dbContent =
-                typeof dbMsg.content === 'object' && 'content' in dbMsg.content
-                  ? String((dbMsg.content as { content: unknown }).content)
-                  : '';
-              const streamContent =
-                typeof streamMsg.content === 'object' && 'content' in streamMsg.content
-                  ? String((streamMsg.content as { content: unknown }).content)
-                  : '';
-              return streamContent.length > dbContent.length ? streamMsg : dbMsg;
-            });
-
-            const streamingOnly = sameConversation.filter(
-              (m) => !dbIds.has(m.id) && !(m.msg_id && dbMsgIds.has(m.msg_id))
-            );
-            if (!streamingOnly.length && !streamingByMsgId.size) return messages;
-            return [...mergedMessages, ...streamingOnly];
-          });
-        }
-      })
-      .catch((error) => {
-        console.error('[useMessageLstCache] Failed to load messages from database:', error);
-      });
-  }, [key]);
+  useEffect(() => {
+    if (!key) return;
+    return addEventListener('conversation.messages.sync', ({ conversationId }) => {
+      if (conversationId !== key) return;
+      if (syncTimerRef.current) {
+        clearTimeout(syncTimerRef.current);
+      }
+      syncTimerRef.current = setTimeout(() => {
+        syncTimerRef.current = null;
+        void fetchAndReplaceConversationMessages(key, update).catch((error) => {
+          console.error('[useMessageLstCache] Failed to sync messages from database:', error);
+        });
+      }, MESSAGE_CACHE_SYNC_DEBOUNCE_MS);
+    });
+  }, [key, update]);
 };
 
 export const beforeUpdateMessageList = (fn: (list: TMessage[]) => TMessage[]) => {

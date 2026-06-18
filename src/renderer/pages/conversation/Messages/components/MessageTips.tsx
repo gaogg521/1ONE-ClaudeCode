@@ -80,4 +80,10 @@ const MessageTips: React.FC<{ message: IMessageTips }> = ({ message }) => {
   );
 };
 
-export default MessageTips;
+export default React.memo(MessageTips, (prev, next) => {
+  return (
+    prev.message.id === next.message.id &&
+    prev.message.content.content === next.message.content.content &&
+    prev.message.content.type === next.message.content.type
+  );
+});

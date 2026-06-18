@@ -606,4 +606,6 @@ const MessageToolGroup: React.FC<IMessageToolGroupProps> = ({ message }) => {
   );
 };
 
-export default MessageToolGroup;
+export default React.memo(MessageToolGroup, (prev, next) => {
+  return prev.message.id === next.message.id && prev.message.content === next.message.content;
+});

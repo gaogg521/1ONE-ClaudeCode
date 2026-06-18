@@ -10,6 +10,10 @@ import type { IResponseMessage } from '@/common/adapter/ipcBridge';
 import type { TChatConversation, TokenUsageData } from '@/common/config/storage';
 import type { ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
+import {
+  useConversationMessageSync,
+  useSyncOnRunningComplete,
+} from '@/renderer/pages/conversation/Messages/conversationMessageSync';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type TokenUsage = {
@@ -17,8 +21,12 @@ type TokenUsage = {
   output_tokens?: number;
 };
 
+/** Poll DB while waiting so packaged builds still show replies without waiting for finish. */
+export const AIONRS_MESSAGE_SYNC_POLL_MS = 2500;
+
 export const useAionrsMessage = (conversation_id: string, onError?: (message: IResponseMessage) => void) => {
   const addOrUpdateMessage = useAddOrUpdateMessage();
+  const scheduleMessageSync = useConversationMessageSync(conversation_id);
   const [streamRunning, setStreamRunning] = useState(false);
   const [hasActiveTools, setHasActiveTools] = useState(false);
   const [waitingResponse, setWaitingResponse] = useState(false);
@@ -152,6 +160,7 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
             setStreamRunning(false);
             setWaitingResponse(false);
             setThought({ subject: '', description: '' });
+            scheduleMessageSync();
           }
           break;
         case 'tool_group':
@@ -219,6 +228,7 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
             hasContentInTurnRef.current = false;
             // Clear active message id so next request won't be filtered
             activeMsgIdRef.current = null;
+            scheduleMessageSync();
             onError?.(message as IResponseMessage);
           } else {
             // Mark that current turn has content output (exclude error type)
@@ -241,7 +251,7 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
       }
     });
     // Note: hasActiveTools and streamRunning are accessed via refs to avoid re-subscription
-  }, [conversation_id, addOrUpdateMessage, onError]);
+  }, [conversation_id, addOrUpdateMessage, onError, scheduleMessageSync]);
 
   useEffect(() => {
     let cancelled = false;
@@ -303,6 +313,19 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
     // Clear active message ID to prevent filtering events from new messages after stop
     activeMsgIdRef.current = null;
   }, []);
+
+  // Packaged builds may miss stream IPC events; poll DB only while waiting for the first chunk.
+  // During active streaming, IPC updates the list — polling here caused full list reloads and scroll jitter.
+  useEffect(() => {
+    if (!waitingResponse || streamRunning) {
+      return;
+    }
+    scheduleMessageSync();
+    const timer = setInterval(scheduleMessageSync, AIONRS_MESSAGE_SYNC_POLL_MS);
+    return () => clearInterval(timer);
+  }, [conversation_id, waitingResponse, streamRunning, scheduleMessageSync]);
+
+  useSyncOnRunningComplete(conversation_id, running, scheduleMessageSync);
 
   return {
     thought,

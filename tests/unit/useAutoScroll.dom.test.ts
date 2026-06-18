@@ -393,7 +393,7 @@ describe('useAutoScroll - streaming guard refresh (#2017)', () => {
     expect(result.current.handleFollowOutput(false)).toBe('auto');
   });
 
-  it('atBottomStateChange(false) should scroll back when not user-scrolled (layout shift)', () => {
+  it('atBottomStateChange(false) should not force scroll during streaming layout changes', () => {
     const { result } = renderHook(({ messages, itemCount }) => useAutoScroll({ messages, itemCount }), {
       initialProps: { messages: [createMessage('left', '1')], itemCount: 1 },
     });
@@ -405,13 +405,11 @@ describe('useAutoScroll - streaming guard refresh (#2017)', () => {
       result.current.handleScrollerRef(scrollerEl);
     });
 
-    // atBottomStateChange(false) fires due to layout shift (ThoughtDisplay appeared)
-    // userScrolled is still false — should scroll back to bottom
     act(() => {
       result.current.handleAtBottomStateChange(false);
     });
 
-    expect(scrollerEl.scrollTop).toBe(1000 - 462);
+    expect(scrollerEl.scrollTop).toBe(490);
   });
 
   it('atBottomStateChange(false) should NOT scroll back when user scrolled up', () => {
@@ -467,9 +465,9 @@ describe('useAutoScroll - streaming guard refresh (#2017)', () => {
       triggerResizeObservers();
     });
 
-    // First correction fires at 50ms
+    // Deferred correction fires after layout settles
     act(() => {
-      vi.advanceTimersByTime(50);
+      vi.advanceTimersByTime(80);
     });
 
     expect(scrollerEl.scrollTop).toBe(1000 - 504);

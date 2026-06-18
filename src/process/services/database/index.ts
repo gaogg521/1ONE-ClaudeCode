@@ -21,9 +21,7 @@ import { quarantineCorruptedDatabase, removeSqliteSidecars } from './recovery';
 
 function isNativeModuleLoadError(message: string): boolean {
   return (
-    message.includes('NODE_MODULE_VERSION') ||
-    message.includes('was compiled against') ||
-    message.includes('dlopen')
+    message.includes('NODE_MODULE_VERSION') || message.includes('was compiled against') || message.includes('dlopen')
   );
 }
 
@@ -275,20 +273,14 @@ export class OneCmdDatabase {
   updateUserTenantId(userId: string, tenantId: string): IQueryResult<boolean> {
     try {
       const now = Date.now();
-      this.db
-        .prepare('UPDATE users SET tenant_id = ?, updated_at = ? WHERE id = ?')
-        .run(tenantId, now, userId);
+      this.db.prepare('UPDATE users SET tenant_id = ?, updated_at = ? WHERE id = ?').run(tenantId, now, userId);
       return { success: true, data: true };
     } catch (error: any) {
       return { success: false, error: error.message, data: false };
     }
   }
 
-  updateUserOrgProfile(
-    userId: string,
-    orgUnitPath: string,
-    source: string
-  ): IQueryResult<boolean> {
+  updateUserOrgProfile(userId: string, orgUnitPath: string, source: string): IQueryResult<boolean> {
     try {
       const now = Date.now();
       this.db
@@ -626,7 +618,9 @@ export class OneCmdDatabase {
   getAuthIdentity(provider: string, externalId: string): IQueryResult<IAuthIdentityRow | null> {
     try {
       const row = this.db
-        .prepare('SELECT provider, external_id, user_id, created_at FROM auth_identities WHERE provider = ? AND external_id = ?')
+        .prepare(
+          'SELECT provider, external_id, user_id, created_at FROM auth_identities WHERE provider = ? AND external_id = ?'
+        )
         .get(provider, externalId) as IAuthIdentityRow | undefined;
       return { success: true, data: row ?? null };
     } catch (error: any) {
@@ -637,7 +631,9 @@ export class OneCmdDatabase {
   getAuthIdentityByUser(provider: string, userId: string): IQueryResult<IAuthIdentityRow | null> {
     try {
       const row = this.db
-        .prepare('SELECT provider, external_id, user_id, created_at FROM auth_identities WHERE provider = ? AND user_id = ?')
+        .prepare(
+          'SELECT provider, external_id, user_id, created_at FROM auth_identities WHERE provider = ? AND user_id = ?'
+        )
         .get(provider, userId) as IAuthIdentityRow | undefined;
       return { success: true, data: row ?? null };
     } catch (error: any) {
@@ -742,9 +738,7 @@ export class OneCmdDatabase {
 
   getConversation(conversationId: string): IQueryResult<TChatConversation> {
     try {
-      const row = this.db
-        .prepare('SELECT * FROM conversations WHERE id = ?')
-        .get(conversationId) as
+      const row = this.db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversationId) as
         | IConversationRow
         | undefined;
 
@@ -1446,9 +1440,24 @@ export class OneCmdDatabase {
    * Get message by msg_id and conversation_id
    * Used for finding existing messages to update (e.g., streaming text accumulation)
    */
-  getMessageByMsgId(conversationId: string, msgId: string, type: TMessage['type']): IQueryResult<TMessage | null> {
+  getMessageByMsgId(
+    conversationId: string,
+    msgId: string,
+    type: TMessage['type'],
+    position?: TMessage['position']
+  ): IQueryResult<TMessage | null> {
     try {
-      const stmt = this.db.prepare(`
+      const stmt = position
+        ? this.db.prepare(`
+        SELECT *
+        FROM messages
+        WHERE conversation_id = ?
+          AND msg_id = ?
+          AND type = ?
+          AND position = ?
+        ORDER BY created_at DESC LIMIT 1
+      `)
+        : this.db.prepare(`
         SELECT *
         FROM messages
         WHERE conversation_id = ?
@@ -1457,7 +1466,9 @@ export class OneCmdDatabase {
         ORDER BY created_at DESC LIMIT 1
       `);
 
-      const row = stmt.get(conversationId, msgId, type) as IMessageRow | undefined;
+      const row = position
+        ? (stmt.get(conversationId, msgId, type, position) as IMessageRow | undefined)
+        : (stmt.get(conversationId, msgId, type) as IMessageRow | undefined);
 
       return {
         success: true,
@@ -2106,7 +2117,10 @@ export class OneCmdDatabase {
 
   getPersonalTask(id: string): { id: string; user_id: string } | null {
     try {
-      return this.db.prepare('SELECT id, user_id FROM tasks WHERE id = ?').get(id) as { id: string; user_id: string } | null;
+      return this.db.prepare('SELECT id, user_id FROM tasks WHERE id = ?').get(id) as {
+        id: string;
+        user_id: string;
+      } | null;
     } catch {
       return null;
     }
@@ -2150,7 +2164,10 @@ export class OneCmdDatabase {
     }
   }
 
-  listPersonalTasks(tenant_id: string, user_id?: string): IQueryResult<
+  listPersonalTasks(
+    tenant_id: string,
+    user_id?: string
+  ): IQueryResult<
     {
       id: string;
       user_id: string;

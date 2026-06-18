@@ -14,6 +14,10 @@ import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/cha
 import { createSetUploadFile } from '@/renderer/hooks/chat/useSendBoxFiles';
 import { useAddOrUpdateMessage, useRemoveMessageByMsgId } from '@/renderer/pages/conversation/Messages/hooks';
 import {
+  useConversationMessageSync,
+  useSyncOnRunningComplete,
+} from '@/renderer/pages/conversation/Messages/conversationMessageSync';
+import {
   shouldEnqueueConversationCommand,
   useConversationCommandQueue,
   type ConversationCommandQueueItem,
@@ -67,6 +71,7 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
   const isCommandQueueEnabled = useCommandQueueEnabled();
   const addOrUpdateMessage = useAddOrUpdateMessage();
   const removeMessageByMsgId = useRemoveMessageByMsgId();
+  const scheduleMessageSync = useConversationMessageSync(conversation_id);
   const { setSendBoxHandler } = usePreviewContext();
 
   const [aiProcessing, setAiProcessing] = useState(false);
@@ -197,6 +202,7 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
         case 'finish': {
           setThought({ subject: '', description: '' });
           setAiProcessing(false);
+          scheduleMessageSync();
           break;
         }
         case 'content':
@@ -210,12 +216,15 @@ const NanobotSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id
           }
           if (message.type === 'error') {
             setAiProcessing(false);
+            scheduleMessageSync();
           }
           break;
         }
       }
     });
-  }, [conversation_id, addOrUpdateMessage]);
+  }, [conversation_id, addOrUpdateMessage, scheduleMessageSync]);
+
+  useSyncOnRunningComplete(conversation_id, aiProcessing, scheduleMessageSync);
 
   const handleFilesAdded = useCallback(
     (pastedFiles: FileMetadata[]) => {

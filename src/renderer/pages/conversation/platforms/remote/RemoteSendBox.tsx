@@ -12,6 +12,10 @@ import SendBox from '@/renderer/components/chat/sendbox';
 import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/chat/useSendBoxDraft';
 import { createSetUploadFile } from '@/renderer/hooks/chat/useSendBoxFiles';
 import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
+import {
+  useConversationMessageSync,
+  useSyncOnRunningComplete,
+} from '@/renderer/pages/conversation/Messages/conversationMessageSync';
 import { allSupportedExts, type FileMetadata } from '@/renderer/services/FileService';
 import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
@@ -54,6 +58,7 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
   const effectiveWorkspace = useEffectiveWorkspace(conversation_id);
   const { checkAndUpdateTitle } = useAutoTitle();
   const addOrUpdateMessage = useAddOrUpdateMessage();
+  const scheduleMessageSync = useConversationMessageSync(conversation_id);
   const { setSendBoxHandler } = usePreviewContext();
 
   const [agentName, setAgentName] = useState('Remote Agent');
@@ -182,6 +187,7 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
           aiProcessingRef.current = false;
           setThought({ subject: '', description: '' });
           hasContentInTurnRef.current = false;
+          scheduleMessageSync();
           break;
         case 'content':
         case 'acp_permission': {
@@ -213,7 +219,9 @@ const RemoteSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id 
         }
       }
     });
-  }, [conversation_id, addOrUpdateMessage]);
+  }, [conversation_id, addOrUpdateMessage, scheduleMessageSync]);
+
+  useSyncOnRunningComplete(conversation_id, aiProcessing, scheduleMessageSync);
 
   useEffect(() => {
     void ipcBridge.conversation.get.invoke({ id: conversation_id }).then(async (res) => {

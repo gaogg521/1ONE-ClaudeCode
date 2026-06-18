@@ -177,20 +177,18 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
             'bg-3 p-8px': isTeammateMessage,
             'w-full': !(isUserMessage || cronMeta || isTeammateMessage),
           })}
-          style={
-            {
-              ...(stretchLayout
-                ? !isUserMessage
-                  ? { width: '100%', maxWidth: 'none' }
-                  : {}
-                : { maxWidth: CONTENT_RAIL.chatMessageMaxWidth }),
-              ...(isUserMessage || cronMeta
-                ? { borderRadius: '8px 0 8px 8px' }
-                : isTeammateMessage
-                  ? { borderRadius: '0 8px 8px 8px' }
-                  : {}),
-            }
-          }
+          style={{
+            ...(stretchLayout
+              ? !isUserMessage
+                ? { width: '100%', maxWidth: 'none' }
+                : {}
+              : { maxWidth: CONTENT_RAIL.chatMessageMaxWidth }),
+            ...(isUserMessage || cronMeta
+              ? { borderRadius: '8px 0 8px 8px' }
+              : isTeammateMessage
+                ? { borderRadius: '0 8px 8px 8px' }
+                : {}),
+          }}
         >
           {/* JSON 内容使用折叠组件 Use CollapsibleContent for JSON content */}
           {json ? (
@@ -230,4 +228,18 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
   );
 };
 
-export default MessageText;
+export default React.memo(MessageText, (prev, next) => {
+  const a = prev.message;
+  const b = next.message;
+  return (
+    a.id === b.id &&
+    a.position === b.position &&
+    a.status === b.status &&
+    a.createdAt === b.createdAt &&
+    a.content.content === b.content.content &&
+    a.content.teammateMessage === b.content.teammateMessage &&
+    a.content.senderName === b.content.senderName &&
+    a.content.senderAgentType === b.content.senderAgentType &&
+    a.content.cronMeta === b.content.cronMeta
+  );
+});
