@@ -33,7 +33,7 @@ export function buildWebuiMemberLoginSearch(redirect = '/guid'): string {
   return params.toString();
 }
 
-export function buildWebuiAdminLoginSearch(redirect = '/enterprise/auth'): string {
+export function buildWebuiAdminLoginSearch(redirect = '/enterprise'): string {
   const params = new URLSearchParams({ redirect, mode: 'admin' });
   return params.toString();
 }
@@ -47,14 +47,14 @@ export function buildWebuiMemberLoginUrl(origin: string, redirect = '/guid'): st
   return buildWebuiLoginHashUrl(origin, buildWebuiMemberLoginSearch(redirect));
 }
 
-export function buildWebuiAdminLoginUrl(origin: string, redirect = '/enterprise/auth'): string {
+export function buildWebuiAdminLoginUrl(origin: string, redirect = '/enterprise'): string {
   return buildWebuiLoginHashUrl(origin, buildWebuiAdminLoginSearch(redirect));
 }
 
 /** Same host with memberPort+1 — use when a second WebUI instance listens on the admin port. */
 export function buildWebuiAdminLoginUrlOnDedicatedPort(
   memberOrigin: string,
-  redirect = '/enterprise/auth'
+  redirect = '/enterprise'
 ): string | null {
   try {
     const url = new URL(memberOrigin);

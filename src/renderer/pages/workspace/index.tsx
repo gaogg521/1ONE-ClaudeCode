@@ -216,7 +216,7 @@ const WorkspacePage: React.FC = () => {
               description: t('common.workspace.hub.enterpriseAdminDesc', {
                 defaultValue: '成员、LDAP、飞书、邀请码、邮箱配置等组织治理入口。',
               }),
-              path: '/enterprise/auth',
+              path: '/enterprise',
             }
           : null,
         showEnterpriseAdminNav

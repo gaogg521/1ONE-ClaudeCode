@@ -38,4 +38,8 @@ describe('enterprise login navigation', () => {
       '/login?redirect=%2Fenterprise%2Fcteam&mode=enterprise&intent=enterprise-member'
     );
   });
+
+  it('builds admin console home login with admin mode', () => {
+    expect(buildWebuiAdminLoginPath('/enterprise')).toBe('/login?redirect=%2Fenterprise&mode=admin');
+  });
 });

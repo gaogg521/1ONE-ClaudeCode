@@ -5,6 +5,7 @@
  */
 
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { ENTERPRISE_ADMIN_HOME_PATH } from '@/common/auth/enterpriseRoles';
 
 export type OpenAdminConsoleResult = 'opened' | 'webui_not_running' | 'failed' | 'navigated';
 
@@ -23,6 +24,6 @@ export async function openAdminConsole(options: OpenAdminConsoleOptions): Promis
     }
     return result;
   }
-  options.navigate('/enterprise/auth');
+  options.navigate(ENTERPRISE_ADMIN_HOME_PATH);
   return 'navigated';
 }
