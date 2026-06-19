@@ -21,7 +21,7 @@ describe('openAdminConsole', () => {
     const result = await openAdminConsole({ navigate, openEnterpriseAdminInBrowser });
 
     expect(result).toBe('navigated');
-    expect(navigate).toHaveBeenCalledWith('/enterprise/auth');
+    expect(navigate).toHaveBeenCalledWith('/enterprise');
     expect(openEnterpriseAdminInBrowser).not.toHaveBeenCalled();
   });
 

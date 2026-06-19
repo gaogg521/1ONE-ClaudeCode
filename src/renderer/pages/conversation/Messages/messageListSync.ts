@@ -19,18 +19,31 @@ export function mergeDbMessagesWithStreaming(key: string, messages: TMessage[], 
   if (!sameConversation.length) return messages;
   const dbIds = new Set(messages.map((m) => m.id));
   const dbStreamKeys = new Set(
-    messages.map((m) => textMessageStreamKey(m)).filter((key): key is string => Boolean(key))
+    messages.map((m) => textMessageStreamKey(m)).filter((streamKey): streamKey is string => Boolean(streamKey))
   );
 
   const streamingByKey = new Map<string, TMessage>();
+  const streamingThinkingByMsgId = new Map<string, TMessage>();
   for (const m of sameConversation) {
     const streamKey = textMessageStreamKey(m);
     if (streamKey && dbStreamKeys.has(streamKey)) {
       streamingByKey.set(streamKey, m);
     }
+    if (m.type === 'thinking' && m.msg_id) {
+      streamingThinkingByMsgId.set(m.msg_id, m);
+    }
   }
 
   const mergedMessages = messages.map((dbMsg) => {
+    if (dbMsg.type === 'thinking' && dbMsg.msg_id) {
+      const streamMsg = streamingThinkingByMsgId.get(dbMsg.msg_id);
+      if (streamMsg?.type === 'thinking') {
+        const dbLen = thinkingContentLength(dbMsg);
+        const streamLen = thinkingContentLength(streamMsg);
+        return streamLen > dbLen ? streamMsg : dbMsg;
+      }
+      return dbMsg;
+    }
     const streamKey = textMessageStreamKey(dbMsg);
     if (!streamKey) return dbMsg;
     const streamMsg = streamingByKey.get(streamKey);
@@ -49,15 +62,95 @@ export function mergeDbMessagesWithStreaming(key: string, messages: TMessage[], 
   const streamingOnly = sameConversation.filter((m) => {
     if (dbIds.has(m.id)) return false;
     const streamKey = textMessageStreamKey(m);
-    return !streamKey || !dbStreamKeys.has(streamKey);
+    if (streamKey && dbStreamKeys.has(streamKey)) return false;
+    if (m.type === 'thinking' && m.msg_id) {
+      return !messages.some((db) => db.type === 'thinking' && db.msg_id === m.msg_id);
+    }
+    return true;
   });
-  if (!streamingOnly.length && !streamingByKey.size) return messages;
+  if (!streamingOnly.length && !streamingByKey.size && !streamingThinkingByMsgId.size) return messages;
   return [...mergedMessages, ...streamingOnly];
+}
+
+/** UI-only messages not yet persisted (tool calls, in-flight thinking, etc.). */
+export function hasStreamingOnlyMessages(baseline: TMessage[], dbMessages: TMessage[]): boolean {
+  const dbIds = new Set(dbMessages.map((m) => m.id));
+  const dbStreamKeys = new Set(
+    dbMessages.map((m) => textMessageStreamKey(m)).filter((streamKey): streamKey is string => Boolean(streamKey))
+  );
+  return baseline.some((m) => {
+    if (dbIds.has(m.id)) return false;
+    const streamKey = textMessageStreamKey(m);
+    if (streamKey && dbStreamKeys.has(streamKey)) return false;
+    if (m.type === 'thinking' && m.msg_id) {
+      return !dbMessages.some((db) => db.type === 'thinking' && db.msg_id === m.msg_id);
+    }
+    return true;
+  });
+}
+
+/** Merge DB snapshot into the cached list; preserve reference when nothing changes. */
+export function mergeConversationMessagesFromDb(
+  conversationId: string,
+  dbMessages: TMessage[],
+  currentList: TMessage[]
+): TMessage[] {
+  if (!dbMessages.length) {
+    const hasConversationMessages = currentList.some((m) => m.conversation_id === conversationId);
+    return hasConversationMessages
+      ? currentList.filter((m) => m.conversation_id !== conversationId)
+      : currentList;
+  }
+
+  const sameConversation = currentList.filter((m) => m.conversation_id === conversationId);
+  const baseline = sameConversation.length ? sameConversation : currentList;
+
+  if (
+    messageListSyncSignature(baseline) === messageListSyncSignature(dbMessages) &&
+    !hasStreamingOnlyMessages(baseline, dbMessages)
+  ) {
+    return currentList;
+  }
+
+  const merged = mergeDbMessagesWithStreaming(conversationId, dbMessages, currentList);
+  const mergedBaseline =
+    merged.length && merged.every((m) => m.conversation_id === conversationId)
+      ? merged
+      : merged.filter((m) => m.conversation_id === conversationId);
+
+  if (messageListsEquivalentForSync(baseline, mergedBaseline)) {
+    return currentList;
+  }
+
+  const otherConversations = currentList.filter((m) => m.conversation_id !== conversationId);
+  return otherConversations.length ? [...otherConversations, ...mergedBaseline] : merged;
 }
 
 /** After turn finish, DB is authoritative (avoids stale batched stream chunks). */
 export function replaceMessageListFromDb(messages: TMessage[]): TMessage[] {
   return messages;
+}
+
+/** Replace one conversation's messages in a multi-conversation cache list. */
+export function replaceConversationMessagesInList(
+  currentList: TMessage[],
+  conversationId: string,
+  messages: TMessage[]
+): TMessage[] {
+  if (!messages.length) {
+    const hasConversationMessages = currentList.some((m) => m.conversation_id === conversationId);
+    return hasConversationMessages ? currentList.filter((m) => m.conversation_id !== conversationId) : currentList;
+  }
+  const sameConversation = currentList.filter((m) => m.conversation_id === conversationId);
+  const baseline = sameConversation.length ? sameConversation : currentList;
+  if (messageListSyncSignature(baseline) === messageListSyncSignature(messages)) {
+    return currentList;
+  }
+  if (messageListsEquivalentForSync(baseline, messages)) {
+    return currentList;
+  }
+  const otherConversations = currentList.filter((m) => m.conversation_id !== conversationId);
+  return otherConversations.length ? [...otherConversations, ...messages] : replaceMessageListFromDb(messages);
 }
 
 function textContentLength(message: TMessage): number {
@@ -67,11 +160,18 @@ function textContentLength(message: TMessage): number {
   return String((message.content as { content: unknown }).content).length;
 }
 
+function thinkingContentLength(message: TMessage): number {
+  if (message.type !== 'thinking' || typeof message.content !== 'object' || !('content' in message.content)) {
+    return 0;
+  }
+  return String((message.content as { content: unknown }).content).length;
+}
+
 /** Fast fingerprint to skip no-op DB reloads during polling / debounced sync. */
 export function messageListSyncSignature(messages: TMessage[]): string {
   if (!messages.length) return '0';
   const last = messages[messages.length - 1];
-  const tailLen = textContentLength(last);
+  const tailLen = last.type === 'thinking' ? thinkingContentLength(last) : textContentLength(last);
   return `${messages.length}:${last.id}:${last.type}:${last.position ?? ''}:${last.msg_id ?? ''}:${tailLen}`;
 }
 
@@ -95,6 +195,22 @@ export function messageListsEquivalentForSync(current: TMessage[], next: TMessag
           ? String((b.content as { content: unknown }).content)
           : '';
       if (ac !== bc) return false;
+    }
+    if (a.type === 'thinking' && b.type === 'thinking') {
+      const ac =
+        typeof a.content === 'object' && 'content' in a.content
+          ? String((a.content as { content: unknown }).content)
+          : '';
+      const bc =
+        typeof b.content === 'object' && 'content' in b.content
+          ? String((b.content as { content: unknown }).content)
+          : '';
+      if (ac !== bc) return false;
+      const aStatus =
+        typeof a.content === 'object' && 'status' in a.content ? String((a.content as { status: unknown }).status) : '';
+      const bStatus =
+        typeof b.content === 'object' && 'status' in b.content ? String((b.content as { status: unknown }).status) : '';
+      if (aStatus !== bStatus) return false;
     }
   }
   return true;

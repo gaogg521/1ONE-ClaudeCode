@@ -416,4 +416,62 @@ describe('message hooks cache merge', () => {
       expect(parsed[0]?.content.content).toBe('partial reply');
     });
   });
+
+  it('add=true upserts duplicate user bubble instead of appending twice', async () => {
+    mockGetConversationMessagesInvoke.mockResolvedValue([]);
+
+    const DuplicateAddProbe = () => {
+      const addOrUpdateMessage = useAddOrUpdateMessage();
+      const messages = useMessageList();
+
+      return (
+        <div>
+          <button
+            type='button'
+            onClick={() => {
+              addOrUpdateMessage(
+                {
+                  id: 'user-1',
+                  msg_id: 'turn-1',
+                  conversation_id: 'conv-1',
+                  type: 'text',
+                  position: 'right',
+                  content: { content: 'hello' },
+                },
+                true
+              );
+              addOrUpdateMessage(
+                {
+                  id: 'user-1',
+                  msg_id: 'turn-1',
+                  conversation_id: 'conv-1',
+                  type: 'text',
+                  position: 'right',
+                  content: { content: 'hello patched' },
+                },
+                true
+              );
+            }}
+          >
+            duplicate-add
+          </button>
+          <pre data-testid='dup-messages'>{JSON.stringify(messages)}</pre>
+        </div>
+      );
+    };
+
+    render(
+      <MessageListProvider value={[]}>
+        <DuplicateAddProbe />
+      </MessageListProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'duplicate-add' }));
+
+    await waitFor(() => {
+      const parsed = JSON.parse(screen.getByTestId('dup-messages').textContent ?? '[]') as TestMessage[];
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0]?.content.content).toBe('hello patched');
+    });
+  });
 });

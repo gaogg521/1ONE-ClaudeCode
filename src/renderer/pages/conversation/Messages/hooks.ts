@@ -11,9 +11,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import { addEventListener } from '@/renderer/utils/emitter';
 import { createContext } from '@renderer/utils/ui/createContext';
 import {
-  mergeDbMessagesWithStreaming,
-  messageListsEquivalentForSync,
-  replaceMessageListFromDb,
+  mergeConversationMessagesFromDb,
+  replaceConversationMessagesInList,
   textMessageStreamKey,
 } from '@renderer/pages/conversation/Messages/messageListSync';
 
@@ -343,6 +342,53 @@ function composeMessageWithIndex(message: TMessage, list: TMessage[], index: Mes
   return newList;
 }
 
+/** When add=true, upsert if the bubble already exists (avoids duplicate user messages). */
+function findExistingIndexForAdd(message: TMessage, list: TMessage[], index: MessageIndex): number | undefined {
+  if (message.type === 'text' && (message.msg_id || message.id)) {
+    const roleKey = textMessageStreamKey(message) ?? message.msg_id ?? message.id;
+    const existingIdx = index.msgIdIndex.get(roleKey);
+    if (existingIdx !== undefined && existingIdx < list.length) {
+      const existing = list[existingIdx];
+      if (existing.type === 'text' && existing.position === message.position) {
+        return existingIdx;
+      }
+    }
+    if (message.id) {
+      const idIdx = list.findIndex(
+        (item) => item.id === message.id && item.type === 'text' && item.position === message.position
+      );
+      if (idIdx >= 0) return idIdx;
+    }
+    return undefined;
+  }
+
+  if (message.type === 'tool_call' && message.content?.callId) {
+    const idx = index.callIdIndex.get(message.content.callId);
+    if (idx !== undefined && idx < list.length) return idx;
+  }
+  if (message.type === 'codex_tool_call' && message.content?.toolCallId) {
+    const idx = index.toolCallIdIndex.get(message.content.toolCallId);
+    if (idx !== undefined && idx < list.length) return idx;
+  }
+  if (message.type === 'acp_tool_call' && message.content?.update?.toolCallId) {
+    const idx = index.toolCallIdIndex.get(message.content.update.toolCallId);
+    if (idx !== undefined && idx < list.length) return idx;
+  }
+  if (message.type === 'thinking' && message.msg_id) {
+    const idx = index.msgIdIndex.get(message.msg_id);
+    if (idx !== undefined && idx < list.length && list[idx].type === 'thinking') return idx;
+  }
+  if (message.msg_id) {
+    const idx = index.msgIdIndex.get(message.msg_id);
+    if (idx !== undefined && idx < list.length) return idx;
+  }
+  if (message.id) {
+    const idx = list.findIndex((m) => m.id === message.id);
+    if (idx >= 0) return idx;
+  }
+  return undefined;
+}
+
 export const useAddOrUpdateMessage = () => {
   const update = useUpdateMessageList();
   const pendingRef = useRef<Array<{ message: TMessage; add: boolean }>>([]);
@@ -375,28 +421,31 @@ export const useAddOrUpdateMessage = () => {
       for (const item of pending) {
         const index = getOrBuildIndex(newList);
         if (item.add) {
-          // 新增消息，更新索引
-          // New message, update index
           const msg = item.message;
-          const newIdx = newList.length;
-          const streamKey = textMessageStreamKey(msg);
-          if (streamKey) {
-            index.msgIdIndex.set(streamKey, newIdx);
-          } else if (msg.msg_id) {
-            index.msgIdIndex.set(msg.msg_id, newIdx);
-          } else if (msg.type === 'text' && msg.position === 'right' && msg.id) {
-            index.msgIdIndex.set(msg.id, newIdx);
+          const existingIdx = findExistingIndexForAdd(msg, newList, index);
+          if (existingIdx !== undefined) {
+            newList = composeMessageWithIndex(msg, newList, index);
+          } else {
+            const newIdx = newList.length;
+            const streamKey = textMessageStreamKey(msg);
+            if (streamKey) {
+              index.msgIdIndex.set(streamKey, newIdx);
+            } else if (msg.msg_id) {
+              index.msgIdIndex.set(msg.msg_id, newIdx);
+            } else if (msg.type === 'text' && msg.position === 'right' && msg.id) {
+              index.msgIdIndex.set(msg.id, newIdx);
+            }
+            if (msg.type === 'tool_call' && msg.content?.callId) {
+              index.callIdIndex.set(msg.content.callId, newIdx);
+            }
+            if (msg.type === 'codex_tool_call' && msg.content?.toolCallId) {
+              index.toolCallIdIndex.set(msg.content.toolCallId, newIdx);
+            }
+            if (msg.type === 'acp_tool_call' && msg.content?.update?.toolCallId) {
+              index.toolCallIdIndex.set(msg.content.update.toolCallId, newIdx);
+            }
+            newList = newList.concat(msg);
           }
-          if (msg.type === 'tool_call' && msg.content?.callId) {
-            index.callIdIndex.set(msg.content.callId, newIdx);
-          }
-          if (msg.type === 'codex_tool_call' && msg.content?.toolCallId) {
-            index.toolCallIdIndex.set(msg.content.toolCallId, newIdx);
-          }
-          if (msg.type === 'acp_tool_call' && msg.content?.update?.toolCallId) {
-            index.toolCallIdIndex.set(msg.content.update.toolCallId, newIdx);
-          }
-          newList = newList.concat(msg);
         } else {
           // 使用索引优化的消息合并
           // Use index-optimized message compose
@@ -470,14 +519,7 @@ async function fetchAndMergeConversationMessages(
   update: (fn: (list: TMessage[]) => TMessage[]) => void
 ): Promise<void> {
   const messages = await fetchConversationMessages(conversationId);
-  if (!messages.length) {
-    update((currentList) => {
-      const hasConversationMessages = currentList.some((m) => m.conversation_id === conversationId);
-      return hasConversationMessages ? [] : currentList;
-    });
-    return;
-  }
-  update((currentList) => mergeDbMessagesWithStreaming(conversationId, messages, currentList));
+  update((currentList) => mergeConversationMessagesFromDb(conversationId, messages, currentList));
 }
 
 /** After stream finish or explicit sync, DB is authoritative (avoids stale batched stream chunks). */
@@ -487,18 +529,7 @@ async function fetchAndReplaceConversationMessages(
 ): Promise<void> {
   cancelPendingMessageUpdates();
   const messages = await fetchConversationMessages(conversationId);
-  update((currentList) => {
-    if (!messages.length) {
-      const hasConversationMessages = currentList.some((m) => m.conversation_id === conversationId);
-      return hasConversationMessages ? [] : currentList;
-    }
-    const sameConversation = currentList.filter((m) => m.conversation_id === conversationId);
-    const baseline = sameConversation.length ? sameConversation : currentList;
-    if (messageListsEquivalentForSync(baseline, messages)) {
-      return currentList;
-    }
-    return replaceMessageListFromDb(messages);
-  });
+  update((currentList) => replaceConversationMessagesInList(currentList, conversationId, messages));
 }
 
 const MESSAGE_CACHE_SYNC_DEBOUNCE_MS = 150;

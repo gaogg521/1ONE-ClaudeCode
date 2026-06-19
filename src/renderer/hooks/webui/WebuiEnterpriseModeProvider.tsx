@@ -30,6 +30,7 @@ import { isDesktopOperatorUser, useAuth } from '@/renderer/hooks/context/AuthCon
 import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
 import { fetchWebuiApi, getWebuiAdminBrowserOrigin, getWebuiApiBaseUrl } from '@/renderer/utils/webuiApiBase';
 import { buildWebuiAdminLoginUrl } from '@/common/config/webuiLoginAccess';
+import { ENTERPRISE_ADMIN_HOME_PATH } from '@/common/auth/enterpriseRoles';
 import {
   getDesktopWebuiBearerToken,
   syncBrowserWebuiSessionToDesktop,
@@ -452,12 +453,12 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   );
 
   const openEnterpriseAdminInBrowser = useCallback(async (): Promise<'opened' | 'webui_not_running' | 'failed'> => {
-    setPostLoginRedirect('/enterprise/auth');
+    setPostLoginRedirect(ENTERPRISE_ADMIN_HOME_PATH);
     const adminOrigin = await getWebuiAdminBrowserOrigin();
     if (!adminOrigin) {
       return 'webui_not_running';
     }
-    const url = buildWebuiAdminLoginUrl(adminOrigin, '/enterprise/auth');
+    const url = buildWebuiAdminLoginUrl(adminOrigin, ENTERPRISE_ADMIN_HOME_PATH);
     try {
       if (isDesktop) {
         await openExternalUrl(url);

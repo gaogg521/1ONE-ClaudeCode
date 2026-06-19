@@ -111,7 +111,7 @@ describe('EnterpriseLayout', () => {
     render(<EnterpriseLayout />);
 
     expect(screen.getByTestId('desktop-placeholder-url')).toHaveTextContent(
-      'http://127.0.0.1:25809/#/login?redirect=%2Fenterprise%2Fauth&mode=admin&intent=webui-admin'
+      'http://127.0.0.1:25809/#/login?redirect=%2Fenterprise&mode=admin'
     );
   });
 });

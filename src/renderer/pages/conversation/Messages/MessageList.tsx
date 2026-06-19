@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { CodexToolCallUpdate, IMessageAcpToolCall, IMessageToolGroup, TMessage } from '@/common/chat/chatLib';
+import type { TMessage } from '@/common/chat/chatLib';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { iconColors } from '@/renderer/styles/colors';
 import { CHAT_MESSAGE_JUMP_EVENT, type ChatMessageJumpDetail } from '@/renderer/utils/chat/chatMinimapEvents';
@@ -13,7 +13,7 @@ import { Down } from '@icon-park/react';
 import MessageAcpPermission from '@renderer/pages/conversation/Messages/acp/MessageAcpPermission';
 import MessageAcpToolCall from '@renderer/pages/conversation/Messages/acp/MessageAcpToolCall';
 import classNames from 'classnames';
-import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { Virtuoso } from 'react-virtuoso';
@@ -21,8 +21,7 @@ import { uuid } from '@renderer/utils/common';
 import './messages.css';
 import HOC from '@renderer/utils/ui/HOC';
 import MessageCodexToolCall from './codex/MessageCodexToolCall';
-import type { FileChangeInfo } from './codex/MessageFileChanges';
-import MessageFileChanges, { parseDiff } from './codex/MessageFileChanges';
+import MessageFileChanges from './codex/MessageFileChanges';
 import { useMessageList } from './hooks';
 import MessageAgentStatus from './components/MessageAgentStatus';
 import MessagePlan from './components/MessagePlan';
@@ -31,59 +30,25 @@ import MessageToolCall from './components/MessageToolCall';
 import MessageToolGroup from './components/MessageToolGroup';
 import MessageToolGroupSummary from './components/MessageToolGroupSummary';
 import WebSourcesCitationBar from './components/WebSourcesCitationBar';
-import { collectWebSourcesFromToolMessages, type WebSourceItem } from '@/renderer/utils/web/collectWebSourcesFromTools';
 import MessageCronTrigger from './components/MessageCronTrigger';
 import MessageSkillSuggest from './components/MessageSkillSuggest';
 import MessageText from './components/MessagetText';
 import MessageThinking from './components/MessageThinking';
-import type { WriteFileResult } from './types';
+import {
+  getProcessedItemAnchorId,
+  matchesTargetMessage,
+  type IMessageVO,
+} from '@renderer/pages/conversation/Messages/messageListProcess';
+import { useProcessedMessageList } from '@renderer/pages/conversation/Messages/useProcessedMessageList';
 import { useAutoScroll } from './useAutoScroll';
 import { useAutoPreviewOfficeFiles } from '@/renderer/hooks/file/useAutoPreviewOfficeFiles';
 import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
 import SelectionReplyButton from './components/SelectionReplyButton';
 import { useAddEventListener } from '@/renderer/utils/emitter';
 
-type TurnDiffContent = Extract<CodexToolCallUpdate, { subtype: 'turn_diff' }>;
-
-type IMessageVO =
-  | TMessage
-  | { type: 'file_summary'; id: string; diffs: FileChangeInfo[]; sourceMessageIds: string[] }
-  | {
-      type: 'tool_summary';
-      id: string;
-      messages: Array<IMessageToolGroup | IMessageAcpToolCall>;
-      sourceMessageIds: string[];
-    }
-  | { type: 'web_sources'; id: string; sources: WebSourceItem[]; sourceMessageIds: string[] };
-
 type ConversationLocationState = {
   targetMessageId?: string;
   fromConversationSearch?: boolean;
-};
-
-const getProcessedItemSourceMessageIds = (item: IMessageVO): string[] => {
-  if ('type' in item && item.type === 'tool_summary') {
-    return item.sourceMessageIds;
-  }
-  if ('type' in item && item.type === 'file_summary') {
-    return item.sourceMessageIds;
-  }
-  if ('type' in item && item.type === 'web_sources') {
-    return item.sourceMessageIds;
-  }
-  return 'id' in item ? [item.id] : [];
-};
-
-const matchesTargetMessage = (item: IMessageVO, targetMessageId?: string): boolean => {
-  if (!targetMessageId) {
-    return false;
-  }
-  return getProcessedItemSourceMessageIds(item).includes(targetMessageId);
-};
-
-const getProcessedItemAnchorId = (item: IMessageVO): string => {
-  const sourceIds = getProcessedItemSourceMessageIds(item);
-  return sourceIds[0] || ('id' in item ? item.id : uuid());
 };
 
 const highlightStyle: React.CSSProperties = {
@@ -197,104 +162,7 @@ const MessageList: React.FC<{ className?: string }> = () => {
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>();
   const handledTargetKeyRef = useRef<string>('');
 
-  // Pre-process message list to group Codex turn_diff messages
-  const processedList = useMemo(() => {
-    const result: Array<IMessageVO> = [];
-    let diffsChanges: FileChangeInfo[] = [];
-    let diffsSourceMessageIds: string[] = [];
-    let toolList: Array<IMessageToolGroup | IMessageAcpToolCall> = [];
-    let toolSourceMessageIds: string[] = [];
-
-    const pushFileDffChanges = (changes: FileChangeInfo, sourceMessageId: string) => {
-      if (!diffsChanges.length) {
-        diffsSourceMessageIds = [];
-        result.push({
-          type: 'file_summary',
-          id: `summary-${sourceMessageId}`,
-          diffs: diffsChanges,
-          sourceMessageIds: diffsSourceMessageIds,
-        });
-      }
-      diffsChanges.push(changes);
-      diffsSourceMessageIds.push(sourceMessageId);
-      toolList = [];
-      toolSourceMessageIds = [];
-    };
-    const pushWebSourcesBeforeReply = (anchorMessageId: string) => {
-      if (!toolList.length) {
-        return;
-      }
-      const sources = collectWebSourcesFromToolMessages(toolList);
-      if (sources.length > 0) {
-        result.push({
-          type: 'web_sources',
-          id: `web-sources-${anchorMessageId}`,
-          sources,
-          sourceMessageIds: [...toolSourceMessageIds],
-        });
-      }
-    };
-
-    const pushToolList = (message: IMessageToolGroup | IMessageAcpToolCall) => {
-      if (!toolList.length) {
-        toolSourceMessageIds = [];
-        result.push({
-          type: 'tool_summary',
-          id: `tool-summary-${message.id}`,
-          messages: toolList,
-          sourceMessageIds: toolSourceMessageIds,
-        });
-      }
-      toolList.push(message);
-      toolSourceMessageIds.push(message.id);
-      diffsChanges = [];
-      diffsSourceMessageIds = [];
-    };
-
-    for (let i = 0, len = list.length; i < len; i++) {
-      const message = list[i];
-      // Skip hidden and available_commands messages
-      if (message.hidden) continue;
-      if (message.type === 'available_commands') continue;
-      if (message.type === 'codex_tool_call' && message.content.subtype === 'turn_diff') {
-        pushFileDffChanges(parseDiff((message.content as TurnDiffContent).data.unified_diff), message.id);
-        continue;
-      }
-      if (message.type === 'tool_group') {
-        if (message.content.length === 1) {
-          const writeFileResults = message.content
-            .filter(
-              (item) =>
-                item.name === 'WriteFile' &&
-                item.resultDisplay &&
-                typeof item.resultDisplay === 'object' &&
-                'fileDiff' in item.resultDisplay
-            )
-            .map((item) => item.resultDisplay as WriteFileResult);
-          if (writeFileResults.length && writeFileResults[0].fileDiff) {
-            pushFileDffChanges(parseDiff(writeFileResults[0].fileDiff, writeFileResults[0].fileName), message.id);
-            continue;
-          }
-        }
-        pushToolList(message);
-        continue;
-      }
-      if (message.type === 'acp_tool_call') {
-        pushToolList(message);
-        continue;
-      }
-      pushWebSourcesBeforeReply(message.id);
-      toolList = [];
-      toolSourceMessageIds = [];
-      diffsChanges = [];
-      diffsSourceMessageIds = [];
-      result.push(message);
-    }
-    if (toolList.length > 0) {
-      pushWebSourcesBeforeReply(toolSourceMessageIds[toolSourceMessageIds.length - 1] ?? 'tail');
-    }
-    return result;
-  }, [list]);
+  const processedList = useProcessedMessageList(list);
 
   // Use auto-scroll hook
   const {
@@ -405,7 +273,7 @@ const MessageList: React.FC<{ className?: string }> = () => {
         return (
           <div
             key={item.id}
-            id={`message-${getProcessedItemAnchorId(item)}`}
+            id={`message-${getProcessedItemAnchorId(item, uuid)}`}
             className={classNames('min-w-0 message-item px-8px m-t-10px max-w-full', item.type, {
               'mx-auto': !stretchLayout,
               'w-full': stretchLayout,

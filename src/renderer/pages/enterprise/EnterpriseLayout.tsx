@@ -35,7 +35,10 @@ import EnterpriseRouteErrorBoundary from '@/renderer/pages/enterprise/components
 import DesktopEnterprisePlaceholder from '@/renderer/pages/enterprise/components/DesktopEnterprisePlaceholder';
 import { ENTERPRISE_HOME_PATH } from '@/common/auth/enterpriseRoutes';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import { buildEnterpriseRouteLoginPath } from '@/renderer/utils/enterpriseLoginNavigation';
+import {
+  buildEnterpriseRouteLoginPath,
+  buildWebuiAdminLoginPath,
+} from '@/renderer/utils/enterpriseLoginNavigation';
 import '@/renderer/styles/enterprise-theme.css';
 import styles from '@/renderer/pages/enterprise/EnterpriseLayout.module.css';
 import TeamRuntimeAdminSyncMount from '@/renderer/components/enterprise/TeamRuntimeAdminSyncMount';
@@ -196,7 +199,7 @@ const EnterpriseLayout: React.FC = () => {
       enterpriseContext?.tenantName
     );
     const enterpriseBrowserUrl = webuiApiBase
-      ? `${webuiApiBase}/#${buildEnterpriseRouteLoginPath('/enterprise/auth')}`
+      ? `${webuiApiBase}/#${buildWebuiAdminLoginPath(ENTERPRISE_HOME_PATH)}`
       : '';
 
     return (

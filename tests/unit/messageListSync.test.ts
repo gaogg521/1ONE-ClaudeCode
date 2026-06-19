@@ -7,9 +7,12 @@
 import { describe, expect, it } from 'vitest';
 import type { TMessage } from '@/common/chat/chatLib';
 import {
+  hasStreamingOnlyMessages,
+  mergeConversationMessagesFromDb,
   mergeDbMessagesWithStreaming,
   messageListSyncSignature,
   messageListsEquivalentForSync,
+  replaceConversationMessagesInList,
   replaceMessageListFromDb,
 } from '@/renderer/pages/conversation/Messages/messageListSync';
 
@@ -107,5 +110,106 @@ describe('messageListSync', () => {
     const a = [textMessage('a1', 'conv-1', 'partial')];
     const b = [textMessage('a1', 'conv-1', 'complete answer')];
     expect(messageListsEquivalentForSync(a, b)).toBe(false);
+  });
+
+  it('merge prefers longer in-flight thinking content by msg_id', () => {
+    const db = [
+      {
+        id: 'think-db',
+        msg_id: 'think-1',
+        conversation_id: 'conv-1',
+        type: 'thinking',
+        position: 'left',
+        content: { content: 'Analy', status: 'thinking' },
+      } as TMessage,
+    ];
+    const stream = [
+      {
+        id: 'think-stream',
+        msg_id: 'think-1',
+        conversation_id: 'conv-1',
+        type: 'thinking',
+        position: 'left',
+        content: { content: 'Analyzing image...', status: 'thinking' },
+      } as TMessage,
+    ];
+    const merged = mergeDbMessagesWithStreaming('conv-1', db, stream);
+    expect((merged[0] as { content: { content: string } }).content.content).toBe('Analyzing image...');
+  });
+
+  it('messageListsEquivalentForSync returns false when thinking content differs', () => {
+    const a = [
+      {
+        ...textMessage('a1', 'conv-1', 'x'),
+        type: 'thinking',
+        content: { content: 'short', status: 'thinking' },
+      } as TMessage,
+    ];
+    const b = [
+      {
+        ...textMessage('a1', 'conv-1', 'x'),
+        type: 'thinking',
+        content: { content: 'longer thinking body', status: 'thinking' },
+      } as TMessage,
+    ];
+    expect(messageListsEquivalentForSync(a, b)).toBe(false);
+  });
+
+  it('messageListSyncSignature changes when thinking tail grows', () => {
+    const partial = [
+      {
+        ...textMessage('t1', 'conv-1', ''),
+        type: 'thinking',
+        content: { content: 'think', status: 'thinking' },
+      } as TMessage,
+    ];
+    const full = [
+      {
+        ...textMessage('t1', 'conv-1', ''),
+        type: 'thinking',
+        content: { content: 'thinking more', status: 'thinking' },
+      } as TMessage,
+    ];
+    expect(messageListSyncSignature(partial)).not.toBe(messageListSyncSignature(full));
+  });
+
+  it('replaceConversationMessagesInList preserves other conversations', () => {
+    const other = textMessage('other-1', 'conv-other', 'keep me');
+    const current = [other, textMessage('a1', 'conv-1', 'stale')];
+    const db = [textMessage('a1', 'conv-1', 'fresh from db')];
+    const next = replaceConversationMessagesInList(current, 'conv-1', db);
+    expect(next).toHaveLength(2);
+    expect(next[0]?.conversation_id).toBe('conv-other');
+    expect((next[1] as { content: { content: string } }).content.content).toBe('fresh from db');
+  });
+
+  it('replaceConversationMessagesInList skips no-op when signature matches', () => {
+    const current = [textMessage('a1', 'conv-1', 'same')];
+    const db = [textMessage('a1', 'conv-1', 'same')];
+    const next = replaceConversationMessagesInList(current, 'conv-1', db);
+    expect(next).toBe(current);
+  });
+
+  it('mergeConversationMessagesFromDb keeps list reference when DB matches UI', () => {
+    const current = [textMessage('a1', 'conv-1', 'same')];
+    const db = [textMessage('a1', 'conv-1', 'same')];
+    const next = mergeConversationMessagesFromDb('conv-1', db, current);
+    expect(next).toBe(current);
+  });
+
+  it('mergeConversationMessagesFromDb still merges longer streaming tail', () => {
+    const db = [textMessage('a1', 'conv-1', 'hello')];
+    const current = [textMessage('a1', 'conv-1', 'hello world')];
+    const next = mergeConversationMessagesFromDb('conv-1', db, current);
+    expect((next[0] as { content: { content: string } }).content.content).toBe('hello world');
+  });
+
+  it('hasStreamingOnlyMessages detects tool rows not yet in DB', () => {
+    const db = [textMessage('a1', 'conv-1', 'done')];
+    const ui = [
+      textMessage('a1', 'conv-1', 'done'),
+      { ...textMessage('tool-1', 'conv-1', ''), type: 'tool_group', content: [] } as TMessage,
+    ];
+    expect(hasStreamingOnlyMessages(ui, db)).toBe(true);
   });
 });

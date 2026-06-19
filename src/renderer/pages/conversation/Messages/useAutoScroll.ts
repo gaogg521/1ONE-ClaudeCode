@@ -155,7 +155,9 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     setShowScrollButton(!atBottom);
 
     if (atBottom) {
-      userScrolledRef.current = false;
+      // Do not clear userScrolledRef here — Virtuoso may report atBottom while the user
+      // is still reading slightly above the threshold. Re-enable follow via scroll button
+      // or sending a message (see hideScrollButton / new right-position message effect).
       // Short guard: expire 50ms from now (not the full PROGRAMMATIC_SCROLL_GUARD_MS)
       lastProgrammaticScrollTimeRef.current = Date.now() - (PROGRAMMATIC_SCROLL_GUARD_MS - 50);
       // Close any residual gap within atBottomThreshold (e.g. after ThoughtDisplay
