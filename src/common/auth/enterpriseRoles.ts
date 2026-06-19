@@ -8,6 +8,7 @@
 
 import {
   canAccessEnterpriseRoute,
+  ENTERPRISE_AUTH_PATH,
   ENTERPRISE_HOME_PATH,
   getEnterpriseRouteMetaByPath,
 } from './enterpriseRoutes';
@@ -121,12 +122,12 @@ export function resolveOAuthPostLoginRedirectPath(
   tenantId: string | undefined
 ): string {
   const target = resolvePostLoginRedirectPath(rawTarget, role, tenantId, false);
-  if (
-    target.startsWith('/settings') ||
-    target.startsWith('/login') ||
-    target === '/enterprise/auth'
-  ) {
+  if (target.startsWith('/settings') || target.startsWith('/login')) {
     return hasEnterpriseTenant(tenantId) ? ENTERPRISE_WORKSPACE_PATH : '/sessions';
+  }
+  // Legacy OAuth redirects targeted /enterprise/auth — send admins to console home.
+  if (target === ENTERPRISE_AUTH_PATH && isEnterpriseAdminRole(role)) {
+    return ENTERPRISE_ADMIN_HOME_PATH;
   }
   return target;
 }

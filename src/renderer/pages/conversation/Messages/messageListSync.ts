@@ -107,7 +107,8 @@ export function mergeConversationMessagesFromDb(
 
   if (
     messageListSyncSignature(baseline) === messageListSyncSignature(dbMessages) &&
-    !hasStreamingOnlyMessages(baseline, dbMessages)
+    !hasStreamingOnlyMessages(baseline, dbMessages) &&
+    messageListsEquivalentForSync(baseline, dbMessages)
   ) {
     return currentList;
   }

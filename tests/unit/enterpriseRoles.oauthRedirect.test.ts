@@ -16,4 +16,8 @@ describe('resolveOAuthPostLoginRedirectPath', () => {
     expect(resolveOAuthPostLoginRedirectPath('/settings/model', 'member', 'tenant_acme')).toBe('/sessions');
     expect(resolveOAuthPostLoginRedirectPath('/issues', 'member', 'tenant_acme')).toBe('/issues');
   });
+
+  it('sends admin OAuth legacy /enterprise/auth redirect to console home', () => {
+    expect(resolveOAuthPostLoginRedirectPath('/enterprise/auth', 'org_admin', 'tenant_acme')).toBe('/enterprise');
+  });
 });
