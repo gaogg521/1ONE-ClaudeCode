@@ -18,6 +18,7 @@ import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useWorkspaceUserProfile } from '@/renderer/hooks/enterprise/useWorkspaceUserProfile';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { ENTERPRISE_ADMIN_HOME_PATH } from '@/common/auth/enterpriseRoles';
 import { openAdminConsole } from '@/renderer/utils/openAdminConsole';
 import { buildWebuiAdminLoginPath } from '@/renderer/utils/enterpriseLoginNavigation';
 import { appNavigate } from '@/renderer/utils/appNavigate';
@@ -409,11 +410,9 @@ const WorkspaceIdentityPanel: React.FC<WorkspaceIdentityPanelProps> = ({ compact
   };
 
   const handleGuestAdminLogin = () => {
-    const returnTo =
-      location.pathname.startsWith('/login') || location.pathname.startsWith('/enterprise/join')
-        ? '/sessions'
-        : `${location.pathname}${location.search}`;
-    void navigate(buildWebuiAdminLoginPath(returnTo), { state: { returnTo } });
+    void navigate(buildWebuiAdminLoginPath(ENTERPRISE_ADMIN_HOME_PATH), {
+      state: { returnTo: ENTERPRISE_ADMIN_HOME_PATH },
+    });
   };
 
   const handleLogout = async () => {

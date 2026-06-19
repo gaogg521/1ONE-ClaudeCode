@@ -20,14 +20,14 @@ describe('webuiLoginAccess', () => {
       'http://172.29.128.120:25809/#/login?redirect=%2Fguid&mode=enterprise'
     );
     expect(buildWebuiAdminLoginUrl(origin)).toBe(
-      'http://172.29.128.120:25809/#/login?redirect=%2Fenterprise%2Fauth&mode=admin'
+      'http://172.29.128.120:25809/#/login?redirect=%2Fenterprise&mode=admin'
     );
   });
 
   it('builds admin URL on dedicated port offset', () => {
     expect(resolveWebuiAdminPort(25809)).toBe(25810);
     expect(buildWebuiAdminLoginUrlOnDedicatedPort('http://localhost:25809')).toBe(
-      'http://localhost:25810/#/login?redirect=%2Fenterprise%2Fauth&mode=admin'
+      'http://localhost:25810/#/login?redirect=%2Fenterprise&mode=admin'
     );
   });
 

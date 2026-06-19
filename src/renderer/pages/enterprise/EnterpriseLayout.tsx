@@ -193,7 +193,7 @@ const EnterpriseLayout: React.FC = () => {
   } = useWebuiEnterpriseMode();
   const isDesktop = isElectronDesktop();
 
-  if (!enterpriseModeLoading && isDesktop && location.pathname === ENTERPRISE_HOME_PATH) {
+  if (!enterpriseModeLoading && isDesktop && location.pathname.startsWith(ENTERPRISE_HOME_PATH)) {
     const tenantLabel = resolveEnterpriseTenantDisplayLabel(
       enterpriseContext?.tenantId,
       enterpriseContext?.tenantName

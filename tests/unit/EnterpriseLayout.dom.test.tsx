@@ -114,4 +114,10 @@ describe('EnterpriseLayout', () => {
       'http://127.0.0.1:25809/#/login?redirect=%2Fenterprise&mode=admin'
     );
   });
+
+  it('shows desktop placeholder for enterprise sub-routes on desktop', () => {
+    locationMock.pathname = '/enterprise/users';
+    render(<EnterpriseLayout />);
+    expect(screen.getByTestId('desktop-placeholder-url')).toBeInTheDocument();
+  });
 });
