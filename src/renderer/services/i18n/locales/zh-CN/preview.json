@@ -16,6 +16,8 @@
   "downloadFile": "下载文件",
   "closePreview": "关闭预览",
   "collapsePanel": "收起面板",
+  "restorePanelWithTitle": "恢复预览：{{title}}",
+  "restorePanelWithCount": "恢复预览（{{count}} 个标签）",
   "source": "原文",
   "code": "代码",
   "preview": "预览",

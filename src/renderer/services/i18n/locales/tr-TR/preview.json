@@ -16,6 +16,8 @@
   "downloadFile": "Dosyayı İndir",
   "closePreview": "Önizlemeyi Kapat",
   "collapsePanel": "Paneli Daralt",
+  "restorePanelWithTitle": "Önizlemeyi geri yükle: {{title}}",
+  "restorePanelWithCount": "Önizlemeyi geri yükle ({{count}} sekme)",
   "source": "Kaynak",
   "code": "Kod",
   "preview": "Önizleme",

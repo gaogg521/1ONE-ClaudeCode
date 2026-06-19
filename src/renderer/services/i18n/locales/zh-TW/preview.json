@@ -16,6 +16,8 @@
   "downloadFile": "下載檔案",
   "closePreview": "關閉預覽",
   "collapsePanel": "收起面板",
+  "restorePanelWithTitle": "恢復預覽：{{title}}",
+  "restorePanelWithCount": "恢復預覽（{{count}} 個標籤）",
   "source": "原文",
   "code": "Code",
   "preview": "預覽",

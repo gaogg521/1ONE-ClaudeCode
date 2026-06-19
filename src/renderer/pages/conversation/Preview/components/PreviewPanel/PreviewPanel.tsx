@@ -61,7 +61,8 @@ const PreviewPanel: React.FC = () => {
     activeTab,
     closeTab,
     switchTab,
-    closePreview,
+    collapsePreview,
+    restorePreview,
     updateContent,
     saveContent,
     addDomSnippet,
@@ -689,7 +690,7 @@ const PreviewPanel: React.FC = () => {
           onSwitchTab={switchTab}
           onCloseTab={handleCloseTab}
           onContextMenu={handleTabContextMenu}
-          onClosePanel={closePreview}
+          onClosePanel={collapsePreview}
         />
 
         {/* 工具栏（URL 类型不显示工具栏，因为不需要下载/编辑等功能）/ Toolbar (hidden for URL type as it doesn't need download/edit features) */}
@@ -724,7 +725,7 @@ const PreviewPanel: React.FC = () => {
             renderHistoryDropdown={renderHistoryDropdown}
             onOpenInSystem={handleOpenInSystem}
             onDownload={handleDownload}
-            onClose={closePreview}
+            onClose={collapsePreview}
             inspectMode={inspectMode}
             onInspectModeToggle={() => setInspectMode(!inspectMode)}
             leftExtra={toolbarExtras?.left}

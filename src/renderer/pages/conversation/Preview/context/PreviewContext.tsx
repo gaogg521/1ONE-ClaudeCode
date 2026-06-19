@@ -50,6 +50,11 @@ export interface PreviewContextValue {
 
   // 预览面板操作 / Preview panel operations
   openPreview: (content: string, type: PreviewContentType, metadata?: PreviewMetadata) => void;
+  /** 收起预览面板，保留已打开的标签 / Collapse panel while keeping open tabs */
+  collapsePreview: () => void;
+  /** 恢复已收起的预览面板 / Restore a collapsed preview panel */
+  restorePreview: () => void;
+  /** 完全关闭并清空预览状态 / Fully close and reset preview state */
   closePreview: () => void;
   closeTab: (tabId: string) => void;
   switchTab: (tabId: string) => void;
@@ -330,6 +335,14 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     },
     [extractFileName, findPreviewTabInList]
   );
+
+  const collapsePreview = useCallback(() => {
+    setIsOpen(false);
+  }, []);
+
+  const restorePreview = useCallback(() => {
+    setIsOpen(true);
+  }, []);
 
   const closePreview = useCallback(() => {
     setIsOpen(false);
@@ -666,6 +679,8 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       activeTabId,
       activeTab,
       openPreview,
+      collapsePreview,
+      restorePreview,
       closePreview,
       closeTab,
       switchTab: setActiveTabId,
@@ -686,6 +701,8 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     activeTabId,
     activeTab,
     openPreview,
+    collapsePreview,
+    restorePreview,
     closePreview,
     closeTab,
     setActiveTabId,

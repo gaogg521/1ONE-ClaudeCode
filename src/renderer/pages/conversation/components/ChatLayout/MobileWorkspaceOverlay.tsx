@@ -59,7 +59,37 @@ const MobileWorkspaceOverlay: React.FC<MobileWorkspaceOverlayProps> = ({
       </ArcoLayout.Content>
     </div>
 
-    {/* Floating collapse handle */}
+    {/* Floating expand handle when workspace is collapsed on mobile */}
+    {rightSiderCollapsed && (
+      <button
+        type='button'
+        className='fixed z-101 flex items-center justify-center transition-colors workspace-toggle-floating'
+        style={{
+          top: '50%',
+          right: 0,
+          transform: 'translateY(-50%)',
+          width: '20px',
+          height: '64px',
+          borderTopLeftRadius: '10px',
+          borderBottomLeftRadius: '10px',
+          borderTopRightRadius: '0',
+          borderBottomRightRadius: '0',
+          borderRight: 'none',
+          backgroundColor: 'var(--bg-2)',
+          boxShadow: '0 8px 20px rgba(0, 0, 0, 0.12)',
+        }}
+        onClick={() => dispatchWorkspaceToggleEvent()}
+        aria-label='Expand workspace'
+      >
+        <span className='flex flex-col items-center justify-center gap-5px text-t-secondary'>
+          <span className='block w-8px h-2px rd-999px bg-current opacity-85'></span>
+          <span className='block w-8px h-2px rd-999px bg-current opacity-65'></span>
+          <span className='block w-8px h-2px rd-999px bg-current opacity-45'></span>
+        </span>
+      </button>
+    )}
+
+    {/* Floating collapse handle when workspace is open */}
     {!rightSiderCollapsed && (
       <button
         type='button'

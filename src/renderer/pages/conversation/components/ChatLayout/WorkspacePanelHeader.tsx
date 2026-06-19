@@ -50,11 +50,11 @@ const WorkspacePanelHeader: React.FC<WorkspaceHeaderProps> = ({
 );
 
 // Small floating button shown when the workspace panel is collapsed on desktop
-export const DesktopWorkspaceToggle: React.FC = () => (
+export const DesktopWorkspaceToggle: React.FC<{ bottomOffsetPx?: number }> = ({ bottomOffsetPx = 16 }) => (
   <button
     type='button'
-    className='workspace-toggle-floating workspace-header__toggle absolute top-1/2 right-2 z-10'
-    style={{ transform: 'translateY(-50%)' }}
+    className='workspace-toggle-floating workspace-header__toggle absolute z-20'
+    style={{ bottom: `${bottomOffsetPx}px`, right: '16px' }}
     onClick={() => dispatchWorkspaceToggleEvent()}
     aria-label='Expand workspace'
   >

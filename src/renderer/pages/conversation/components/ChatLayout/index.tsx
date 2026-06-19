@@ -14,7 +14,7 @@ import { useLayoutConstraints } from '@/renderer/pages/conversation/hooks/useLay
 import { usePreviewAutoCollapse } from '@/renderer/pages/conversation/hooks/usePreviewAutoCollapse';
 import { useTitleRename } from '@/renderer/pages/conversation/hooks/useTitleRename';
 import { useWorkspaceCollapse } from '@/renderer/pages/conversation/hooks/useWorkspaceCollapse';
-import { PreviewPanel, usePreviewContext } from '@/renderer/pages/conversation/Preview';
+import { PreviewPanel, PreviewRestoreButton, usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import { dispatchWorkspaceToggleEvent } from '@/renderer/utils/workspace/workspaceEvents';
 import { ACP_BACKENDS_ALL } from '@/common/types/acpTypes';
 import classNames from 'classnames';
@@ -65,15 +65,16 @@ const ChatLayout: React.FC<{
   const isDesktop = !layout?.isMobile;
   const isMobile = Boolean(layout?.isMobile);
 
-  // Preview panel state
-  const { isOpen: isPreviewOpen } = usePreviewContext();
-
   // --- Hook A: workspace collapse ---
   const { rightSiderCollapsed, setRightSiderCollapsed } = useWorkspaceCollapse({
     workspaceEnabled,
     isMobile,
     conversationId,
   });
+
+  // Preview panel state
+  const { isOpen: isPreviewOpen, tabs: previewTabs, activeTab, restorePreview } = usePreviewContext();
+  const previewTabCount = previewTabs.length;
 
   // --- Hook B: container width ---
   const { containerRef, containerWidth } = useContainerWidth();
@@ -337,8 +338,17 @@ const ChatLayout: React.FC<{
         )}
 
         {/* Desktop expand button when workspace is collapsed */}
-        {!isMacRuntime && !isWindowsRuntime && workspaceEnabled && rightSiderCollapsed && !layout?.isMobile && (
-          <DesktopWorkspaceToggle />
+        {workspaceEnabled && rightSiderCollapsed && !layout?.isMobile && (
+          <DesktopWorkspaceToggle bottomOffsetPx={!isPreviewOpen && previewTabCount > 0 ? 56 : 16} />
+        )}
+
+        {/* Restore collapsed preview panel (tabs preserved) */}
+        {!isPreviewOpen && previewTabCount > 0 && (
+          <PreviewRestoreButton
+            tabCount={previewTabCount}
+            activeTitle={activeTab?.title}
+            onRestore={restorePreview}
+          />
         )}
       </div>
     </ArcoLayout>

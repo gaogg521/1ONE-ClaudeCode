@@ -16,6 +16,8 @@
   "downloadFile": "ファイルをダウンロード",
   "closePreview": "プレビューを閉じる",
   "collapsePanel": "パネルを閉じる",
+  "restorePanelWithTitle": "プレビューを復元: {{title}}",
+  "restorePanelWithCount": "プレビューを復元（{{count}} タブ）",
   "source": "ソース",
   "code": "Code",
   "preview": "プレビュー",

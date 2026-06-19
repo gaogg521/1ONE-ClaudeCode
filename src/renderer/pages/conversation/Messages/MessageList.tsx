@@ -163,6 +163,12 @@ const MessageList: React.FC<{ className?: string }> = () => {
   const handledTargetKeyRef = useRef<string>('');
 
   const processedList = useProcessedMessageList(list);
+  const conversationId = conversationContext?.conversationId;
+  const pendingInitialScrollRef = useRef(true);
+
+  useEffect(() => {
+    pendingInitialScrollRef.current = true;
+  }, [conversationId]);
 
   // Use auto-scroll hook
   const {
@@ -182,12 +188,27 @@ const MessageList: React.FC<{ className?: string }> = () => {
 
   useAddEventListener(
     'conversation.messages.sync',
-    ({ conversationId }) => {
-      if (conversationId !== conversationContext?.conversationId) return;
+    ({ conversationId: syncedId }) => {
+      if (syncedId !== conversationContext?.conversationId) return;
       dismissScrollButton();
     },
     [conversationContext?.conversationId, dismissScrollButton]
   );
+
+  // Long histories: one scroll-to-latest on open. Short threads stay top-aligned (ChatGPT-style).
+  useEffect(() => {
+    if (!pendingInitialScrollRef.current || processedList.length === 0 || !virtuosoRef.current) {
+      return;
+    }
+    pendingInitialScrollRef.current = false;
+    requestAnimationFrame(() => {
+      virtuosoRef.current?.scrollToIndex({
+        index: 'LAST',
+        behavior: 'auto',
+        align: 'end',
+      });
+    });
+  }, [conversationId, processedList.length, virtuosoRef]);
 
   useEffect(() => {
     if (!targetMessageId || processedList.length === 0 || !virtuosoRef.current) {
@@ -311,8 +332,7 @@ const MessageList: React.FC<{ className?: string }> = () => {
             scrollerRef={handleScrollerRef}
             className='flex-1 h-full pb-10px box-border'
             data={processedList}
-            alignToBottom
-            initialTopMostItemIndex={processedList.length - 1}
+            initialTopMostItemIndex={0}
             defaultItemHeight={64}
             atBottomThreshold={100}
             increaseViewportBy={{ top: 400, bottom: 600 }}

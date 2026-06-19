@@ -1378,6 +1378,8 @@ export type I18nKey =
   | 'preview.preview'
   | 'preview.previewEffect'
   | 'preview.readOnlyLabel'
+  | 'preview.restorePanelWithCount'
+  | 'preview.restorePanelWithTitle'
   | 'preview.saveAndClose'
   | 'preview.saveSnapshot'
   | 'preview.snapshot'

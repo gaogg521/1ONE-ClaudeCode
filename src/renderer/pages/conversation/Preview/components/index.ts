@@ -12,6 +12,7 @@
 // 主面板组件及其子组件
 // Main panel component and its sub-components
 export { default as PreviewPanel } from './PreviewPanel/PreviewPanel';
+export { default as PreviewRestoreButton } from './PreviewPanel/PreviewRestoreButton';
 export * from './PreviewPanel';
 
 // 预览器组件

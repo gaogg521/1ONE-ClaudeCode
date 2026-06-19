@@ -16,6 +16,8 @@
   "downloadFile": "Download file",
   "closePreview": "Close preview",
   "collapsePanel": "Collapse panel",
+  "restorePanelWithTitle": "Restore preview: {{title}}",
+  "restorePanelWithCount": "Restore preview ({{count}} tabs)",
   "source": "Source",
   "code": "Code",
   "preview": "Preview",
