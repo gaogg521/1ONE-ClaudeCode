@@ -20,4 +20,8 @@ describe('resolveOAuthPostLoginRedirectPath', () => {
   it('sends admin OAuth legacy /enterprise/auth redirect to console home', () => {
     expect(resolveOAuthPostLoginRedirectPath('/enterprise/auth', 'org_admin', 'tenant_acme')).toBe('/enterprise');
   });
+
+  it('sends member OAuth legacy /enterprise/auth redirect to console home fallback', () => {
+    expect(resolveOAuthPostLoginRedirectPath('/enterprise/auth', 'member', 'tenant_acme')).toBe('/enterprise');
+  });
 });

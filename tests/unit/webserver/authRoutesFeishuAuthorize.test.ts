@@ -312,7 +312,7 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
     expect((res as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect).not.toHaveBeenCalled();
   });
 
-  it('redirects Feishu callback back to the original enterprise target after login', async () => {
+  it('redirects Feishu callback org_admin legacy /enterprise/auth to console home', async () => {
     mockGetProvider.mockResolvedValue({
       provider: 'feishu',
       enabled: true,
@@ -377,7 +377,7 @@ describe('registerAuthRoutes /api/auth/feishu/authorize', () => {
     );
 
     expect((callbackRes as unknown as { redirect: ReturnType<typeof vi.fn> }).redirect).toHaveBeenCalledWith(
-      '/#/sessions'
+      '/#/enterprise'
     );
   });
 

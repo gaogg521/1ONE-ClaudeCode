@@ -641,11 +641,11 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         });
       } catch (error) {
         console.error('Desktop WebUI logout request failed:', error);
-      } finally {
-        if (forceSignOut) {
-          finishLogout(null);
-          return;
-        }
+      }
+
+      if (forceSignOut) {
+        finishLogout(null);
+      } else {
         let currentUser: AuthUser | null = null;
         try {
           const response = await fetchWebuiApi('/api/auth/user');

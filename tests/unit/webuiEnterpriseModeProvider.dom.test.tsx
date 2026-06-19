@@ -201,7 +201,34 @@ describe('WebuiEnterpriseModeProvider', () => {
 
     await expect(result.current.openEnterpriseAdminInBrowser()).resolves.toBe('opened');
     expect(openExternalUrlMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:25810/#/login?redirect=%2Fenterprise%2Fauth&mode=admin'
+      'http://127.0.0.1:25810/#/login?redirect=%2Fenterprise&mode=admin'
+    );
+  });
+
+  it('opens enterprise member login with mode=enterprise in browser URL', async () => {
+    getWebuiApiBaseUrlMock.mockResolvedValue('http://127.0.0.1:25809');
+    getEnterpriseContextInvokeMock.mockResolvedValue({
+      success: true,
+      data: {
+        joined: false,
+        tenantId: 'default',
+        tenantName: null,
+        role: 'member',
+        canCreateEnterprise: false,
+      },
+    });
+
+    const wrapper = ({ children }: React.PropsWithChildren) => (
+      <WebuiEnterpriseModeProvider>{children}</WebuiEnterpriseModeProvider>
+    );
+
+    const { result } = renderHook(() => useWebuiEnterpriseMode(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await expect(result.current.openEnterpriseLoginInBrowser()).resolves.toBe('opened');
+    expect(openExternalUrlMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:25809/#/login?redirect=%2Fenterprise%2Fjoin&mode=enterprise'
     );
   });
 });

@@ -35,7 +35,7 @@ export class RAGService {
    * 兜底 embedding：当本地 transformers 初始化失败时，使用可复现的 hash 向量避免 RAG 全部失败。
    */
   private static buildFallbackEmbedding(text: string, dim = 384): number[] {
-    const vector = new Array<number>(dim).fill(0);
+    const vector = Array.from({ length: dim }, () => 0);
     const tokens = (text || '')
       .toLowerCase()
       .replace(/[^\p{L}\p{N}\s]+/gu, ' ')

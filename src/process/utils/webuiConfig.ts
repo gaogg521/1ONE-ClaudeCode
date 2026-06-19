@@ -17,6 +17,13 @@ const DESKTOP_WEBUI_ENABLED_KEY = 'webui.desktop.enabled';
 const DESKTOP_WEBUI_ALLOW_REMOTE_KEY = 'webui.desktop.allowRemote';
 const DESKTOP_WEBUI_PORT_KEY = 'webui.desktop.port';
 
+export { DESKTOP_WEBUI_ENABLED_KEY };
+
+/** Desktop WebUI is on by default; only an explicit `false` disables auto-start. */
+export function resolveDesktopWebUIEnabledPreference(value: unknown): boolean {
+  return value !== false;
+}
+
 export type WebUIUserConfig = {
   port?: number | string;
   allowRemote?: boolean;
@@ -88,8 +95,8 @@ export const resolveRemoteAccess = (config: WebUIUserConfig, isRemoteMode: boole
 
 export const restoreDesktopWebUIFromPreferences = async (): Promise<void> => {
   try {
-    const enabled = (await ProcessConfig.get(DESKTOP_WEBUI_ENABLED_KEY)) === true;
-    if (!enabled) return;
+    const enabledPref = await ProcessConfig.get(DESKTOP_WEBUI_ENABLED_KEY);
+    if (!resolveDesktopWebUIEnabledPreference(enabledPref)) return;
 
     const [allowRemotePref, portPref] = await Promise.all([
       ProcessConfig.get(DESKTOP_WEBUI_ALLOW_REMOTE_KEY),
@@ -100,6 +107,9 @@ export const restoreDesktopWebUIFromPreferences = async (): Promise<void> => {
 
     const instance = await startWebServerWithInstance(preferredPort, allowRemote);
     setWebServerInstance(instance);
+    if (enabledPref !== true) {
+      await ProcessConfig.set(DESKTOP_WEBUI_ENABLED_KEY, true);
+    }
     const { getAdminWebListenPort } = await import('../webserver/index');
     const adminPort = getAdminWebListenPort();
     const adminLine =

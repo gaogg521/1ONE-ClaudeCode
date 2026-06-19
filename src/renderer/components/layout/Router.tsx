@@ -94,7 +94,7 @@ const EnterpriseAuthLayout: React.FC = () => {
     return <AppLoader />;
   }
 
-  if (isDesktop && location.pathname === '/enterprise') {
+  if (isDesktop && location.pathname.startsWith('/enterprise')) {
     return <Outlet />;
   }
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @license
  * Copyright 2025 1ONE ClaudeCode
  * SPDX-License-Identifier: Apache-2.0
@@ -278,7 +278,7 @@ const WebuiModalContent: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [startLoading, setStartLoading] = useState(false);
   const port = WEBUI_DEFAULT_PORT;
-  const [webuiEnabled, setWebuiEnabled] = useState(false);
+  const [webuiEnabled, setWebuiEnabled] = useState(isDesktop);
   const [allowRemotePreference, setAllowRemotePreference] = useState(false);
   const [cachedIP, setCachedIP] = useState<string | null>(null);
   const [cachedPassword, setCachedPassword] = useState<string | null>(null);
@@ -307,10 +307,10 @@ const WebuiModalContent: React.FC = () => {
     setLoading(true);
     try {
       const [savedEnabled, savedAllowRemote] = await Promise.all([
-        ConfigStorage.get(DESKTOP_WEBUI_ENABLED_KEY).catch(() => false),
+        ConfigStorage.get(DESKTOP_WEBUI_ENABLED_KEY).catch((): undefined => undefined),
         ConfigStorage.get(DESKTOP_WEBUI_ALLOW_REMOTE_KEY).catch(() => false),
       ]);
-      setWebuiEnabled(savedEnabled === true);
+      setWebuiEnabled(savedEnabled !== false);
       setAllowRemotePreference(savedAllowRemote === true);
 
       let result: { success: boolean; data?: IWebUIStatus } | null = null;

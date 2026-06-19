@@ -98,7 +98,7 @@ class AcpDetector {
   }
 
   private async mapLimit<T, R>(items: readonly T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
-    const results: R[] = new Array(items.length) as R[];
+    const results: R[] = Array.from({ length: items.length }) as R[];
     let nextIndex = 0;
     const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
       while (true) {

@@ -47,7 +47,7 @@ describe('messageListProcess', () => {
     const processed = buildProcessedMessageList(prev);
     const patched = updateProcessedMessageListTail(processed, prev, next);
     expect(patched).toHaveLength(2);
-    expect((patched?.[1] as TMessage).content.content).toBe('world');
+    expect((patched[1] as TMessage).content.content).toBe('world');
   });
 
   it('updateProcessedMessageListTail patches in-place streaming text', () => {
@@ -56,7 +56,7 @@ describe('messageListProcess', () => {
     const processed = buildProcessedMessageList(prev);
     const patched = updateProcessedMessageListTail(processed, prev, next);
     expect(patched).toHaveLength(1);
-    expect((patched?.[0] as TMessage).content.content).toBe('hello');
+    expect((patched[0] as TMessage).content.content).toBe('hello');
   });
 
   it('updateProcessedMessageListTail returns null when prefix references change', () => {

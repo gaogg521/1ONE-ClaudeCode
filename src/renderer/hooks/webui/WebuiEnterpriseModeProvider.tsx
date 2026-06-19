@@ -428,7 +428,7 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   const openEnterpriseLoginInBrowser = useCallback(async (): Promise<'opened' | 'webui_not_running' | 'failed'> => {
     const landing = resolveEnterpriseEditionPath(hasJoinedEnterprise);
     setPostLoginRedirect(landing);
-    const result = await openUrlInBrowser(`/login?redirect=${encodeURIComponent(landing)}`);
+    const result = await openUrlInBrowser(buildEnterpriseLoginPath(landing));
     if (result === 'opened' && isDesktop) {
       const synced = await syncBrowserWebuiSessionToDesktop();
       if (synced?.token) {

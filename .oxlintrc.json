@@ -58,6 +58,7 @@
     "build/",
     ".webpack/",
     "out/",
+    ".claude/",
     "*.min.js",
     "*.min.css",
     "package-lock.json",

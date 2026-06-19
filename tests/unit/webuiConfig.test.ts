@@ -37,6 +37,7 @@ describe('webuiConfig module', () => {
     vi.doMock('@process/utils/initStorage', () => ({
       ProcessConfig: {
         get: vi.fn(() => Promise.resolve(undefined)),
+        set: vi.fn(() => Promise.resolve()),
       },
     }));
 
@@ -158,6 +159,48 @@ describe('webuiConfig module', () => {
       const { resolveWebUIPort } = await import('@process/utils/webuiConfig');
 
       expect(resolveWebUIPort({}, () => undefined)).toBe(3000);
+    });
+  });
+
+  describe('resolveDesktopWebUIEnabledPreference', () => {
+    it('defaults to enabled when preference is unset', async () => {
+      const { resolveDesktopWebUIEnabledPreference } = await import('@process/utils/webuiConfig');
+
+      expect(resolveDesktopWebUIEnabledPreference(undefined)).toBe(true);
+      expect(resolveDesktopWebUIEnabledPreference(true)).toBe(true);
+    });
+
+    it('respects explicit disable', async () => {
+      const { resolveDesktopWebUIEnabledPreference } = await import('@process/utils/webuiConfig');
+
+      expect(resolveDesktopWebUIEnabledPreference(false)).toBe(false);
+    });
+  });
+
+  describe('restoreDesktopWebUIFromPreferences', () => {
+    it('auto-starts WebUI when preference is unset', async () => {
+      const { ProcessConfig } = await import('@process/utils/initStorage');
+      const { startWebServerWithInstance } = await import('@process/webserver');
+      const { setWebServerInstance } = await import('@process/bridge/webuiBridge');
+      const { restoreDesktopWebUIFromPreferences } = await import('@process/utils/webuiConfig');
+
+      await restoreDesktopWebUIFromPreferences();
+
+      expect(startWebServerWithInstance).toHaveBeenCalledWith(3000, false);
+      expect(setWebServerInstance).toHaveBeenCalledWith({ port: 3000 });
+      expect(ProcessConfig.set).toHaveBeenCalledWith('webui.desktop.enabled', true);
+    });
+
+    it('skips auto-start when user explicitly disabled WebUI', async () => {
+      const { ProcessConfig } = await import('@process/utils/initStorage');
+      vi.mocked(ProcessConfig.get).mockResolvedValue(false);
+
+      const { startWebServerWithInstance } = await import('@process/webserver');
+      const { restoreDesktopWebUIFromPreferences } = await import('@process/utils/webuiConfig');
+
+      await restoreDesktopWebUIFromPreferences();
+
+      expect(startWebServerWithInstance).not.toHaveBeenCalled();
     });
   });
 

@@ -32,7 +32,7 @@ function sanitizeUsername(raw: string): string {
     return '';
   }
 
-  if (/^[\x00-\x7F]+$/.test(trimmed)) {
+  if ([...trimmed].every((char) => char.charCodeAt(0) <= 0x7f)) {
     const lowered = trimmed.toLowerCase();
     const cleaned = lowered
       .replace(/[^a-z0-9._@-]/g, '_')

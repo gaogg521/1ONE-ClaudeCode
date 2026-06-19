@@ -148,6 +148,20 @@ describe('Router enterprise auth redirect', () => {
     expect(setPostLoginRedirectMock).not.toHaveBeenCalled();
   });
 
+  it('does not redirect desktop enterprise sub-routes to login', async () => {
+    isDesktopMock.current = true;
+    window.location.hash = '#/enterprise/users';
+
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('enterprise-layout')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('login-page')).not.toBeInTheDocument();
+    expect(setPostLoginRedirectMock).not.toHaveBeenCalled();
+  });
+
   it('keeps product routes available for issues and skills', async () => {
     authStateMock.current = {
       ready: true,
