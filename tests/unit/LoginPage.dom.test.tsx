@@ -351,6 +351,8 @@ describe('LoginPage', () => {
 
     expect(screen.queryByText('登录方式')).not.toBeInTheDocument();
     expect(screen.queryByText('LDAP 域控')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'login.submit' })).toBeInTheDocument();
+    expect(document.querySelector('.login-page__hero')).not.toBeInTheDocument();
   });
 
   it('shows compact desktop login with back navigation', async () => {

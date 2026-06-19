@@ -41,6 +41,8 @@ Read `package.json` → extract `version` field.
 
 Display: "Bumping version: {current} → {target}"
 
+**Release line policy:** GitHub tags follow `package.json` only. `npm run dist:win` does not bump version. After GitHub `v1.22.0`, main continues at `1.23.0+` (1.16.x was an internal patch line; use 1.23.0+ for public releases).
+
 ### Step 4: Update package.json
 
 Use Edit tool to replace:

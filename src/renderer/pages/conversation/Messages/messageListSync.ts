@@ -56,6 +56,15 @@ export function mergeDbMessagesWithStreaming(key: string, messages: TMessage[], 
       typeof streamMsg.content === 'object' && 'content' in streamMsg.content
         ? String((streamMsg.content as { content: unknown }).content)
         : '';
+    if (streamMsg.id !== dbMsg.id && dbContent.length > 0) {
+      const sameTurn =
+        streamContent.startsWith(dbContent) ||
+        dbContent.startsWith(streamContent) ||
+        streamContent === dbContent;
+      if (!sameTurn) {
+        return dbMsg;
+      }
+    }
     return streamContent.length > dbContent.length ? streamMsg : dbMsg;
   });
 
@@ -96,10 +105,7 @@ export function mergeConversationMessagesFromDb(
   currentList: TMessage[]
 ): TMessage[] {
   if (!dbMessages.length) {
-    const hasConversationMessages = currentList.some((m) => m.conversation_id === conversationId);
-    return hasConversationMessages
-      ? currentList.filter((m) => m.conversation_id !== conversationId)
-      : currentList;
+    return currentList;
   }
 
   const sameConversation = currentList.filter((m) => m.conversation_id === conversationId);
@@ -139,8 +145,7 @@ export function replaceConversationMessagesInList(
   messages: TMessage[]
 ): TMessage[] {
   if (!messages.length) {
-    const hasConversationMessages = currentList.some((m) => m.conversation_id === conversationId);
-    return hasConversationMessages ? currentList.filter((m) => m.conversation_id !== conversationId) : currentList;
+    return currentList;
   }
   const sameConversation = currentList.filter((m) => m.conversation_id === conversationId);
   const baseline = sameConversation.length ? sameConversation : currentList;

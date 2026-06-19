@@ -1,5 +1,5 @@
 body.login-page-active {
-  overflow: hidden;
+  overflow: auto;
 }
 
 .login-page {
@@ -29,7 +29,8 @@ body.login-page-active {
   box-sizing: border-box;
   padding: var(--login-side-padding);
   min-height: 100vh;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   color-scheme: light;
   background:
     radial-gradient(circle at 12% 22%, rgba(120, 170, 255, 0.16), transparent 28%),
@@ -78,6 +79,49 @@ body.login-page-active {
   --login-bg-end: #eef4ff;
   --login-accent: #2563eb;
   --login-accent-strong: #1d4ed8;
+}
+
+.login-page--admin {
+  --login-bg-start: #f3f7ff;
+  --login-bg-end: #ebf2ff;
+  --login-accent: #2563eb;
+  --login-accent-strong: #1d4ed8;
+}
+
+/* Browser admin login (member + dedicated admin port): form only, no marketing hero. */
+.login-page--web.login-page--admin {
+  --login-panel-width: min(100%, 480px);
+  --login-side-padding: clamp(16px, 4vw, 32px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 100vh;
+  height: auto;
+}
+
+.login-page--web.login-page--admin .login-page__hero {
+  display: none;
+}
+
+.login-page--web.login-page--admin .login-page__panel {
+  width: 100%;
+  max-width: var(--login-panel-width);
+  padding: var(--login-side-padding) 0;
+}
+
+.login-page--web.login-page--admin .login-page__card {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.login-page--web {
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 100vh;
+  height: auto;
 }
 
 .login-page--web .login-page__card {
@@ -1036,6 +1080,28 @@ body.login-page-active {
 .login-page--enterprise .login-page__hero {
   flex-basis: min(100%, 420px);
   max-width: 420px;
+}
+
+.login-page--web.login-page--enterprise .login-page__hero-content {
+  min-height: auto;
+}
+
+.login-page--web.login-page--enterprise .login-page__hero-visual {
+  display: none;
+}
+
+@media (max-width: 1440px) {
+  .login-page--web .login-page__hero-content {
+    min-height: auto;
+  }
+
+  .login-page--web .login-page__hero {
+    padding-bottom: 0;
+  }
+
+  .login-page--web .login-page__panel {
+    padding-top: 8px;
+  }
 }
 
 .login-page--enterprise .login-page__hero-content {

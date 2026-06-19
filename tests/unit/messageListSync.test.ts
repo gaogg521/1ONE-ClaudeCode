@@ -45,6 +45,20 @@ describe('messageListSync', () => {
     expect((merged[0] as { content: { content: string } }).content.content).toBe('hello world');
   });
 
+  it('merge prefers persisted DB row over divergent ephemeral stream id', () => {
+    const db = [
+      { ...textMessage('db-assistant', 'conv-1', 'CentOS terminal answer'), msg_id: 'turn-1' },
+    ];
+    const stream = [
+      {
+        ...textMessage('stream-assistant', 'conv-1', 'longer stale stream text that should lose'),
+        msg_id: 'turn-1',
+      },
+    ];
+    const merged = mergeDbMessagesWithStreaming('conv-1', db, stream);
+    expect((merged[0] as { content: { content: string } }).content.content).toBe('CentOS terminal answer');
+  });
+
   it('merge prefers DB when DB has longer text than stale stream chunk', () => {
     const db = [textMessage('a1', 'conv-1', 'complete answer from sqlite')];
     const stream = [textMessage('a1', 'conv-1', 'partial')];
@@ -202,6 +216,21 @@ describe('messageListSync', () => {
     const current = [textMessage('a1', 'conv-1', 'hello world')];
     const next = mergeConversationMessagesFromDb('conv-1', db, current);
     expect((next[0] as { content: { content: string } }).content.content).toBe('hello world');
+  });
+
+  it('mergeConversationMessagesFromDb preserves UI when DB snapshot is still empty', () => {
+    const current = [
+      textMessage('u1', 'conv-1', '你好', 'right'),
+      textMessage('a1', 'conv-1', '你好，我是助手', 'left'),
+    ];
+    const next = mergeConversationMessagesFromDb('conv-1', [], current);
+    expect(next).toBe(current);
+  });
+
+  it('replaceConversationMessagesInList preserves UI when DB snapshot is still empty', () => {
+    const current = [textMessage('a1', 'conv-1', 'in-flight reply')];
+    const next = replaceConversationMessagesInList(current, 'conv-1', []);
+    expect(next).toBe(current);
   });
 
   it('hasStreamingOnlyMessages detects tool rows not yet in DB', () => {

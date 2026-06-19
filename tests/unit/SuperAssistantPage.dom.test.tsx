@@ -700,4 +700,60 @@ describe('SuperAssistantPage (refactored command center)', () => {
       await screen.findByText('还没有数字员工。个人版可直接创建；加入协同团队后可创建工作区数字员工。')
     ).toBeInTheDocument();
   });
+
+  it('auto-starts personal issue handling without redirecting to enterprise console', async () => {
+    editionFeaturesMock.mockReturnValue({
+      hasJoinedEnterprise: false,
+      tenantLabel: null,
+      showEnterpriseAdminNav: false,
+      showTeamsFeature: false,
+      identity: { userId: 'user-1', tenantId: 'default' },
+      can: () => false,
+    });
+    requirementTreeState.items = [
+      {
+        id: 'issue-personal-1',
+        type: 'story',
+        subject: '个人 Issue 自动处理',
+        description: 'auto start',
+        status: 'backlog',
+        priority: 'medium',
+        assigned_to: 'user-1',
+        creator_id: 'user-1',
+        tenant_id: 'default',
+        created_at: 1,
+        updated_at: 1,
+      },
+    ];
+    vi.mocked(ipcBridge.personalAgent.list.invoke).mockResolvedValue([
+      {
+        id: 'personal-agent-1',
+        ownerUserId: 'user-1',
+        tenantId: 'default',
+        name: '个人执行 Agent',
+        description: 'personal',
+        agentType: 'codex',
+        conversationType: 'acp',
+        automationConfig: {},
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ]);
+    locationMock.search = '?issueId=issue-personal-1&tab=overview&action=start';
+    navigateMock.mockClear();
+    personalAgentRunNowMock.mockClear();
+
+    render(<SuperAssistantPage />);
+
+    await waitFor(() => {
+      expect(personalAgentRunNowMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'personal-agent-1',
+          issue: expect.objectContaining({ id: 'issue-personal-1' }),
+        })
+      );
+    });
+    expect(navigateMock).not.toHaveBeenCalledWith('/enterprise');
+    expect(navigateMock).not.toHaveBeenCalledWith('/enterprise/teams');
+  });
 });

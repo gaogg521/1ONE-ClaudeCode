@@ -339,16 +339,6 @@ function cleanupWindowsPackOutput(currentVersion) {
   }
 }
 
-function bumpMinorVersion(version) {
-  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version || '').trim());
-  if (!m) {
-    throw new Error(`Invalid package.json version: "${version}". Expected semver like "1.0.0".`);
-  }
-  const major = Number(m[1]);
-  const minor = Number(m[2]);
-  return `${major}.${minor + 1}.0`;
-}
-
 // Parse command line arguments
 const args = process.argv.slice(2);
 const archList = ['x64', 'arm64', 'ia32', 'armv7l'];
@@ -442,17 +432,8 @@ const packageJsonPath = path.resolve(__dirname, '../package.json');
 try {
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
 
-  // 0. Auto-bump version for "auto" packaging runs (opt-out via env var).
-  // This keeps Windows artifacts unique so older installers remain in out/.
-  if (args[0] === 'auto' && process.env.ONE_DISABLE_AUTO_BUMP_VERSION !== '1') {
-    const prevVersion = packageJson.version;
-    const nextVersion = bumpMinorVersion(prevVersion);
-    if (nextVersion !== prevVersion) {
-      packageJson.version = nextVersion;
-      fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
-      console.log(`🔖 Auto version bump: ${prevVersion} → ${nextVersion}`);
-    }
-  }
+  // Version lives only in package.json (bump via /bump-version or manual edit before release).
+  // dist:win must NOT mutate version — auto-bump caused divergent tags (e.g. 1.22 vs main 1.16.x).
 
   // 1. Ensure package.json main entry is correct for electron-vite
   if (packageJson.main !== './out/main/index.js') {

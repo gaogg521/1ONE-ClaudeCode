@@ -166,6 +166,23 @@ function areIssueTaskIdMapsEqual(a: Record<string, string>, b: Record<string, st
   return aKeys.every((key) => a[key] === b[key]);
 }
 
+function resolvePrimaryPersonalAgentRef(
+  groups: SuperAssistantAgentExecutionGroup[]
+): AgentCardRef | null {
+  const personalGroup = groups.find((group) => group.teamId === 'personal');
+  const agent = personalGroup?.agents[0];
+  if (!personalGroup || !agent) {
+    return null;
+  }
+  return {
+    teamId: personalGroup.teamId,
+    teamName: personalGroup.teamName,
+    slotId: agent.slotId,
+    agentName: agent.agentName,
+    agentType: agent.agentType,
+  };
+}
+
 function appendIssueContext(params: URLSearchParams, issue: NavigationIssueContext): void {
   if (!issue) {
     return;
@@ -289,8 +306,10 @@ const SuperAssistantPage: React.FC = () => {
     return {
       issueId: params.get('issueId'),
       tab: parseSuperAssistantTab(locationSearch),
+      autoStart: params.get('action') === 'start',
     };
   }, [locationSearch]);
+  const autoStartIssueRef = useRef<string | null>(null);
   const [activeTab, setActiveTab] = useState<SuperAssistantTab>(() => {
     const initialSearch = readSuperAssistantSearch(location);
     const fromUrl = parseSuperAssistantTab(initialSearch);
@@ -343,8 +362,14 @@ const SuperAssistantPage: React.FC = () => {
     });
   }, [featuredIssueId, issueLookup]);
 
+  const routedIssue =
+    routedState.issueId && issueLookup[routedState.issueId]
+      ? issueLookup[routedState.issueId]
+      : null;
   const currentIssue =
-    (selectedIssueId ? issueLookup[selectedIssueId] : null) ?? superAssistantData.featuredIssue;
+    (selectedIssueId ? issueLookup[selectedIssueId] : null) ??
+    routedIssue ??
+    superAssistantData.featuredIssue;
   const currentIssueAssignment = currentIssue ? issueAssignments[currentIssue.id] ?? null : null;
   const currentIssueAssignmentTaskId = currentIssue ? issueAssignmentTaskIds[currentIssue.id] ?? null : null;
   const primaryTeamId = superAssistantData.primaryTeam?.id ?? null;
@@ -1063,6 +1088,10 @@ const SuperAssistantPage: React.FC = () => {
     [currentIssue?.id, navigate, routedState.issueId]
   );
   const handleOpenTeamFlow = async () => {
+    if (!showTeamsFeature) {
+      await handleStartCurrentIssue();
+      return;
+    }
     if (!superAssistantData.primaryTeam) {
       navigate('/enterprise/teams');
       return;
@@ -1100,6 +1129,14 @@ const SuperAssistantPage: React.FC = () => {
   };
   const handleOpenEnterpriseKnowledge = () => navigate(showEnterpriseAdminNav ? '/enterprise/rag' : '/skills');
   const handleOpenEnterpriseModule = useCallback(() => {
+    if (!showTeamsFeature && !showEnterpriseAdminNav) {
+      Message.info(
+        t('common.superAssistant.personalEditionNoEnterpriseConsole', {
+          defaultValue: '个人版无需企业控制台，请使用数字员工或 WebUI 设置。',
+        })
+      );
+      return;
+    }
     if (!showEnterpriseAdminNav) {
       void navigate('/enterprise');
       return;
@@ -1110,7 +1147,7 @@ const SuperAssistantPage: React.FC = () => {
       },
       openEnterpriseAdminInBrowser: enterpriseMode.openEnterpriseAdminInBrowser,
     });
-  }, [enterpriseMode.openEnterpriseAdminInBrowser, navigate, showEnterpriseAdminNav]);
+  }, [enterpriseMode.openEnterpriseAdminInBrowser, navigate, showEnterpriseAdminNav, showTeamsFeature, t]);
   const handleOpenSkillsHub = () => navigate('/skills');
   const handleOpenMcp = () => navigate('/mcp');
   const handleOpenAgentSettings = () => navigate('/settings/agent');
@@ -1310,7 +1347,24 @@ const SuperAssistantPage: React.FC = () => {
 
   const handleStartCurrentIssue = async () => {
     if (!currentIssue) {
+      if (routedState.autoStart && routedState.issueId && superAssistantData.loading) {
+        return;
+      }
       navigate('/issues');
+      return;
+    }
+    if (!showTeamsFeature) {
+      const personalAgentRef = resolvePrimaryPersonalAgentRef(superAssistantData.agentExecutionGroups);
+      if (personalAgentRef) {
+        await handleRunAgentNow(personalAgentRef);
+        return;
+      }
+      Message.info(
+        t('common.superAssistant.personalAgentRequired', {
+          defaultValue: '请先在「数字员工」中创建个人 Agent，再处理 Issue。',
+        })
+      );
+      handleSwitchTab('agents');
       return;
     }
     if (currentIssueAssignment) {
@@ -1324,6 +1378,20 @@ const SuperAssistantPage: React.FC = () => {
     }
     await handleOpenTeamFlow();
   };
+
+  useEffect(() => {
+    if (!routedState.autoStart || !routedState.issueId) {
+      return;
+    }
+    if (!issueLookup[routedState.issueId]) {
+      return;
+    }
+    if (autoStartIssueRef.current === routedState.issueId) {
+      return;
+    }
+    autoStartIssueRef.current = routedState.issueId;
+    void handleStartCurrentIssue();
+  }, [issueLookup, routedState.autoStart, routedState.issueId]);
 
   const handleOpenCurrentIssueDetail = () => {
     if (!currentIssue?.id) {
@@ -1602,7 +1670,8 @@ const SuperAssistantPage: React.FC = () => {
           <Card title={t('common.superAssistant.rebuild.systemConfigTitle', { defaultValue: '系统配置入口' })}>
             <SettingsTab
               isAdmin={isAdmin}
-              onOpenEnterpriseConsole={() => navigate('/enterprise')}
+              showEnterpriseConsole={showTeamsFeature || showEnterpriseAdminNav}
+              onOpenEnterpriseConsole={() => void handleOpenEnterpriseModule()}
               onOpenWebuiSettings={() => navigate('/settings/webui')}
             />
           </Card>

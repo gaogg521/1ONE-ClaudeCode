@@ -4,8 +4,23 @@ export type IssuePlanningPathInput = {
   teamsCollaborationEnabled: boolean;
 };
 
-export function buildIssueAssistantPath(issueId: string): string {
-  return `/super-assistant?issueId=${encodeURIComponent(issueId)}`;
+export type IssueAssistantPathInput = {
+  issueId: string;
+  /** Personal edition: open assistant and start processing with a personal agent. */
+  autoStart?: boolean;
+};
+
+export function buildIssueAssistantPath(input: string | IssueAssistantPathInput): string {
+  const issueId = typeof input === 'string' ? input : input.issueId;
+  const autoStart = typeof input === 'string' ? false : Boolean(input.autoStart);
+  const params = new URLSearchParams({
+    issueId,
+    tab: 'overview',
+  });
+  if (autoStart) {
+    params.set('action', 'start');
+  }
+  return `/super-assistant?${params.toString()}`;
 }
 
 export function buildIssuePlanningPath(input: IssuePlanningPathInput): string {

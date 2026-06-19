@@ -159,7 +159,14 @@ const IssueDetailPage: React.FC = () => {
                   <Space wrap>
                     <Button
                       type='primary'
-                      onClick={() => navigate(buildIssueAssistantPath(currentIssue.id))}
+                      onClick={() =>
+                        navigate(
+                          buildIssueAssistantPath({
+                            issueId: currentIssue.id,
+                            autoStart: !showTeamsFeature,
+                          })
+                        )
+                      }
                     >
                       {t('common.issues.startWithAssistant', { defaultValue: '交给 Agent 助手处理' })}
                     </Button>
@@ -272,33 +279,35 @@ const IssueDetailPage: React.FC = () => {
                       ))}
                     </Select>
                   </div>
-                  <div>
-                    <div className='text-t-tertiary mb-6px'>{t('common.issues.propertyAssignee', { defaultValue: '负责人' })}</div>
-                    {showTeamsFeature && assigneeOptions.length > 0 ? (
-                      <Select
-                        allowClear
-                        loading={assigneesLoading}
-                        value={currentIssue.assigned_to ?? undefined}
-                        placeholder={t('common.issues.unassigned', { defaultValue: '未分配' })}
-                        disabled={savingField}
-                        onChange={(value) =>
-                          void patchIssue({ assigned_to: value ? String(value) : null })
-                        }
-                      >
-                        {assigneeOptions.map((member) => (
-                          <Select.Option key={member.userId} value={member.userId}>
-                            {member.label}
-                          </Select.Option>
-                        ))}
-                      </Select>
-                    ) : (
-                      <div className='text-t-primary'>
-                        {resolveLabel(currentIssue.assigned_to) ??
-                          currentIssue.assigned_to ??
-                          t('common.issues.unassigned', { defaultValue: '未分配' })}
-                      </div>
-                    )}
-                  </div>
+                  {showTeamsFeature ? (
+                    <div>
+                      <div className='text-t-tertiary mb-6px'>{t('common.issues.propertyAssignee', { defaultValue: '负责人' })}</div>
+                      {assigneeOptions.length > 0 ? (
+                        <Select
+                          allowClear
+                          loading={assigneesLoading}
+                          value={currentIssue.assigned_to ?? undefined}
+                          placeholder={t('common.issues.unassigned', { defaultValue: '未分配' })}
+                          disabled={savingField}
+                          onChange={(value) =>
+                            void patchIssue({ assigned_to: value ? String(value) : null })
+                          }
+                        >
+                          {assigneeOptions.map((member) => (
+                            <Select.Option key={member.userId} value={member.userId}>
+                              {member.label}
+                            </Select.Option>
+                          ))}
+                        </Select>
+                      ) : (
+                        <div className='text-t-primary'>
+                          {resolveLabel(currentIssue.assigned_to) ??
+                            currentIssue.assigned_to ??
+                            t('common.issues.unassigned', { defaultValue: '未分配' })}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                   <div>
                     <div className='text-t-tertiary'>{t('common.issues.propertyId', { defaultValue: 'ID' })}</div>
                     <div className='mt-4px text-t-primary break-all'>{currentIssue.id}</div>

@@ -26,6 +26,15 @@ describe('issue collaboration routing', () => {
   });
 
   it('opens assistant without forcing enterprise routes', () => {
-    expect(buildIssueAssistantPath('issue-1')).toBe('/super-assistant?issueId=issue-1');
+    expect(buildIssueAssistantPath('issue-1')).toBe('/super-assistant?issueId=issue-1&tab=overview');
+  });
+
+  it('supports personal auto-start without enterprise redirect params', () => {
+    expect(
+      buildIssueAssistantPath({
+        issueId: 'issue-1',
+        autoStart: true,
+      })
+    ).toBe('/super-assistant?issueId=issue-1&tab=overview&action=start');
   });
 });

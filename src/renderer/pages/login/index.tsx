@@ -482,11 +482,13 @@ const LoginPage: React.FC = () => {
     defaultValue: '企业 AI 工作台主视觉',
   });
 
+  const showLoginHero = !isDesktopApp && loginEdition !== 'admin';
+
   return (
     <div
       className={`login-page login-page--${loginEdition}${isBrowserWebUi ? ' login-page--web' : ' login-page--desktop'}${isDesktopApp ? ' login-page--desktop-app' : ''}`}
     >
-      {!isDesktopApp ? (
+      {showLoginHero ? (
       <LoginHeroPanel
         badge={heroBadge}
         title={heroTitle}

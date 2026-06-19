@@ -191,7 +191,7 @@ describe('message hooks cache merge', () => {
     });
   });
 
-  it('replaces in-memory list with DB snapshot on conversation.messages.sync', async () => {
+  it('merges DB snapshot on conversation.messages.sync preferring persisted rows', async () => {
     const dbMessages: TestMessage[] = [
       {
         id: 'db-assistant',
@@ -271,7 +271,7 @@ describe('message hooks cache merge', () => {
     expect(screen.getByTestId('messages').textContent).toBe(before);
   });
 
-  it('clears stale messages when DB returns an empty snapshot for the conversation', async () => {
+  it('preserves in-flight UI when DB returns an empty snapshot for the conversation', async () => {
     const stale: TestMessage[] = [
       {
         id: 'old-1',
@@ -291,8 +291,16 @@ describe('message hooks cache merge', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId('messages').textContent).toBe('[]');
+      expect(screen.getByTestId('messages').textContent).toContain('stale message');
     });
+
+    emitter.emit('conversation.messages.sync', { conversationId: 'conv-1' });
+
+    await waitFor(() => {
+      expect(mockGetConversationMessagesInvoke).toHaveBeenCalledTimes(2);
+    });
+
+    expect(screen.getByTestId('messages').textContent).toContain('stale message');
   });
 
   it('keeps user and assistant as separate bubbles when turn msg_id matches', async () => {

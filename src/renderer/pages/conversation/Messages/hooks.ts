@@ -522,16 +522,6 @@ async function fetchAndMergeConversationMessages(
   update((currentList) => mergeConversationMessagesFromDb(conversationId, messages, currentList));
 }
 
-/** After stream finish or explicit sync, DB is authoritative (avoids stale batched stream chunks). */
-async function fetchAndReplaceConversationMessages(
-  conversationId: string,
-  update: (fn: (list: TMessage[]) => TMessage[]) => void
-): Promise<void> {
-  cancelPendingMessageUpdates();
-  const messages = await fetchConversationMessages(conversationId);
-  update((currentList) => replaceConversationMessagesInList(currentList, conversationId, messages));
-}
-
 const MESSAGE_CACHE_SYNC_DEBOUNCE_MS = 150;
 
 export const useMessageLstCache = (key: string) => {
@@ -563,7 +553,7 @@ export const useMessageLstCache = (key: string) => {
       }
       syncTimerRef.current = setTimeout(() => {
         syncTimerRef.current = null;
-        void fetchAndReplaceConversationMessages(key, update).catch((error) => {
+        void fetchAndMergeConversationMessages(key, update).catch((error) => {
           console.error('[useMessageLstCache] Failed to sync messages from database:', error);
         });
       }, MESSAGE_CACHE_SYNC_DEBOUNCE_MS);

@@ -18,6 +18,8 @@ import {
   ISSUE_PRIORITIES,
   ISSUE_STATUS_ORDER,
 } from '../issueUtils';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import { useIssueAssigneeOptions } from '../hooks/useIssueAssigneeOptions';
 
 const FormItem = Form.Item;
@@ -49,9 +51,13 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   onCreated,
 }) => {
   const { t } = useTranslation();
+  const auth = useAuth();
+  const { showTeamsFeature } = useEditionFeatures();
   const [form] = Form.useForm<CreateIssueFormValues>();
   const [saving, setSaving] = useState(false);
-  const { options: assigneeOptions, loading: assigneesLoading } = useIssueAssigneeOptions(visible);
+  const { options: assigneeOptions, loading: assigneesLoading } = useIssueAssigneeOptions(
+    visible && showTeamsFeature
+  );
 
   useEffect(() => {
     if (!visible) {
@@ -79,7 +85,9 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         description: values.description?.trim() || null,
         status: values.status,
         priority: values.priority,
-        assigned_to: values.assigned_to?.trim() || null,
+        assigned_to: showTeamsFeature
+          ? values.assigned_to?.trim() || null
+          : auth.user?.id ?? null,
         parent_id: values.parent_id?.trim() || parentId || null,
       });
       Message.success(t('common.issues.createSuccess', { defaultValue: 'Issue 已创建' }));
@@ -181,25 +189,27 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             ))}
           </Select>
         </FormItem>
-        <FormItem
-          label={t('common.issues.propertyAssignee', { defaultValue: '负责人' })}
-          field='assigned_to'
-          extra={t('common.issues.assigneeHint', {
-            defaultValue: '分配给本企业同事后，对方登录企业账号可在「分配给我」筛选中看到该 Issue。',
-          })}
-        >
-          <Select
-            allowClear
-            loading={assigneesLoading}
-            placeholder={t('common.issues.assigneePlaceholder', { defaultValue: '选择团队成员（可选）' })}
+        {showTeamsFeature ? (
+          <FormItem
+            label={t('common.issues.propertyAssignee', { defaultValue: '负责人' })}
+            field='assigned_to'
+            extra={t('common.issues.assigneeHint', {
+              defaultValue: '分配给本企业同事后，对方登录企业账号可在「分配给我」筛选中看到该 Issue。',
+            })}
           >
-            {assigneeOptions.map((member) => (
-              <Select.Option key={member.userId} value={member.userId}>
-                {member.label}
-              </Select.Option>
-            ))}
-          </Select>
-        </FormItem>
+            <Select
+              allowClear
+              loading={assigneesLoading}
+              placeholder={t('common.issues.assigneePlaceholder', { defaultValue: '选择团队成员（可选）' })}
+            >
+              {assigneeOptions.map((member) => (
+                <Select.Option key={member.userId} value={member.userId}>
+                  {member.label}
+                </Select.Option>
+              ))}
+            </Select>
+          </FormItem>
+        ) : null}
         {parentId ? (
           <FormItem field='parent_id' hidden>
             <Input />
