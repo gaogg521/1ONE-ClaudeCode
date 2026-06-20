@@ -627,20 +627,26 @@ export function initConversationBridge(
         files: workspaceFiles,
       });
 
-      // Defer cleanup until after Gemini worker finishes processing the files.
-      // sendMessage() resolves when the worker acknowledges receipt, but the worker
-      // continues reading files asynchronously during streaming. Deleting immediately
-      // after sendMessage() causes a race condition where Gemini CLI reads deleted files.
-      if (isGeminiAgent && workspaceFiles.length > 0) {
+      // Defer cleanup until after the agent finishes processing the files.
+      // sendMessage() resolves when the worker acknowledges receipt, but the
+      // worker continues reading files asynchronously during streaming.
+      // Deleting immediately after sendMessage() causes a race condition where
+      // the CLI reads deleted files.
+      //
+      // Unified across all agent types: listen for the turn-completed event on
+      // the shared conversation bridge channel. Previously only Gemini had
+      // cleanup wired (via gemini.message), leaving ACP/Aionrs temp files to
+      // accumulate in the workspace indefinitely.
+      if (workspaceFiles.length > 0) {
         const saveToWorkspace = await ProcessConfig.get('upload.saveToWorkspace').catch(() => false);
         if (!saveToWorkspace) {
-          const geminiTask = task as unknown as GeminiAgentManager;
+          const conversationId = task.conversation_id;
           const filesToCleanup = [...workspaceFiles];
           const resolvedWorkspace = path.resolve(task.workspace);
-          const handleMessage = (data: { type: string }) => {
-            if (data.type !== 'finish') return;
-            geminiTask.off('gemini.message', handleMessage);
+          const cleanup = () => {
             for (const filePath of filesToCleanup) {
+              // Keep images — they may be re-referenced by follow-up messages
+              // and are small after compression. Only purge non-image temp copies.
               if (isImageFilePath(filePath)) {
                 continue;
               }
@@ -652,7 +658,25 @@ export function initConversationBridge(
               }
             }
           };
-          geminiTask.on('gemini.message', handleMessage);
+
+          // Gemini emits a task-level 'gemini.message' event with type 'finish'.
+          if (isGeminiAgent) {
+            const geminiTask = task as unknown as GeminiAgentManager;
+            const handleMessage = (data: { type: string }) => {
+              if (data.type !== 'finish') return;
+              geminiTask.off('gemini.message', handleMessage);
+              cleanup();
+            };
+            geminiTask.on('gemini.message', handleMessage);
+          } else {
+            // ACP / Aionrs / OpenClaw / NanoBot: listen on the shared responseStream
+            // emitter for a finish message targeting this conversation.
+            const off = ipcBridge.conversation.responseStream.on((msg) => {
+              if (msg.conversation_id !== conversationId || msg.type !== 'finish') return;
+              off();
+              cleanup();
+            });
+          }
         }
       }
 

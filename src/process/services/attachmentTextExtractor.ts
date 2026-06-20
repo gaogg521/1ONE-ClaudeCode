@@ -5,6 +5,9 @@
  */
 
 import fs from 'fs/promises';
+import { spawn } from 'child_process';
+import path from 'path';
+import os from 'os';
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx-republish';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
@@ -19,6 +22,9 @@ import {
   type AttachmentExtractSection,
 } from '@/common/chat/attachmentContext';
 import { isAudioFilePath, isVideoFilePath } from '@/common/chat/messageFiles';
+import { SpeechToTextService } from '@process/bridge/services/SpeechToTextService';
+import { ProcessConfig } from '@process/utils/initStorage';
+import { getBundledFfmpegPath } from '@process/utils/shellEnv';
 
 function truncateText(text: string, maxChars: number): { text: string; truncated: boolean } {
   const normalized = text.replace(/\r\n/g, '\n').trim();
@@ -94,6 +100,69 @@ async function extractPlainText(buffer: Buffer): Promise<string> {
 }
 
 /**
+ * Extract audio track from a video file using ffmpeg, returning a temp mp3 path.
+ * Prefers the bundled ffmpeg binary; falls back to system PATH. Returns null
+ * if ffmpeg is unavailable or extraction fails.
+ */
+async function extractAudioTrackFromVideo(videoPath: string): Promise<string | null> {
+  const bundledFfmpeg = getBundledFfmpegPath();
+  const ffmpegCmd = bundledFfmpeg ?? 'ffmpeg';
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'one-video-audio-'));
+  const audioPath = path.join(tmpDir, 'audio.mp3');
+  return new Promise((resolve) => {
+    const ffmpeg = spawn(ffmpegCmd, ['-y', '-i', videoPath, '-vn', '-acodec', 'libmp3lame', '-q:a', '4', audioPath], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    ffmpeg.on('error', () => resolve(null));
+    ffmpeg.on('exit', (code) => {
+      if (code === 0) resolve(audioPath);
+      else resolve(null);
+    });
+  });
+}
+
+/**
+ * Transcribe an audio/video file via the configured SpeechToText provider.
+ * Returns the transcript text, or null if STT is disabled / unavailable.
+ */
+async function transcribeMediaFile(filePath: string, isVideo: boolean): Promise<string | null> {
+  let audioPath = filePath;
+  let tempAudioPath: string | null = null;
+
+  // For video files, extract the audio track first (STT providers only accept audio)
+  if (isVideo) {
+    const extracted = await extractAudioTrackFromVideo(filePath);
+    if (!extracted) return null;
+    audioPath = extracted;
+    tempAudioPath = extracted;
+  }
+
+  try {
+    const config = await ProcessConfig.get('tools.speechToText').catch((): null => null);
+    if (!config || !config.enabled) return null;
+
+    const audioBuffer = await fs.readFile(audioPath);
+    const ext = extname(audioPath).toLowerCase();
+    const mimeType = ext === '.wav' ? 'audio/wav' : ext === '.ogg' ? 'audio/ogg' : ext === '.flac' ? 'audio/flac' : 'audio/mpeg';
+    const fileName = path.basename(audioPath);
+
+    const result = await SpeechToTextService.transcribe({
+      audioBuffer: new Uint8Array(audioBuffer),
+      fileName,
+      mimeType,
+    });
+    return result?.text?.trim() || null;
+  } catch {
+    return null;
+  } finally {
+    if (tempAudioPath) {
+      await fs.rm(path.dirname(tempAudioPath), { recursive: true, force: true }).catch(() => {});
+    }
+  }
+}
+
+/**
  * Wrap a parser call with a timeout so a single huge/corrupt file cannot
  * freeze the main process. All parsers above (pdf-parse, mammoth, pptx2json,
  * xlsx) run synchronously on the event loop — without this guard a 200MB
@@ -121,19 +190,37 @@ export async function extractAttachmentText(
   filePath: string,
   maxChars = DEFAULT_ATTACHMENT_MAX_CHARS
 ): Promise<AttachmentExtractSection | null> {
-  // Audio/video files cannot be auto-transcribed inline (would require a Whisper-
-  // class model). Surface a clear note to the agent so it knows the file exists
-  // and can decide to invoke a transcription tool, rather than silently ignoring.
+  // Audio/video files: try to transcribe via configured STT provider.
+  // If STT is disabled or fails, fall back to a clear note so the agent
+  // knows the file exists and can use a tool to process it.
   if (isAudioFilePath(filePath) || isVideoFilePath(filePath)) {
     const fileName = getAttachmentFileName(filePath);
     const kind = isAudioFilePath(filePath) ? 'audio' : 'video';
+    const isVideo = kind === 'video';
+
+    const transcript = await withParseTimeout(fileName, () => transcribeMediaFile(filePath, isVideo));
+    if (transcript) {
+      const { text, truncated } = truncateText(transcript, maxChars);
+      return {
+        filePath,
+        fileName,
+        kind,
+        text: truncated ? `${text}\n…` : text,
+        truncated,
+      };
+    }
+
+    const sttConfig = await ProcessConfig.get('tools.speechToText').catch((): null => null);
+    const hint = !sttConfig?.enabled
+      ? `Automatic transcription is disabled. Enable it in Settings → Speech-to-Text, or use a tool (ffmpeg + whisper) to process ${fileName}.`
+      : `Transcription failed. The agent should use a tool (ffmpeg + whisper) to process ${fileName}, or the user should provide a text summary.`;
     return {
       filePath,
       fileName,
       kind,
       text: '',
       truncated: false,
-      error: `${kind === 'audio' ? 'Audio' : 'Video'} file attached. Automatic transcription is not available — the agent must use a tool (e.g. ffmpeg + whisper) to process ${fileName}, or the user should provide a text summary.`,
+      error: `${kind === 'audio' ? 'Audio' : 'Video'} file attached. ${hint}`,
     };
   }
 

@@ -9,6 +9,7 @@ import type { AnyToolInvocation, Config } from '@office-ai/aioncli-core';
 import { getErrorMessage, isNodeError, unescapePath } from '@office-ai/aioncli-core';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { isImageFilePath } from '@/common/chat/messageFiles';
 import type { HistoryItem, IndividualToolCallDisplay } from './types';
 import { ToolCallStatus } from './types';
 
@@ -386,21 +387,54 @@ export async function handleAtCommand({
     const workspaceDirs = config.getWorkspaceContext().getDirectories();
     const workspaceDir = workspaceDirs[0] || process.cwd();
 
-    processedQueryParts.push({
-      text: '\n\n[Files referenced in workspace - use read_file tool to access when needed]:',
-    });
+    const imageParts: PartUnion[] = [];
+    const pathHints: string[] = [];
 
     for (const pathSpec of pathSpecsToRead) {
       const absolutePath = path.resolve(workspaceDir, pathSpec);
-      processedQueryParts.push({
-        text: `\n- ${pathSpec} (path: ${absolutePath})`,
-      });
-      onDebugMessage(`File reference added (lazy mode): ${pathSpec}`);
+      // Images must be inlined as base64 — Gemini's read_file tool cannot
+      // decode binary image data, so a path-only hint leaves the model blind
+      // to image content. Other files stay as path hints (agent reads on demand).
+      if (isImageFilePath(pathSpec)) {
+        try {
+          const buffer = await fs.readFile(absolutePath);
+          const ext = path.extname(pathSpec).toLowerCase();
+          const mimeType =
+            ext === '.png' ? 'image/png'
+            : ext === '.gif' ? 'image/gif'
+            : ext === '.webp' ? 'image/webp'
+            : ext === '.bmp' ? 'image/bmp'
+            : ext === '.svg' ? 'image/svg+xml'
+            : 'image/jpeg';
+          imageParts.push({
+            inlineData: {
+              mimeType,
+              data: buffer.toString('base64'),
+            },
+          } as PartUnion);
+          onDebugMessage(`Image inlined (lazy mode): ${pathSpec}`);
+        } catch (readError) {
+          onDebugMessage(`Failed to inline image ${pathSpec}: ${getErrorMessage(readError)}`);
+          pathHints.push(`\n- ${pathSpec} (path: ${absolutePath}) [image read failed]`);
+        }
+      } else {
+        pathHints.push(`\n- ${pathSpec} (path: ${absolutePath})`);
+      }
     }
 
-    processedQueryParts.push({
-      text: '\n\nNote: File contents are not loaded. Use read_file or read_many_files tool to read file content when you need it.',
-    });
+    if (imageParts.length > 0) {
+      processedQueryParts.push({ text: '\n\n[Attached images:]' });
+      processedQueryParts.push(...imageParts);
+    }
+    if (pathHints.length > 0) {
+      processedQueryParts.push({
+        text: '\n\n[Files referenced in workspace - use read_file tool to access when needed]:',
+      });
+      processedQueryParts.push({ text: pathHints.join('') });
+      processedQueryParts.push({
+        text: '\n\nNote: File contents are not loaded. Use read_file or read_many_files tool to read file content when you need it.',
+      });
+    }
 
     return { processedQuery: processedQueryParts, shouldProceed: true };
   }

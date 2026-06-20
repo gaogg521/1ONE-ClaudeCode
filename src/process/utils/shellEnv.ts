@@ -42,6 +42,23 @@ export function getBundledBunDir(): string | null {
 }
 
 /**
+ * Get the path to the bundled ffmpeg binary.
+ * Looks for `resources/bundled-ffmpeg/<platform>-<arch>/ffmpeg(.exe)`.
+ * Returns null if not bundled — callers should fall back to system PATH.
+ */
+export function getBundledFfmpegPath(): string | null {
+  const resourcesPath = getPlatformServices().paths.isPackaged()
+    ? process.resourcesPath
+    : path.join(process.cwd(), 'resources');
+  const platform = process.platform === 'win32' ? 'win32' : process.platform;
+  const arch = process.arch;
+  const ffmpegDir = path.join(resourcesPath, 'bundled-ffmpeg', `${platform}-${arch}`);
+  const exeName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+  const ffmpegPath = path.join(ffmpegDir, exeName);
+  return existsSync(ffmpegPath) ? ffmpegPath : null;
+}
+
+/**
  * Get the path to the user's bun global bin directory.
  * This is where `bun add -g` installs binaries.
  * - macOS/Linux: ~/.bun/bin

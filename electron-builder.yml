@@ -114,6 +114,10 @@ extraResources:
     to: bundled-aionrs
   - from: resources/bundled-agent-toolkit
     to: bundled-agent-toolkit
+  # ffmpeg binary (per platform/arch) — used for video audio extraction
+  # when transcribing mp4/mov/etc via SpeechToTextService.
+  - from: resources/bundled-ffmpeg
+    to: bundled-ffmpeg
   - from: resources/hub
     to: hub
 
