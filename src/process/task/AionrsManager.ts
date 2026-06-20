@@ -18,7 +18,6 @@ import BaseAgentManager from './BaseAgentManager';
 import { IpcAgentEventEmitter } from './IpcAgentEventEmitter';
 import { mainError } from '@process/utils/mainLogger';
 import { ProcessConfig } from '@process/utils/initStorage';
-import { describeImagesForPrompt } from '@process/services/visionDescribe';
 import type { IProvider } from '@/common/config/storage';
 import { getSystemDir } from '@process/utils/initStorage';
 import fs from 'node:fs';
@@ -402,23 +401,36 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     // Pre-describe images via the user's configured model's vision API and
     // inject the text description into the prompt, so the agent can "see"
     // image content. Non-image files pass through unchanged.
-    if (data.files && data.files.length > 0 && this.model.apiKey && this.model.useModel) {
-      try {
-        const { imageDescriptionBlock, nonImageFiles } = await describeImagesForPrompt(
-          data.files,
-          this.model
-        );
-        if (imageDescriptionBlock) {
-          // Append description to the input the worker receives; keep the
-          // user-visible content (originalInput) clean.
-          data = {
-            ...data,
-            input: data.input + imageDescriptionBlock,
-            files: nonImageFiles,
-          };
+    //
+    // Critical: image file paths must NEVER reach aionrs's files array —
+    // envBuilder warns the agent not to read them, and some aionrs binary
+    // versions exit(0) silently when handed image paths it can't process.
+    // Always strip images from files, even if vision description fails.
+    if (data.files && data.files.length > 0) {
+      const { describeImagesForPrompt } = await import('@process/services/visionDescribe');
+      const { isImageFilePath } = await import('@/common/chat/messageFiles');
+      const imageFiles = data.files.filter((f) => isImageFilePath(f));
+      const nonImageFiles = data.files.filter((f) => !isImageFilePath(f));
+
+      let imageDescriptionBlock = '';
+      if (imageFiles.length > 0 && this.model.apiKey && this.model.useModel) {
+        try {
+          const result = await describeImagesForPrompt(imageFiles, this.model);
+          imageDescriptionBlock = result.imageDescriptionBlock;
+        } catch (error) {
+          console.warn('[AionrsManager] Image vision description failed:', error);
+          // Fallback: tell the agent images were attached but couldn't be described
+          imageDescriptionBlock = `\n\n[Images attached but vision description unavailable: ${imageFiles.map((f) => f.replace(/\\/g, '/').split('/').pop()).join(', ')}]\n`;
         }
-      } catch (error) {
-        console.warn('[AionrsManager] Image vision description failed, sending without it:', error);
+      }
+
+      if (imageFiles.length > 0) {
+        // Always strip image paths from files — aionrs can't process them
+        data = {
+          ...data,
+          input: data.input + imageDescriptionBlock,
+          files: nonImageFiles,
+        };
       }
     }
 

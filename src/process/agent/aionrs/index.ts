@@ -205,19 +205,27 @@ export class AionrsAgent {
         // Exited before emitting ready — reject the bootstrap promise
         this.readyReject(new Error(`aionrs exited with code ${code} during init`));
       } else {
-        // Exited mid-conversation (context overflow, upstream crash, API auth failure, etc.).
-        // Unblock the UI immediately so the user sees an error rather than an infinite spinner.
+        // Exit code 0 = clean exit. If the turn already finished (stream_end
+        // cleared activeMsgId), this is just the binary shutting down after
+        // completing its work — not an error. Only surface an error if the
+        // process died mid-turn (activeMsgId still set) with a non-zero code.
         const msgId = this.activeMsgId || this.pendingTurnMsgId || '';
-        if (msgId) {
+        if (msgId && code !== 0) {
           this.onStreamEvent({
             type: 'error',
             data: `[aionrs] 进程意外退出（exit code ${code}）。可能原因：上下文超过模型限制、API 认证失败或上游服务异常。请重试或检查模型配置。`,
             msg_id: msgId,
           });
           this.onStreamEvent({ type: 'finish', data: '', msg_id: msgId });
-          this.activeMsgId = null;
-          this.pendingTurnMsgId = null;
         }
+        // For exit code 0 mid-turn: the binary finished cleanly. If content
+        // was already streamed, treat as normal completion (emit finish to
+        // unblock the UI spinner without a scary error message).
+        if (msgId && code === 0) {
+          this.onStreamEvent({ type: 'finish', data: '', msg_id: msgId });
+        }
+        this.activeMsgId = null;
+        this.pendingTurnMsgId = null;
       }
 
       this.childProcess = null;
