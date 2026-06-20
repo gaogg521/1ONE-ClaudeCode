@@ -43,19 +43,52 @@ export function buildPersonalDigitalEmployeeCronPrompt(
   agent: PersonalAgent,
   issue?: { id: string; subject: string; description?: string | null } | null
 ): string {
+  const instructions =
+    typeof agent.automationConfig?.instructions === 'string'
+      ? agent.automationConfig.instructions.trim()
+      : '';
+
   if (issue) {
+    // When an issue is bound, combine the agent's custom instructions with the
+    // issue content. Previously this branch ignored instructions entirely and
+    // only passed the issue subject/description — so template-based agents
+    // (e.g. "热点话题调研员") lost their system prompt and treated the issue
+    // body as the sole task, blocking on "test" issues with no real topic.
+    const description = issue.description?.trim();
+    const issueBlock = [
+      `**${issue.subject}**`,
+      `Issue ID: \`${issue.id}\``,
+      description ? description : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    if (instructions) {
+      return [
+        `你是数字员工「${agent.name}」。`,
+        instructions,
+        '',
+        '---',
+        '本次执行绑定的 Issue 内容（作为任务输入）：',
+        issueBlock,
+        '',
+        '要求：',
+        '1. 直接开始执行，不要反问澄清问题',
+        '2. 如果 Issue 内容不足以执行你的职责（如缺少必要的话题/参数），说明具体缺什么并阻塞',
+        '3. 遇到阻塞请说明原因，并在回复中用 @用户名 提及需要介入的同事',
+        '4. 完成后输出可交付摘要；若职责包含文档产出，写明本地 report.html 与 report.docx 路径',
+      ].join('\n\n');
+    }
+
     return buildIssueAssignmentPrompt(issue, agent.name);
   }
+
   if (agent.name.trim() === GAME_SECURITY_EXPERT_NAME) {
     return GAME_SECURITY_DAILY_CRON_PROMPT;
   }
   if (agent.name.trim() === DOCUMENT_DELIVERABLE_AGENT_NAME) {
     return DOCUMENT_DELIVERABLE_CRON_PROMPT;
   }
-  const instructions =
-    typeof agent.automationConfig?.instructions === 'string'
-      ? agent.automationConfig.instructions.trim()
-      : '';
   if (instructions) {
     return [
       `你是数字员工「${agent.name}」。`,
