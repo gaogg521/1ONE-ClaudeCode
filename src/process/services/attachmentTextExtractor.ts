@@ -28,8 +28,16 @@ function truncateText(text: string, maxChars: number): { text: string; truncated
 }
 
 async function extractPdfText(filePath: string, buffer: Buffer): Promise<string> {
-  const result = await pdfParse(buffer);
-  return result.text || '';
+  // Cap pages to avoid blocking the main process on huge PDFs (pdf-parse runs
+  // synchronously on the event loop — a 500-page PDF freezes all IPC for ~30s).
+  // 50 pages covers most documents; longer ones truncate with a marker.
+  const MAX_PAGES = 50;
+  const result = await pdfParse(buffer, { max: MAX_PAGES });
+  const text = result.text || '';
+  if (result.numpages && result.numpages > MAX_PAGES) {
+    return `${text}\n\n[PDF truncated: extracted first ${MAX_PAGES} of ${result.numpages} pages]`;
+  }
+  return text;
 }
 
 async function extractDocxText(buffer: Buffer): Promise<string> {

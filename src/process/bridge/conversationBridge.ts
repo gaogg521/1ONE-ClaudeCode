@@ -28,6 +28,7 @@ import { refreshTrayMenu } from '@process/utils/tray';
 import { copyFilesToDirectory, readDirectoryRecursive } from '@process/utils';
 import { computeOpenClawIdentityHash } from '@process/utils/openclawUtils';
 import { readOpenClawConfig } from '@process/agent/openclaw/openclawConfig';
+import { compressImagesInPlace } from '@process/services/imageCompress';
 import fs from 'fs';
 import path from 'path';
 import { migrateConversationToDatabase } from './migrationUtils';
@@ -570,6 +571,12 @@ export function initConversationBridge(
       } catch (error) {
         console.error('[conversationBridge] sendMessage: failed to copy files to workspace:', error);
         workspaceFiles = [];
+      }
+      // Compress images in-place so they fit within agent context windows.
+      // A 4K photo base64-inlined by Claude CLI / Gemini becomes ~700K tokens
+      // and overflows the 115K context. Downsampling to ≤1568px keeps it ~5-10K.
+      if (workspaceFiles.length > 0) {
+        workspaceFiles = await compressImagesInPlace(workspaceFiles);
       }
     } else {
       // Non-temp attachments: use absolute paths directly
