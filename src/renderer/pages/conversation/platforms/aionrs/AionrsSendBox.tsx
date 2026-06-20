@@ -27,6 +27,7 @@ import {
 import { assertBridgeSuccess } from '@/renderer/pages/conversation/platforms/assertBridgeSuccess';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import { allSupportedExts } from '@/renderer/services/FileService';
+import { isImageFilePath } from '@/common/chat/messageFiles';
 import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
@@ -257,6 +258,22 @@ const AionrsSendBox: React.FC<{
     }
 
     const filesToSend = collectSelectedFiles(uploadFile, atPath);
+
+    // aionrs backend does not support image vision input — the binary passes
+    // file paths as text context, and the envBuilder explicitly tells the agent
+    // not to read binary/image files. Warn the user so they know the agent
+    // cannot see image content, rather than letting the agent reply "I can't
+    // see the image" and leaving the user confused.
+    const imageFiles = filesToSend.filter((f) => isImageFilePath(f));
+    if (imageFiles.length > 0) {
+      Message.warning(
+        t('conversation.aionrsImageNotSupported', {
+          defaultValue:
+            '当前 aionrs 后端不支持图片识别，agent 无法看到图片内容。如需图片解析，请切换到 Claude 或 Gemini agent。',
+        })
+      );
+    }
+
     clearFiles();
     emitter.emit('aionrs.selected.file.clear');
 
