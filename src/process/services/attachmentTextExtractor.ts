@@ -18,6 +18,7 @@ import {
   isExtractableAttachmentPath,
   type AttachmentExtractSection,
 } from '@/common/chat/attachmentContext';
+import { isAudioFilePath, isVideoFilePath } from '@/common/chat/messageFiles';
 
 function truncateText(text: string, maxChars: number): { text: string; truncated: boolean } {
   const normalized = text.replace(/\r\n/g, '\n').trim();
@@ -70,13 +71,20 @@ async function extractPptxText(filePath: string): Promise<string> {
 function extractXlsxText(buffer: Buffer): string {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const chunks: string[] = [];
-  for (const sheetName of workbook.SheetNames) {
+  // Cap sheets to avoid blocking the main process on workbooks with hundreds
+  // of sheets (each sheet_to_csv call is synchronous).
+  const MAX_SHEETS = 20;
+  const sheets = workbook.SheetNames.slice(0, MAX_SHEETS);
+  for (const sheetName of sheets) {
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) continue;
     const csv = XLSX.utils.sheet_to_csv(sheet).trim();
     if (csv) {
       chunks.push(`Sheet ${sheetName}:\n${csv}`);
     }
+  }
+  if (workbook.SheetNames.length > MAX_SHEETS) {
+    chunks.push(`[Workbook truncated: extracted first ${MAX_SHEETS} of ${workbook.SheetNames.length} sheets]`);
   }
   return chunks.join('\n\n');
 }
@@ -85,10 +93,50 @@ async function extractPlainText(buffer: Buffer): Promise<string> {
   return buffer.toString('utf-8');
 }
 
+/**
+ * Wrap a parser call with a timeout so a single huge/corrupt file cannot
+ * freeze the main process. All parsers above (pdf-parse, mammoth, pptx2json,
+ * xlsx) run synchronously on the event loop — without this guard a 200MB
+ * Excel file blocks all IPC for minutes.
+ */
+const ATTACHMENT_PARSE_TIMEOUT_MS = 15_000;
+
+async function withParseTimeout<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      fn(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`Parsing ${label} timed out after ${ATTACHMENT_PARSE_TIMEOUT_MS / 1000}s. The file may be too large or corrupt.`));
+        }, ATTACHMENT_PARSE_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function extractAttachmentText(
   filePath: string,
   maxChars = DEFAULT_ATTACHMENT_MAX_CHARS
 ): Promise<AttachmentExtractSection | null> {
+  // Audio/video files cannot be auto-transcribed inline (would require a Whisper-
+  // class model). Surface a clear note to the agent so it knows the file exists
+  // and can decide to invoke a transcription tool, rather than silently ignoring.
+  if (isAudioFilePath(filePath) || isVideoFilePath(filePath)) {
+    const fileName = getAttachmentFileName(filePath);
+    const kind = isAudioFilePath(filePath) ? 'audio' : 'video';
+    return {
+      filePath,
+      fileName,
+      kind,
+      text: '',
+      truncated: false,
+      error: `${kind === 'audio' ? 'Audio' : 'Video'} file attached. Automatic transcription is not available — the agent must use a tool (e.g. ffmpeg + whisper) to process ${fileName}, or the user should provide a text summary.`,
+    };
+  }
+
   if (!isExtractableAttachmentPath(filePath)) {
     return null;
   }
@@ -103,11 +151,11 @@ export async function extractAttachmentText(
 
     switch (ext) {
       case '.pdf':
-        rawText = await extractPdfText(filePath, buffer);
+        rawText = await withParseTimeout(fileName, () => extractPdfText(filePath, buffer));
         kind = 'pdf';
         break;
       case '.docx':
-        rawText = await extractDocxText(buffer);
+        rawText = await withParseTimeout(fileName, () => extractDocxText(buffer));
         kind = 'docx';
         break;
       case '.doc':
@@ -121,7 +169,7 @@ export async function extractAttachmentText(
           error: 'Legacy .doc (Office 97-2003) is not supported. Please convert to .docx and re-upload.',
         };
       case '.pptx':
-        rawText = await extractPptxText(filePath);
+        rawText = await withParseTimeout(fileName, () => extractPptxText(filePath));
         kind = 'pptx';
         break;
       case '.ppt':
@@ -134,7 +182,7 @@ export async function extractAttachmentText(
           error: 'Legacy .ppt (Office 97-2003) is not supported. Please convert to .pptx and re-upload.',
         };
       case '.xlsx':
-        rawText = extractXlsxText(buffer);
+        rawText = await withParseTimeout(fileName, () => Promise.resolve(extractXlsxText(buffer)));
         kind = 'excel';
         break;
       case '.xls':
@@ -190,9 +238,9 @@ export async function buildAttachmentContextBlock(
   let totalChars = 0;
 
   for (const filePath of filePaths) {
-    if (!isExtractableAttachmentPath(filePath)) {
-      continue;
-    }
+    // extractAttachmentText handles both extractable docs and audio/video
+    // (which return an error note instead of text). Skip only truly unknown
+    // types that extractAttachmentText returns null for.
     const remaining = maxTotalChars - totalChars;
     if (remaining <= 0) {
       break;

@@ -21,8 +21,42 @@ const IMAGE_EXTENSIONS = new Set([
   '.ico',
 ]);
 
+const AUDIO_EXTENSIONS = new Set([
+  '.mp3',
+  '.wav',
+  '.m4a',
+  '.aac',
+  '.ogg',
+  '.flac',
+  '.wma',
+  '.opus',
+]);
+
+const VIDEO_EXTENSIONS = new Set([
+  '.mp4',
+  '.mov',
+  '.avi',
+  '.mkv',
+  '.webm',
+  '.flv',
+  '.wmv',
+  '.m4v',
+]);
+
 export function isImageFilePath(filePath: string): boolean {
   return IMAGE_EXTENSIONS.has(extname(filePath));
+}
+
+export function isAudioFilePath(filePath: string): boolean {
+  return AUDIO_EXTENSIONS.has(extname(filePath));
+}
+
+export function isVideoFilePath(filePath: string): boolean {
+  return VIDEO_EXTENSIONS.has(extname(filePath));
+}
+
+export function isMediaFilePath(filePath: string): boolean {
+  return isImageFilePath(filePath) || isAudioFilePath(filePath) || isVideoFilePath(filePath);
 }
 
 export function isCacheTempFilePath(filePath: string, cacheDir: string): boolean {
