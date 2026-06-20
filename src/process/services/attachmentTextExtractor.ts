@@ -123,6 +123,17 @@ async function extractAudioTrackFromVideo(videoPath: string): Promise<string | n
 }
 
 /**
+ * Check if ffmpeg is available on system PATH (used when bundled binary absent).
+ */
+async function isFfmpegOnPath(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const ffmpeg = spawn('ffmpeg', ['-version'], { stdio: 'ignore', windowsHide: true });
+    ffmpeg.on('error', () => resolve(false));
+    ffmpeg.on('exit', (code) => resolve(code === 0));
+  });
+}
+
+/**
  * Transcribe an audio/video file via the configured SpeechToText provider.
  * Returns the transcript text, or null if STT is disabled / unavailable.
  */
@@ -210,10 +221,16 @@ export async function extractAttachmentText(
       };
     }
 
+    // Diagnose failure: STT disabled / ffmpeg missing / transcription error
     const sttConfig = await ProcessConfig.get('tools.speechToText').catch((): null => null);
-    const hint = !sttConfig?.enabled
-      ? `Automatic transcription is disabled. Enable it in Settings → Speech-to-Text, or use a tool (ffmpeg + whisper) to process ${fileName}.`
-      : `Transcription failed. The agent should use a tool (ffmpeg + whisper) to process ${fileName}, or the user should provide a text summary.`;
+    let hint: string;
+    if (!sttConfig?.enabled) {
+      hint = `Automatic transcription is disabled. Enable it in Settings → Speech-to-Text, or use a tool (ffmpeg + whisper) to process ${fileName}.`;
+    } else if (isVideo && !getBundledFfmpegPath() && !(await isFfmpegOnPath())) {
+      hint = `Video transcription requires ffmpeg, which is not installed. Install ffmpeg (https://ffmpeg.org/download.html) and add it to PATH, or use a tool to process ${fileName} manually.`;
+    } else {
+      hint = `Transcription failed. The agent should use a tool (ffmpeg + whisper) to process ${fileName}, or the user should provide a text summary.`;
+    }
     return {
       filePath,
       fileName,

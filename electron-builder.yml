@@ -71,9 +71,9 @@ files:
   - '!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}'
   - '!**/{appveyor.yml,.travis.yml,circle.yml}'
   - '!**/{npm-debug.log,yarn.lock,.yarn-metadata.json,yarn-error.log}'
-  # Exclude large packages
-  - '!**/node_modules/{@img,@emnapi}/**'
-  - '!**/node_modules/@img/sharp-*/**'
+  # Note: @img/@emnapi (sharp's native binaries) MUST NOT be excluded —
+  # excluding them causes "Could not load the sharp module using the
+  # win32-x64 runtime" at startup. They are unpacked via asarUnpack below.
   - '!**/node_modules/@anthropic-ai/claude-code/vendor/**'
   - '!**/node_modules/@anthropic-ai/claude-agent-sdk/vendor/**'
   # Exclude JAR files and JNI libraries that cause notarization issues
@@ -114,10 +114,9 @@ extraResources:
     to: bundled-aionrs
   - from: resources/bundled-agent-toolkit
     to: bundled-agent-toolkit
-  # ffmpeg binary (per platform/arch) — used for video audio extraction
-  # when transcribing mp4/mov/etc via SpeechToTextService.
-  - from: resources/bundled-ffmpeg
-    to: bundled-ffmpeg
+  # ffmpeg is NOT bundled (143MB too large for installer). Users who need
+  # audio/video transcription are guided to install it via Settings, or the
+  # app falls back to system PATH if ffmpeg is already installed.
   - from: resources/hub
     to: hub
 
@@ -205,6 +204,10 @@ asarUnpack:
   - '**/node_modules/prebuild-install/**/*'
   - '**/node_modules/node-gyp-build/**/*'
   - '**/node_modules/bindings/**/*'
+  # sharp native binaries — must be unpacked or sharp fails to load at runtime
+  - '**/node_modules/sharp/**/*'
+  - '**/node_modules/@img/**/*'
+  - '**/node_modules/@emnapi/**/*'
   # open library and dependencies - needed for Windows asar compatibility
   - '**/node_modules/open/**/*'
   - '**/node_modules/default-browser/**/*'
