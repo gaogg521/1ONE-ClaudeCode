@@ -46,8 +46,13 @@ export async function buildPromptAugmentationPrefix(input: PromptAugmentationInp
 }
 
 export function composeAgentPrompt(displayContent: string, augmentationPrefix: string): string {
+  // The augmentation prefix already carries attachment context as structured
+  // blocks (file paths + extracted text). The ONE_FILES_MARKER in displayContent
+  // is a UI-only affordance — leaking it into the agent prompt wastes tokens
+  // and confuses the model with raw path listings.
+  const cleanContent = stripFilesMarker(displayContent);
   if (!augmentationPrefix) {
-    return displayContent;
+    return cleanContent;
   }
-  return `${augmentationPrefix}${displayContent}`;
+  return `${augmentationPrefix}${cleanContent}`;
 }

@@ -50,6 +50,10 @@ function getExtensionFromMimeType(mimeType: string): string {
     'image/webp': '.webp',
     'image/bmp': '.bmp',
     'image/svg+xml': '.svg',
+    'image/tiff': '.tiff',
+    'image/avif': '.avif',
+    'image/apng': '.apng',
+    'image/x-icon': '.ico',
   };
   return mimeMap[mimeType] || '.png'; // 默认为 .png
 }

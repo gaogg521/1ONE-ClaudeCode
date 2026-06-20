@@ -24,14 +24,14 @@ const TEXT_EXTRACTABLE_EXTENSIONS = new Set([
   '.ppt',
   '.xlsx',
   '.xls',
-  '.html',
-  '.htm',
   '.txt',
   '.md',
   '.csv',
   '.json',
   '.xml',
-  '.rtf',
+  // .html / .htm / .rtf intentionally omitted: no tag-stripping parser is wired
+  // up, so they would leak raw markup into the agent prompt. Users can still
+  // upload them, but they won't be auto-extracted into the attachment context.
 ]);
 
 export type AttachmentExtractSection = {

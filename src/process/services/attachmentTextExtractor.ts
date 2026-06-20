@@ -99,20 +99,45 @@ export async function extractAttachmentText(
         kind = 'pdf';
         break;
       case '.docx':
-      case '.doc':
         rawText = await extractDocxText(buffer);
-        kind = ext.slice(1);
+        kind = 'docx';
         break;
+      case '.doc':
+        // Legacy OLE .doc is not supported by mammoth (OpenXML only).
+        return {
+          filePath,
+          fileName,
+          kind: 'doc',
+          text: '',
+          truncated: false,
+          error: 'Legacy .doc (Office 97-2003) is not supported. Please convert to .docx and re-upload.',
+        };
       case '.pptx':
-      case '.ppt':
         rawText = await extractPptxText(filePath);
         kind = 'pptx';
         break;
+      case '.ppt':
+        return {
+          filePath,
+          fileName,
+          kind: 'ppt',
+          text: '',
+          truncated: false,
+          error: 'Legacy .ppt (Office 97-2003) is not supported. Please convert to .pptx and re-upload.',
+        };
       case '.xlsx':
-      case '.xls':
         rawText = extractXlsxText(buffer);
         kind = 'excel';
         break;
+      case '.xls':
+        return {
+          filePath,
+          fileName,
+          kind: 'xls',
+          text: '',
+          truncated: false,
+          error: 'Legacy .xls (Office 97-2003) is not supported. Please convert to .xlsx and re-upload.',
+        };
       default:
         rawText = await extractPlainText(buffer);
         break;
@@ -126,7 +151,10 @@ export async function extractAttachmentText(
         kind,
         text: '',
         truncated: false,
-        error: 'No extractable text found',
+        error:
+          kind === 'pdf'
+            ? 'No extractable text found. This PDF may be scanned/image-based with no embedded text layer. Try converting it to text or uploading as an image.'
+            : 'No extractable text found',
       };
     }
 
