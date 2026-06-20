@@ -27,6 +27,7 @@ import DigitalEmployeeDetailModal, {
   type DigitalEmployeeDetailTarget,
 } from './components/DigitalEmployeeDetailModal';
 import CreateWorkspaceAgentModal from './components/CreateWorkspaceAgentModal';
+import { AGENT_TEMPLATES, getTemplateInstructions, getTemplateName } from './templates/agentTemplates';
 import ManageWorkspaceAgentModal, { type ManagedAgentRef } from './components/ManageWorkspaceAgentModal';
 import CreateTaskDialog from '@/renderer/pages/cron/ScheduledTasksPage/CreateTaskDialog';
 import { useAssistantCollaborationTeams } from './hooks/useAssistantCollaborationTeams';
@@ -269,7 +270,7 @@ function parseIssueTaskMetadata(task: TeamTaskRecord): SuperAssistantIssueTaskMe
 }
 
 const SuperAssistantPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -282,6 +283,7 @@ const SuperAssistantPage: React.FC = () => {
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [sharedTaskVisible, setSharedTaskVisible] = useState(false);
   const [createDigitalEmployeeVisible, setCreateDigitalEmployeeVisible] = useState(false);
+  const [creatingFromTemplate, setCreatingFromTemplate] = useState(false);
   const [digitalEmployeeDetailTarget, setDigitalEmployeeDetailTarget] =
     useState<DigitalEmployeeDetailTarget | null>(null);
   const [agentAutomationVisible, setAgentAutomationVisible] = useState(false);
@@ -1025,9 +1027,54 @@ const SuperAssistantPage: React.FC = () => {
     setCreateDigitalEmployeeVisible(true);
   }, []);
 
+  const handleCreateFromTemplate = useCallback(
+    async (templateId: string): Promise<void> => {
+      const template = AGENT_TEMPLATES.find((tpl) => tpl.id === templateId);
+      if (!template) return;
+      const allAgents = [...cliAgents, ...presetAssistants];
+      const agent = agentFromKey(template.agentKey, allAgents);
+      const backend = resolveTeamAgentType(agent, 'claude');
+      const language = i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US';
+      const instructions = getTemplateInstructions(template, language);
+      const name = getTemplateName(template, language);
+
+      setCreatingFromTemplate(true);
+      try {
+        await ipcBridge.personalAgent.create.invoke({
+          ownerUserId: user?.id ?? DESKTOP_OPERATOR_USER_ID,
+          tenantId: 'default',
+          name,
+          description: template.descriptionI18n[language] ?? template.descriptionI18n['en-US'],
+          agentType: backend,
+          conversationType: resolveConversationType(backend),
+          cliPath: agent?.cliPath,
+          customAgentId: agent?.customAgentId,
+          automationConfig: { instructions },
+        });
+        await superAssistantData.refresh();
+        Message.success(
+          t('common.superAssistant.templateCreated', {
+            defaultValue: '已创建「{{name}}」，可在下方卡片运行',
+            name,
+          })
+        );
+      } catch (error) {
+        console.error('[SuperAssistant] Failed to create agent from template:', error);
+        Message.error(
+          t('common.superAssistant.templateCreateFailed', { defaultValue: '创建失败，请重试' })
+        );
+      } finally {
+        setCreatingFromTemplate(false);
+      }
+    },
+    [cliAgents, presetAssistants, i18n.language, user?.id, superAssistantData, t]
+  );
+
   const agentTabHandlers = useMemo(
     () => ({
       onCreateAgent: handleOpenCreateDigitalEmployee,
+      onCreateFromTemplate: handleCreateFromTemplate,
+      creatingFromTemplate,
       onManageAgent: handleManageAgent,
       onRunAgentNow: (ref: AgentCardRef): void => {
         void handleRunAgentNow(ref);
@@ -1043,6 +1090,8 @@ const SuperAssistantPage: React.FC = () => {
       },
     }),
     [
+      creatingFromTemplate,
+      handleCreateFromTemplate,
       handleDeleteAgent,
       handleManageAgent,
       handleOpenCreateDigitalEmployee,

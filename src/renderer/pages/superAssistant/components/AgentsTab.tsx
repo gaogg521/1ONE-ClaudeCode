@@ -1,11 +1,12 @@
 import React, { useMemo } from 'react';
 import { Button, Card, Empty, Popconfirm, Tag } from '@arco-design/web-react';
-import { Delete, Edit, FileText, PlayOne, Plus, Time } from '@icon-park/react';
+import { Delete, Edit, FileText, PlayOne, Plus, Time, Magic } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import type { ICronJob } from '@/common/adapter/ipcBridge';
 import { useAllCronJobs } from '@/renderer/pages/cron/useCronJobs';
 import type { SuperAssistantAgentExecutionGroup } from '../hooks/useSuperAssistantData';
 import { listAgentCronJobs } from '../utils/agentAutomationUtils';
+import { useAgentTemplates, getTemplateName, getTemplateDescription } from '../templates/agentTemplates';
 
 export type AgentCardRef = {
   teamId: string;
@@ -23,6 +24,10 @@ type AgentsTabProps = {
   onScheduleAgent?: (agent: AgentCardRef) => void;
   onViewDigitalEmployeeDetail?: (agent: AgentCardRef) => void;
   onDeleteAgent?: (agent: AgentCardRef) => Promise<void>;
+  /** Create a personal agent from a template (template id). */
+  onCreateFromTemplate?: (templateId: string) => Promise<void>;
+  /** Whether a template creation is in flight (disables the card to prevent double-click). */
+  creatingFromTemplate?: boolean;
 };
 
 function getStatusMeta(
@@ -55,9 +60,14 @@ const AgentsTab: React.FC<AgentsTabProps> = ({
   onScheduleAgent,
   onViewDigitalEmployeeDetail,
   onDeleteAgent,
+  onCreateFromTemplate,
+  creatingFromTemplate,
 }) => {
   const { t } = useTranslation();
+  const { i18n } = useTranslation();
   const { jobs } = useAllCronJobs();
+  const templates = useAgentTemplates();
+  const language = i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US';
 
   const automationCountByAgent = useMemo(() => {
     const map = new Map<string, number>();
@@ -93,6 +103,48 @@ const AgentsTab: React.FC<AgentsTabProps> = ({
           </Button>
         </div>
       </Card>
+      {templates.length > 0 && onCreateFromTemplate ? (
+        <Card
+          title={
+            <span className='flex items-center gap-6px'>
+              <Magic theme='outline' size={16} />
+              {t('common.superAssistant.agentTemplatesTitle', { defaultValue: '快速模板' })}
+            </span>
+          }
+        >
+          <div className='text-12px text-t-tertiary mb-12px'>
+            {t('common.superAssistant.agentTemplatesDesc', {
+              defaultValue: '一键创建预配置的智能体，开箱即用。',
+            })}
+          </div>
+          <div className='grid gap-12px md:grid-cols-2'>
+            {templates.map((tpl) => (
+              <Card
+                key={tpl.id}
+                size='small'
+                hoverable
+                className='cursor-pointer'
+                onClick={() => {
+                  if (creatingFromTemplate) return;
+                  void onCreateFromTemplate(tpl.id);
+                }}
+              >
+                <div className='flex items-start gap-10px'>
+                  <span className='text-24px leading-1'>{tpl.avatar}</span>
+                  <div className='flex-1 min-w-0'>
+                    <div className='font-600 text-t-primary text-14px'>
+                      {getTemplateName(tpl, language)}
+                    </div>
+                    <div className='text-12px text-t-secondary mt-4px'>
+                      {getTemplateDescription(tpl, language)}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </Card>
+      ) : null}
       {executionGroups.length === 0 ? (
         <Empty
           description={t('common.superAssistant.noDigitalEmployees', {
