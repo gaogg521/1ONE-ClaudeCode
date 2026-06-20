@@ -105,8 +105,14 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
     defaultValue: '企业团队版管理后台',
   });
 
-  // 已登录企业成员：标题栏展示企业身份；实例访客仍保留个人/企业切换器
-  if (hasJoinedEnterprise && status === 'authenticated' && !isDesktopOperatorUser(user)) {
+  // 已登录企业成员且当前已在企业版视图：标题栏展示企业身份。
+  // 仍在个人版视图时落到下方切换器分支，让用户能明确切到企业版。
+  if (
+    hasJoinedEnterprise &&
+    managementMode === 'enterprise' &&
+    status === 'authenticated' &&
+    !isDesktopOperatorUser(user)
+  ) {
     const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId;
     const enterpriseTagLabel = tenantLabel ?? t('settings.edition.joined', { defaultValue: '已加入企业' });
     if (variant === 'compact') {
