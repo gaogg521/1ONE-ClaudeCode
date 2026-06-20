@@ -676,18 +676,18 @@ export class AcpAgent {
       let processedContent = data.agentPrompt ?? data.content;
 
       // Add @ prefix to ALL uploaded files (including images) with FULL PATH
-      // Claude CLI needs full path to read files
-      // 为所有上传的文件添加 @ 前缀（包括图片），使用完整路径让 Claude CLI 读取
+      // Claude CLI needs full path to read files. On Windows, normalize
+      // backslashes to forward slashes — Claude CLI's @ parser mishandles
+      // backslash paths, causing "I can't see the image" responses even
+      // though the file exists on disk.
       if (data.files && data.files.length > 0) {
         const fileRefs = data.files
           .map((filePath) => {
-            // Use full path instead of just filename
-            // Escape paths with spaces using quotes for Claude CLI
-            // 对含空格的路径使用引号包裹，确保 Claude CLI 正确解析
-            if (filePath.includes(' ')) {
-              return `@"${filePath}"`;
+            const normalized = filePath.replace(/\\/g, '/');
+            if (normalized.includes(' ')) {
+              return `@"${normalized}"`;
             }
-            return '@' + filePath;
+            return '@' + normalized;
           })
           .join(' ');
         // Prepend file references to the content

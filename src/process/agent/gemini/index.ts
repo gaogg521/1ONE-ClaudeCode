@@ -1002,9 +1002,10 @@ export class GeminiAgent {
     }
 
     // 将 files 参数中的文件路径作为 @ 引用添加到消息末尾
-    // Append files from files parameter as @ references to the message
+    // Normalize backslashes to forward slashes — CLI @ parsers on Windows
+    // mishandle backslash paths, especially for image files.
     if (files && files.length > 0) {
-      const fileRefs = files.map((filePath) => `@${filePath}`).join(' ');
+      const fileRefs = files.map((filePath) => `@${filePath.replace(/\\/g, '/')}`).join(' ');
       if (Array.isArray(message)) {
         if (message[0]?.text) {
           message[0].text = `${message[0].text} ${fileRefs}`;

@@ -109,7 +109,15 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ filePath, content, hideToolbar 
 
   // 使用 Electron webview 加载本地 PDF 文件
   // Use Electron webview to load local PDF files
-  const pdfSrc = filePath ? `file://${filePath}` : content || '';
+  // Windows paths (C:\...) must be normalized to file:///C:/... with forward
+  // slashes, otherwise webview's did-fail-load fires with "未能加载 PDF 文档".
+  const pdfSrc = React.useMemo(() => {
+    if (!filePath) return content || '';
+    // Convert backslashes to forward slashes and ensure file:/// prefix
+    const normalized = filePath.replace(/\\/g, '/');
+    const prefixed = normalized.startsWith('/') ? `file://${normalized}` : `file:///${normalized}`;
+    return prefixed;
+  }, [filePath, content]);
 
   if (error) {
     return (
