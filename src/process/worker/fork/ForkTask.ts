@@ -44,6 +44,8 @@ export class ForkTask<Data> extends Pipe {
       this.fcp = undefined;
     }
     process.off('exit', this.killFn);
+    // Drop any pending once-listeners so their promises don't leak.
+    this.clear();
   }
   protected init() {
     if (this.fcp) {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Input, Message, Spin, Typography } from '@arco-design/web-react';
 import { DataServer, HardDisk, User } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
@@ -187,12 +187,31 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
     [channelLabel, t]
   );
 
+  const oauthPollTimers = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    return () => {
+      for (const id of oauthPollTimers.current) {
+        window.clearTimeout(id);
+      }
+      oauthPollTimers.current.clear();
+    };
+  }, [isDesktop]);
+
   const pollDesktopOAuthSession = useCallback(() => {
     if (!isDesktop) {
       return;
     }
     const startedAt = Date.now();
     const maxMs = 120_000;
+    const schedule = (fn: () => void, delay: number) => {
+      const id = window.setTimeout(() => {
+        oauthPollTimers.current.delete(id);
+        fn();
+      }, delay);
+      oauthPollTimers.current.add(id);
+    };
     const tick = () => {
       void refresh().then(() => {
         if (getWebuiDesktopSession()?.token) {
@@ -200,11 +219,11 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
           return;
         }
         if (Date.now() - startedAt < maxMs) {
-          window.setTimeout(tick, 1500);
+          schedule(tick, 1500);
         }
       });
     };
-    window.setTimeout(tick, 1500);
+    schedule(tick, 1500);
   }, [isDesktop, refresh]);
 
   const startOAuth = useCallback(

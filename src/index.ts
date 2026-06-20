@@ -905,6 +905,22 @@ app.on('before-quit', async () => {
   } catch (error) {
     console.error('[App] Failed to shutdown ChannelManager:', error);
   }
+
+  // Stop all preview/office watch child processes (avoids orphan officecli processes)
+  try {
+    const { stopAllWatchSessions } = await import('@process/bridge/pptPreviewBridge');
+    stopAllWatchSessions();
+  } catch (error) {
+    console.error('[App] Failed to stop watch sessions:', error);
+  }
+
+  // Release workspace snapshot resources (file handles / cached buffers)
+  try {
+    const { disposeAllSnapshots } = await import('@process/bridge/workspaceSnapshotBridge');
+    await disposeAllSnapshots();
+  } catch (error) {
+    console.error('[App] Failed to dispose workspace snapshots:', error);
+  }
 });
 
 app.on('will-quit', () => {

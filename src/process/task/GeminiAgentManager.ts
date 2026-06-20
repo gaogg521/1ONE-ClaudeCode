@@ -1007,6 +1007,14 @@ export class GeminiAgentManager extends BaseAgentManager<
     return this.postMessagePromise(callId, data);
   }
 
+  override kill(): void {
+    if (this.thinkingDbFlushTimer) {
+      clearTimeout(this.thinkingDbFlushTimer);
+      this.thinkingDbFlushTimer = null;
+    }
+    super.kill();
+  }
+
   // Manually trigger context reload
   async reloadContext(): Promise<void> {
     await this.injectHistoryFromDatabase();
