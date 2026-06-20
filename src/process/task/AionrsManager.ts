@@ -18,6 +18,7 @@ import BaseAgentManager from './BaseAgentManager';
 import { IpcAgentEventEmitter } from './IpcAgentEventEmitter';
 import { mainError } from '@process/utils/mainLogger';
 import { ProcessConfig } from '@process/utils/initStorage';
+import { describeImagesForPrompt } from '@process/services/visionDescribe';
 import type { IProvider } from '@/common/config/storage';
 import { getSystemDir } from '@process/utils/initStorage';
 import fs from 'node:fs';
@@ -395,6 +396,32 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       // Conversation might not exist in DB yet
     }
     this.status = 'pending';
+
+    // aionrs backend does not support image vision — the binary passes file
+    // paths as text context and envBuilder tells the agent not to read images.
+    // Pre-describe images via the user's configured model's vision API and
+    // inject the text description into the prompt, so the agent can "see"
+    // image content. Non-image files pass through unchanged.
+    if (data.files && data.files.length > 0 && this.model.apiKey && this.model.useModel) {
+      try {
+        const { imageDescriptionBlock, nonImageFiles } = await describeImagesForPrompt(
+          data.files,
+          this.model
+        );
+        if (imageDescriptionBlock) {
+          // Append description to the input the worker receives; keep the
+          // user-visible content (originalInput) clean.
+          data = {
+            ...data,
+            input: data.input + imageDescriptionBlock,
+            files: nonImageFiles,
+          };
+        }
+      } catch (error) {
+        console.warn('[AionrsManager] Image vision description failed, sending without it:', error);
+      }
+    }
+
     return super.sendMessage(data);
   }
 

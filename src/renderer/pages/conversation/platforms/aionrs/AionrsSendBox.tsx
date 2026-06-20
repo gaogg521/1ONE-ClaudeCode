@@ -259,17 +259,16 @@ const AionrsSendBox: React.FC<{
 
     const filesToSend = collectSelectedFiles(uploadFile, atPath);
 
-    // aionrs backend does not support image vision input — the binary passes
-    // file paths as text context, and the envBuilder explicitly tells the agent
-    // not to read binary/image files. Warn the user so they know the agent
-    // cannot see image content, rather than letting the agent reply "I can't
-    // see the image" and leaving the user confused.
+    // aionrs backend doesn't natively support image vision. Images are auto-
+    // described via the configured model's vision API before sending (see
+    // AionrsManager.sendMessage + visionDescribe service), so the agent
+    // receives image content as text. This is a heads-up, not a blocker.
     const imageFiles = filesToSend.filter((f) => isImageFilePath(f));
     if (imageFiles.length > 0) {
-      Message.warning(
-        t('conversation.aionrsImageNotSupported', {
+      Message.info(
+        t('conversation.aionrsImageAutoDescribe', {
           defaultValue:
-            '当前 aionrs 后端不支持图片识别，agent 无法看到图片内容。如需图片解析，请切换到 Claude 或 Gemini agent。',
+            '正在通过视觉模型识别图片内容并转为文字注入对话，可能多花几秒钟。',
         })
       );
     }
