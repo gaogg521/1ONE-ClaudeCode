@@ -189,7 +189,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
             </Radio>
           </Tooltip>
         </Radio.Group>
-        {showEnterpriseAdminNav ? (
+        {showEnterpriseAdminNav && managementMode === 'enterprise' ? (
           <Button size='mini' type='text' onClick={() => void openAdminConsole()}>
             {enterpriseAdminConsoleLabel}
           </Button>
@@ -256,7 +256,7 @@ const EditionModeSwitcher: React.FC<EditionModeSwitcherProps> = ({ variant = 'ba
           </Tag>
         )}
       </div>
-      {showEnterpriseAdminNav ? (
+      {showEnterpriseAdminNav && managementMode === 'enterprise' ? (
         <Tooltip
           content={t('settings.edition.adminConsoleHint', {
             defaultValue: '企业团队版管理后台（成员、LDAP、邀请码、邮件）与上方「企业团队版」工作区是独立入口。',
