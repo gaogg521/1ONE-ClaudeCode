@@ -944,13 +944,14 @@ const SuperAssistantPage: React.FC = () => {
       if (managed.scope === 'personal') {
         try {
           const ownerUserId = user?.id ?? DESKTOP_OPERATOR_USER_ID;
-          const issueContext = currentIssue
-            ? { id: currentIssue.id, subject: currentIssue.subject, description: currentIssue.description }
-            : undefined;
+          // Run independently — don't auto-bind currentIssue. The agent uses
+          // its own instructions (automationConfig.instructions) as the task
+          // prompt. Users who want to run against a specific issue can do so
+          // from the issue's own "assign to agent" flow.
           await ipcBridge.personalAgent.runNow.invoke({
             agentId: managed.slotId,
             ownerUserId,
-            issue: issueContext,
+            issue: undefined,
           });
           Message.success(
             t('common.superAssistant.digitalEmployee.runStarted', {
@@ -965,18 +966,12 @@ const SuperAssistantPage: React.FC = () => {
         return;
       }
       try {
-        const issueContext = currentIssue
-          ? {
-              id: currentIssue.id,
-              subject: currentIssue.subject,
-              description: currentIssue.description,
-            }
-          : undefined;
+        // Run independently — see personal branch comment above.
         await ipcBridge.team.runDigitalEmployeeNow.invoke({
           teamId: managed.teamId,
           tenantId: managed.tenantId,
           slotId: managed.slotId,
-          issue: issueContext,
+          issue: undefined,
         });
         Message.success(
           t('common.superAssistant.digitalEmployee.runStarted', {
