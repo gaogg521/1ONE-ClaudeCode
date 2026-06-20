@@ -14,7 +14,7 @@ import FileAttachButton from '@/renderer/components/media/FileAttachButton';
 import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/chat/useSendBoxDraft';
 import { createSetUploadFile, useSendBoxFiles } from '@/renderer/hooks/chat/useSendBoxFiles';
 import { useSlashCommands } from '@/renderer/hooks/chat/useSlashCommands';
-import { useAddOrUpdateMessage, useRemoveMessageByMsgId } from '@/renderer/pages/conversation/Messages/hooks';
+import { useAddOrUpdateMessage, useRemoveMessageByMsgId, cancelPendingMessageUpdates } from '@/renderer/pages/conversation/Messages/hooks';
 import {
   shouldEnqueueConversationCommand,
   useConversationCommandQueue,
@@ -263,6 +263,10 @@ const GeminiSendBox: React.FC<{
           emitter.emit('gemini.workspace.refresh');
         }
       } catch (error) {
+        // Drop the user bubble before the next rAF flush can paint it. Without
+        // this, the pending addOrUpdateMessage batch may still win the race and
+        // leave a stray user message on screen after a send failure.
+        cancelPendingMessageUpdates();
         removeMessageByMsgId(msg_id);
         throw error;
       }

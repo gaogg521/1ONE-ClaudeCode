@@ -12,7 +12,6 @@ import { addEventListener } from '@/renderer/utils/emitter';
 import { createContext } from '@renderer/utils/ui/createContext';
 import {
   mergeConversationMessagesFromDb,
-  replaceConversationMessagesInList,
   textMessageStreamKey,
 } from '@renderer/pages/conversation/Messages/messageListSync';
 

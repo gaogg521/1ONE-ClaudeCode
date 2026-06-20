@@ -196,7 +196,9 @@ const MessageList: React.FC<{ className?: string }> = () => {
   );
 
   // Long histories: one scroll-to-latest on open. Short threads stay top-aligned (ChatGPT-style).
+  // Skip when opening with a target message id — the jump effect below owns the initial scroll.
   useEffect(() => {
+    if (targetMessageId) return;
     if (!pendingInitialScrollRef.current || processedList.length === 0 || !virtuosoRef.current) {
       return;
     }
@@ -208,7 +210,7 @@ const MessageList: React.FC<{ className?: string }> = () => {
         align: 'end',
       });
     });
-  }, [conversationId, processedList.length, virtuosoRef]);
+  }, [conversationId, processedList.length, targetMessageId, virtuosoRef]);
 
   useEffect(() => {
     if (!targetMessageId || processedList.length === 0 || !virtuosoRef.current) {

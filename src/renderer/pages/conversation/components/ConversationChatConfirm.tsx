@@ -105,7 +105,7 @@ const ConversationChatConfirm: React.FC<PropsWithChildren<{ conversation_id: str
         console.error('[ConversationChatConfirm] Failed to load confirmations:', error);
         if (retryCount < maxRetries) {
           retryCount++;
-          setTimeout(loadConfirmations, 1000);
+          retryTimer = window.setTimeout(loadConfirmations, 1000);
         } else {
           const errorMsg = error instanceof Error ? error.message : 'Failed to load confirmations';
           setLoadError(errorMsg);
@@ -113,9 +113,13 @@ const ConversationChatConfirm: React.FC<PropsWithChildren<{ conversation_id: str
       }
     };
 
+    let retryTimer: number | undefined;
     void loadConfirmations();
 
     return removeStack(
+      () => {
+        if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      },
       ipcBridge.conversation.confirmation.add.on((data) => {
         if (!idSet.has(data.conversation_id)) return;
         // Check if should auto-confirm (async)

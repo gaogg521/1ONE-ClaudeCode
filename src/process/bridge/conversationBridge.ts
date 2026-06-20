@@ -660,6 +660,22 @@ export function initConversationBridge(
 
   // 通用 confirmMessage 实现 - 自动根据 conversation 类型分发
 
+  // Renderer-facing generic confirm: maps a selected optionId back to the full
+  // option value stored on the manager's confirmation cache, then dispatches.
+  ipcBridge.conversation.confirmMessage.provider(async ({ conversation_id, msg_id, confirmKey, callId }) => {
+    const task = workerTaskManager.getTask(conversation_id);
+    if (!task) return { success: false, msg: 'conversation not found' };
+
+    const confirmations = task.getConfirmations();
+    const match = confirmations.find((c) => c.callId === callId || c.id === msg_id);
+    const option = match?.options.find((o) => o.value?.optionId === confirmKey || o.label === confirmKey);
+    if (!option) {
+      return { success: false, msg: 'confirmation option not found' };
+    }
+    task.confirm(msg_id, callId, option.value);
+    return { success: true };
+  });
+
   ipcBridge.conversation.confirmation.confirm.provider(async ({ conversation_id, msg_id, data, callId }) => {
     const task = workerTaskManager.getTask(conversation_id);
     if (!task) return { success: false, msg: 'conversation not found' };

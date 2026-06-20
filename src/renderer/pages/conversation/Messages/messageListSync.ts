@@ -105,7 +105,19 @@ export function mergeConversationMessagesFromDb(
   currentList: TMessage[]
 ): TMessage[] {
   if (!dbMessages.length) {
-    return currentList;
+    // DB sees no persisted messages for this conversation. Drop any cached
+    // entries for it, but keep in-flight streaming-only messages (thinking /
+    // unsaved text) so a live turn isn't wiped mid-stream.
+    const sameConversation = currentList.filter((m) => m.conversation_id === conversationId);
+    if (!sameConversation.length) return currentList;
+    const streamingOnly = sameConversation.filter((m) => {
+      if (m.type === 'thinking' && m.msg_id) return true;
+      const streamKey = textMessageStreamKey(m);
+      return Boolean(streamKey);
+    });
+    if (streamingOnly.length === sameConversation.length) return currentList;
+    const otherConversations = currentList.filter((m) => m.conversation_id !== conversationId);
+    return otherConversations.length ? [...otherConversations, ...streamingOnly] : streamingOnly;
   }
 
   const sameConversation = currentList.filter((m) => m.conversation_id === conversationId);
@@ -145,7 +157,17 @@ export function replaceConversationMessagesInList(
   messages: TMessage[]
 ): TMessage[] {
   if (!messages.length) {
-    return currentList;
+    // Same defensive behavior as mergeConversationMessagesFromDb: drop cached
+    // entries for this conversation, retain in-flight streaming-only messages.
+    const sameConversation = currentList.filter((m) => m.conversation_id === conversationId);
+    if (!sameConversation.length) return currentList;
+    const streamingOnly = sameConversation.filter((m) => {
+      if (m.type === 'thinking' && m.msg_id) return true;
+      return Boolean(textMessageStreamKey(m));
+    });
+    if (streamingOnly.length === sameConversation.length) return currentList;
+    const otherConversations = currentList.filter((m) => m.conversation_id !== conversationId);
+    return otherConversations.length ? [...otherConversations, ...streamingOnly] : streamingOnly;
   }
   const sameConversation = currentList.filter((m) => m.conversation_id === conversationId);
   const baseline = sameConversation.length ? sameConversation : currentList;
