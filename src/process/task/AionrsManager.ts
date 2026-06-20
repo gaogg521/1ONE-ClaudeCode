@@ -82,6 +82,8 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   model: TProviderWithModel;
   readonly approvalStore = new AionrsApprovalStore();
   private currentMode: string = 'default';
+  /** Derived from sessionMode='yolo' or explicit yoloMode — passed to aionrs binary as --auto-approve. */
+  private autoApproveEnabled: boolean = false;
   private static readonly autoFixedProtocolKeys = new Set<string>();
   private pendingModelIdentityNotice: string | null = null;
   private lastModelIdSeen: string | null = null;
@@ -119,6 +121,10 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     this.conversation_id = data.conversation_id;
     this.model = model;
     this.currentMode = data.sessionMode || 'default';
+    // sessionMode='yolo' must propagate to yoloMode so the aionrs binary gets
+    // --auto-approve. Without this, the binary prompts for tool confirmation
+    // even when the user selected full-auto mode at conversation creation.
+    this.autoApproveEnabled = this.currentMode === 'yolo' || data.yoloMode === true;
 
     // Start the worker bootstrap
     void this.start().catch(() => {});
@@ -150,7 +156,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
           ? { resume: storedAionrsSession }
           : { sessionId: this.conversation_id };
 
-      const res = await super.start({ ...this.data.data, ...sessionArgs } as AionrsManagerData);
+      const res = await super.start({ ...this.data.data, ...sessionArgs, yoloMode: this.autoApproveEnabled } as AionrsManagerData);
 
       // When the worker is rebuilt (commonly after model switch), it starts fresh and loses "self identity".
       // Inject a one-time reminder into the next user message so the model can correctly answer
@@ -188,7 +194,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       return res;
     } catch {
       // Fallback: start as new session if DB check fails
-      const res = await super.start({ ...this.data.data, sessionId: this.conversation_id } as AionrsManagerData);
+      const res = await super.start({ ...this.data.data, sessionId: this.conversation_id, yoloMode: this.autoApproveEnabled } as AionrsManagerData);
       await this.injectHistoryFromDatabase().catch(() => {});
       return res;
     }
