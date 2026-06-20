@@ -2,11 +2,13 @@ import { ipcBridge } from '@/common';
 import { Spin, Result, Button } from '@arco-design/web-react';
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 import TeamPage from './TeamPage';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 
 const TeamIndex: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { identity, showTeamsFeature } = useEditionFeatures();
@@ -26,9 +28,9 @@ const TeamIndex: React.FC = () => {
     <div className='flex items-center justify-center h-full'>
       <Result
         status='404'
-        title='团队不存在'
-        subTitle='此团队可能已被删除，请返回重新选择。'
-        extra={<Button type='primary' onClick={() => navigate('/sessions')}>返回</Button>}
+        title={t('team.notFound.title', { defaultValue: '团队不存在' })}
+        subTitle={t('team.notFound.desc', { defaultValue: '此团队可能已被删除，请返回重新选择。' })}
+        extra={<Button type='primary' onClick={() => navigate('/sessions')}>{t('common.back', { defaultValue: '返回' })}</Button>}
       />
     </div>
   );

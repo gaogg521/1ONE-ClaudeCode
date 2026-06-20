@@ -125,19 +125,19 @@ const TeamConfirmOverlay: React.FC<{
       style={{ zIndex: 1000, pointerEvents: 'none' }}
     >
       <div
-        className='relative p-16px bg-white flex flex-col overflow-hidden rd-20px max-h-[calc(100vh-200px)] w-full box-border mx-20px'
+        className='relative p-16px bg-bg-1 flex flex-col overflow-hidden rd-20px max-h-[calc(100vh-200px)] w-full box-border mx-20px'
         style={{
           maxWidth: CONTENT_RAIL.chatSurfaceMaxWidth,
-          boxShadow: '0px 2px 20px 0px rgba(74, 88, 250, 0.1)',
+          boxShadow: '0px 2px 20px 0px var(--shadow-color-overlay-1)',
           pointerEvents: 'auto',
         }}
       >
         <div className='flex-1 overflow-y-auto min-h-0'>
-          <Typography.Ellipsis className='text-15px font-bold color-[rgba(29,33,41,1)]' rows={2} expandable>
+          <Typography.Ellipsis className='text-15px font-bold text-t-primary' rows={2} expandable>
             {$t(confirmation.title) || 'Choose an action'}
           </Typography.Ellipsis>
           <Divider className={'!my-10px'} />
-          <Typography.Ellipsis className='text-13px color-[rgba(29,33,41,1)]' rows={5} expandable>
+          <Typography.Ellipsis className='text-13px text-t-primary' rows={5} expandable>
             {$t(confirmation.description)}
           </Typography.Ellipsis>
         </div>
@@ -166,9 +166,9 @@ const TeamConfirmOverlay: React.FC<{
                   });
                 }}
                 key={label + option.value + index}
-                className='b-1px b-solid h-30px lh-30px b-[rgba(229,230,235,1)] rd-8px px-12px hover:bg-[rgba(229,231,240,1)] cursor-pointer mt-10px flex items-center gap-8px'
+                className='b-1px b-solid h-30px lh-30px b-border-2 rd-8px px-12px hover:bg-fill-3 cursor-pointer mt-10px flex items-center gap-8px'
               >
-                <span className='inline-flex items-center justify-center px-4px h-18px rd-4px bg-[rgba(229,230,235,0.6)] text-11px text-[rgba(134,144,156,1)] font-mono shrink-0'>
+                <span className='inline-flex items-center justify-center px-4px h-18px rd-4px bg-fill-2 text-11px text-t-tertiary font-mono shrink-0'>
                   {shortcut}
                 </span>
                 {label}

@@ -10,8 +10,8 @@ import ModulePageHeader from '@/renderer/pages/admin/components/ModulePageHeader
 import AdminPageWrapper from '@/renderer/pages/admin/components/AdminPageWrapper';
 import { listValueStreamStages, type FlowStageRecord } from '@/renderer/utils/enterpriseApi/modules';
 
+// Backend persists stage_name in zh-CN. Map to i18n keys for display.
 const STAGE_ORDER = ['需求分析', '设计规划', '开发编码', '代码评审', '测试验证', '部署发布'];
-
 const STAGE_COLORS: Record<string, string> = {
   '需求分析': 'arcoblue',
   '设计规划': 'purple',
@@ -19,6 +19,14 @@ const STAGE_COLORS: Record<string, string> = {
   '代码评审': 'orange',
   '测试验证': 'gold',
   '部署发布': 'green',
+};
+const STAGE_LABEL_KEYS: Record<string, string> = {
+  '需求分析': 'admin.cflow.stage.requirementAnalysis',
+  '设计规划': 'admin.cflow.stage.designPlanning',
+  '开发编码': 'admin.cflow.stage.developmentCoding',
+  '代码评审': 'admin.cflow.stage.codeReview',
+  '测试验证': 'admin.cflow.stage.testVerification',
+  '部署发布': 'admin.cflow.stage.deployRelease',
 };
 
 function formatMs(ms: number): string {
@@ -46,7 +54,7 @@ function resolveRequirementTitle(reqId: string, stages: FlowStageRecord[]): stri
   const subject = stages.find((stage) => stage.req_subject)?.req_subject;
   if (subject) return subject;
   if (reqId === 'unlinked') {
-    return '未关联需求';
+    return 'admin.cflow.unlinkedRequirement';
   }
   return reqId.slice(0, 8);
 }
@@ -100,13 +108,13 @@ const CFlowBoard: React.FC = () => {
                 return (
                   <div key={stage} className='flex-1 min-w-120px'>
                     <div className='flex items-center justify-between mb-4px'>
-                      <Tag size='small' color={STAGE_COLORS[stage] ?? 'gray'}>{stage}</Tag>
+                      <Tag size='small' color={STAGE_COLORS[stage] ?? 'gray'}>{t(STAGE_LABEL_KEYS[stage] ?? '', { defaultValue: stage })}</Tag>
                       <span className='text-11px text-t-secondary font-mono'>{formatMs(avg)}</span>
                     </div>
                     <Progress
                       percent={pct}
                       size='small'
-                      color={pct >= 80 ? '#f53f3f' : pct >= 50 ? '#ff7d00' : '#00b42a'}
+                      color={pct >= 80 ? 'var(--danger)' : pct >= 50 ? 'var(--warning)' : 'var(--success)'}
                       showText={false}
                     />
                   </div>
@@ -147,13 +155,13 @@ const CFlowBoard: React.FC = () => {
                   className='rd-12px'
                   title={
                     <div className='flex items-center gap-10px'>
-                      <span className='font-600 text-t-primary'>{reqName}</span>
-                      <Tooltip content={`流动效率 = 处理时间 / (等待 + 处理)`}>
+                      <span className='font-600 text-t-primary'>{reqName === 'admin.cflow.unlinkedRequirement' ? t(reqName, { defaultValue: '未关联需求' }) : reqName}</span>
+                      <Tooltip content={t('admin.cflow.flowEfficiencyFormula', { defaultValue: '流动效率 = 处理时间 / (等待 + 处理)' })}>
                         <Tag size='small' color={flowEfficiency >= 60 ? 'green' : flowEfficiency >= 30 ? 'orange' : 'red'}>
-                          流动效率 {flowEfficiency}%
+                          {t('admin.cflow.flowEfficiency', { defaultValue: '流动效率' })} {flowEfficiency}%
                         </Tag>
                       </Tooltip>
-                      <span className='text-11px text-t-tertiary'>总等待 {formatMs(totalWait)} · 总处理 {formatMs(totalProcess)}</span>
+                      <span className='text-11px text-t-tertiary'>{t('admin.cflow.totalWait', { defaultValue: '总等待' })} {formatMs(totalWait)} · {t('admin.cflow.totalProcess', { defaultValue: '总处理' })} {formatMs(totalProcess)}</span>
                     </div>
                   }
                 >
@@ -177,15 +185,15 @@ const CFlowBoard: React.FC = () => {
                               className='mb-4px'
                             />
                             <Tag size='small' color={isCompleted ? (STAGE_COLORS[stage] ?? 'gray') : 'gray'}>
-                              {stage}
+                              {t(STAGE_LABEL_KEYS[stage] ?? '', { defaultValue: stage })}
                             </Tag>
                             {record && (() => {
                               const metrics = resolveStageMetrics(record);
                               return (
                                 <div className='mt-4px text-10px text-t-tertiary'>
-                                  <div>等待 {formatMs(metrics.waitMs)}</div>
+                                  <div>{t('admin.cflow.wait', { defaultValue: '等待' })} {formatMs(metrics.waitMs)}</div>
                                   {metrics.processMs > 0 && (
-                                    <div>处理 {formatMs(metrics.processMs)}</div>
+                                    <div>{t('admin.cflow.process', { defaultValue: '处理' })} {formatMs(metrics.processMs)}</div>
                                   )}
                                 </div>
                               );
