@@ -74,6 +74,7 @@ function makeEmitter(overrides?: Partial<ICronEventEmitter>): ICronEventEmitter 
 function makeExecutor(overrides?: Partial<ICronJobExecutor>): ICronJobExecutor {
   return {
     isConversationBusy: vi.fn(() => false),
+    tryAcquireBusy: vi.fn(() => true),
     executeJob: vi.fn(async () => {}),
     onceIdle: vi.fn(),
     setProcessing: vi.fn(),
@@ -352,8 +353,11 @@ describe('CronService', () => {
     });
     const skippedJob = makeJob({ id: 'j1' });
     vi.mocked(repo.listEnabled).mockReturnValue([job]);
-    vi.mocked(repo.getById).mockReturnValue(skippedJob);
-    vi.mocked(executor.isConversationBusy).mockReturnValue(true);
+    // Re-fetch during retry (1st call) returns the same job; skip-path fetch (2nd call) returns skippedJob
+    vi.mocked(repo.getById)
+      .mockReturnValueOnce(job)
+      .mockReturnValueOnce(skippedJob);
+    vi.mocked(executor.tryAcquireBusy).mockReturnValue(false);
 
     await service.init();
     // First interval fires: retry count = 1, not > maxRetries(1) → schedules 30s retry timer
@@ -377,7 +381,7 @@ describe('CronService', () => {
       state: { runCount: 0, retryCount: 0, maxRetries: 3 },
     });
     vi.mocked(repo.listEnabled).mockReturnValue([job]);
-    vi.mocked(executor.isConversationBusy).mockReturnValue(true);
+    vi.mocked(executor.tryAcquireBusy).mockReturnValue(false);
 
     await service.init();
     // First interval fires — busy, retry count = 1 (within limit), schedules retry

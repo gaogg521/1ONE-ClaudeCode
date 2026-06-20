@@ -30,6 +30,19 @@ export class CronBusyGuard {
   }
 
   /**
+   * Atomically acquire the busy lock for a conversation.
+   * Returns true if acquired (was idle), false if already busy.
+   * Closes the TOCTOU window between isProcessing() check and setProcessing(true).
+   */
+  tryAcquire(conversationId: string): boolean {
+    if (this.isProcessing(conversationId)) {
+      return false;
+    }
+    this.setProcessing(conversationId, true);
+    return true;
+  }
+
+  /**
    * Set the processing state of a conversation
    * Should be called at the start and end of message processing
    */

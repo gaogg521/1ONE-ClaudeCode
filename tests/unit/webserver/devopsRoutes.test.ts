@@ -216,7 +216,7 @@ describe('devopsRoutes', () => {
 
     it('PATCH /api/admin/requirements/:id - closes open stage and records process duration on status change', async () => {
       mockGet
-        .mockReturnValueOnce({ id: 'req-1' })
+        .mockReturnValueOnce({ id: 'req-1', type: 'story', status: 'planning' })
         .mockReturnValueOnce({ id: 'stage-open', entry_time: 1_000 });
 
       const handler = getRouteHandler(app, 'patch', '/api/admin/requirements/:id');
@@ -240,7 +240,7 @@ describe('devopsRoutes', () => {
     });
 
     it('PATCH /api/admin/requirements/:id - 个人未登录时可更新默认工作区 Issue', async () => {
-      mockGet.mockReturnValueOnce({ type: 'story' });
+      mockGet.mockReturnValueOnce({ type: 'story', status: 'planning' });
 
       const handler = getRouteHandler(app, 'patch', '/api/admin/requirements/:id');
       const req = {
@@ -252,7 +252,7 @@ describe('devopsRoutes', () => {
       await handler(req, res, () => {});
 
       expect(mockDriver.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT type FROM requirements WHERE id = ? AND tenant_id = ?')
+        expect.stringContaining('SELECT type, status FROM requirements WHERE id = ? AND tenant_id = ?')
       );
       expect(mockRun).toHaveBeenCalled();
       expect(res.json).toHaveBeenCalledWith({ success: true });

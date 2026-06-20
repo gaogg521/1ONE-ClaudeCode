@@ -46,6 +46,14 @@ export class WorkerTaskManagerJobExecutor implements ICronJobExecutor {
     return this.busyGuard.isProcessing(conversationId);
   }
 
+  /**
+   * Atomically acquire the busy lock. Returns true if acquired, false if already busy.
+   * Closes the TOCTOU window between isConversationBusy() and setProcessing(true).
+   */
+  tryAcquireBusy(conversationId: string): boolean {
+    return this.busyGuard.tryAcquire(conversationId);
+  }
+
   async executeJob(job: CronJob, onAcquired?: (conversationId: string) => void, preparedConversationId?: string): Promise<string | void> {
     let conversationId = preparedConversationId ?? job.metadata.conversationId;
 
@@ -91,7 +99,9 @@ export class WorkerTaskManagerJobExecutor implements ICronJobExecutor {
       }
     } catch (err) {
       // Conversation may have been deleted between scheduling and execution.
-      // Re-throw with context so the caller (CronService) can log and update job state.
+      // Release the busy lock acquired by CronService.executeJob so subsequent
+      // runs aren't blocked, then re-throw with context for the caller to log.
+      this.busyGuard.setProcessing(conversationId, false);
       throw new Error(
         `Failed to acquire task for conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}`,
         { cause: err }

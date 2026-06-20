@@ -547,9 +547,12 @@ export class CronService {
   private async executeJob(job: CronJob, preparedConversationId?: string): Promise<void> {
     const conversationId = preparedConversationId ?? job.metadata.conversationId;
 
-    // Check if conversation is busy
-    const isBusy = this.executor.isConversationBusy(conversationId);
-    if (isBusy) {
+    // Atomically acquire the busy lock to close the TOCTOU window between
+    // isConversationBusy() check and setProcessing(true). Two cron jobs for
+    // the same conversation firing simultaneously previously could both pass
+    // the busy check and proceed to execute concurrently.
+    const acquired = this.executor.tryAcquireBusy(conversationId);
+    if (!acquired) {
       const currentRetry = (this.retryCounts.get(job.id) ?? 0) + 1;
       this.retryCounts.set(job.id, currentRetry);
 
@@ -573,10 +576,17 @@ export class CronService {
         return;
       }
 
-      // Schedule retry in 30 seconds
+      // Schedule retry in 30 seconds. Re-fetch the job from repo before retrying
+      // so config changes made during the wait window (executionMode, conversationId,
+      // agentConfig) are honored — previously the retry used the stale closure job.
+      const retryJobId = job.id;
       const retryTimer = setTimeout(() => {
-        this.retryTimers.delete(job.id);
-        void this.executeJob(job);
+        this.retryTimers.delete(retryJobId);
+        void Promise.resolve(this.repo.getById(retryJobId)).then((latest) => {
+          if (latest) {
+            void this.executeJob(latest);
+          }
+        });
       }, 30000);
       this.retryTimers.set(job.id, retryTimer);
       return;

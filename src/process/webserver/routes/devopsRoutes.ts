@@ -17,7 +17,7 @@ import { UserRepository } from '../auth/repository/UserRepository';
 import { apiRateLimiter } from '../middleware/security';
 import { AuthProviderRepository } from '../auth/repository/AuthProviderRepository';
 import { getDatabase } from '@process/services/database';
-import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
+import { DESKTOP_OPERATOR_USER_ID, isWebuiBuiltinAdministrator } from '@/common/auth/enterpriseRoles';
 import { canUseAnonymousLocalDevops } from '@/common/config/localDevopsAccess';
 import { isEnterpriseAdminRole } from '../auth/enterpriseRoles';
 import { RAGService } from '@process/services/rag/RAGService';
@@ -48,9 +48,21 @@ import {
 
 /**
  * 校验管理员权限中间件
+ *
+ * 与 adminRoutes.requireAdmin 对齐：拒绝桌面占位身份（DESKTOP_OPERATOR_USER_ID），
+ * 只认 JWT/DB 中的管理员角色。此前仅用 isEnterpriseAdminRole，导致桌面端
+ * 占位身份可绕过 devopsRoutes 的 admin 校验。
  */
 function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  if (!req.user || !isEnterpriseAdminRole(req.user.role)) {
+  if (
+    !req.user ||
+    !isWebuiBuiltinAdministrator({
+      id: req.user.id,
+      username: req.user.username,
+      role: req.user.role,
+      tenant_id: req.user.tenant_id,
+    })
+  ) {
     res.status(403).json({ success: false, message: 'Admin only' });
     return;
   }
@@ -509,12 +521,33 @@ export function registerDevOpsRoutes(app: Express): void {
       const driver = db.getDriver();
 
       const existing = driver
-        .prepare(`SELECT type FROM requirements WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as { type: string } | undefined;
+        .prepare(`SELECT type, status FROM requirements WHERE id = ? AND tenant_id = ?`)
+        .get(id, tenantId) as { type: string; status: string } | undefined;
 
       if (!existing) {
         res.status(404).json({ success: false, message: 'Requirement not found' });
         return;
+      }
+
+      // 状态机校验：拒绝非法跳转（如 backlog 直接跳 completed、completed 回退）
+      // Legal transitions: backlog -> planning -> developing -> testing -> completed
+      // 允许任意状态回退到 backlog（重新规划），允许同状态（幂等）
+      if (updates.status !== undefined && updates.status !== existing.status) {
+        const LEGAL_NEXT: Record<string, ReadonlyArray<string>> = {
+          backlog: ['planning'],
+          planning: ['developing', 'backlog'],
+          developing: ['testing', 'backlog'],
+          testing: ['completed', 'backlog'],
+          completed: ['backlog'],
+        };
+        const allowed = LEGAL_NEXT[existing.status] ?? [];
+        if (!allowed.includes(updates.status)) {
+          res.status(400).json({
+            success: false,
+            message: `Illegal status transition: ${existing.status} -> ${updates.status}`,
+          });
+          return;
+        }
       }
 
       const fieldsToUpdate: string[] = [];
@@ -1090,7 +1123,7 @@ export function registerDevOpsRoutes(app: Express): void {
   // 9. 安全审计日志 API
   // ==========================================
 
-  app.get('/api/admin/audit-logs', apiRateLimiter, auth, async (req, res) => {
+  app.get('/api/admin/audit-logs', apiRateLimiter, auth, requireAdmin, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const userId = req.user!.id;

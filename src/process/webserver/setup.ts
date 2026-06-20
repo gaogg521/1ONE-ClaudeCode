@@ -10,10 +10,13 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import csrf from 'tiny-csrf';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { resolveAllLanIps } from '@/common/utils/resolveLanIp';
 import { AuthMiddleware } from '@process/webserver/auth/middleware/AuthMiddleware';
 import { errorHandler, createAppError } from './middleware/errorHandler';
 import { attachCsrfToken } from './middleware/security';
+import { getDataPath } from '@process/utils/utils';
 
 /**
  * 获取物理网卡 IPv4 地址（排除 VMware 等虚拟网卡；含 Tailscale 等）
@@ -30,8 +33,8 @@ function getAllNonInternalIPs(): string[] {
  * CSRF secret must be exactly 32 characters for AES-256-CBC
  * CSRF 密钥必须正好 32 个字符以用于 AES-256-CBC
  *
- * 优先级：环境变量 > 随机生成（每次启动不同）
- * Priority: Environment variable > Random generation (different on each startup)
+ * 优先级：环境变量 > 持久化文件 > 随机生成（每次启动不同）
+ * Priority: Environment variable > Persistent file > Random generation
  */
 function getCsrfSecret(): string {
   // 优先使用环境变量 / Prefer environment variable
@@ -39,11 +42,23 @@ function getCsrfSecret(): string {
     return process.env.CSRF_SECRET;
   }
 
-  // 生成随机 32 字符密钥（16 字节的 hex 编码）
-  // Generate random 32-character secret (16 bytes hex encoded)
-  const randomSecret = crypto.randomBytes(16).toString('hex');
-  console.log('[security] Generated random CSRF secret for this session');
-  return randomSecret;
+  // 持久化到文件，避免重启后所有已登录用户 cookie 失效
+  // Persist to file so logged-in cookies survive restarts
+  try {
+    const secretPath = path.join(getDataPath(), 'csrf-secret.txt');
+    const persisted = fs.existsSync(secretPath) ? fs.readFileSync(secretPath, 'utf8').trim() : '';
+    if (persisted.length === 32) {
+      return persisted;
+    }
+    const fresh = crypto.randomBytes(16).toString('hex');
+    fs.mkdirSync(path.dirname(secretPath), { recursive: true });
+    fs.writeFileSync(secretPath, fresh, { mode: 0o600 });
+    return fresh;
+  } catch {
+    // Fallback to in-memory only if the data dir is unavailable
+    console.warn('[security] Failed to persist CSRF secret; using ephemeral in-memory secret');
+    return crypto.randomBytes(16).toString('hex');
+  }
 }
 
 // 在模块加载时生成一次，整个进程生命周期内保持不变

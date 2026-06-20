@@ -2,6 +2,7 @@ import React from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SWRConfig } from 'swr';
+import { MemoryRouter } from 'react-router-dom';
 import ChatConversationIndex from '@/renderer/pages/conversation';
 
 const openTabMock = vi.fn();
@@ -75,9 +76,11 @@ describe('ChatConversationIndex', () => {
 
   const renderPage = () =>
     render(
-      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-        <ChatConversationIndex />
-      </SWRConfig>
+      <MemoryRouter>
+        <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+          <ChatConversationIndex />
+        </SWRConfig>
+      </MemoryRouter>
     );
 
   it('revalidates the active conversation after an update event', async () => {
