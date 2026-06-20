@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, Empty, Message, Tag } from '@arco-design/web-react';
+import { Button, Card, Empty, Input, Message, Modal, Tag } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ipcBridge } from '@/common';
@@ -284,6 +284,14 @@ const SuperAssistantPage: React.FC = () => {
   const [sharedTaskVisible, setSharedTaskVisible] = useState(false);
   const [createDigitalEmployeeVisible, setCreateDigitalEmployeeVisible] = useState(false);
   const [creatingFromTemplate, setCreatingFromTemplate] = useState(false);
+  // Pending run that needs user to provide a task prompt (e.g. topic to research).
+  // Holds the agent ref + name so the modal knows what to show.
+  const [pendingRunPrompt, setPendingRunPrompt] = useState<{
+    ref: AgentCardRef;
+    agentName: string;
+    placeholder: string;
+  } | null>(null);
+  const [runPromptInput, setRunPromptInput] = useState('');
   const [digitalEmployeeDetailTarget, setDigitalEmployeeDetailTarget] =
     useState<DigitalEmployeeDetailTarget | null>(null);
   const [agentAutomationVisible, setAgentAutomationVisible] = useState(false);
@@ -941,17 +949,39 @@ const SuperAssistantPage: React.FC = () => {
       if (!managed) {
         return;
       }
+      // Always prompt the user for a task description before running.
+      // Previously the agent ran blindly with only its system prompt and no
+      // concrete task, so it blocked on "no topic provided". The prompt modal
+      // lets users specify what they want the agent to do this run.
+      const agentName = 'teamAgent' in managed ? managed.teamAgent.agentName : (ref as AgentCardRef).agentName;
+      const placeholder = t('common.superAssistant.runPromptPlaceholder', {
+        defaultValue: '输入本轮要执行的任务，例如：调研 Claude Code 4.5 发布后的社区反馈',
+      });
+      setPendingRunPrompt({ ref: ref as AgentCardRef, agentName, placeholder });
+      setRunPromptInput('');
+    },
+    [teams, superAssistantData.agentExecutionGroups, t]
+  );
+
+  const executeRunWithPrompt = useCallback(
+    async (ref: AgentCardRef, taskPrompt: string) => {
+      const managed = resolveManagedAgent(teams, superAssistantData.agentExecutionGroups, ref);
+      if (!managed) return;
+      const trimmedPrompt = taskPrompt.trim();
       if (managed.scope === 'personal') {
         try {
           const ownerUserId = user?.id ?? DESKTOP_OPERATOR_USER_ID;
-          // Run independently — don't auto-bind currentIssue. The agent uses
-          // its own instructions (automationConfig.instructions) as the task
-          // prompt. Users who want to run against a specific issue can do so
-          // from the issue's own "assign to agent" flow.
+          // If the user provided a task prompt, pass it as the issue subject
+          // so buildPersonalDigitalEmployeeCronPrompt uses it as the task input
+          // (combined with the agent's instructions). If empty, run with no
+          // issue — agent falls back to its own instructions only.
+          const issueContext = trimmedPrompt
+            ? { id: `adhoc-${Date.now()}`, subject: trimmedPrompt, description: trimmedPrompt }
+            : undefined;
           await ipcBridge.personalAgent.runNow.invoke({
             agentId: managed.slotId,
             ownerUserId,
-            issue: undefined,
+            issue: issueContext,
           });
           Message.success(
             t('common.superAssistant.digitalEmployee.runStarted', {
@@ -966,12 +996,15 @@ const SuperAssistantPage: React.FC = () => {
         return;
       }
       try {
-        // Run independently — see personal branch comment above.
+        const trimmedPromptInner = taskPrompt.trim();
+        const issueContext = trimmedPromptInner
+          ? { id: `adhoc-${Date.now()}`, subject: trimmedPromptInner, description: trimmedPromptInner }
+          : undefined;
         await ipcBridge.team.runDigitalEmployeeNow.invoke({
           teamId: managed.teamId,
           tenantId: managed.tenantId,
           slotId: managed.slotId,
-          issue: undefined,
+          issue: issueContext,
         });
         Message.success(
           t('common.superAssistant.digitalEmployee.runStarted', {
@@ -987,7 +1020,6 @@ const SuperAssistantPage: React.FC = () => {
     },
     [
       buildDigitalEmployeeDetailTarget,
-      currentIssue,
       refreshCollaborationTeams,
       superAssistantData,
       t,
@@ -1836,6 +1868,53 @@ const SuperAssistantPage: React.FC = () => {
             : undefined
         }
       />
+      <Modal
+        title={
+          pendingRunPrompt
+            ? t('common.superAssistant.runPromptTitle', {
+                defaultValue: '运行「{{name}}」',
+                name: pendingRunPrompt.agentName,
+              })
+            : ''
+        }
+        visible={!!pendingRunPrompt}
+        onCancel={() => {
+          setPendingRunPrompt(null);
+          setRunPromptInput('');
+        }}
+        onOk={() => {
+          if (!pendingRunPrompt) return;
+          const prompt = runPromptInput;
+          setPendingRunPrompt(null);
+          setRunPromptInput('');
+          void executeRunWithPrompt(pendingRunPrompt.ref, prompt);
+        }}
+        okText={t('common.run', { defaultValue: '运行' })}
+        cancelText={t('common.cancel', { defaultValue: '取消' })}
+        maskClosable={false}
+      >
+        <div className='mb-8px text-13px text-t-secondary'>
+          {t('common.superAssistant.runPromptDesc', {
+            defaultValue: '输入本轮要让智能体执行的任务描述，留空则仅按智能体默认职责运行：',
+          })}
+        </div>
+        <Input.TextArea
+          autoFocus
+          value={runPromptInput}
+          onChange={setRunPromptInput}
+          placeholder={pendingRunPrompt?.placeholder ?? ''}
+          autoSize={{ minRows: 3, maxRows: 8 }}
+          onPressEnter={(e) => {
+            if (e.ctrlKey || e.metaKey) {
+              if (!pendingRunPrompt) return;
+              const prompt = runPromptInput;
+              setPendingRunPrompt(null);
+              setRunPromptInput('');
+              void executeRunWithPrompt(pendingRunPrompt.ref, prompt);
+            }
+          }}
+        />
+      </Modal>
     </div>
   );
 };
