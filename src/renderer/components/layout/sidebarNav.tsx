@@ -12,6 +12,7 @@ import {
   CommentOne,
   FolderOpen,
   Lightning,
+  Link,
   NetworkDrive,
   People,
   Robot,
@@ -58,7 +59,7 @@ const NAV_ITEMS: NavItem[] = [
     labelKey: 'nav.issues',
     labelDefault: 'Issues',
     path: '/issues',
-    paths: ['/enterprise/cteam', '/enterprise/kanban', '/tasks'],
+    paths: ['/enterprise/cteam', '/enterprise/kanban'],
   },
   {
     icon: <Robot theme='outline' size={18} />,
@@ -89,7 +90,7 @@ const NAV_ITEMS: NavItem[] = [
     capability: 'admin.console',
   },
   {
-    icon: <Lightning theme='outline' size={18} />,
+    icon: <Link theme='outline' size={18} />,
     labelKey: 'nav.hooks',
     labelDefault: 'Hooks',
     path: '/hooks',

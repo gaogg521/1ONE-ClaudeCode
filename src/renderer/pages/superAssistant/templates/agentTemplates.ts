@@ -98,14 +98,14 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     avatar: '📰',
     agentKey: 'claude',
     nameI18n: {
-      'en-US': '30-Day Topic Researcher',
-      'zh-CN': '30 天话题研究员',
+      'en-US': 'Trend Pulse Researcher',
+      'zh-CN': '热点话题调研员',
     },
     descriptionI18n: {
       'en-US':
         'Researches any topic across Reddit, HN, X, YouTube, GitHub, and the web — then synthesizes a grounded summary with citations. Zero config, works out of the box.',
       'zh-CN':
-        '跨 Reddit、HN、X、YouTube、GitHub 和全网研究任意话题，生成带引用的摘要。零配置，开箱即用。',
+        '跨 Reddit、HN、X、YouTube、GitHub 和全网调研任意话题，生成带引用的摘要。零配置，开箱即用。',
     },
     instructionsI18n: {
       'en-US': TOPIC_RESEARCHER_INSTRUCTIONS_EN,
