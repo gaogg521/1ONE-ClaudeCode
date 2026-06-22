@@ -1,6 +1,6 @@
 {
   "name": "1one-claudecode",
-  "version": "1.23.4",
+  "version": "1.23.5",
   "description": "1ONE Code — Visual control center for Claude Code native capabilities.",
   "keywords": [],
   "license": "MIT",
@@ -74,7 +74,9 @@
     "build:renderer:web": "bunx vite build --config vite.renderer.config.ts",
     "build:server": "node scripts/build-server.mjs",
     "vendor:agent-toolkit": "node scripts/vendor-agent-toolkit.mjs",
-    "prepare:agent-toolkit": "node scripts/prepareBundledAgentToolkit.js"
+    "prepare:agent-toolkit": "node scripts/prepareBundledAgentToolkit.js",
+    "prepare:aionrs": "node -e \"require('./scripts/prepareAionrs')({strict:true})\"",
+    "prepare:aioncore": "node -e \"require('./scripts/prepareAioncore')({projectRoot:process.cwd(),platform:process.platform,arch:process.env.AIONCORE_ARCH||process.arch})\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

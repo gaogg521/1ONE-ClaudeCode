@@ -130,12 +130,32 @@ export type IMessageText = IMessage<
   'text',
   {
     content: string;
+    /** Backend explicitly replaced the accumulated text for this msg_id. */
+    replace?: boolean;
     cronMeta?: CronMessageMeta;
     teammateMessage?: boolean;
     senderName?: string;
     senderAgentType?: string;
   }
 >;
+
+export const isTextContentReplacement = (content: IMessageText['content'] | undefined): boolean =>
+  content?.replace === true;
+
+export const mergeTextMessageContent = (
+  existing: IMessageText['content'],
+  incoming: IMessageText['content']
+): IMessageText['content'] => {
+  const { replace: _existingReplace, ...existingRest } = existing;
+  const { replace: incomingReplace, ...incomingRest } = incoming;
+
+  return {
+    ...existingRest,
+    ...incomingRest,
+    content: incomingReplace ? incoming.content : existing.content + incoming.content,
+    ...(incomingReplace ? { replace: true } : {}),
+  };
+};
 
 export type IMessageTips = IMessage<'tips', { content: string; type: 'error' | 'success' | 'warning' }>;
 
@@ -387,6 +407,14 @@ export interface IConfirmation<Option extends any = any> {
    */
   commandType?: string;
 }
+
+export const isErrorTipMessage = (message: IResponseMessage): boolean => {
+  if (message.type !== 'tips' || !message.data || typeof message.data !== 'object') {
+    return false;
+  }
+  const tipData = message.data as { type?: unknown };
+  return tipData.type === 'error';
+};
 
 /**
  * @description 将后端返回的消息转换为前端消息

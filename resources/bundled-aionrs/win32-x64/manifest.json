@@ -1,11 +1,11 @@
 {
   "platform": "win32",
   "arch": "x64",
-  "version": "aionrs 0.1.7",
-  "generatedAt": "2026-05-28T14:19:05.344Z",
-  "sourceType": "bundled-local",
+  "version": "aionrs 0.1.30",
+  "generatedAt": "2026-06-22T04:50:13.655Z",
+  "sourceType": "download",
   "source": {
-    "path": "resources\\bundled-aionrs\\win32-x64\\aionrs.exe"
+    "url": "https://github.com/iOfficeAI/aionrs/releases/download/v0.1.30/aionrs-v0.1.30-x86_64-pc-windows-msvc.zip"
   },
   "files": [
     "aionrs.exe"

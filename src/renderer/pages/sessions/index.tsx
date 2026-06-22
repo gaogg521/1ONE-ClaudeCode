@@ -46,22 +46,7 @@ function resolveWorkspaceScope(search: string): WorkspaceScope {
   return 'all';
 }
 
-const BACKEND_LABEL: Record<string, { label: string; color: string }> = {
-  claude:     { label: 'Claude Code', color: 'blue' },
-  gemini:     { label: 'Gemini',      color: 'green' },
-  qwen:       { label: 'Qwen',        color: 'orangered' },
-  codex:      { label: 'Codex',       color: 'purple' },
-  codebuddy:  { label: 'CodeBuddy',   color: 'cyan' },
-  opencode:   { label: 'OpenCode',    color: 'gold' },
-};
-
-function getBackendInfo(conv: TChatConversation) {
-  if (conv.type === 'acp') {
-    const backend = (conv.extra as { backend?: string }).backend ?? 'claude';
-    return BACKEND_LABEL[backend] ?? { label: backend, color: 'arcoblue' };
-  }
-  return { label: 'Gemini', color: 'green' };
-}
+import { getConversationBackendLabel } from '@/renderer/utils/conversation/conversationBackendLabel';
 
 function formatTime(ts: number) {
   const d = new Date(ts);
@@ -137,7 +122,7 @@ const SessionCard: React.FC<{
 }> = ({ conv, onDelete, matchPreview }) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const backend = getBackendInfo(conv);
+  const backend = getConversationBackendLabel(conv);
   const isRunning = conv.status === 'running';
   const extra = conv.extra as { pinned?: boolean; favorited?: boolean } | undefined;
   const pinned = Boolean(extra?.pinned);

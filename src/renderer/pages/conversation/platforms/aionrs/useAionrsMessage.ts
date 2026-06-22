@@ -5,9 +5,10 @@
  */
 
 import { ipcBridge } from '@/common';
-import { transformMessage } from '@/common/chat/chatLib';
+import { isErrorTipMessage, transformMessage } from '@/common/chat/chatLib';
 import type { IResponseMessage } from '@/common/adapter/ipcBridge';
 import type { TChatConversation, TokenUsageData } from '@/common/config/storage';
+import { uuid } from '@/common/utils';
 import type { ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
 import {
@@ -15,6 +16,7 @@ import {
   useSyncOnRunningComplete,
 } from '@/renderer/pages/conversation/Messages/conversationMessageSync';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { processLocalCronResponse } from './localCronCommands';
 
 type TokenUsage = {
   input_tokens?: number;
@@ -24,7 +26,16 @@ type TokenUsage = {
 /** Poll DB while waiting so packaged builds still show replies without waiting for finish. */
 export const AIONRS_MESSAGE_SYNC_POLL_MS = 2500;
 
-export const useAionrsMessage = (conversation_id: string, onError?: (message: IResponseMessage) => void) => {
+export const useAionrsMessage = (
+  conversation_id: string,
+  options?: {
+    onError?: (message: IResponseMessage) => void;
+    onConfigChanged?: (capabilities: Record<string, unknown>) => void;
+  }
+) => {
+  const onError = options?.onError;
+  const onConfigChanged = options?.onConfigChanged;
+  const onConfigChangedRef = useRef(onConfigChanged);
   const addOrUpdateMessage = useAddOrUpdateMessage();
   const scheduleMessageSync = useConversationMessageSync(conversation_id);
   const [streamRunning, setStreamRunning] = useState(false);
@@ -36,18 +47,18 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
     subject: '',
   });
   const [tokenUsage, setTokenUsage] = useState<TokenUsageData | null>(null);
-  // Current active message ID to filter out events from old requests (prevents aborted request events from interfering with new ones)
   const activeMsgIdRef = useRef<string | null>(null);
+  const messageBufferRef = useRef(new Map<string, string>());
+  const processedCronMsgIdsRef = useRef(new Set<string>());
 
-  // Use refs to avoid useEffect re-subscription when these states change
   const hasActiveToolsRef = useRef(hasActiveTools);
   const streamRunningRef = useRef(streamRunning);
   const waitingResponseRef = useRef(waitingResponse);
-
-  // Track whether current turn has content output
-  // Only reset waitingResponse when finish arrives after content (not after tool calls)
   const hasContentInTurnRef = useRef(false);
 
+  useEffect(() => {
+    onConfigChangedRef.current = onConfigChanged;
+  }, [onConfigChanged]);
   useEffect(() => {
     hasActiveToolsRef.current = hasActiveTools;
   }, [hasActiveTools]);
@@ -55,7 +66,6 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
     streamRunningRef.current = streamRunning;
   }, [streamRunning]);
 
-  // Throttle thought updates to reduce render frequency
   const thoughtThrottleRef = useRef<{
     lastUpdate: number;
     pending: ThoughtData | null;
@@ -63,7 +73,7 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
   }>({ lastUpdate: 0, pending: null, timer: null });
 
   const throttledSetThought = useMemo(() => {
-    const THROTTLE_MS = 50; // 50ms throttle interval
+    const THROTTLE_MS = 50;
     return (data: ThoughtData) => {
       const now = Date.now();
       const ref = thoughtThrottleRef.current;
@@ -95,7 +105,6 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
     };
   }, []);
 
-  // Cleanup throttle timer
   useEffect(() => {
     return () => {
       if (thoughtThrottleRef.current.timer) {
@@ -104,13 +113,65 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
     };
   }, []);
 
-  // Combined running state: waiting for response OR stream is running OR tools are active
   const running = waitingResponse || streamRunning || hasActiveTools;
 
-  // Set current active message ID
   const setActiveMsgId = useCallback((msgId: string | null) => {
     activeMsgIdRef.current = msgId;
   }, []);
+
+  const processCompletedAssistantMessage = useCallback(
+    async (msgId: string) => {
+      if (!msgId || processedCronMsgIdsRef.current.has(msgId)) {
+        return;
+      }
+
+      const rawContent = messageBufferRef.current.get(msgId) ?? '';
+      if (!rawContent.trim()) {
+        return;
+      }
+
+      processedCronMsgIdsRef.current.add(msgId);
+
+      try {
+        const result = await processLocalCronResponse(conversation_id, rawContent);
+        if (result.displayContent !== undefined && result.displayContent !== rawContent) {
+          addOrUpdateMessage({
+            id: uuid(),
+            msg_id: msgId,
+            type: 'text',
+            position: 'left',
+            conversation_id,
+            createdAt: Date.now(),
+            content: {
+              content: result.displayContent,
+              replace: true,
+            },
+          });
+        }
+
+        for (const response of result.systemResponses) {
+          addOrUpdateMessage(
+            {
+              id: uuid(),
+              msg_id: `cron-local-${uuid()}`,
+              type: 'tips',
+              position: 'center',
+              conversation_id,
+              createdAt: Date.now(),
+              content: {
+                content: response,
+                type: response.startsWith('❌') ? 'error' : 'success',
+              },
+            },
+            true
+          );
+        }
+      } catch {
+        processedCronMsgIdsRef.current.delete(msgId);
+      }
+    },
+    [addOrUpdateMessage, conversation_id]
+  );
 
   useEffect(() => {
     return ipcBridge.conversation.responseStream.on((message) => {
@@ -118,17 +179,49 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
         return;
       }
 
-      // Filter out events not belonging to current active request (prevents aborted events from interfering)
-      // Note: only filter out thought and start messages, other messages must be rendered
+      if (isErrorTipMessage(message)) {
+        setStreamRunning(false);
+        streamRunningRef.current = false;
+        setWaitingResponse(false);
+        waitingResponseRef.current = false;
+        setHasActiveTools(false);
+        hasActiveToolsRef.current = false;
+        setThought({ subject: '', description: '' });
+        hasContentInTurnRef.current = false;
+        const transformedMessage = transformMessage(message);
+        if (transformedMessage) {
+          addOrUpdateMessage(transformedMessage);
+        }
+        scheduleMessageSync();
+        return;
+      }
+
       if (activeMsgIdRef.current && message.msg_id && message.msg_id !== activeMsgIdRef.current) {
         if (message.type === 'thought') {
           return;
         }
       }
 
+      if ((message.type === 'content' || message.type === 'text') && message.msg_id) {
+        const payload = message.data;
+        const chunk =
+          typeof payload === 'string'
+            ? payload
+            : typeof payload === 'object' &&
+                payload !== null &&
+                'content' in payload &&
+                typeof (payload as { content?: unknown }).content === 'string'
+              ? ((payload as { content: string }).content ?? '')
+              : '';
+
+        if (chunk) {
+          const previous = messageBufferRef.current.get(message.msg_id) ?? '';
+          messageBufferRef.current.set(message.msg_id, previous + chunk);
+        }
+      }
+
       switch (message.type) {
         case 'thought':
-          // Auto-recover streamRunning if thought arrives after finish
           if (!streamRunningRef.current) {
             setStreamRunning(true);
             streamRunningRef.current = true;
@@ -138,11 +231,9 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
         case 'start':
           setStreamRunning(true);
           streamRunningRef.current = true;
-          // Don't reset waitingResponse here - let tool completion flow handle it
           break;
         case 'finish':
           {
-            // aionrs stream_end carries usage in data field
             const usageData = message.data as TokenUsage | undefined;
             if (usageData && typeof usageData === 'object' && 'input_tokens' in usageData) {
               const newTokenUsage: TokenUsageData = {
@@ -161,36 +252,33 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
             setWaitingResponse(false);
             setThought({ subject: '', description: '' });
             scheduleMessageSync();
+            if (message.msg_id) {
+              void processCompletedAssistantMessage(message.msg_id);
+            }
           }
           break;
         case 'tool_group':
           {
-            // Mark that current turn has content output
             hasContentInTurnRef.current = true;
 
-            // Auto-recover streamRunning if tool_group arrives after finish
             if (!streamRunningRef.current) {
               setStreamRunning(true);
               streamRunningRef.current = true;
             }
 
-            // Check if any tools are executing or awaiting confirmation
             const tools = message.data as Array<{ status: string; name?: string }>;
             const activeStatuses = new Set(['Executing', 'Confirming', 'Pending']);
             const hasActive = tools.some((tool) => activeStatuses.has(tool.status));
             const wasActive = hasActiveToolsRef.current;
 
             setHasActiveTools(hasActive);
-            hasActiveToolsRef.current = hasActive; // Sync update ref immediately
+            hasActiveToolsRef.current = hasActive;
 
-            // When tools transition from active to inactive, set waitingResponse=true
-            // because backend needs to continue sending requests to model
             if (wasActive && !hasActive && tools.length > 0) {
               setWaitingResponse(true);
               waitingResponseRef.current = true;
             }
 
-            // If tools are awaiting confirmation, update thought hint
             const confirmingTool = tools.find((tool) => tool.status === 'Confirming');
             if (confirmingTool) {
               setThought({
@@ -206,18 +294,25 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
                 });
               }
             } else if (!streamRunningRef.current) {
-              // All tools completed and stream stopped, clear thought
               setThought({ subject: '', description: '' });
             }
 
-            // Continue passing message to message list update
             addOrUpdateMessage(transformMessage(message));
           }
           break;
+        case 'permission':
+        case 'acp_permission':
+          if (!streamRunningRef.current) {
+            setStreamRunning(true);
+            streamRunningRef.current = true;
+          }
+          addOrUpdateMessage(transformMessage({ ...message, type: 'permission' }));
+          break;
+        case 'config_changed':
+          onConfigChangedRef.current?.(message.data as Record<string, unknown>);
+          break;
         default: {
           if (message.type === 'error') {
-            // aionrs may emit `error` without a trailing `finish` in some failure paths
-            // (e.g. worker crash / upstream timeout). Ensure the UI is unblocked for the next turn.
             setWaitingResponse(false);
             waitingResponseRef.current = false;
             setStreamRunning(false);
@@ -226,32 +321,33 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
             hasActiveToolsRef.current = false;
             setThought({ subject: '', description: '' });
             hasContentInTurnRef.current = false;
-            // Clear active message id so next request won't be filtered
             activeMsgIdRef.current = null;
             scheduleMessageSync();
             onError?.(message as IResponseMessage);
           } else {
-            // Mark that current turn has content output (exclude error type)
             hasContentInTurnRef.current = true;
-            // Reset waitingResponse when actual content arrives
             if (message.type === 'content') {
               setWaitingResponse(false);
               waitingResponseRef.current = false;
             }
-            // Auto-recover streamRunning if content arrives after finish
             if (!streamRunningRef.current) {
               setStreamRunning(true);
               streamRunningRef.current = true;
             }
           }
-          // Backend handles persistence, Frontend only updates UI
           addOrUpdateMessage(transformMessage(message));
           break;
         }
       }
     });
-    // Note: hasActiveTools and streamRunning are accessed via refs to avoid re-subscription
-  }, [conversation_id, addOrUpdateMessage, onError, scheduleMessageSync]);
+  }, [
+    conversation_id,
+    addOrUpdateMessage,
+    onError,
+    scheduleMessageSync,
+    processCompletedAssistantMessage,
+    throttledSetThought,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,8 +357,6 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
     hasContentInTurnRef.current = false;
     setHasHydratedRunningState(false);
 
-    // Check actual conversation status from backend before resetting all running states
-    // to avoid flicker when switching to a running conversation
     void ipcBridge.conversation.get.invoke({ id: conversation_id }).then((res) => {
       if (cancelled) {
         return;
@@ -281,12 +375,10 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
       const isRunning = res.status === 'running';
       setStreamRunning(isRunning);
       streamRunningRef.current = isRunning;
-      // Reset tool states - they will be restored by incoming messages if still active
       setHasActiveTools(false);
       hasActiveToolsRef.current = false;
       setWaitingResponse(isRunning);
       waitingResponseRef.current = isRunning;
-      // Load persisted token usage stats
       if (res.type === 'aionrs' && res.extra?.lastTokenUsage) {
         const { lastTokenUsage } = res.extra;
         if (lastTokenUsage.totalTokens > 0) {
@@ -310,12 +402,9 @@ export const useAionrsMessage = (conversation_id: string, onError?: (message: IR
     hasActiveToolsRef.current = false;
     setThought({ subject: '', description: '' });
     hasContentInTurnRef.current = false;
-    // Clear active message ID to prevent filtering events from new messages after stop
     activeMsgIdRef.current = null;
   }, []);
 
-  // Packaged builds may miss stream IPC events; poll DB only while waiting for the first chunk.
-  // During active streaming, IPC updates the list — polling here caused full list reloads and scroll jitter.
   useEffect(() => {
     if (!waitingResponse || streamRunning) {
       return;

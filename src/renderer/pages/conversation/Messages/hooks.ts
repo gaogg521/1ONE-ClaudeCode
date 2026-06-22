@@ -6,7 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import type { TMessage } from '@/common/chat/chatLib';
-import { composeMessage } from '@/common/chat/chatLib';
+import { composeMessage, mergeTextMessageContent } from '@/common/chat/chatLib';
 import { useCallback, useEffect, useRef } from 'react';
 import { addEventListener } from '@/renderer/utils/emitter';
 import { createContext } from '@renderer/utils/ui/createContext';
@@ -228,14 +228,11 @@ function composeMessageWithIndex(message: TMessage, list: TMessage[], index: Mes
       if ((message.content as { teammateMessage?: boolean })?.teammateMessage) {
         return list;
       }
-      // AI streaming messages (left position) — append chunks
+      // AI streaming messages (left position) — append chunks or replace when flagged
       const newList = list.slice();
       newList[existingIdx] = {
         ...existingMsg,
-        content: {
-          ...existingMsg.content,
-          content: existingMsg.content.content + message.content.content,
-        },
+        content: mergeTextMessageContent(existingMsg.content, message.content),
       };
       return newList;
     }
