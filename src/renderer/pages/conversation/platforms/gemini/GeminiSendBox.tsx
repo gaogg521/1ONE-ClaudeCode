@@ -44,6 +44,9 @@ import type { GeminiModelSelection } from './useGeminiModelSelection';
 import { useGeminiMessage } from './useGeminiMessage';
 import { useGeminiQuotaFallback } from './useGeminiQuotaFallback';
 import { useGeminiInitialMessage } from './useGeminiInitialMessage';
+import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtime/useConversationRuntimeView';
+import { runtimeSummaryForActiveSend } from '@/renderer/pages/conversation/utils/conversationRuntime';
+import { warmupConversation } from '@/renderer/pages/conversation/utils/warmupConversation';
 
 const useGeminiSendBoxDraft = getSendBoxDraftHook('gemini', {
   _type: 'gemini',
@@ -91,7 +94,10 @@ const useSendBoxDraft = (conversation_id: string) => {
 const GeminiSendBox: React.FC<{
   conversation_id: string;
   modelSelection: GeminiModelSelection;
-}> = ({ conversation_id, modelSelection }) => {
+  teamId?: string;
+  tenantId?: string;
+  agentSlotId?: string;
+}> = ({ conversation_id, modelSelection, teamId, tenantId, agentSlotId }) => {
   const { t } = useTranslation();
   const teamPermission = useTeamPermission();
   const conversationContext = useConversationContextSafe();
@@ -145,6 +151,14 @@ const GeminiSendBox: React.FC<{
     resetState,
     hasThinkingMessage,
   } = useGeminiMessage(conversation_id, handleGeminiError);
+  const runtimeView = useConversationRuntimeView(conversation_id);
+
+  useEffect(() => {
+    if (!conversation_id) return;
+    void warmupConversation(conversation_id).catch(() => {
+      // Warmup is best-effort; send path still works without it.
+    });
+  }, [conversation_id]);
 
   const { atPath, uploadFile, setAtPath, setUploadFile, content, setContent } = useSendBoxDraft(conversation_id);
 
@@ -190,7 +204,11 @@ const GeminiSendBox: React.FC<{
   const addOrUpdateMessage = useAddOrUpdateMessage();
   const removeMessageByMsgId = useRemoveMessageByMsgId();
   const { setSendBoxHandler } = usePreviewContext();
-  const isBusy = running;
+  const isBusy =
+    running ||
+    (!teamId &&
+      runtimeView.hydrated &&
+      (!runtimeView.canSendMessage || runtimeView.isProcessing || runtimeView.view.localSubmitting));
 
   // Use useLatestRef to keep latest setters to avoid re-registering handler
   const setContentRef = useLatestRef(setContent);
@@ -224,14 +242,78 @@ const GeminiSendBox: React.FC<{
 
   const executeCommand = useCallback(
     async ({ input, files }: Pick<ConversationCommandQueueItem, 'input' | 'files'>) => {
-      if (!currentModel?.useModel) {
+      if (!teamId && !currentModel?.useModel) {
         Message.warning(t('conversation.chat.noModelSelected'));
         throw new Error('No model selected');
+      }
+
+      if (teamId) {
+        const hasAttachments = files.length > 0;
+        let optimisticMsgId: string | undefined;
+        try {
+          void checkAndUpdateTitle(conversation_id, input);
+          if (hasAttachments) {
+            optimisticMsgId = uuid();
+            setActiveMsgId(optimisticMsgId);
+            setWaitingResponse(true);
+            const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
+            addOrUpdateMessage(
+              {
+                id: optimisticMsgId,
+                type: 'text',
+                position: 'right',
+                conversation_id,
+                content: { content: displayMessage },
+                createdAt: Date.now(),
+              },
+              true
+            );
+          }
+          if (agentSlotId) {
+            const result = await ipcBridge.team.sendMessageToAgent.invoke({
+              teamId,
+              tenantId,
+              slotId: agentSlotId,
+              content: input,
+              files,
+            });
+            const maybeError = result as unknown as { __bridgeError?: boolean; message?: string };
+            if (maybeError.__bridgeError) {
+              throw new Error(maybeError.message || 'Failed to send message to agent');
+            }
+          } else {
+            const result = await ipcBridge.team.sendMessage.invoke({
+              teamId,
+              tenantId,
+              content: input,
+              files,
+            });
+            const maybeError = result as unknown as { __bridgeError?: boolean; message?: string };
+            if (maybeError.__bridgeError) {
+              throw new Error(maybeError.message || 'Failed to send message to team');
+            }
+          }
+          emitter.emit('chat.history.refresh');
+          if (files.length > 0) {
+            emitter.emit('gemini.workspace.refresh');
+          }
+        } catch (error) {
+          if (files.length > 0) {
+            setWaitingResponse(false);
+            setActiveMsgId(null);
+            if (optimisticMsgId) {
+              removeMessageByMsgId(optimisticMsgId);
+            }
+          }
+          throw error;
+        }
+        return;
       }
 
       const msg_id = uuid();
       setActiveMsgId(msg_id);
       setWaitingResponse(true);
+      runtimeView.markSendStarted();
 
       const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
       addOrUpdateMessage(
@@ -257,12 +339,16 @@ const GeminiSendBox: React.FC<{
           files,
         });
         assertBridgeSuccess(result, 'Failed to send message to Gemini');
+        runtimeView.markSendAccepted(msg_id, runtimeSummaryForActiveSend(msg_id), msg_id);
         patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
         emitter.emit('chat.history.refresh');
         if (files.length > 0) {
           emitter.emit('gemini.workspace.refresh');
         }
       } catch (error) {
+        runtimeView.markSendFailed(error instanceof Error ? error.message : String(error));
+        setWaitingResponse(false);
+        setActiveMsgId(null);
         // Drop the user bubble before the next rAF flush can paint it. Without
         // this, the pending addOrUpdateMessage batch may still win the race and
         // leave a stray user message on screen after a send failure.
@@ -273,13 +359,17 @@ const GeminiSendBox: React.FC<{
     },
     [
       addOrUpdateMessage,
+      agentSlotId,
       checkAndUpdateTitle,
       conversation_id,
       currentModel?.useModel,
       setActiveMsgId,
       removeMessageByMsgId,
+      runtimeView,
       setWaitingResponse,
       effectiveWorkspace,
+      teamId,
+      tenantId,
     ]
   );
 
@@ -350,12 +440,27 @@ const GeminiSendBox: React.FC<{
 
   // Stop conversation handler
   const handleStop = async (): Promise<void> => {
-    // Use finally to ensure UI state is reset even if backend stop fails
+    const turnId = runtimeView.activeTurnId;
+    if (turnId) {
+      runtimeView.markStopRequested(turnId);
+    }
     try {
       await ipcBridge.conversation.stop.invoke({ conversation_id });
     } finally {
       resetState();
       resetActiveExecution('stop');
+      if (turnId) {
+        runtimeView.markStopAcknowledged(turnId, {
+          state: 'idle',
+          can_send_message: true,
+          has_task: false,
+          is_processing: false,
+          pending_confirmations: 0,
+          turn_id: turnId,
+        });
+      } else {
+        runtimeView.resetLocalGate('stop_without_turn');
+      }
     }
   };
 

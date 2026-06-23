@@ -14,3 +14,7 @@ export async function refreshConversationCache(conversationId: string): Promise<
 
   await mutate<TChatConversation>(`conversation/${conversationId}`, conversation, false);
 }
+
+export async function getConversationOrNull(conversationId: string): Promise<TChatConversation | null> {
+  return ipcBridge.conversation.get.invoke({ id: conversationId }).catch((): null => null);
+}

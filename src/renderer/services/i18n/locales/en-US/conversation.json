@@ -273,6 +273,7 @@
   "contextUsage": {
     "contextUsed": "context used"
   },
+  "aionrsImageAutoDescribe": "Recognizing image content via the vision model and injecting it as text. This may take a few extra seconds.",
   "gemini": {
     "viewSessionLogs": "Session logs",
     "viewSessionLogsTooltip": "Open workspace/.gemini/logs in the file manager (request summaries and error dumps)",
@@ -304,5 +305,52 @@
   "webSources": {
     "analysisDone": "Analysis complete — referenced {{count}} sources",
     "sourceLabel": "Source"
+  },
+  "agentError": {
+    "fallbackTitle": "Agent could not complete the reply",
+    "errorCode": "Error code",
+    "retryable": "Retryable",
+    "notRetryable": "Fix configuration first",
+    "resolutionPrefix": "Suggested action: ",
+    "resolution": {
+      "retry": "Retry later or resend this message.",
+      "wait_for_current_response": "Wait for the current reply to finish before sending another message.",
+      "start_new_session": "Start a new conversation and continue there.",
+      "reconnect_agent": "Restart or reconnect the selected agent, then retry.",
+      "check_agent_login": "Sign in to the selected agent or refresh its credentials.",
+      "check_agent_installation": "Check the agent installation and local command configuration.",
+      "check_agent_version": "Update the agent or fix protocol version incompatibility.",
+      "check_local_command": "Install the missing command or ensure it is on PATH.",
+      "check_provider_credentials": "Check the provider API key or account credentials in Settings.",
+      "check_provider_billing": "Check provider balance, quota, or billing status.",
+      "check_provider_base_url": "Check provider base URL, route, proxy, and API compatibility.",
+      "change_model": "Choose a model that is available and supports this request.",
+      "reduce_context": "Reduce message size, attached files, or context and retry.",
+      "send_feedback": "Send feedback with logs so the team can investigate."
+    },
+    "ownership": {
+      "aionui": "1ONE",
+      "user_agent": "Agent",
+      "user_llm_provider": "Model provider",
+      "unknown_upstream": "Upstream"
+    },
+    "codes": {
+      "AIONUI_CONVERSATION_BUSY": {
+        "title": "Conversation is still processing",
+        "body": "This conversation still has an active reply. Wait for it to finish before sending another message."
+      },
+      "USER_AGENT_DISCONNECTED": {
+        "title": "Selected agent disconnected",
+        "body": "The agent disconnected while handling this message. Reconnect the agent and retry."
+      },
+      "USER_LLM_PROVIDER_AUTH_FAILED": {
+        "title": "Model provider authentication failed",
+        "body": "Check the API key, credentials, or sign-in status and retry."
+      },
+      "USER_LLM_PROVIDER_RATE_LIMITED": {
+        "title": "Model provider rate limited",
+        "body": "The request was rate limited or quota was exceeded. Retry later or check provider quota."
+      }
+    }
   }
 }

@@ -1165,6 +1165,8 @@ export interface IResponseMessage {
 
 export interface IConversationTurnCompletedEvent {
   sessionId: string;
+  /** Active turn identifier (usually user message id). */
+  turnId?: string;
   status: 'pending' | 'running' | 'finished';
   state:
     | 'ai_generating'
@@ -1447,10 +1449,14 @@ export const team = {
   remove: bridge.buildProvider<void, { id: string; tenantId?: string }>('team.remove'),
   addAgent: bridge.buildProvider<import('@process/team/types').TeamAgent, IAddTeamAgentParams>('team.add-agent'),
   removeAgent: bridge.buildProvider<void, { teamId: string; tenantId?: string; slotId: string }>('team.remove-agent'),
-  sendMessage: bridge.buildProvider<void, { teamId: string; tenantId?: string; content: string }>('team.send-message'),
-  sendMessageToAgent: bridge.buildProvider<void, { teamId: string; tenantId?: string; slotId: string; content: string }>(
-    'team.send-message-to-agent'
-  ),
+  sendMessage: bridge.buildProvider<
+    void,
+    { teamId: string; tenantId?: string; content: string; files?: string[] }
+  >('team.send-message'),
+  sendMessageToAgent: bridge.buildProvider<
+    void,
+    { teamId: string; tenantId?: string; slotId: string; content: string; files?: string[] }
+  >('team.send-message-to-agent'),
   runDigitalEmployeeNow: bridge.buildProvider<
     { runId: string; conversationId: string },
     {

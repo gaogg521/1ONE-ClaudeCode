@@ -43,6 +43,8 @@ import { applyAgentToolkitFirstMessage } from '@process/services/agentToolkit/fi
 import { ensureCodegraphWorkspaceIndexed } from '@process/services/agentToolkit/codegraph';
 import { shouldAutoInitCodegraph } from '@process/services/agentToolkit/workspace';
 import { extractTextFromMessage, processCronInMessage } from './MessageMiddleware';
+import type { IConversationTurnCompletedEvent } from '@/common/adapter/ipcBridge';
+import { emitAgentTurnCompleted } from '@process/utils/emitConversationTurnCompleted';
 
 interface AcpAgentManagerData {
   workspace?: string;
@@ -90,6 +92,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
   // Track current message for cron detection (accumulated from streaming chunks)
   private currentMsgId: string | null = null;
   private currentMsgContent: string = '';
+  private activeTurnId: string | null = null;
   /** Current turn's thinking message msg_id for accumulating content */
   private thinkingMsgId: string | null = null;
   /** Timestamp when thinking started for duration calculation */
@@ -112,6 +115,22 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     this.status = 'pending';
     // Sync yoloMode from sessionMode so addConfirmation auto-approves when Full Auto is selected
     this.yoloMode = this.yoloMode || this.isYoloMode(this.currentMode);
+  }
+
+  private emitRuntimeSnapshot(state?: IConversationTurnCompletedEvent['state']): void {
+    const modelInfo = this.agent?.getModelInfo();
+    emitAgentTurnCompleted(
+      {
+        conversation_id: this.conversation_id,
+        workspace: this.workspace,
+        status: this.status,
+        getConfirmations: () => this.getConfirmations(),
+        modelPlatform: this.options.backend,
+        modelId: modelInfo?.currentModelId || this.persistedModelId || '',
+      },
+      this.activeTurnId ?? this.currentMsgId ?? this.conversation_id,
+      state
+    );
   }
 
   private makeStreamBufferKey(message: Extract<TMessage, { type: 'text' }>): string {
@@ -379,6 +398,12 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
 
           // Emit request trace on each model generation start
           if (message.type === 'start') {
+            if (message.msg_id) {
+              this.activeTurnId = message.msg_id;
+              this.currentMsgId = message.msg_id;
+            }
+            this.status = 'running';
+            this.emitRuntimeSnapshot('ai_generating');
             const modelInfo = this.agent?.getModelInfo();
             const traceData = {
               agentType: 'acp' as const,
@@ -549,6 +574,8 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
               })),
             });
 
+            this.emitRuntimeSnapshot('ai_waiting_confirmation');
+
             // Channels (Telegram/Lark) currently don't have interactive permission UX.
             // Emit a readable error to avoid "silent hang" in external platforms.
             channelEventBus.emitAgentMessage(this.conversation_id, {
@@ -560,10 +587,20 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
             return;
           }
 
+          if (v.type === 'error') {
+            cronBusyGuard.setProcessing(this.conversation_id, false);
+            this.status = 'finished';
+            if (v.msg_id) {
+              this.activeTurnId = v.msg_id;
+            }
+            this.emitRuntimeSnapshot('error');
+          }
+
           // Clear busy guard and finalize thinking message when turn ends
           if (v.type === 'finish') {
             cronBusyGuard.setProcessing(this.conversation_id, false);
             this.status = 'finished';
+            this.emitRuntimeSnapshot('ai_waiting_input');
             // Finalize thinking message with done status
             if (this.thinkingMsgId) {
               this.emitThinkingMessage('', 'done');
@@ -705,6 +742,11 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     cronBusyGuard.setProcessing(this.conversation_id, true);
     // Set status to running when message is being processed
     this.status = 'running';
+    if (data.msg_id) {
+      this.activeTurnId = data.msg_id;
+      this.currentMsgId = data.msg_id;
+    }
+    this.emitRuntimeSnapshot('ai_generating');
     try {
       // Emit/persist user message immediately so UI can refresh without waiting
       // for ACP connection/auth/session initialization.
@@ -791,6 +833,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
         // immediately so the conversation isn't stuck in a busy/running state.
         if (!result.success) {
           this.clearBusyState();
+          this.emitRuntimeSnapshot('error');
         }
         return result;
       }
@@ -807,6 +850,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
         );
       if (!result.success) {
         this.clearBusyState();
+        this.emitRuntimeSnapshot('error');
       }
       return result;
     } catch (e) {
@@ -837,6 +881,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
         data: null,
       };
       ipcBridge.acpConversation.responseStream.emit(finishMessage);
+      this.emitRuntimeSnapshot('error');
 
       return new Promise((_, reject) => {
         nextTickToLocalFinish(() => {
@@ -900,6 +945,9 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
       // msg_id: dat;
       callId: callId,
     });
+    this.emitRuntimeSnapshot(
+      this.getConfirmations().length > 0 ? 'ai_waiting_confirmation' : 'ai_generating'
+    );
   }
 
   /**
@@ -1290,12 +1338,15 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     this.flushBufferedStreamTextMessages();
     this.flushThinkingToDb(undefined, 'done');
 
-    let killed = false;
-    const GRACE_PERIOD_MS = 500; // Allow child process time to exit cleanly
-    const HARD_TIMEOUT_MS = 1500; // Force kill if agent.kill() hangs
+    // Emit synthetic finish immediately so the renderer unlocks the sendbox.
+    // Must happen before the async grace-period flow — super.kill() would also
+    // call emitSyntheticFinishOnKill(), but that fires too late (after timers).
+    this.emitSyntheticFinishOnKill();
 
-    // Clear pending slash command waiters to prevent memory leaks
-    // 清除待处理的斜杠命令等待者，防止内存泄漏
+    let killed = false;
+    const GRACE_PERIOD_MS = 500;
+    const HARD_TIMEOUT_MS = 1500;
+
     const waiters = this.acpAvailableSlashWaiters.splice(0, this.acpAvailableSlashWaiters.length);
     for (const resolve of waiters) {
       resolve([]);
@@ -1309,10 +1360,8 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
       super.kill();
     };
 
-    // Hard fallback: force kill after timeout regardless
     const hardTimer = setTimeout(doKill, HARD_TIMEOUT_MS);
 
-    // Graceful path: agent.kill → grace period → super.kill
     void (this.agent?.kill?.() || Promise.resolve())
       .catch((err) => {
         mainWarn('[AcpAgentManager]', 'agent.kill() failed during kill', err);

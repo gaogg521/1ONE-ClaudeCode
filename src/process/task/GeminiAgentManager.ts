@@ -31,6 +31,8 @@ import { IpcAgentEventEmitter } from './IpcAgentEventEmitter';
 import { mainLog, mainWarn, mainError } from '@process/utils/mainLogger';
 import { hasCronCommands } from './CronCommandDetector';
 import { extractTextFromMessage, processCronInMessage } from './MessageMiddleware';
+import type { IConversationTurnCompletedEvent } from '@/common/adapter/ipcBridge';
+import { emitAgentTurnCompleted } from '@process/utils/emitConversationTurnCompleted';
 import { stripThinkTags, extractAndStripThinkTags } from './ThinkTagDetector';
 import { teamEventBus } from '@process/team/teamEventBus';
 import * as fs from 'node:fs';
@@ -121,6 +123,7 @@ export class GeminiAgentManager extends BaseAgentManager<
   private thinkingContent: string = '';
   private thinkingDbFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly thinkingDbFlushIntervalMs = 120;
+  private activeTurnId: string | null = null;
 
   /** Stored webSearchEngine for worker re-bootstrap / 保存 webSearchEngine 用于重建 worker */
   private webSearchEngine?: 'google' | 'default';
@@ -178,6 +181,20 @@ export class GeminiAgentManager extends BaseAgentManager<
     // Prevent unhandled rejection when bootstrap fails (e.g. missing OAuth credentials).
     // The error still propagates when sendMessage() awaits this.bootstrap.
     this.bootstrap.catch(() => {});
+  }
+
+  private emitRuntimeSnapshot(state?: IConversationTurnCompletedEvent['state']): void {
+    emitAgentTurnCompleted(
+      {
+        conversation_id: this.conversation_id,
+        workspace: this.workspace,
+        status: this.status,
+        getConfirmations: () => this.getConfirmations(),
+        model: this.model,
+      },
+      this.activeTurnId ?? this.conversation_id,
+      state
+    );
   }
 
   /**
@@ -391,6 +408,8 @@ export class GeminiAgentManager extends BaseAgentManager<
       await this.bootstrap
         .catch((e) => {
           cronBusyGuard.setProcessing(this.conversation_id, false);
+          this.status = 'finished';
+          this.emitRuntimeSnapshot('error');
           this.emit('gemini.message', {
             type: 'error',
             data: e.message || JSON.stringify(e),
@@ -420,6 +439,7 @@ export class GeminiAgentManager extends BaseAgentManager<
       ...(data.hidden && { hidden: true }),
     };
     addMessage(this.conversation_id, message);
+    this.activeTurnId = data.msg_id;
     // Update conversation modifyTime so history list sorts correctly.
     // Without this, chat.history.refresh fires before modifyTime is updated,
     // causing stale sorting until a manual page refresh.
@@ -449,10 +469,13 @@ export class GeminiAgentManager extends BaseAgentManager<
     await this.refreshWorkerIfMcpChanged();
     this.status = 'pending';
     cronBusyGuard.setProcessing(this.conversation_id, true);
+    this.emitRuntimeSnapshot('ai_generating');
 
     const result = await this.bootstrap
       .catch((e) => {
         cronBusyGuard.setProcessing(this.conversation_id, false);
+        this.status = 'finished';
+        this.emitRuntimeSnapshot('error');
         this.emit('gemini.message', {
           type: 'error',
           data: e.message || JSON.stringify(e),
@@ -671,6 +694,7 @@ export class GeminiAgentManager extends BaseAgentManager<
               },
             ],
           });
+          this.emitRuntimeSnapshot('ai_waiting_confirmation');
           return;
         }
         if (!question || !hasOptions) return;
@@ -688,6 +712,7 @@ export class GeminiAgentManager extends BaseAgentManager<
           options: options,
           commandType,
         });
+        this.emitRuntimeSnapshot('ai_waiting_confirmation');
       });
     }
   }
@@ -703,7 +728,19 @@ export class GeminiAgentManager extends BaseAgentManager<
         this.status = 'finished';
       }
 
+      if (data.type === 'error') {
+        cronBusyGuard.setProcessing(this.conversation_id, false);
+        this.status = 'finished';
+        if (data.msg_id) {
+          this.activeTurnId = data.msg_id;
+        }
+        this.emitRuntimeSnapshot('error');
+      }
+
       if (data.type === 'finish') {
+        cronBusyGuard.setProcessing(this.conversation_id, false);
+        this.status = 'finished';
+        this.emitRuntimeSnapshot('ai_waiting_input');
         // When stream finishes, check for cron commands in the accumulated message
         // Use longer delay and retry logic to ensure message is persisted
         this.checkCronWithRetry(0);
@@ -719,6 +756,10 @@ export class GeminiAgentManager extends BaseAgentManager<
       }
       if (data.type === 'start') {
         this.status = 'running';
+        if (data.msg_id) {
+          this.activeTurnId = data.msg_id;
+        }
+        this.emitRuntimeSnapshot('ai_generating');
         const traceData = {
           agentType: 'gemini' as const,
           provider: this.model.name,
@@ -1002,6 +1043,9 @@ export class GeminiAgentManager extends BaseAgentManager<
     }
 
     super.confirm(id, callId, data);
+    this.emitRuntimeSnapshot(
+      this.getConfirmations().length > 0 ? 'ai_waiting_confirmation' : 'ai_generating'
+    );
     // 发送确认到 worker，使用 callId 作为消息类型
     // Send confirmation to worker, using callId as message type
     return this.postMessagePromise(callId, data);

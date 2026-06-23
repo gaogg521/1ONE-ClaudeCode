@@ -14,5 +14,10 @@ export default forkTask(({ data }, pipe) => {
   pipe.on('send.message', (data, deferred) => {
     deferred.with(agent.sendMessage(data));
   });
+
+  process.on('exit', () => {
+    void agent.kill().catch(() => {});
+  });
+
   return agent.start();
 });

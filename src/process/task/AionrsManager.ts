@@ -5,9 +5,9 @@
  */
 
 import { ipcBridge } from '@/common';
-import type { IMessageToolGroup, TMessage, IMessageText } from '@/common/chat/chatLib';
+import type { IConfirmation, IMessageToolGroup, TMessage, IMessageText } from '@/common/chat/chatLib';
 import { transformMessage } from '@/common/chat/chatLib';
-import type { IResponseMessage } from '@/common/adapter/ipcBridge';
+import type { IConversationTurnCompletedEvent, IResponseMessage } from '@/common/adapter/ipcBridge';
 import type { TProviderWithModel } from '@/common/config/storage';
 import { BaseApprovalStore, type IApprovalKey } from '@/common/chat/approval';
 import { ToolConfirmationOutcome } from '../agent/gemini/cli/tools/tools';
@@ -17,6 +17,7 @@ import { uuid } from '@/common/utils';
 import BaseAgentManager from './BaseAgentManager';
 import { IpcAgentEventEmitter } from './IpcAgentEventEmitter';
 import { mainError } from '@process/utils/mainLogger';
+import { emitAionrsTurnCompleted } from '@process/utils/emitConversationTurnCompleted';
 import { ProcessConfig } from '@process/utils/initStorage';
 import type { IProvider } from '@/common/config/storage';
 import { getSystemDir } from '@process/utils/initStorage';
@@ -87,6 +88,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   private static readonly autoFixedProtocolKeys = new Set<string>();
   private pendingModelIdentityNotice: string | null = null;
   private lastModelIdSeen: string | null = null;
+  private activeTurnId: string | null = null;
 
   private inferProductLine(): string {
     const modelId = (this.model.useModel || '').toLowerCase();
@@ -312,9 +314,40 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   }
 
   async stop() {
-    // Inject history BEFORE stopping so the command reaches the running process
-    await this.injectHistoryFromDatabase();
+    // Inject history BEFORE stopping so the command reaches the running process.
+    // Skip if already finished — the worker subprocess may no longer be alive.
+    if (this.status !== 'finished') {
+      await this.injectHistoryFromDatabase();
+    }
     await super.stop();
+    this.status = 'finished';
+    emitAionrsTurnCompleted(this, this.activeTurnId ?? this.conversation_id, 'stopped');
+  }
+
+  /**
+   * When the worker process is killed mid-turn (model switch, idle timeout, app
+   * shutdown), the aionrs binary inside the worker dies before it can emit
+   * `stream_end`/`finish` to the host. Without a synthetic finish, the renderer
+   * sendbox stays locked on "正在进行对话中..." forever.
+   *
+   * Emit the finish + runtime snapshot to the renderer BEFORE delegating to
+   * super.kill() so the IPC packet is queued while the manager is still alive.
+   */
+  protected override emitSyntheticFinishOnKill(): void {
+    if (this.status !== 'running' && this.status !== 'pending') return;
+    const turnId = this.activeTurnId ?? this.conversation_id;
+    this.status = 'finished';
+    try {
+      ipcBridge.conversation.responseStream.emit({
+        type: 'finish',
+        data: '',
+        msg_id: turnId,
+        conversation_id: this.conversation_id,
+      } as IResponseMessage);
+    } catch {
+      // best-effort
+    }
+    emitAionrsTurnCompleted(this, turnId, 'stopped');
   }
 
   async sendMessage(data: {
@@ -401,6 +434,8 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       // Conversation might not exist in DB yet
     }
     this.status = 'pending';
+    this.activeTurnId = data.msg_id;
+    emitAionrsTurnCompleted(this, data.msg_id, 'ai_generating');
 
     // aionrs backend does not support image vision — the binary passes file
     // paths as text context and envBuilder tells the agent not to read images.
@@ -419,14 +454,19 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       const nonImageFiles = data.files.filter((f) => !isImageFilePath(f));
 
       let imageDescriptionBlock = '';
-      if (imageFiles.length > 0 && this.model.apiKey && this.model.useModel) {
-        try {
-          const result = await describeImagesForPrompt(imageFiles, this.model);
-          imageDescriptionBlock = result.imageDescriptionBlock;
-        } catch (error) {
-          console.warn('[AionrsManager] Image vision description failed:', error);
-          // Fallback: tell the agent images were attached but couldn't be described
-          imageDescriptionBlock = `\n\n[Images attached but vision description unavailable: ${imageFiles.map((f) => f.replace(/\\/g, '/').split('/').pop()).join(', ')}]\n`;
+      if (imageFiles.length > 0) {
+        if (this.model.apiKey && this.model.useModel) {
+          try {
+            const result = await describeImagesForPrompt(imageFiles, this.model);
+            imageDescriptionBlock = result.imageDescriptionBlock;
+          } catch (error) {
+            console.warn('[AionrsManager] Image vision description failed:', error);
+            imageDescriptionBlock = `\n\n[Images attached but vision description unavailable: ${imageFiles.map((f) => f.replace(/\\/g, '/').split('/').pop()).join(', ')}]\n`;
+          }
+        } else {
+          imageDescriptionBlock =
+            `\n\n[Images attached: ${imageFiles.map((f) => f.replace(/\\/g, '/').split('/').pop()).join(', ')}. ` +
+            `Vision description requires a configured model API key. Please add API credentials in Settings or describe the image in your message.]\n`;
         }
       }
 
@@ -460,6 +500,26 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       }
     }
     return false;
+  }
+
+  private emitRuntimeSnapshot(state?: IConversationTurnCompletedEvent['state']): void {
+    const pendingConfirmations = this.getConfirmations().length;
+    const resolvedState =
+      state ??
+      (pendingConfirmations > 0
+        ? 'ai_waiting_confirmation'
+        : this.status === 'running' || this.status === 'pending'
+          ? 'ai_generating'
+          : 'ai_waiting_input');
+    emitAionrsTurnCompleted(this, this.activeTurnId ?? this.conversation_id, resolvedState);
+  }
+
+  protected override addConfirmation(data: IConfirmation<string>): void {
+    const pendingBefore = this.getConfirmations().length;
+    super.addConfirmation(data);
+    if (this.getConfirmations().length > pendingBefore) {
+      this.emitRuntimeSnapshot('ai_waiting_confirmation');
+    }
   }
 
   private handleConformationMessage(message: IMessageToolGroup) {
@@ -524,12 +584,16 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       }
 
       const contentTypes = ['content', 'tool_group'];
-      if (contentTypes.includes(data.type)) {
-        this.status = 'finished';
+      if (contentTypes.includes(data.type) && this.status !== 'running') {
+        this.status = 'running';
       }
 
       if (data.type === 'start') {
         this.status = 'running';
+        if (data.msg_id) {
+          this.activeTurnId = data.msg_id;
+        }
+        emitAionrsTurnCompleted(this, this.activeTurnId ?? this.conversation_id, 'ai_generating');
         ipcBridge.conversation.responseStream.emit({
           type: 'request_trace',
           conversation_id: this.conversation_id,
@@ -548,6 +612,8 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       data.conversation_id = this.conversation_id;
 
       if (data.type === 'error') {
+        this.status = 'finished';
+        emitAionrsTurnCompleted(this, this.activeTurnId ?? data.msg_id ?? this.conversation_id, 'error');
         // Auto-fix common "protocol mismatch" issues for gateway providers (LiteLLM/new-api).
         // Example error:
         // "The model does not support the [\"anthropic\",\"claude_code\"] protocols, it only supports [\"openai\"]."
@@ -557,6 +623,10 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
 
       // Transform and persist message (skip transient UI state)
       const skipTransformTypes = ['thought', 'finished', 'start', 'finish'];
+      if (data.type === 'finish') {
+        this.status = 'finished';
+        emitAionrsTurnCompleted(this, this.activeTurnId ?? data.msg_id ?? this.conversation_id);
+      }
       if (!skipTransformTypes.includes(data.type)) {
         const tMessage = transformMessage(data as IResponseMessage);
         if (tMessage) {
@@ -644,6 +714,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     }
 
     super.confirm(id, callId, data);
+    this.emitRuntimeSnapshot();
     return this.postMessagePromise(callId, data);
   }
 }

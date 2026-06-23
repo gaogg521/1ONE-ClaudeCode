@@ -376,6 +376,29 @@ export const useGeminiMessage = (conversation_id: string, onError?: (message: IR
     };
   }, [conversation_id]);
 
+  useEffect(() => {
+    return ipcBridge.conversation.turnCompleted.on((event) => {
+      if (event.sessionId !== conversation_id) {
+        return;
+      }
+      if (event.canSendMessage) {
+        setWaitingResponse(false);
+        waitingResponseRef.current = false;
+        setStreamRunning(false);
+        streamRunningRef.current = false;
+        setHasActiveTools(false);
+        hasActiveToolsRef.current = false;
+        if (event.state === 'ai_waiting_input' || event.state === 'stopped' || event.state === 'error') {
+          setThought({ subject: '', description: '' });
+          activeMsgIdRef.current = null;
+        }
+      } else if (event.state === 'ai_waiting_confirmation') {
+        setWaitingResponse(true);
+        waitingResponseRef.current = true;
+      }
+    });
+  }, [conversation_id]);
+
   const resetState = useCallback(() => {
     setWaitingResponse(false);
     waitingResponseRef.current = false;

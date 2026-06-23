@@ -6,6 +6,7 @@
 
 import { stripFilesMarker } from '@/common/chat/messageFiles';
 import { messageAlreadyHasPromptAugmentation } from '@/common/chat/attachmentContext';
+import type { TProviderWithModel } from '@/common/config/storage';
 import { prefetchWebContextForUserMessage, shouldPrefetchWebContext } from '@/common/web/prefetchWebContext';
 import { buildAttachmentContextBlock } from '@process/services/attachmentTextExtractor';
 
@@ -16,6 +17,8 @@ export type PromptAugmentationInput = {
   files: string[];
   /** Whether to skip web prefetch (e.g. when caller already augmented). */
   skipWebPrefetch?: boolean;
+  /** Vision-capable model for scanned PDF OCR fallback. */
+  visionModel?: TProviderWithModel;
 };
 
 /**
@@ -26,7 +29,9 @@ export async function buildPromptAugmentationPrefix(input: PromptAugmentationInp
   const blocks: string[] = [];
 
   if (input.files.length > 0) {
-    const attachmentBlock = await buildAttachmentContextBlock(input.files);
+    const attachmentBlock = await buildAttachmentContextBlock(input.files, {
+      visionModel: input.visionModel,
+    });
     if (attachmentBlock) {
       blocks.push(attachmentBlock);
     }

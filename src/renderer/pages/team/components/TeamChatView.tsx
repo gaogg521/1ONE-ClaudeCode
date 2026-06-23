@@ -20,7 +20,10 @@ const GeminiTeamChat: React.FC<{
   conversation: GeminiConversation;
   hideSendBox?: boolean;
   stretchLayout?: boolean;
-}> = ({ conversation, hideSendBox, stretchLayout }) => {
+  teamId?: string;
+  tenantId?: string;
+  agentSlotId?: string;
+}> = ({ conversation, hideSendBox, stretchLayout, teamId, tenantId, agentSlotId }) => {
   const onSelectModel = useCallback(
     async (_provider: IProvider, modelName: string) => {
       const selected = { ..._provider, useModel: modelName } as TProviderWithModel;
@@ -39,6 +42,9 @@ const GeminiTeamChat: React.FC<{
       modelSelection={modelSelection}
       hideSendBox={hideSendBox}
       stretchLayout={stretchLayout}
+      teamId={teamId}
+      tenantId={tenantId}
+      agentSlotId={agentSlotId}
     />
   );
 };
@@ -50,7 +56,10 @@ type AionrsConversation = Extract<TChatConversation, { type: 'aionrs' }>;
 const AionrsTeamChat: React.FC<{
   conversation: AionrsConversation;
   stretchLayout?: boolean;
-}> = ({ conversation, stretchLayout }) => {
+  teamId?: string;
+  tenantId?: string;
+  agentSlotId?: string;
+}> = ({ conversation, stretchLayout, teamId, tenantId, agentSlotId }) => {
   const onSelectModel = useCallback(
     async (_provider: IProvider, modelName: string) => {
       const selected = { ..._provider, useModel: modelName } as TProviderWithModel;
@@ -68,6 +77,9 @@ const AionrsTeamChat: React.FC<{
       workspace={conversation.extra.workspace}
       modelSelection={modelSelection}
       stretchLayout={stretchLayout}
+      teamId={teamId}
+      tenantId={tenantId}
+      agentSlotId={agentSlotId}
     />
   );
 };
@@ -120,9 +132,28 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({ conversation, hideSendBox, 
           />
         );
       case 'aionrs':
-        return <AionrsTeamChat key={conversation.id} conversation={conversation as AionrsConversation} stretchLayout />;
+        return (
+          <AionrsTeamChat
+            key={conversation.id}
+            conversation={conversation as AionrsConversation}
+            stretchLayout
+            teamId={teamId}
+            tenantId={tenantId}
+            agentSlotId={agentSlotId}
+          />
+        );
       case 'gemini':
-        return <GeminiTeamChat key={conversation.id} conversation={conversation} hideSendBox={hideSendBox} stretchLayout />;
+        return (
+          <GeminiTeamChat
+            key={conversation.id}
+            conversation={conversation}
+            hideSendBox={hideSendBox}
+            stretchLayout
+            teamId={teamId}
+            tenantId={tenantId}
+            agentSlotId={agentSlotId}
+          />
+        );
       case 'openclaw-gateway':
         return (
           <OpenClawChat

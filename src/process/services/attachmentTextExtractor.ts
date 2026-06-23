@@ -12,6 +12,7 @@ import mammoth from 'mammoth';
 import * as XLSX from 'xlsx-republish';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import PPTX2Json from 'pptx2json';
+import type { TProviderWithModel } from '@/common/config/storage';
 import { extname } from '@/common/chat/pathUtils';
 import {
   DEFAULT_ATTACHMENT_MAX_CHARS,
@@ -47,6 +48,53 @@ async function extractPdfText(filePath: string, buffer: Buffer): Promise<string>
   return text;
 }
 
+/**
+ * Render the first PDF page to PNG via pdftoppm (poppler-utils).
+ * Returns the image path, or null when poppler is unavailable.
+ */
+async function renderPdfFirstPagePng(pdfPath: string): Promise<string | null> {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'one-pdf-page-'));
+  const outputPrefix = path.join(tmpDir, 'page');
+  return new Promise((resolve) => {
+    const proc = spawn('pdftoppm', ['-png', '-f', '1', '-l', '1', '-r', '150', pdfPath, outputPrefix], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    proc.on('error', () => {
+      void fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+      resolve(null);
+    });
+    proc.on('exit', (code) => {
+      void (async () => {
+        if (code !== 0) {
+          await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+          resolve(null);
+          return;
+        }
+        const files = await fs.readdir(tmpDir);
+        const png = files.find((file) => file.endsWith('.png'));
+        resolve(png ? path.join(tmpDir, png) : null);
+      })();
+    });
+  });
+}
+
+async function describeScannedPdfFirstPage(
+  filePath: string,
+  visionModel: TProviderWithModel
+): Promise<string | null> {
+  const pageImage = await renderPdfFirstPagePng(filePath);
+  if (!pageImage) {
+    return null;
+  }
+  try {
+    const { describeImage } = await import('@process/services/visionDescribe');
+    return await describeImage(pageImage, visionModel);
+  } finally {
+    await fs.rm(path.dirname(pageImage), { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 async function extractDocxText(buffer: Buffer): Promise<string> {
   const result = await mammoth.extractRawText({ buffer });
   return result.value || '';
@@ -57,7 +105,7 @@ async function extractPptxText(filePath: string): Promise<string> {
   const json = (await parser.toJson(filePath)) as Record<string, unknown>;
   const slides = Object.entries(json)
     .filter(([key]) => /^ppt\/slides\/slide\d+\.xml$/i.test(key))
-    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
+    .toSorted(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
 
   const chunks: string[] = [];
   for (const [slideKey, slideXml] of slides) {
@@ -199,7 +247,8 @@ async function withParseTimeout<T>(label: string, fn: () => Promise<T>): Promise
 
 export async function extractAttachmentText(
   filePath: string,
-  maxChars = DEFAULT_ATTACHMENT_MAX_CHARS
+  maxChars = DEFAULT_ATTACHMENT_MAX_CHARS,
+  options?: { visionModel?: TProviderWithModel }
 ): Promise<AttachmentExtractSection | null> {
   // Audio/video files: try to transcribe via configured STT provider.
   // If STT is disabled or fails, fall back to a clear note so the agent
@@ -305,6 +354,21 @@ export async function extractAttachmentText(
 
     const { text, truncated } = truncateText(rawText, maxChars);
     if (!text) {
+      if (kind === 'pdf' && options?.visionModel?.apiKey && options.visionModel.useModel) {
+        const visionText = await withParseTimeout(fileName, () =>
+          describeScannedPdfFirstPage(filePath, options.visionModel as TProviderWithModel)
+        );
+        if (visionText?.trim()) {
+          const visionResult = truncateText(`[Scanned PDF — page 1 vision OCR]\n${visionText.trim()}`, maxChars);
+          return {
+            filePath,
+            fileName,
+            kind,
+            text: visionResult.text,
+            truncated: visionResult.truncated,
+          };
+        }
+      }
       return {
         filePath,
         fileName,
@@ -313,7 +377,7 @@ export async function extractAttachmentText(
         truncated: false,
         error:
           kind === 'pdf'
-            ? 'No extractable text found. This PDF may be scanned/image-based with no embedded text layer. Try converting it to text or uploading as an image.'
+            ? 'No extractable text found. This PDF may be scanned/image-based with no embedded text layer. Install poppler-utils (pdftoppm) and configure a vision-capable model for OCR, or convert the PDF to text.'
             : 'No extractable text found',
       };
     }
@@ -333,7 +397,7 @@ export async function extractAttachmentText(
 
 export async function buildAttachmentContextBlock(
   filePaths: string[],
-  options?: { maxCharsPerFile?: number; maxTotalChars?: number }
+  options?: { maxCharsPerFile?: number; maxTotalChars?: number; visionModel?: TProviderWithModel }
 ): Promise<string> {
   const maxCharsPerFile = options?.maxCharsPerFile ?? DEFAULT_ATTACHMENT_MAX_CHARS;
   const maxTotalChars = options?.maxTotalChars ?? DEFAULT_ATTACHMENT_TOTAL_MAX_CHARS;
@@ -350,7 +414,9 @@ export async function buildAttachmentContextBlock(
       break;
     }
 
-    const section = await extractAttachmentText(filePath, Math.min(maxCharsPerFile, remaining));
+    const section = await extractAttachmentText(filePath, Math.min(maxCharsPerFile, remaining), {
+      visionModel: options?.visionModel,
+    });
     if (!section) {
       continue;
     }

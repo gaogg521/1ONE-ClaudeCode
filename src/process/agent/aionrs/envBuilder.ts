@@ -88,6 +88,12 @@ export function buildSpawnConfig(
   const env: Record<string, string> = {};
   const args: string[] = ['--json-stream', '--provider', provider, '--model', model.useModel];
 
+  // Diagnostic logging: write aionrs internal logs into <workspace>/.aionrs/logs so we can
+  // see TOML parse errors, HTTP request bodies and SSE stalls when the host watchdog fires.
+  // Enabled by default to make production support reports actionable. Override level via
+  // AIONRS_LOG_LEVEL env var (e.g. "info" to quiet, "trace" for max detail).
+  args.push('--log-dir', options.workspace, '--log-level', process.env.AIONRS_LOG_LEVEL || 'debug');
+
   if (options.maxTokens) {
     args.push('--max-tokens', String(options.maxTokens));
   }
@@ -182,20 +188,14 @@ export function buildSpawnConfig(
 /**
  * Build `.aionrs.toml` project config for the OpenAI provider path.
  *
- * - **api = "openai-completions"** — forces aionrs to use OpenAI `/v1/chat/completions` wire format.
- *   Aligns with LiteLLM “工具封装”建议里的 `protocol: "openai"` + `endpoint: "/v1/chat/completions"`.
- *   Gateways (LiteLLM/new-api) often reject `anthropic` / `claude_code` style protocols; this must not
- *   be inferred as Anthropic when the HTTP surface is OpenAI-compatible.
- * - `[providers.openai.compat]` — Gemini path segment, `max_completion_tokens`, etc.
+ * Only emit `[providers.openai.compat]` overrides — and only when at least one applies.
+ * aionrs 0.1.30+ rejects/ignores unknown fields (e.g. the legacy `api = "openai-completions"`),
+ * which previously caused the binary to silently drift away from chat-completions wire format
+ * and the host to hang on the 90 s response watchdog. `--provider openai` already implies
+ * `/v1/chat/completions`; no top-level `[providers.openai]` block is needed.
  */
 function buildProjectConfig(model: TProviderWithModel, provider: AionrsProvider): string {
   if (provider !== 'openai') return '';
-
-  const chunks: string[] = [
-    '[providers.openai]',
-    'api = "openai-completions"',
-    '',
-  ];
 
   const compat: string[] = [];
 
@@ -216,9 +216,7 @@ function buildProjectConfig(model: TProviderWithModel, provider: AionrsProvider)
     compat.push('max_tokens_field = "max_completion_tokens"');
   }
 
-  if (compat.length > 0) {
-    chunks.push('[providers.openai.compat]', ...compat, '');
-  }
+  if (compat.length === 0) return '';
 
-  return chunks.join('\n');
+  return ['[providers.openai.compat]', ...compat, ''].join('\n');
 }

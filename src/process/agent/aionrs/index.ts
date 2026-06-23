@@ -174,15 +174,38 @@ export class AionrsAgent {
     // Ensure `npx` is on PATH: aionrs spawns MCP with bare `npx` (not absolute); Windows IDE launches
     // often miss Node's directory even when getEnhancedEnv() merged common paths.
     const childEnv = withNpxCommandOnPath(getEnhancedEnv());
+    // Diagnostic dump of the exact spawn shape — args + project config — so any future
+    // 90 s stall report can be matched to the binary's actual input without re-asking.
+    // Worker stdout is dropped by Electron utilityProcess.fork default; write to a known file.
+    try {
+      const dumpPath = join(this.options.workspace, '.aionrs-spawn.log');
+      const stamp = new Date().toISOString();
+      const stack = new Error('spawn caller').stack ?? '(no stack)';
+      writeFileSync(
+        dumpPath,
+        `[${stamp}] binary=${binaryPath}\nargs=${JSON.stringify(args)}\nprojectConfig:\n${projectConfig || '(none)'}\nstack:\n${stack}\n\n`,
+        { flag: 'a' }
+      );
+    } catch (e) {
+      console.error('[AionrsAgent] failed to write spawn dump:', e);
+    }
+    console.info('[AionrsAgent] spawn', { binaryPath, args, projectConfig: projectConfig || '(none)' });
     this.childProcess = spawn(binaryPath, args, {
       env: { ...childEnv, ...env },
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: this.options.workspace,
     });
 
-    // Parse stdout JSON Lines
+    // Parse stdout JSON Lines, mirror to <workspace>/.aionrs-stdout.log for diagnostics
+    // (Electron utilityProcess drops worker stdout/stderr so console.error isn't visible).
+    const stdoutPath = join(this.options.workspace, '.aionrs-stdout.log');
     const rl = createInterface({ input: this.childProcess.stdout! });
     rl.on('line', (line) => {
+      try {
+        writeFileSync(stdoutPath, line + '\n', { flag: 'a' });
+      } catch {
+        // best-effort
+      }
       try {
         const event = JSON.parse(line) as AionrsEvent;
         this.handleEvent(event);
@@ -191,9 +214,17 @@ export class AionrsAgent {
       }
     });
 
-    // Log stderr as diagnostics
+    // Log stderr as diagnostics — also mirror to <workspace>/.aionrs-stderr.log
+    // because Electron utilityProcess drops worker stdout/stderr by default.
+    const stderrPath = join(this.options.workspace, '.aionrs-stderr.log');
     this.childProcess.stderr?.on('data', (chunk: Buffer) => {
-      console.error('[aionrs]', chunk.toString());
+      const text = chunk.toString();
+      console.error('[aionrs]', text);
+      try {
+        writeFileSync(stderrPath, text, { flag: 'a' });
+      } catch {
+        // best-effort
+      }
     });
 
     // Handle process exit
@@ -429,6 +460,19 @@ export class AionrsAgent {
           msg_id: event.msg_id,
         });
         break;
+
+      default: {
+        // aionrs 0.1.30 added new events (config_changed, mcp_ready, pong) that
+        // older clients don't handle. Log unknowns to a diagnostic file so we can
+        // see what the binary emits without polluting the renderer.
+        try {
+          const dumpPath = join(this.options.workspace, '.aionrs-unknown-events.log');
+          writeFileSync(dumpPath, `[${new Date().toISOString()}] ${JSON.stringify(event)}\n`, { flag: 'a' });
+        } catch {
+          // best-effort
+        }
+        break;
+      }
     }
   }
 
@@ -480,10 +524,12 @@ export class AionrsAgent {
     await this.readyPromise;
     this.pendingTurnMsgId = msgId;
     this.slideResponseStallWatchdog(msgId);
+    // aionrs 0.1.30 protocol expects `content` (was `input` in 0.1.7 — silent
+    // rename caused every send to be rejected with "missing field content").
     this.sendCommand({
       type: 'message',
       msg_id: msgId,
-      input,
+      content: input,
       files,
     });
   }

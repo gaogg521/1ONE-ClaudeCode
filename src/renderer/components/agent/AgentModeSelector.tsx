@@ -48,6 +48,8 @@ export interface AgentModeSelectorProps {
   hideCompactLabelPrefixOnMobile?: boolean;
   /** Callback fired after a successful mode change (for team-mode propagation) */
   onModeChanged?: (mode: string) => void;
+  /** Hide the agent name text in full mode (logo + dropdown only) */
+  hideAgentName?: boolean;
 }
 
 /**
@@ -74,6 +76,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   compactLabelPrefix,
   hideCompactLabelPrefixOnMobile = false,
   onModeChanged,
+  hideAgentName = false,
 }) => {
   const { t } = useTranslation();
   const layout = useLayoutContext();
@@ -283,7 +286,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
       style={{ opacity: isLoading ? 0.6 : 1, transition: 'opacity 0.2s' }}
     >
       {renderLogo()}
-      <span className='text-sm text-t-primary'>{agentName || backend}</span>
+      {!hideAgentName && <span className='text-sm text-t-primary'>{agentName || backend}</span>}
       {canSwitchMode && (
         <>
           {currentMode !== defaultMode && <span className='text-xs text-t-tertiary'>({getCurrentModeLabel()})</span>}

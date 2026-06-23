@@ -34,7 +34,8 @@
   "noMessages": "暂无消息。",
   "agentNotConfigured": "Agent 尚未配置。",
   "sendBox": {
-    "placeholder": "向调度 Agent 发消息..."
+    "placeholder": "向调度 Agent 发消息...",
+    "attachmentsNotSupported": "团队消息附件发送失败，请重试或在单聊会话中发送文件。"
   },
   "create": {
     "title": "创建团队",

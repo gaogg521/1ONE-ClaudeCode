@@ -204,6 +204,19 @@ export interface IEnvStorageRefer {
  */
 export type ConversationSource = '1one' | 'telegram' | 'lark' | 'dingtalk' | 'weixin' | (string & {});
 
+export type TChatConversationStatus = 'pending' | 'running' | 'finished';
+export type TConversationRuntimeStateKind = 'idle' | 'starting' | 'running' | 'cancelling' | 'waiting_confirmation';
+
+export type TConversationRuntimeSummary = {
+  state: TConversationRuntimeStateKind;
+  can_send_message: boolean;
+  has_task: boolean;
+  task_status?: TChatConversationStatus;
+  is_processing: boolean;
+  pending_confirmations: number;
+  turn_id: string | null;
+};
+
 interface IChatConversation<T, Extra> {
   createTime: number;
   modifyTime: number;
@@ -213,7 +226,8 @@ interface IChatConversation<T, Extra> {
   type: T;
   extra: Extra;
   model: TProviderWithModel;
-  status?: 'pending' | 'running' | 'finished' | undefined;
+  status?: TChatConversationStatus | undefined;
+  runtime?: TConversationRuntimeSummary;
   /** 会话来源，默认为 1ONE / Conversation source, defaults to 1ONE */
   source?: ConversationSource;
   /** Channel chat isolation ID (e.g. user:xxx, group:xxx) */

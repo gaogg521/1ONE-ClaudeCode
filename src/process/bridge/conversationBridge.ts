@@ -13,35 +13,23 @@ import type { TeamSessionService } from '@process/team/TeamSessionService';
 import { ipcBridge } from '@/common';
 import { removeFromMessageCache } from '@process/utils/message';
 import {
-  getSkillsDir,
-  getBuiltinSkillsCopyDir,
-  getSystemDir,
   ProcessChat,
   ProcessConfig,
 } from '@process/utils/initStorage';
 import type AcpAgentManager from '../task/AcpAgentManager';
 import type { GeminiAgentManager } from '../task/GeminiAgentManager';
 import { AionrsApprovalStore, type AionrsManager } from '../task/AionrsManager';
+import { buildConversationTurnCompletedEvent, emitConversationTurnCompleted } from '@process/utils/emitConversationTurnCompleted';
 import type OpenClawAgentManager from '../task/OpenClawAgentManager';
-import { prepareFirstMessage } from '../task/agentUtils';
 import { refreshTrayMenu } from '@process/utils/tray';
-import { copyFilesToDirectory, readDirectoryRecursive } from '@process/utils';
+import { readDirectoryRecursive } from '@process/utils';
 import { computeOpenClawIdentityHash } from '@process/utils/openclawUtils';
 import { readOpenClawConfig } from '@process/agent/openclaw/openclawConfig';
-import { compressImagesInPlace } from '@process/services/imageCompress';
-import fs from 'fs';
-import path from 'path';
 import { migrateConversationToDatabase } from './migrationUtils';
 import { ConversationSideQuestionService } from './services/ConversationSideQuestionService';
-import {
-  buildDisplayMessage,
-  isCacheTempFilePath,
-  isImageFilePath,
-  stripFilesMarker,
-} from '@/common/chat/messageFiles';
+import { sendConversationMessage } from './services/conversationSendService';
 import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 import { resolvePersonalAgentPreset } from '@process/digitalEmployee/resolvePersonalAgentPreset';
-import { buildPromptAugmentationPrefix, composeAgentPrompt } from '@process/services/promptAugmentation';
 
 const refreshTrayMenuSafely = async (): Promise<void> => {
   try {
@@ -368,6 +356,25 @@ export function initConversationBridge(
           } catch {
             // ignore kill error, will lazily rebuild later
           }
+          // Emit a fresh turnCompleted with the NEW model so the renderer
+          // immediately reflects the switch instead of showing stale old-model info.
+          if (nextModel) {
+            try {
+              emitConversationTurnCompleted(
+                buildConversationTurnCompletedEvent({
+                  sessionId: id,
+                  turnId: id,
+                  status: 'finished',
+                  pendingConfirmations: 0,
+                  workspace: (existing && 'workspace' in existing ? existing.workspace : '') as string,
+                  model: nextModel,
+                  state: 'ai_waiting_input',
+                })
+              );
+            } catch {
+              // best-effort
+            }
+          }
         }
 
         if ('name' in updates) {
@@ -400,6 +407,7 @@ export function initConversationBridge(
       if (task && task.type === 'acp') {
         await (task as unknown as AcpAgentManager).initAgent();
       }
+      // aionrs auto-starts in its constructor; getOrBuildTask above is sufficient.
     } catch {
       // Ignore errors — warmup is best-effort
     }
@@ -537,156 +545,7 @@ export function initConversationBridge(
     if (!params) {
       return { success: false, msg: 'Missing request parameters' };
     }
-    const { conversation_id, files, ...other } = params;
-    let task: IAgentManager | undefined;
-    try {
-      task = await workerTaskManager.getOrBuildTask(conversation_id);
-    } catch (err) {
-      console.error(`[conversationBridge] sendMessage: failed to get/build task: ${conversation_id}`, err);
-      return {
-        success: false,
-        msg: err instanceof Error ? err.message : 'conversation not found',
-      };
-    }
-
-    if (!task) {
-      return { success: false, msg: 'conversation not found' };
-    }
-
-    // Handle file paths based on agent type
-    // Gemini and aionrs require files copied into the workspace directory.
-    // aionrs binary reads files from the workspace cwd; raw cache paths work for text, but
-    // binary/image files (PNG, JPG, …) must live inside the workspace so the binary can pass
-    // them as vision attachments rather than leaving the model to call file_read on binary data.
-    let workspaceFiles: string[];
-    const isGeminiAgent = task.type === 'gemini';
-    const isAionrsAgent = task.type === 'aionrs';
-    const cacheDir = getSystemDir().cacheDir;
-    const hasTempUploads = (files ?? []).some((filePath) => isCacheTempFilePath(filePath, cacheDir));
-
-    if (isGeminiAgent || isAionrsAgent || hasTempUploads) {
-      // Copy files to workspace (required for gemini/aionrs; WebUI temp uploads for all agent types)
-      try {
-        workspaceFiles = await copyFilesToDirectory(task.workspace, files, false, cacheDir);
-      } catch (error) {
-        console.error('[conversationBridge] sendMessage: failed to copy files to workspace:', error);
-        workspaceFiles = [];
-      }
-      // Compress images in-place so they fit within agent context windows.
-      // A 4K photo base64-inlined by Claude CLI / Gemini becomes ~700K tokens
-      // and overflows the 115K context. Downsampling to ≤1568px keeps it ~5-10K.
-      if (workspaceFiles.length > 0) {
-        workspaceFiles = await compressImagesInPlace(workspaceFiles);
-      }
-    } else {
-      // Non-temp attachments: use absolute paths directly
-      workspaceFiles = (files ?? []).filter((f) => path.isAbsolute(f));
-    }
-
-    const textOnly = stripFilesMarker(other.input);
-    const resolvedInput =
-      workspaceFiles.length > 0
-        ? buildDisplayMessage(textOnly, workspaceFiles, task.workspace)
-        : textOnly;
-
-    // Precompute agent content with optional skill injection.
-    // OpenClaw uses full-content mode: inject full skill text rather than index paths,
-    // because the CLI may not proactively read SKILL.md files the way ACP agents do.
-    let agentContent = resolvedInput;
-    if (other.injectSkills?.length) {
-      agentContent = await prepareFirstMessage(other.input, {
-        enabledSkills: other.injectSkills,
-      });
-      // Provide absolute skills directory so agent can resolve relative script paths
-      // e.g. "skills/star-office-helper/scripts/..." → "${skillsDir}/star-office-helper/scripts/..."
-      const skillsDir = getSkillsDir();
-      const builtinSkillsCopyDir = getBuiltinSkillsCopyDir();
-      agentContent = agentContent.replace(
-        '[User Request]',
-        `[Skills Directory]\nBuiltin skills: ${builtinSkillsCopyDir}\nUser skills: ${skillsDir}\nWhen skill instructions reference relative paths like "skills/{name}/scripts/...", resolve them under the appropriate directory.\n\n[User Request]`
-      );
-    }
-
-    const augmentationPrefix = await buildPromptAugmentationPrefix({
-      displayContent: agentContent,
-      files: workspaceFiles,
-    });
-    const agentPrompt = composeAgentPrompt(agentContent, augmentationPrefix);
-
-    try {
-      // Pass unified data — each agent reads the fields it needs from the unknown payload.
-      // `content` aliases `input` for ACP/Codex/NanoBot/OpenClaw agents.
-      // `agentContent` carries the skill-injected text for OpenClaw (equals `input` when no skills).
-      // `agentPrompt` adds hidden attachment/web context without polluting user-visible history.
-      await task.sendMessage({
-        ...other,
-        input: resolvedInput,
-        content: resolvedInput,
-        agentContent,
-        agentPrompt,
-        files: workspaceFiles,
-      });
-
-      // Defer cleanup until after the agent finishes processing the files.
-      // sendMessage() resolves when the worker acknowledges receipt, but the
-      // worker continues reading files asynchronously during streaming.
-      // Deleting immediately after sendMessage() causes a race condition where
-      // the CLI reads deleted files.
-      //
-      // Unified across all agent types: listen for the turn-completed event on
-      // the shared conversation bridge channel. Previously only Gemini had
-      // cleanup wired (via gemini.message), leaving ACP/Aionrs temp files to
-      // accumulate in the workspace indefinitely.
-      if (workspaceFiles.length > 0) {
-        const saveToWorkspace = await ProcessConfig.get('upload.saveToWorkspace').catch(() => false);
-        if (!saveToWorkspace) {
-          const conversationId = task.conversation_id;
-          const filesToCleanup = [...workspaceFiles];
-          const resolvedWorkspace = path.resolve(task.workspace);
-          const cleanup = () => {
-            for (const filePath of filesToCleanup) {
-              // Keep images — they may be re-referenced by follow-up messages
-              // and are small after compression. Only purge non-image temp copies.
-              if (isImageFilePath(filePath)) {
-                continue;
-              }
-              const resolvedFile = path.resolve(filePath);
-              if (resolvedFile.startsWith(resolvedWorkspace + path.sep)) {
-                fs.promises.unlink(filePath).catch((cleanupError) => {
-                  console.warn('[conversationBridge] Failed to cleanup file:', filePath, cleanupError);
-                });
-              }
-            }
-          };
-
-          // Gemini emits a task-level 'gemini.message' event with type 'finish'.
-          if (isGeminiAgent) {
-            const geminiTask = task as unknown as GeminiAgentManager;
-            const handleMessage = (data: { type: string }) => {
-              if (data.type !== 'finish') return;
-              geminiTask.off('gemini.message', handleMessage);
-              cleanup();
-            };
-            geminiTask.on('gemini.message', handleMessage);
-          } else {
-            // ACP / Aionrs / OpenClaw / NanoBot: listen on the shared responseStream
-            // emitter for a finish message targeting this conversation.
-            const off = ipcBridge.conversation.responseStream.on((msg) => {
-              if (msg.conversation_id !== conversationId || msg.type !== 'finish') return;
-              off();
-              cleanup();
-            });
-          }
-        }
-      }
-
-      return { success: true, data: { input: resolvedInput, files: workspaceFiles } };
-    } catch (err: unknown) {
-      return {
-        success: false,
-        msg: err instanceof Error ? err.message : String(err),
-      };
-    }
+    return sendConversationMessage(workerTaskManager, params);
   });
 
   // 通用 confirmMessage 实现 - 自动根据 conversation 类型分发

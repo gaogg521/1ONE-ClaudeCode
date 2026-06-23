@@ -46,6 +46,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
 import { useAionrsMessage } from './useAionrsMessage';
+import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtime/useConversationRuntimeView';
+import { runtimeSummaryForActiveSend } from '@/renderer/pages/conversation/utils/conversationRuntime';
+import { useTeamPermission } from '@/renderer/pages/team/hooks/TeamPermissionContext';
+import { warmupConversation } from '@/renderer/pages/conversation/utils/warmupConversation';
 
 const useAionrsSendBoxDraft = getSendBoxDraftHook('aionrs', {
   _type: 'aionrs',
@@ -93,10 +97,14 @@ const useSendBoxDraft = (conversation_id: string) => {
 const AionrsSendBox: React.FC<{
   conversation_id: string;
   modelSelection: AionrsModelSelection;
-}> = ({ conversation_id, modelSelection }) => {
+  teamId?: string;
+  tenantId?: string;
+  agentSlotId?: string;
+}> = ({ conversation_id, modelSelection, teamId, tenantId, agentSlotId }) => {
   const conversationContext = useConversationContextSafe();
   const effectiveWorkspace = useEffectiveWorkspace(conversation_id);
   const { t } = useTranslation();
+  const teamPermission = useTeamPermission();
   const stretchLayout = Boolean(conversationContext?.stretchLayout);
   const { checkAndUpdateTitle } = useAutoTitle();
   const isCommandQueueEnabled = useCommandQueueEnabled();
@@ -105,6 +113,14 @@ const AionrsSendBox: React.FC<{
 
   const { thought, running, hasHydratedRunningState, tokenUsage, setActiveMsgId, setWaitingResponse, resetState } =
     useAionrsMessage(conversation_id);
+  const runtimeView = useConversationRuntimeView(conversation_id);
+
+  useEffect(() => {
+    if (!conversation_id) return;
+    void warmupConversation(conversation_id).catch(() => {
+      // Warmup is best-effort; send path still works without it.
+    });
+  }, [conversation_id]);
 
   const { atPath, uploadFile, setAtPath, setUploadFile, content, setContent } = useSendBoxDraft(conversation_id);
 
@@ -113,7 +129,12 @@ const AionrsSendBox: React.FC<{
   const addOrUpdateMessage = useAddOrUpdateMessage();
   const removeMessageByMsgId = useRemoveMessageByMsgId();
   const { setSendBoxHandler } = usePreviewContext();
-  const isBusy = running;
+  const isBusy =
+    running ||
+    (!teamId &&
+      runtimeView.hydrated &&
+      (!runtimeView.canSendMessage || runtimeView.isProcessing || runtimeView.view.localSubmitting));
+  const showModeSelector = !teamPermission || conversation_id === teamPermission.leadConversationId;
 
   const setContentRef = useLatestRef(setContent);
   const atPathRef = useLatestRef(atPath);
@@ -146,14 +167,78 @@ const AionrsSendBox: React.FC<{
 
   const executeCommand = useCallback(
     async ({ input, files }: Pick<ConversationCommandQueueItem, 'input' | 'files'>) => {
-      if (!currentModel?.useModel) {
+      if (!teamId && !currentModel?.useModel) {
         Message.warning(t('conversation.chat.noModelSelected'));
         throw new Error('No model selected');
+      }
+
+      if (teamId) {
+        const hasAttachments = files.length > 0;
+        let optimisticMsgId: string | undefined;
+        try {
+          void checkAndUpdateTitle(conversation_id, input);
+          if (hasAttachments) {
+            optimisticMsgId = uuid();
+            setActiveMsgId(optimisticMsgId);
+            setWaitingResponse(true);
+            const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
+            addOrUpdateMessage(
+              {
+                id: optimisticMsgId,
+                type: 'text',
+                position: 'right',
+                conversation_id,
+                content: { content: displayMessage },
+                createdAt: Date.now(),
+              },
+              true
+            );
+          }
+          if (agentSlotId) {
+            const result = await ipcBridge.team.sendMessageToAgent.invoke({
+              teamId,
+              tenantId,
+              slotId: agentSlotId,
+              content: input,
+              files,
+            });
+            const maybeError = result as unknown as { __bridgeError?: boolean; message?: string };
+            if (maybeError.__bridgeError) {
+              throw new Error(maybeError.message || 'Failed to send message to agent');
+            }
+          } else {
+            const result = await ipcBridge.team.sendMessage.invoke({
+              teamId,
+              tenantId,
+              content: input,
+              files,
+            });
+            const maybeError = result as unknown as { __bridgeError?: boolean; message?: string };
+            if (maybeError.__bridgeError) {
+              throw new Error(maybeError.message || 'Failed to send message to team');
+            }
+          }
+          emitter.emit('chat.history.refresh');
+          if (files.length > 0) {
+            emitter.emit('aionrs.workspace.refresh');
+          }
+        } catch (error) {
+          if (files.length > 0) {
+            setWaitingResponse(false);
+            setActiveMsgId(null);
+            if (optimisticMsgId) {
+              removeMessageByMsgId(optimisticMsgId);
+            }
+          }
+          throw error;
+        }
+        return;
       }
 
       const msg_id = uuid();
       setActiveMsgId(msg_id);
       setWaitingResponse(true);
+      runtimeView.markSendStarted();
 
       const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
       addOrUpdateMessage(
@@ -179,25 +264,33 @@ const AionrsSendBox: React.FC<{
           files,
         });
         assertBridgeSuccess(result, 'Failed to send message to Aion CLI');
+        runtimeView.markSendAccepted(msg_id, runtimeSummaryForActiveSend(msg_id), msg_id);
         patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
         emitter.emit('chat.history.refresh');
         if (files.length > 0) {
           emitter.emit('aionrs.workspace.refresh');
         }
       } catch (error) {
+        runtimeView.markSendFailed(error instanceof Error ? error.message : String(error));
+        setWaitingResponse(false);
+        setActiveMsgId(null);
         removeMessageByMsgId(msg_id);
         throw error;
       }
     },
     [
       addOrUpdateMessage,
+      agentSlotId,
       checkAndUpdateTitle,
       conversation_id,
       currentModel?.useModel,
       setActiveMsgId,
       removeMessageByMsgId,
+      runtimeView,
       setWaitingResponse,
       effectiveWorkspace,
+      teamId,
+      tenantId,
     ]
   );
 
@@ -265,12 +358,7 @@ const AionrsSendBox: React.FC<{
     // receives image content as text. This is a heads-up, not a blocker.
     const imageFiles = filesToSend.filter((f) => isImageFilePath(f));
     if (imageFiles.length > 0) {
-      Message.info(
-        t('conversation.aionrsImageAutoDescribe', {
-          defaultValue:
-            '正在通过视觉模型识别图片内容并转为文字注入对话，可能多花几秒钟。',
-        })
-      );
+      Message.info(t('conversation.aionrsImageAutoDescribe'));
     }
 
     clearFiles();
@@ -310,11 +398,27 @@ const AionrsSendBox: React.FC<{
 
   // Stop conversation handler
   const handleStop = async (): Promise<void> => {
+    const turnId = runtimeView.activeTurnId;
+    if (turnId) {
+      runtimeView.markStopRequested(turnId);
+    }
     try {
       await ipcBridge.conversation.stop.invoke({ conversation_id });
     } finally {
       resetState();
       resetActiveExecution('stop');
+      if (turnId) {
+        runtimeView.markStopAcknowledged(turnId, {
+          state: 'idle',
+          can_send_message: true,
+          has_task: false,
+          is_processing: false,
+          pending_confirmations: 0,
+          turn_id: turnId,
+        });
+      } else {
+        runtimeView.resetLocalGate('stop_without_turn');
+      }
     }
   };
 
@@ -342,11 +446,13 @@ const AionrsSendBox: React.FC<{
         value={content}
         onChange={setContent}
         loading={isBusy}
-        disabled={!currentModel?.useModel}
+        disabled={!teamId && !currentModel?.useModel}
         placeholder={
-          currentModel?.useModel
-            ? t('conversation.chat.sendMessageTo', { model: getDisplayModelName(currentModel.useModel) })
-            : t('conversation.chat.noModelSelected')
+          teamId
+            ? t('team.sendBox.placeholder')
+            : currentModel?.useModel
+              ? t('conversation.chat.sendMessageTo', { model: getDisplayModelName(currentModel.useModel) })
+              : t('conversation.chat.noModelSelected')
         }
         onStop={handleStop}
         className='z-10'
@@ -358,15 +464,18 @@ const AionrsSendBox: React.FC<{
         tools={
           <div className='flex items-center gap-4px'>
             <FileAttachButton openFileSelector={openFileSelector} onLocalFilesAdded={handleFilesAdded} />
-            <AgentModeSelector
-              backend='aionrs'
-              conversationId={conversation_id}
-              compact
-              compactLeadingIcon={<Shield theme='outline' size='14' fill={iconColors.secondary} />}
-              modeLabelFormatter={(mode) => t(`agentMode.${mode.value}`, { defaultValue: mode.label })}
-              compactLabelPrefix={t('agentMode.permission')}
-              hideCompactLabelPrefixOnMobile
-            />
+            {showModeSelector ? (
+              <AgentModeSelector
+                backend='aionrs'
+                conversationId={conversation_id}
+                compact={!!teamId}
+                hideAgentName
+                compactLeadingIcon={<Shield theme='outline' size='14' fill={iconColors.secondary} />}
+                modeLabelFormatter={(mode) => t(`agentMode.${mode.value}`, { defaultValue: mode.label })}
+                compactLabelPrefix={t('agentMode.permission')}
+                hideCompactLabelPrefixOnMobile
+              />
+            ) : null}
           </div>
         }
         sendButtonPrefix={

@@ -405,7 +405,7 @@ export class OneManager extends EventEmitter implements IAgentManager {
 
     const cmd: AionrsCommand = {
       type: 'message',
-      input: data.input,
+      content: data.input,
       msg_id: data.msg_id,
       files: data.files,
     };

@@ -69,5 +69,9 @@ export default forkTask(({ data }, pipe) => {
     deferred.with(agent.send(event.agentPrompt ?? event.input, event.msg_id, event.files));
   });
 
+  // Windows TerminateProcess does not cascade to grandchildren — kill the
+  // aionrs binary explicitly when this worker exits to prevent orphan processes.
+  process.on('exit', () => agent.kill());
+
   return agent.start();
 });

@@ -60,7 +60,7 @@ export class OneAgent extends EventEmitter {
   async handleCommand(cmd: AionrsCommand): Promise<void> {
     switch (cmd.type) {
       case 'message':
-        await this.handleMessage(cmd.input, cmd.msg_id, cmd.files);
+        await this.handleMessage(cmd.content, cmd.msg_id, cmd.files);
         break;
       case 'stop':
         this.handleStop();

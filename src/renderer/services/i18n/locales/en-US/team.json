@@ -34,7 +34,8 @@
   "noMessages": "No messages yet.",
   "agentNotConfigured": "Agent not configured yet.",
   "sendBox": {
-    "placeholder": "Message dispatch agent..."
+    "placeholder": "Message dispatch agent...",
+    "attachmentsNotSupported": "Failed to send team message with attachments. Try again or send files in a direct conversation."
   },
   "create": {
     "title": "Create Team",

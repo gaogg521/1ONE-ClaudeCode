@@ -405,6 +405,26 @@ export const useAcpMessage = (conversation_id: string): UseAcpMessageReturn => {
     };
   }, [conversation_id]);
 
+  useEffect(() => {
+    return ipcBridge.conversation.turnCompleted.on((event) => {
+      if (event.sessionId !== conversation_id) {
+        return;
+      }
+      if (event.canSendMessage) {
+        setRunning(false);
+        runningRef.current = false;
+        setAiProcessing(false);
+        aiProcessingRef.current = false;
+        if (event.state === 'ai_waiting_input' || event.state === 'stopped' || event.state === 'error') {
+          setThought({ subject: '', description: '' });
+        }
+      } else if (event.state === 'ai_waiting_confirmation') {
+        setRunning(true);
+        runningRef.current = true;
+      }
+    });
+  }, [conversation_id]);
+
   const resetState = useCallback(() => {
     turnFinishedRef.current = true;
     setRunning(false);

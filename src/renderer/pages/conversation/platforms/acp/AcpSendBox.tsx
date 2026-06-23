@@ -7,7 +7,7 @@ import ThoughtDisplay from '@/renderer/components/chat/ThoughtDisplay';
 import CommandQueuePanel from '@/renderer/components/chat/CommandQueuePanel';
 import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/chat/useSendBoxDraft';
 import { createSetUploadFile, useSendBoxFiles } from '@/renderer/hooks/chat/useSendBoxFiles';
-import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
+import { useAddOrUpdateMessage, useRemoveMessageByMsgId } from '@/renderer/pages/conversation/Messages/hooks';
 import {
   shouldEnqueueConversationCommand,
   useConversationCommandQueue,
@@ -42,6 +42,9 @@ import { useEffectiveWorkspace } from '@/renderer/hooks/conversation/useEffectiv
 import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
 import { patchSentMessageContent } from '@/renderer/utils/file/patchSentMessage';
 import { getChatRailSurfaceStyle } from '@/renderer/utils/ui/contentRail';
+import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtime/useConversationRuntimeView';
+import { runtimeSummaryForActiveSend } from '@/renderer/pages/conversation/utils/conversationRuntime';
+import { warmupConversation } from '@/renderer/pages/conversation/utils/warmupConversation';
 
 const useAcpSendBoxDraft = getSendBoxDraftHook('acp', {
   _type: 'acp',
@@ -106,6 +109,7 @@ const AcpSendBox: React.FC<{
     contextLimit,
     hasThinkingMessage,
   } = useAcpMessage(conversation_id);
+  const runtimeView = useConversationRuntimeView(conversation_id);
   const { t } = useTranslation();
   const teamPermission = useTeamPermission();
   const stretchLayout = Boolean(useConversationContextSafe()?.stretchLayout);
@@ -115,6 +119,14 @@ const AcpSendBox: React.FC<{
   const showModeSelector = !teamPermission || conversation_id === teamPermission.leadConversationId;
   const { checkAndUpdateTitle } = useAutoTitle();
   const slashCommands = useSlashCommands(conversation_id, { agentStatus: acpStatus });
+
+  useEffect(() => {
+    if (!conversation_id) return;
+    void warmupConversation(conversation_id).catch(() => {
+      // Warmup is best-effort; send path still works without it.
+    });
+  }, [conversation_id]);
+
   const { atPath, uploadFile, setAtPath, setUploadFile, content, setContent } = useSendBoxDraft(conversation_id);
   const { setSendBoxHandler } = usePreviewContext();
 
@@ -123,6 +135,7 @@ const AcpSendBox: React.FC<{
   const atPathRef = useLatestRef(atPath);
 
   const addOrUpdateMessage = useAddOrUpdateMessage(); // Move this here so it's available in useEffect
+  const removeMessageByMsgId = useRemoveMessageByMsgId();
   const addOrUpdateMessageRef = useLatestRef(addOrUpdateMessage);
 
   // Shared file handling logic
@@ -132,7 +145,12 @@ const AcpSendBox: React.FC<{
     setAtPath,
     setUploadFile,
   });
-  const isBusy = running || aiProcessing;
+  const isBusy =
+    running ||
+    aiProcessing ||
+    (!teamId &&
+      runtimeView.hydrated &&
+      (!runtimeView.canSendMessage || runtimeView.isProcessing || runtimeView.view.localSubmitting));
 
   // Register handler for adding text from preview panel to sendbox
   useEffect(() => {
@@ -166,30 +184,52 @@ const AcpSendBox: React.FC<{
     async ({ input, files }: Pick<ConversationCommandQueueItem, 'input' | 'files'>) => {
       const msg_id = uuid();
 
-      setAiProcessing(true);
-
       try {
         void checkAndUpdateTitle(conversation_id, input);
         if (teamId) {
+          const hasAttachments = files.length > 0;
+          if (hasAttachments) {
+            setAiProcessing(true);
+            const displayMessage = buildDisplayMessage(input, files, effectiveWorkspace);
+            addOrUpdateMessage(
+              {
+                id: msg_id,
+                type: 'text',
+                position: 'right',
+                conversation_id,
+                content: { content: displayMessage },
+                createdAt: Date.now(),
+              },
+              true
+            );
+          }
           if (agentSlotId) {
             const result = await ipcBridge.team.sendMessageToAgent.invoke({
               teamId,
               tenantId,
               slotId: agentSlotId,
               content: input,
+              files,
             });
             const maybeError = result as unknown as { __bridgeError?: boolean; message?: string };
             if (maybeError.__bridgeError) {
               throw new Error(maybeError.message || 'Failed to send message to agent');
             }
           } else {
-            const result = await ipcBridge.team.sendMessage.invoke({ teamId, tenantId, content: input });
+            const result = await ipcBridge.team.sendMessage.invoke({
+              teamId,
+              tenantId,
+              content: input,
+              files,
+            });
             const maybeError = result as unknown as { __bridgeError?: boolean; message?: string };
             if (maybeError.__bridgeError) {
               throw new Error(maybeError.message || 'Failed to send message to team');
             }
           }
         } else {
+          setAiProcessing(true);
+          runtimeView.markSendStarted();
           const displayMessage =
             files.length > 0 ? buildDisplayMessage(input, files, effectiveWorkspace) : input;
           const result = await ipcBridge.acpConversation.sendMessage.invoke({
@@ -199,6 +239,7 @@ const AcpSendBox: React.FC<{
             files,
           });
           assertBridgeSuccess(result, `Failed to send message to ${backend}`);
+          runtimeView.markSendAccepted(msg_id, runtimeSummaryForActiveSend(msg_id), msg_id);
           patchSentMessageContent(addOrUpdateMessage, conversation_id, msg_id, result);
         }
         emitter.emit('chat.history.refresh');
@@ -229,6 +270,11 @@ Please check your local CLI tool authentication status`,
         }
 
         setAiProcessing(false);
+        if (teamId && files.length > 0) {
+          removeMessageByMsgId(msg_id);
+        } else if (!teamId) {
+          runtimeView.markSendFailed(errorMsg);
+        }
         throw error;
       }
 
@@ -243,6 +289,8 @@ Please check your local CLI tool authentication status`,
       checkAndUpdateTitle,
       conversation_id,
       effectiveWorkspace,
+      removeMessageByMsgId,
+      runtimeView,
       setAiProcessing,
       t,
       teamId,
@@ -319,12 +367,27 @@ Please check your local CLI tool authentication status`,
 
   // Stop conversation handler
   const handleStop = async (): Promise<void> => {
-    // Use finally to ensure UI state is reset even if backend stop fails
+    const turnId = runtimeView.activeTurnId;
+    if (turnId) {
+      runtimeView.markStopRequested(turnId);
+    }
     try {
       await ipcBridge.conversation.stop.invoke({ conversation_id });
     } finally {
       resetState();
       resetActiveExecution('stop');
+      if (turnId) {
+        runtimeView.markStopAcknowledged(turnId, {
+          state: 'idle',
+          can_send_message: true,
+          has_task: false,
+          is_processing: false,
+          pending_confirmations: 0,
+          turn_id: turnId,
+        });
+      } else {
+        runtimeView.resetLocalGate('stop_without_turn');
+      }
     }
   };
 

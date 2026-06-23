@@ -274,6 +274,7 @@
   "contextUsage": {
     "contextUsed": "上下文已使用"
   },
+  "aionrsImageAutoDescribe": "正在通过视觉模型识别图片内容并转为文字注入对话，可能多花几秒钟。",
   "gemini": {
     "viewSessionLogs": "查看该会话详细日志",
     "viewSessionLogsTooltip": "在文件管理器中打开工作区下的 .gemini/logs（请求摘要与错误 dump）",
@@ -305,5 +306,52 @@
   "webSources": {
     "analysisDone": "已完成分析，参考了 {{count}} 篇材料",
     "sourceLabel": "来源"
+  },
+  "agentError": {
+    "fallbackTitle": "Agent 未能回复",
+    "errorCode": "错误码",
+    "retryable": "可重试",
+    "notRetryable": "需先处理配置",
+    "resolutionPrefix": "建议：",
+    "resolution": {
+      "retry": "稍后重试，或重新发送这条消息。",
+      "wait_for_current_response": "请等待当前回复结束后再发送下一条消息。",
+      "start_new_session": "请新建一个对话后继续。",
+      "reconnect_agent": "请重启或重新连接所选 Agent 后重试。",
+      "check_agent_login": "请先登录所选 Agent，或刷新它的凭证。",
+      "check_agent_installation": "请检查 Agent 的安装状态和本地命令配置。",
+      "check_agent_version": "请更新 Agent，或修复协议版本不兼容问题。",
+      "check_local_command": "请安装缺失的命令，或确认它已经加入 PATH。",
+      "check_provider_credentials": "请在设置中检查模型服务商的 API Key 或账号凭证。",
+      "check_provider_billing": "请检查模型服务商的余额、额度或配额。",
+      "check_provider_base_url": "请检查模型服务商的 Base URL、接口路径、代理和 API 兼容性。",
+      "change_model": "请选择当前账号可用且支持该请求的模型。",
+      "reduce_context": "请减少消息内容、引用文件或上下文大小后重试。",
+      "send_feedback": "请提交反馈并附带日志，方便团队排查。"
+    },
+    "ownership": {
+      "aionui": "1ONE",
+      "user_agent": "Agent",
+      "user_llm_provider": "模型服务商",
+      "unknown_upstream": "上游"
+    },
+    "codes": {
+      "AIONUI_CONVERSATION_BUSY": {
+        "title": "会话正在处理上一条消息",
+        "body": "当前会话还有回复未结束。请等待本次回复完成后再发送新的消息。"
+      },
+      "USER_AGENT_DISCONNECTED": {
+        "title": "所选 Agent 已断开连接",
+        "body": "Agent 在处理本次消息时断开了连接。请重启或重新连接 Agent 后重试。"
+      },
+      "USER_LLM_PROVIDER_AUTH_FAILED": {
+        "title": "模型服务商认证失败",
+        "body": "请检查 API Key、账号凭证或登录状态后重试。"
+      },
+      "USER_LLM_PROVIDER_RATE_LIMITED": {
+        "title": "模型服务商限流",
+        "body": "请求过于频繁或额度不足。请稍后重试，或检查服务商配额。"
+      }
+    }
   }
 }

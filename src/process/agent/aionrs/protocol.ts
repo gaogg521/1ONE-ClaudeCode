@@ -33,6 +33,10 @@ export type AionrsEvent =
       version: string;
       session_id?: string;
       capabilities: { tool_approval: boolean; thinking: boolean; mcp: boolean };
+      effort?: string;
+      effort_levels?: string[];
+      modes?: string[];
+      current_mode?: string;
     }
   | { type: 'stream_start'; msg_id: string }
   | { type: 'text_delta'; text: string; msg_id: string }
@@ -66,16 +70,22 @@ export type AionrsEvent =
       msg_id: string | null;
       error: { code: string; message: string; retryable: boolean };
     }
-  | { type: 'info'; msg_id: string; message: string };
+  | { type: 'info'; msg_id: string; message: string }
+  | { type: 'config_changed'; config: Record<string, unknown> }
+  | { type: 'mcp_ready'; server: string; tools: number }
+  | { type: 'pong' };
 
 // ============================================
 // Client -> Agent Commands (stdin)
 // ============================================
 
 export type AionrsCommand =
-  | { type: 'message'; msg_id: string; input: string; files?: string[] }
+  | { type: 'message'; msg_id: string; content: string; files?: string[] }
   | { type: 'stop' }
   | { type: 'tool_approve'; call_id: string; scope: 'once' | 'always' }
   | { type: 'tool_deny'; call_id: string; reason?: string }
   | { type: 'init_history'; text: string }
-  | { type: 'set_mode'; mode: 'default' | 'auto_edit' | 'yolo' };
+  | { type: 'set_mode'; mode: 'default' | 'auto_edit' | 'yolo' }
+  | { type: 'set_config'; config: Record<string, unknown> }
+  | { type: 'add_mcp_server'; name: string; command: string; args?: string[]; env?: Record<string, string> }
+  | { type: 'ping' };

@@ -681,9 +681,9 @@ const handleAppReady = async (): Promise<void> => {
     } else {
       try {
         const savedCloseToTray = await ProcessConfig.get('system.closeToTray');
-        setCloseToTrayEnabled(app.isPackaged ? (savedCloseToTray ?? false) : true);
+        setCloseToTrayEnabled(savedCloseToTray ?? true);
       } catch {
-        setCloseToTrayEnabled(!app.isPackaged);
+        setCloseToTrayEnabled(true);
       }
 
       onCloseToTrayChanged((enabled) => {

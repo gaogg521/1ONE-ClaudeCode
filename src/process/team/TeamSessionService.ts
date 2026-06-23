@@ -29,6 +29,7 @@ import {
   type TeamDigitalEmployeeRunNowInput,
   type TeamDigitalEmployeeRunNowResult,
 } from '@process/digitalEmployee/TeamDigitalEmployeeRunService';
+import { sendConversationMessage } from '@process/bridge/services/conversationSendService';
 
 export class TeamSessionService {
   private readonly sessions: Map<string, TeamSession> = new Map();
@@ -703,6 +704,69 @@ export class TeamSessionService {
     );
 
     return session;
+  }
+
+  async sendMessage(teamId: string, content: string, tenantId?: string, files?: string[]): Promise<void> {
+    const team = await this.repo.findById(teamId, tenantId);
+    if (!team) {
+      throw new Error(`Team "${teamId}" not found`);
+    }
+
+    if (files && files.length > 0) {
+      const leadAgent = team.agents.find((agent) => agent.slotId === team.leadAgentId);
+      if (!leadAgent?.conversationId) {
+        throw new Error('Lead agent conversation not found');
+      }
+      const result = await sendConversationMessage(this.workerTaskManager, {
+        conversation_id: leadAgent.conversationId,
+        input: content,
+        msg_id: uuid(),
+        files,
+      });
+      if (!result.success) {
+        throw new Error(result.msg ?? 'Failed to send team message with attachments');
+      }
+      return;
+    }
+
+    const session = await this.getOrStartSession(teamId, tenantId);
+    await session.sendMessage(content);
+  }
+
+  async sendMessageToAgent(
+    teamId: string,
+    slotId: string,
+    content: string,
+    tenantId?: string,
+    files?: string[]
+  ): Promise<void> {
+    const team = await this.repo.findById(teamId, tenantId);
+    if (!team) {
+      throw new Error(`Team "${teamId}" not found`);
+    }
+    const agent = team.agents.find((item) => item.slotId === slotId);
+    if (!agent) {
+      throw new Error(`Agent "${slotId}" not found`);
+    }
+
+    if (files && files.length > 0) {
+      if (!agent.conversationId) {
+        throw new Error('Agent conversation not found');
+      }
+      const result = await sendConversationMessage(this.workerTaskManager, {
+        conversation_id: agent.conversationId,
+        input: content,
+        msg_id: uuid(),
+        files,
+      });
+      if (!result.success) {
+        throw new Error(result.msg ?? 'Failed to send team message with attachments');
+      }
+      return;
+    }
+
+    const session = await this.getOrStartSession(teamId, tenantId);
+    await session.sendMessageToAgent(slotId, content);
   }
 
   async stopSession(teamId: string): Promise<void> {

@@ -7,9 +7,12 @@
 import { ForkTask } from '@process/worker/fork/ForkTask';
 import path from 'path';
 import type { IConfirmation } from '@/common/chat/chatLib';
+import type { IResponseMessage } from '@/common/adapter/ipcBridge';
+import { ipcBridge } from '@/common';
 import type { AgentType, AgentStatus } from './agentTypes';
 import type { IAgentEventEmitter } from './IAgentEventEmitter';
-import type { IAgentManager } from './IAgentManager';
+import type { IAgentManager, AgentKillReason } from './IAgentManager';
+import { emitAgentTurnCompleted } from '@process/utils/emitConversationTurnCompleted';
 
 /**
  * @description agent任务基础类
@@ -112,6 +115,27 @@ class BaseAgentManager<Data, ConfirmationOption extends any = any>
   stop() {
     this.confirmations = [];
     return this.postMessagePromise('stop.stream', {});
+  }
+
+  kill(_reason?: AgentKillReason): void {
+    this.emitSyntheticFinishOnKill();
+    super.kill();
+  }
+
+  protected emitSyntheticFinishOnKill(): void {
+    if (this.status !== 'running' && this.status !== 'pending') return;
+    this.status = 'finished';
+    try {
+      ipcBridge.conversation.responseStream.emit({
+        type: 'finish',
+        data: '',
+        msg_id: this.conversation_id,
+        conversation_id: this.conversation_id,
+      } as IResponseMessage);
+    } catch {
+      // best-effort
+    }
+    emitAgentTurnCompleted(this, this.conversation_id, 'stopped');
   }
 
   sendMessage(data: any) {

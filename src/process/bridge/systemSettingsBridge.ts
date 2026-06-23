@@ -46,7 +46,7 @@ export function initSystemSettingsBridge(): void {
   // 获取"关闭到托盘"设置 / Get "close to tray" setting
   ipcBridge.systemSettings.getCloseToTray.provider(async () => {
     const value = await ProcessConfig.get('system.closeToTray');
-    return value ?? false;
+    return value ?? true;
   });
 
   // 设置"关闭到托盘"，先持久化再通知主进程
