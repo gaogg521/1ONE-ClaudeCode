@@ -76,6 +76,8 @@ type AionrsManagerData = {
   sessionMode?: string;
   sessionId?: string;
   resume?: string;
+  /** App-managed diagnostic-log dir, injected by the manager (kept out of the workspace). */
+  logDir?: string;
 };
 
 export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
@@ -118,7 +120,9 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   }
 
   constructor(data: AionrsManagerData, model: TProviderWithModel) {
-    super('aionrs', { ...data, model }, new IpcAgentEventEmitter());
+    // Route aionrs diagnostic logs to an app cache dir instead of the user's workspace.
+    const logDir = path.join(getSystemDir().cacheDir, 'aionrs-logs', data.conversation_id);
+    super('aionrs', { ...data, model, logDir }, new IpcAgentEventEmitter());
     this.workspace = data.workspace;
     this.conversation_id = data.conversation_id;
     this.model = model;
@@ -148,17 +152,31 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
 
       const conv = db.getConversation(this.conversation_id);
       let storedAionrsSession: string | undefined;
+      let storedLastModelId = '';
       if (conv.success && conv.data?.extra) {
-        const raw = (conv.data.extra as Record<string, unknown>).aionrsSessionId;
+        const extra = conv.data.extra as Record<string, unknown>;
+        const raw = extra.aionrsSessionId;
         if (typeof raw === 'string' && raw.trim()) storedAionrsSession = raw.trim();
+        storedLastModelId = String(extra.lastModelId ?? '');
       }
 
+      // A persisted aionrs session is bound to the model that created it. If the user
+      // switched models (lastModelId differs from the current model), resuming that
+      // session points the binary at the new endpoint/key with stale session state —
+      // the model never responds and the host fires the 90 s stall watchdog. Start a
+      // fresh session instead; injectHistoryFromDatabase() below re-seeds the context.
+      const currentModelId = this.model.useModel || '';
+      const modelUnchanged = !storedLastModelId || storedLastModelId === currentModelId;
       const sessionArgs =
-        hasMessages && storedAionrsSession
+        hasMessages && storedAionrsSession && modelUnchanged
           ? { resume: storedAionrsSession }
           : { sessionId: this.conversation_id };
 
-      const res = await super.start({ ...this.data.data, ...sessionArgs, yoloMode: this.autoApproveEnabled } as AionrsManagerData);
+      const res = await super.start({
+        ...this.data.data,
+        ...sessionArgs,
+        yoloMode: this.autoApproveEnabled,
+      } as AionrsManagerData);
 
       // When the worker is rebuilt (commonly after model switch), it starts fresh and loses "self identity".
       // Inject a one-time reminder into the next user message so the model can correctly answer
@@ -168,7 +186,6 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
         const lastModelId = String(
           (conv as { data?: { extra?: Record<string, unknown> } })?.data?.extra?.lastModelId ?? ''
         );
-        const currentModelId = this.model.useModel || '';
         this.lastModelIdSeen = lastModelId || (hasMessages ? currentModelId : null);
         if (hasMessages && currentModelId && lastModelId && lastModelId !== currentModelId) {
           this.pendingModelIdentityNotice = currentModelId;
@@ -196,7 +213,11 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       return res;
     } catch {
       // Fallback: start as new session if DB check fails
-      const res = await super.start({ ...this.data.data, sessionId: this.conversation_id, yoloMode: this.autoApproveEnabled } as AionrsManagerData);
+      const res = await super.start({
+        ...this.data.data,
+        sessionId: this.conversation_id,
+        yoloMode: this.autoApproveEnabled,
+      } as AionrsManagerData);
       await this.injectHistoryFromDatabase().catch(() => {});
       return res;
     }
@@ -295,9 +316,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
       const truncatedTail = fullText.slice(-MAX_CHARS);
       const headerLines: string[] = [];
       headerLines.push('[Conversation History]');
-      headerLines.push(
-        `Note: history may be truncated for context limits. ConversationId=${this.conversation_id}.`
-      );
+      headerLines.push(`Note: history may be truncated for context limits. ConversationId=${this.conversation_id}.`);
       if (snapshotPath) {
         headerLines.push(`Full history snapshot saved at: ${snapshotPath}`);
         headerLines.push('You may read it if you need older context.');
@@ -350,12 +369,7 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     emitAionrsTurnCompleted(this, turnId, 'stopped');
   }
 
-  async sendMessage(data: {
-    input: string;
-    agentPrompt?: string;
-    msg_id: string;
-    files?: string[];
-  }) {
+  async sendMessage(data: { input: string; agentPrompt?: string; msg_id: string; files?: string[] }) {
     const originalInput = data.input;
 
     // Detect model switches even when the worker is NOT rebuilt (some flows can update model routing without restart).
@@ -394,7 +408,13 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
         `When the user asks which model you are using, answer in Chinese in this exact format: "${productLine} / ${modelId}".\n` +
         `Do not answer with only a product family name; always include the exact model id.\n` +
         `</system-reminder>\n\n`;
-      data = { ...data, input: notice + (data.agentPrompt ?? (data.input || '')) };
+      // The worker sends `agentPrompt ?? input`, so the notice must land on BOTH
+      // fields — injecting into `input` alone gets silently dropped when an
+      // agentPrompt (augmentation/skill prefix) is present, which is the norm.
+      {
+        const base = data.agentPrompt ?? (data.input || '');
+        data = { ...data, input: notice + base, agentPrompt: notice + base };
+      }
       // Identity-question path already carries the needed instruction; avoid stacking a second reminder.
       this.pendingModelIdentityNotice = null;
     } else if (this.pendingModelIdentityNotice) {
@@ -412,7 +432,10 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
         `- Exact model id: answer exactly "${modelId}".\n` +
         `Example: "${productLine} / ${modelId}"\n` +
         `</system-reminder>\n\n`;
-      data = { ...data, input: notice + (data.agentPrompt ?? (data.input || '')) };
+      {
+        const base = data.agentPrompt ?? (data.input || '');
+        data = { ...data, input: notice + base, agentPrompt: notice + base };
+      }
       this.pendingModelIdentityNotice = null;
     } else if (data.agentPrompt) {
       data = { ...data, input: data.agentPrompt };
@@ -449,15 +472,33 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     // Always strip images from files, even if vision description fails.
     if (data.files && data.files.length > 0) {
       const { describeImagesForPrompt } = await import('@process/services/visionDescribe');
-      const { isImageFilePath } = await import('@/common/chat/messageFiles');
+      const { isImageFilePath, isMediaFilePath } = await import('@/common/chat/messageFiles');
       const imageFiles = data.files.filter((f) => isImageFilePath(f));
-      const nonImageFiles = data.files.filter((f) => !isImageFilePath(f));
+      // Keep only files aionrs can actually read/edit (text/docs). All binary media
+      // (image/audio/video) is stripped: aionrs can't read binaries and some binary
+      // versions exit(0) silently on them. Their content still reaches the model —
+      // images via the vision description appended below, audio/video via the STT
+      // transcript baked into agentPrompt by the attachment-augmentation step.
+      const keptFiles = data.files.filter((f) => !isMediaFilePath(f));
+      const strippedMedia = data.files.length !== keptFiles.length;
 
       let imageDescriptionBlock = '';
       if (imageFiles.length > 0) {
-        if (this.model.apiKey && this.model.useModel) {
+        // Prefer the active chat model (Kimi K2.6 / Qwen-VL etc. are natively
+        // multimodal). If it can't describe the image (text-only model), fall back
+        // to any other vision-capable provider configured in Settings.
+        const { resolveFallbackVisionModel } = await import('@process/services/visionModelResolver');
+        const fallbackVisionModel = await resolveFallbackVisionModel(this.model).catch(
+          (): TProviderWithModel | undefined => undefined
+        );
+        const primaryHasKey = this.model.apiKey && this.model.useModel;
+        if (primaryHasKey || fallbackVisionModel) {
           try {
-            const result = await describeImagesForPrompt(imageFiles, this.model);
+            const result = await describeImagesForPrompt(
+              imageFiles,
+              primaryHasKey ? this.model : (fallbackVisionModel as TProviderWithModel),
+              primaryHasKey ? fallbackVisionModel : undefined
+            );
             imageDescriptionBlock = result.imageDescriptionBlock;
           } catch (error) {
             console.warn('[AionrsManager] Image vision description failed:', error);
@@ -466,16 +507,21 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
         } else {
           imageDescriptionBlock =
             `\n\n[Images attached: ${imageFiles.map((f) => f.replace(/\\/g, '/').split('/').pop()).join(', ')}. ` +
-            `Vision description requires a configured model API key. Please add API credentials in Settings or describe the image in your message.]\n`;
+            `No vision-capable model is configured. Add a model with vision support (e.g. Kimi K2.6, Qwen-VL, GPT-4o, Gemini) in Settings → Models, or describe the image in your message.]\n`;
         }
       }
 
-      if (imageFiles.length > 0) {
-        // Always strip image paths from files — aionrs can't process them
+      if (strippedMedia || imageDescriptionBlock) {
+        // The worker sends `agentPrompt ?? input`, so the vision description must
+        // be appended to BOTH fields; appending to `input` alone is silently
+        // dropped whenever an agentPrompt is present (the normal case), which is
+        // why uploaded images were invisible to the model.
+        const promptBase = data.agentPrompt ?? data.input;
         data = {
           ...data,
           input: data.input + imageDescriptionBlock,
-          files: nonImageFiles,
+          agentPrompt: promptBase + imageDescriptionBlock,
+          files: keptFiles,
         };
       }
     }
@@ -647,7 +693,9 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     const looksLikeProtocolMismatch =
       msg.includes('does not support') &&
       msg.includes('protocol') &&
-      (msg.includes('only supports ["openai"]') || msg.includes('only supports [\\"openai\\"]') || msg.includes('only supports [openai]'));
+      (msg.includes('only supports ["openai"]') ||
+        msg.includes('only supports [\\"openai\\"]') ||
+        msg.includes('only supports [openai]'));
     if (!looksLikeProtocolMismatch) return;
 
     const providerId = this.model.id;

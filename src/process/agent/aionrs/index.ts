@@ -5,7 +5,7 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import type { TProviderWithModel } from '@/common/config/storage';
@@ -49,9 +49,15 @@ export function mapAionrsToolResultDisplay(event: AionrsToolResultEvent): unknow
   const parsedOutput = tryParseJsonRecord(event.output);
   const outputRecord = parsedOutput ?? {};
   const candidateImgUrl =
-    [outputRecord.img_url, outputRecord.image_url, metadata.img_url, metadata.image_url, metadata.file_path, metadata.path, metadata.uri].find(
-      (value) => typeof value === 'string' && value.trim().length > 0
-    ) ?? null;
+    [
+      outputRecord.img_url,
+      outputRecord.image_url,
+      metadata.img_url,
+      metadata.image_url,
+      metadata.file_path,
+      metadata.path,
+      metadata.uri,
+    ].find((value) => typeof value === 'string' && value.trim().length > 0) ?? null;
   const candidateRelativePath =
     [outputRecord.relative_path, metadata.relative_path, metadata.relativePath].find(
       (value) => typeof value === 'string' && value.trim().length > 0
@@ -90,6 +96,8 @@ export type AionrsAgentOptions = {
   model: TProviderWithModel;
   /** 1ONE conversation id — used when resume fails to start a fresh aionrs session with a stable key. */
   conversation_id?: string;
+  /** App-managed directory for diagnostic logs (kept out of the user's workspace). */
+  logDir?: string;
   proxy?: string;
   yoloMode?: boolean;
   presetRules?: string;
@@ -134,6 +142,11 @@ export class AionrsAgent {
   /** Last user message id for this turn — used when upstream events omit msg_id. */
   private pendingTurnMsgId: string | null = null;
   private responseStallTimer: NodeJS.Timeout | null = null;
+  /** Set when the host intentionally kills the binary (model switch, idle, shutdown).
+   *  Suppresses the "unexpected exit" error in the exit handler for signal-kills. */
+  private killed = false;
+  /** Resolved diagnostic-log directory (app cache dir, not the user's workspace). */
+  private logBase: string = '';
 
   constructor(options: AionrsAgentOptions) {
     this.options = options;
@@ -154,8 +167,19 @@ export class AionrsAgent {
       throw new Error('aionrs binary not found');
     }
 
+    // Keep diagnostic logs out of the user's workspace (avoids git pollution / unbounded
+    // growth in their project). Fall back to workspace only if no app cache dir was provided.
+    const logBase = this.options.logDir || this.options.workspace;
+    this.logBase = logBase;
+    try {
+      mkdirSync(logBase, { recursive: true });
+    } catch {
+      // best-effort; writes below are guarded individually
+    }
+
     const { args, env, projectConfig } = buildSpawnConfig(this.options.model, {
       workspace: this.options.workspace,
+      logDir: logBase,
       maxTokens: this.options.maxTokens,
       maxTurns: this.options.maxTurns,
       autoApprove: this.options.yoloMode,
@@ -178,7 +202,7 @@ export class AionrsAgent {
     // 90 s stall report can be matched to the binary's actual input without re-asking.
     // Worker stdout is dropped by Electron utilityProcess.fork default; write to a known file.
     try {
-      const dumpPath = join(this.options.workspace, '.aionrs-spawn.log');
+      const dumpPath = join(logBase, '.aionrs-spawn.log');
       const stamp = new Date().toISOString();
       const stack = new Error('spawn caller').stack ?? '(no stack)';
       writeFileSync(
@@ -198,7 +222,13 @@ export class AionrsAgent {
 
     // Parse stdout JSON Lines, mirror to <workspace>/.aionrs-stdout.log for diagnostics
     // (Electron utilityProcess drops worker stdout/stderr so console.error isn't visible).
-    const stdoutPath = join(this.options.workspace, '.aionrs-stdout.log');
+    const stdoutPath = join(logBase, '.aionrs-stdout.log');
+    // Truncate per worker session so the mirror cannot grow without bound across turns.
+    try {
+      writeFileSync(stdoutPath, '', { flag: 'w' });
+    } catch {
+      // best-effort
+    }
     const rl = createInterface({ input: this.childProcess.stdout! });
     rl.on('line', (line) => {
       try {
@@ -216,7 +246,12 @@ export class AionrsAgent {
 
     // Log stderr as diagnostics — also mirror to <workspace>/.aionrs-stderr.log
     // because Electron utilityProcess drops worker stdout/stderr by default.
-    const stderrPath = join(this.options.workspace, '.aionrs-stderr.log');
+    const stderrPath = join(logBase, '.aionrs-stderr.log');
+    try {
+      writeFileSync(stderrPath, '', { flag: 'w' });
+    } catch {
+      // best-effort
+    }
     this.childProcess.stderr?.on('data', (chunk: Buffer) => {
       const text = chunk.toString();
       console.error('[aionrs]', text);
@@ -231,6 +266,16 @@ export class AionrsAgent {
     this.childProcess.on('exit', (code) => {
       this.clearResponseStallTimer();
       this.restoreProjectConfig();
+
+      if (this.killed) {
+        // Host-initiated kill (model switch / idle / shutdown). The manager already
+        // emitted a synthetic finish to unlock the UI — do not surface a scary
+        // "unexpected exit" error for the SIGTERM we sent ourselves.
+        this.activeMsgId = null;
+        this.pendingTurnMsgId = null;
+        this.childProcess = null;
+        return;
+      }
 
       if (!this.ready) {
         // Exited before emitting ready — reject the bootstrap promise
@@ -466,7 +511,7 @@ export class AionrsAgent {
         // older clients don't handle. Log unknowns to a diagnostic file so we can
         // see what the binary emits without polluting the renderer.
         try {
-          const dumpPath = join(this.options.workspace, '.aionrs-unknown-events.log');
+          const dumpPath = join(this.logBase || this.options.workspace, '.aionrs-unknown-events.log');
           writeFileSync(dumpPath, `[${new Date().toISOString()}] ${JSON.stringify(event)}\n`, { flag: 'a' });
         } catch {
           // best-effort
@@ -554,8 +599,10 @@ export class AionrsAgent {
   }
 
   kill(): void {
+    this.killed = true;
     this.clearResponseStallTimer();
     this.pendingTurnMsgId = null;
+    this.activeMsgId = null;
     this.restoreProjectConfig();
     if (this.childProcess) {
       this.childProcess.kill('SIGTERM');
@@ -608,7 +655,11 @@ export class AionrsAgent {
       const dir = join(path, '..');
       const stale = readdirSync(dir).filter((f) => /^aionrs_ONE_.*\.toml$/.test(f));
       for (const f of stale) {
-        try { unlinkSync(join(dir, f)); } catch { /* ignore */ }
+        try {
+          unlinkSync(join(dir, f));
+        } catch {
+          /* ignore */
+        }
       }
     } catch {
       // Workspace may not be accessible; skip

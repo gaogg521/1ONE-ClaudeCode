@@ -38,10 +38,7 @@ export type SendConversationMessageResult = {
   data?: { input: string; files: string[] };
 };
 
-async function resolveWorkspaceFiles(
-  task: IAgentManager,
-  files: string[] | undefined
-): Promise<string[]> {
+async function resolveWorkspaceFiles(task: IAgentManager, files: string[] | undefined): Promise<string[]> {
   const isGeminiAgent = task.type === 'gemini';
   const isAionrsAgent = task.type === 'aionrs';
   const cacheDir = getSystemDir().cacheDir;
@@ -63,12 +60,21 @@ async function resolveWorkspaceFiles(
   return (files ?? []).filter((filePath) => path.isAbsolute(filePath));
 }
 
-function resolveVisionModel(task: IAgentManager): TProviderWithModel | undefined {
+async function resolveVisionModel(task: IAgentManager): Promise<TProviderWithModel | undefined> {
   if (task.type !== 'aionrs' && task.type !== 'gemini') {
     return undefined;
   }
   const manager = task as IAgentManager & { model?: TProviderWithModel };
-  return manager.model?.apiKey && manager.model.useModel ? manager.model : undefined;
+  const chatModel = manager.model?.apiKey && manager.model.useModel ? manager.model : undefined;
+  // The chat model handles vision directly when it is natively multimodal
+  // (Kimi K2.6 / Qwen-VL / Gemini etc.). Otherwise fall back to any configured
+  // vision-capable provider so scanned-PDF OCR and video keyframes still work.
+  const { modelLooksMultimodal, resolveFallbackVisionModel } = await import('@process/services/visionModelResolver');
+  if (chatModel && modelLooksMultimodal(chatModel.useModel)) {
+    return chatModel;
+  }
+  const fallback = await resolveFallbackVisionModel(chatModel).catch((): TProviderWithModel | undefined => undefined);
+  return fallback ?? chatModel;
 }
 
 function scheduleWorkspaceFileCleanup(task: IAgentManager, workspaceFiles: string[]): void {
@@ -175,7 +181,7 @@ export async function sendConversationMessage(
   const augmentationPrefix = await buildPromptAugmentationPrefix({
     displayContent: agentContent,
     files: workspaceFiles,
-    visionModel: resolveVisionModel(task),
+    visionModel: await resolveVisionModel(task),
   });
   const agentPrompt = composeAgentPrompt(agentContent, augmentationPrefix);
 

@@ -250,7 +250,7 @@ export class SpeechToTextService {
           ? await this.transcribeWithOpenAI(config, request)
           : config.provider === 'custom'
             ? await this.transcribeWithCustom(config, request)
-          : await this.transcribeWithDeepgram(config, request);
+            : await this.transcribeWithDeepgram(config, request);
 
       mainLog(STT_LOG_TAG, 'Transcription completed', {
         requestId,
@@ -271,6 +271,24 @@ export class SpeechToTextService {
       });
       throw error;
     }
+  }
+
+  /**
+   * Transcribe directly against an OpenAI-compatible `/audio/transcriptions`
+   * endpoint, bypassing the `tools.speechToText` enabled gate. Used as a
+   * best-effort fallback so audio/video works through the user's existing chat
+   * gateway (many proxy Whisper) without a separate STT configuration.
+   */
+  static async transcribeDirect(
+    request: SpeechToTextRequest,
+    opts: { baseUrl: string; apiKey: string; model?: string }
+  ): Promise<SpeechToTextResult> {
+    const config = {
+      provider: 'custom',
+      enabled: true,
+      custom: { baseUrl: opts.baseUrl, apiKey: opts.apiKey, model: opts.model || DEFAULT_OPENAI_MODEL },
+    } as SpeechToTextConfig;
+    return this.transcribeWithCustom(config, request);
   }
 
   private static async transcribeWithOpenAI(

@@ -42,20 +42,49 @@ export function getBundledBunDir(): string | null {
 }
 
 /**
- * Get the path to the bundled ffmpeg binary.
- * Looks for `resources/bundled-ffmpeg/<platform>-<arch>/ffmpeg(.exe)`.
- * Returns null if not bundled — callers should fall back to system PATH.
+ * Writable directory where the in-app downloader places ffmpeg/ffprobe.
+ * `<userData>/tools/ffmpeg/<platform>-<arch>/`. Resolves to the same location in
+ * the main process and forked workers (worker reads DATA_DIR — see NodePlatformServices).
  */
-export function getBundledFfmpegPath(): string | null {
+export function getFfmpegToolsDir(): string {
+  const platform = process.platform === 'win32' ? 'win32' : process.platform;
+  const arch = process.arch;
+  return path.join(getPlatformServices().paths.getDataDir(), 'tools', 'ffmpeg', `${platform}-${arch}`);
+}
+
+/**
+ * Resolve an ffmpeg-family binary, checking (in order): the bundled resources dir,
+ * then the in-app download dir. Returns null when neither has it — callers then
+ * fall back to the binary on the system PATH.
+ */
+function resolveMediaBinary(baseName: 'ffmpeg' | 'ffprobe'): string | null {
+  const exeName = process.platform === 'win32' ? `${baseName}.exe` : baseName;
+  const platform = process.platform === 'win32' ? 'win32' : process.platform;
+  const arch = process.arch;
   const resourcesPath = getPlatformServices().paths.isPackaged()
     ? process.resourcesPath
     : path.join(process.cwd(), 'resources');
-  const platform = process.platform === 'win32' ? 'win32' : process.platform;
-  const arch = process.arch;
-  const ffmpegDir = path.join(resourcesPath, 'bundled-ffmpeg', `${platform}-${arch}`);
-  const exeName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
-  const ffmpegPath = path.join(ffmpegDir, exeName);
-  return existsSync(ffmpegPath) ? ffmpegPath : null;
+  const bundled = path.join(resourcesPath, 'bundled-ffmpeg', `${platform}-${arch}`, exeName);
+  if (existsSync(bundled)) return bundled;
+  const downloaded = path.join(getFfmpegToolsDir(), exeName);
+  if (existsSync(downloaded)) return downloaded;
+  return null;
+}
+
+/**
+ * Get the path to a usable ffmpeg binary (bundled or in-app downloaded).
+ * Returns null if neither exists — callers should fall back to system PATH.
+ */
+export function getBundledFfmpegPath(): string | null {
+  return resolveMediaBinary('ffmpeg');
+}
+
+/**
+ * Get the path to the bundled ffprobe binary (sibling of bundled ffmpeg).
+ * Returns null if not bundled — callers should fall back to system PATH.
+ */
+export function getBundledFfprobePath(): string | null {
+  return resolveMediaBinary('ffprobe');
 }
 
 /**
@@ -433,6 +462,17 @@ export function getEnhancedEnv(customEnv?: Record<string, string>): Record<strin
   const bundledBunDir = getBundledBunDir();
   if (bundledBunDir) {
     mergedPath = `${mergedPath}${separator}${bundledBunDir}`;
+  }
+
+  // Append the in-app ffmpeg download dir so bare `ffmpeg`/`ffprobe` invocations
+  // resolve to the downloaded binaries (system PATH still wins when present).
+  try {
+    const ffmpegToolsDir = getFfmpegToolsDir();
+    if (existsSync(ffmpegToolsDir)) {
+      mergedPath = `${mergedPath}${separator}${ffmpegToolsDir}`;
+    }
+  } catch {
+    // getDataDir may be unavailable in some early contexts — best-effort.
   }
 
   return {

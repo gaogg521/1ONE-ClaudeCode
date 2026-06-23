@@ -12,7 +12,9 @@ import {
 } from '@/common/config/storage';
 import type { SpeechToTextConfig, SpeechToTextProvider } from '@/common/types/speech';
 import { NEW_API_PLATFORM_ID } from '@/common/utils/platformConstants';
-import { Divider, Form, Message, Button, Modal, Switch, Input } from '@arco-design/web-react';
+import { Divider, Form, Message, Button, Modal, Switch, Input, Progress, Tag } from '@arco-design/web-react';
+import type { FfmpegDownloadProgress, FfmpegStatus } from '@/common/types/mediaTools';
+import { ipcBridge } from '@/common';
 import { Plus } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -153,9 +155,17 @@ const ImageGenerationSettingsSection: React.FC<{
   isUpdating: boolean;
   onModelChange: (value: Partial<IConfigStorageRefer['tools.imageGenerationModel']>) => void;
   onToggle: (checked: boolean) => Promise<void>;
-}> = ({ imageGenerationModel, builtinImageGenServer, agentInstallStatus, isServerLoading, isUpdating, onModelChange, onToggle }) => {
+}> = ({
+  imageGenerationModel,
+  builtinImageGenServer,
+  agentInstallStatus,
+  isServerLoading,
+  isUpdating,
+  onModelChange,
+  onToggle,
+}) => {
   const { t } = useTranslation();
-  const noDragStyle = useMemo(() => ({ WebkitAppRegion: 'no-drag' } as React.CSSProperties), []);
+  const noDragStyle = useMemo(() => ({ WebkitAppRegion: 'no-drag' }) as React.CSSProperties, []);
 
   const initPreset = detectPreset(imageGenerationModel?.baseUrl, imageGenerationModel?.useModel);
   const [selectedPresetId, setSelectedPresetId] = React.useState<string>(initPreset);
@@ -234,14 +244,18 @@ const ImageGenerationSettingsSection: React.FC<{
       <div className='flex items-center justify-between mb-16px'>
         <div className='flex flex-col gap-4px'>
           <span className='settings-card-header__title'>{t('settings.imageGeneration')}</span>
-          <span className='settings-content-summary'>{'配置 AI 图像生成服务，支持 DALL-E、Stability AI 等提供商。'}</span>
+          <span className='settings-content-summary'>
+            {'配置 AI 图像生成服务，支持 DALL-E、Stability AI 等提供商。'}
+          </span>
         </div>
         <div className='flex items-center gap-8px'>
           {builtinImageGenServer?.enabled && builtinImageGenServer.name && (
             <McpAgentStatusDisplay
               serverName={builtinImageGenServer.name}
               agentInstallStatus={agentInstallStatus}
-              isLoadingAgentStatus={isServerLoading(builtinImageGenServer.name) && imageGenerationInstalledAgents.length === 0}
+              isLoadingAgentStatus={
+                isServerLoading(builtinImageGenServer.name) && imageGenerationInstalledAgents.length === 0
+              }
               alwaysVisible
             />
           )}
@@ -260,7 +274,9 @@ const ImageGenerationSettingsSection: React.FC<{
           <div style={noDragStyle}>
             <AionSelect value={selectedPresetId} onChange={handlePresetChange}>
               {IMAGE_GEN_PRESETS.map((p) => (
-                <AionSelect.Option key={p.id} value={p.id}>{p.label}</AionSelect.Option>
+                <AionSelect.Option key={p.id} value={p.id}>
+                  {p.label}
+                </AionSelect.Option>
               ))}
             </AionSelect>
           </div>
@@ -288,7 +304,7 @@ const ImageGenerationSettingsSection: React.FC<{
         <Form.Item label={renderLabel('模型', 'optional')}>
           <Input
             value={model}
-            placeholder={IMAGE_GEN_PRESETS.find(p => p.id === selectedPresetId)?.defaultModel ?? 'dall-e-3'}
+            placeholder={IMAGE_GEN_PRESETS.find((p) => p.id === selectedPresetId)?.defaultModel ?? 'dall-e-3'}
             onChange={handleModelChange}
             style={noDragStyle}
           />
@@ -299,9 +315,15 @@ const ImageGenerationSettingsSection: React.FC<{
           <div className='settings-note-card mt-4px text-12px space-y-6px'>
             <div className='settings-note-card__title'>💡 使用 LiteLLM 代理时的填写格式</div>
             <div className='settings-note-card__code font-mono space-y-2px'>
-              <div><span className='text-t-tertiary'>Base URL: </span>https://your-litellm.com</div>
-              <div><span className='text-t-tertiary'>API Key:  </span>sk-your-litellm-key</div>
-              <div><span className='text-t-tertiary'>模型:     </span>dall-e-3</div>
+              <div>
+                <span className='text-t-tertiary'>Base URL: </span>https://your-litellm.com
+              </div>
+              <div>
+                <span className='text-t-tertiary'>API Key: </span>sk-your-litellm-key
+              </div>
+              <div>
+                <span className='text-t-tertiary'>模型: </span>dall-e-3
+              </div>
             </div>
             <div className='text-11px'>
               {'模型名填写 LiteLLM 中配置的图像模型别名即可，例如 '}
@@ -508,9 +530,15 @@ const SpeechToTextSettingsSection: React.FC<{
             <div className='settings-note-card text-12px space-y-6px'>
               <div className='settings-note-card__title'>💡 使用 LiteLLM 代理时的填写格式</div>
               <div className='settings-note-card__code font-mono space-y-2px'>
-                <div><span className='text-t-tertiary'>Base URL: </span>https://your-litellm.com/v1</div>
-                <div><span className='text-t-tertiary'>API Key:  </span>sk-your-litellm-key</div>
-                <div><span className='text-t-tertiary'>模型:     </span>whisper-1</div>
+                <div>
+                  <span className='text-t-tertiary'>Base URL: </span>https://your-litellm.com/v1
+                </div>
+                <div>
+                  <span className='text-t-tertiary'>API Key: </span>sk-your-litellm-key
+                </div>
+                <div>
+                  <span className='text-t-tertiary'>模型: </span>whisper-1
+                </div>
               </div>
               <div className='text-11px'>
                 {'LiteLLM 代理语音转文字走 '}
@@ -520,7 +548,7 @@ const SpeechToTextSettingsSection: React.FC<{
                 {'，模型填 LiteLLM 中配置的别名即可。'}
               </div>
             </div>
-</>
+          </>
         )}
       </Form>
     </div>
@@ -690,9 +718,7 @@ const ModalMcpManagementSection: React.FC<{
 
       <div className='flex-1 min-h-0'>
         {visibleMcpServers.length === 0 && extensionMcpServers.length === 0 ? (
-          <div className='settings-empty-state'>
-            {t('settings.mcpNoServersFound')}
-          </div>
+          <div className='settings-empty-state'>{t('settings.mcpNoServersFound')}</div>
         ) : (
           <AionScrollArea
             className={classNames('max-h-360px', isPageMode && 'max-h-none')}
@@ -762,6 +788,159 @@ const ModalMcpManagementSection: React.FC<{
       >
         <p>{t('settings.mcpDeleteConfirm')}</p>
       </Modal>
+    </div>
+  );
+};
+
+function formatBytes(bytes?: number): string {
+  if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+/**
+ * Media tools (ffmpeg/ffprobe) — required for video keyframe / audio transcription.
+ * Auto-detects a system / bundled / downloaded binary; offers one-click download
+ * when missing. After download the app resolves the binaries from its tools dir.
+ */
+const MediaToolsSettingsSection: React.FC = () => {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<FfmpegStatus | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [progress, setProgress] = useState<FfmpegDownloadProgress | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const next = await ipcBridge.systemSettings.getFfmpegStatus.invoke();
+      setStatus(next);
+    } catch {
+      // ignore — UI shows "未检测到"
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const off = ipcBridge.systemSettings.ffmpegDownloadProgress.on((p) => setProgress(p));
+    return () => {
+      off?.();
+    };
+  }, []);
+
+  const handleDownload = useCallback(async () => {
+    setDownloading(true);
+    setProgress(null);
+    try {
+      const next = await ipcBridge.systemSettings.downloadFfmpeg.invoke();
+      setStatus(next);
+      if (next.ready) {
+        Message.success(t('settings.mediaTools.downloadSuccess', { defaultValue: 'ffmpeg / ffprobe 已就绪' }));
+      } else {
+        Message.warning(
+          t('settings.mediaTools.downloadIncomplete', {
+            defaultValue: '下载完成但仍缺少组件，请重试或手动安装 ffmpeg',
+          })
+        );
+      }
+    } catch {
+      Message.error(
+        t('settings.mediaTools.downloadFailed', { defaultValue: '下载失败，请检查网络或手动安装 ffmpeg 到系统 PATH' })
+      );
+    } finally {
+      setDownloading(false);
+      setProgress(null);
+    }
+  }, [t]);
+
+  const ready = status?.ready ?? false;
+  const percent =
+    progress?.phase === 'downloading' && progress.totalBytes
+      ? Math.min(100, Math.round(((progress.receivedBytes ?? 0) / progress.totalBytes) * 100))
+      : undefined;
+
+  const sourceLabel = (source?: string) => {
+    switch (source) {
+      case 'path':
+        return t('settings.mediaTools.sourcePath', { defaultValue: '系统 PATH' });
+      case 'downloaded':
+        return t('settings.mediaTools.sourceDownloaded', { defaultValue: '已下载' });
+      case 'bundled':
+        return t('settings.mediaTools.sourceBundled', { defaultValue: '内置' });
+      default:
+        return t('settings.mediaTools.sourceNone', { defaultValue: '未检测到' });
+    }
+  };
+
+  return (
+    <div className='settings-content-panel'>
+      <div className='flex items-center justify-between gap-12px mb-8px'>
+        <div className='flex flex-col gap-4px'>
+          <span className='settings-card-header__title'>
+            {t('settings.mediaTools.title', { defaultValue: '媒体工具 (ffmpeg / ffprobe)' })}
+          </span>
+          <span className='settings-content-summary'>
+            {t('settings.mediaTools.description', {
+              defaultValue: '视频关键帧分析与音视频转写需要 ffmpeg / ffprobe。已安装则自动使用系统版本。',
+            })}
+          </span>
+        </div>
+        {ready ? (
+          <Tag color='green'>{t('settings.mediaTools.ready', { defaultValue: '已就绪' })}</Tag>
+        ) : (
+          <Tag color='orange'>{t('settings.mediaTools.missing', { defaultValue: '未检测到' })}</Tag>
+        )}
+      </div>
+
+      <Divider className='mt-0px mb-16px' />
+
+      <div className='space-y-8px text-13px'>
+        <div className='flex items-center gap-8px'>
+          <span className='text-t-secondary w-72px'>ffmpeg</span>
+          <span className={status?.ffmpeg.available ? 'text-green-600' : 'text-t-tertiary'}>
+            {sourceLabel(status?.ffmpeg.source)}
+          </span>
+        </div>
+        <div className='flex items-center gap-8px'>
+          <span className='text-t-secondary w-72px'>ffprobe</span>
+          <span className={status?.ffprobe.available ? 'text-green-600' : 'text-t-tertiary'}>
+            {sourceLabel(status?.ffprobe.source)}
+          </span>
+        </div>
+      </div>
+
+      {downloading ? (
+        <div className='mt-12px'>
+          <Progress percent={percent} status='normal' />
+          <div className='text-12px text-t-tertiary mt-4px'>
+            {progress?.phase === 'extracting'
+              ? t('settings.mediaTools.extracting', { defaultValue: '正在解压…' })
+              : progress?.phase === 'installing'
+                ? t('settings.mediaTools.installing', { defaultValue: '正在安装…' })
+                : t('settings.mediaTools.downloading', {
+                    defaultValue: '下载中 {{received}} / {{total}}',
+                    received: formatBytes(progress?.receivedBytes),
+                    total: formatBytes(progress?.totalBytes) || '…',
+                  })}
+          </div>
+        </div>
+      ) : null}
+
+      <div className='mt-16px flex items-center gap-10px'>
+        {!ready ? (
+          <Button type='primary' loading={downloading} onClick={() => void handleDownload()}>
+            {t('settings.mediaTools.downloadButton', { defaultValue: '一键下载 ffmpeg / ffprobe' })}
+          </Button>
+        ) : null}
+        <Button onClick={() => void refresh()} loading={loading} disabled={downloading}>
+          {t('settings.mediaTools.recheck', { defaultValue: '重新检测' })}
+        </Button>
+      </div>
     </div>
   );
 };
@@ -925,7 +1104,10 @@ const ToolsModalContent: React.FC = () => {
       setImageGenerationModel((prev) => {
         const newImageGenerationModel = {
           ...prev,
-          platform: value.platform || prev?.platform || getImageGenPlatformForPreset(detectPreset(prev?.baseUrl, prev?.useModel)),
+          platform:
+            value.platform ||
+            prev?.platform ||
+            getImageGenPlatformForPreset(detectPreset(prev?.baseUrl, prev?.useModel)),
           ...value,
         };
         ConfigStorage.set('tools.imageGenerationModel', newImageGenerationModel).catch((error) => {
@@ -1040,6 +1222,7 @@ const ToolsModalContent: React.FC = () => {
             onToggle={handleImageGenerationToggle}
           />
           <SpeechToTextSettingsSection config={speechToTextConfig} onChange={updateSpeechToTextConfig} />
+          <MediaToolsSettingsSection />
         </div>
       </AionScrollArea>
     </div>

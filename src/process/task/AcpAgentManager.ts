@@ -133,6 +133,29 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     );
   }
 
+  /**
+   * Override the base synthetic finish so the kill event carries the real ACP
+   * model identity (backend + current model id) and the active turn id, instead
+   * of the base implementation's 'unknown' fallback. The finish stream event is
+   * emitted on the ACP channel (acpConversation) the renderer actually listens to.
+   */
+  protected override emitSyntheticFinishOnKill(): void {
+    if (this.status !== 'running' && this.status !== 'pending') return;
+    this.status = 'finished';
+    const turnId = this.activeTurnId ?? this.currentMsgId ?? this.conversation_id;
+    try {
+      ipcBridge.acpConversation.responseStream.emit({
+        type: 'finish',
+        data: '',
+        msg_id: turnId,
+        conversation_id: this.conversation_id,
+      } as IResponseMessage);
+    } catch {
+      // best-effort
+    }
+    this.emitRuntimeSnapshot('stopped');
+  }
+
   private makeStreamBufferKey(message: Extract<TMessage, { type: 'text' }>): string {
     return `${message.conversation_id}:${message.msg_id || message.id}`;
   }
@@ -945,9 +968,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
       // msg_id: dat;
       callId: callId,
     });
-    this.emitRuntimeSnapshot(
-      this.getConfirmations().length > 0 ? 'ai_waiting_confirmation' : 'ai_generating'
-    );
+    this.emitRuntimeSnapshot(this.getConfirmations().length > 0 ? 'ai_waiting_confirmation' : 'ai_generating');
   }
 
   /**

@@ -15,7 +15,7 @@ import heroIllustration from '@renderer/assets/login/enterprise-hero.svg';
 import { useFeishuQrLogin } from '@/renderer/hooks/auth/useFeishuQrLogin';
 import { formatOAuthAuthorizeError, startOAuthAuthorize } from '@/renderer/utils/oauthAuthorize';
 import { useLoginUiProviders } from '@/renderer/hooks/auth/useLoginUiProviders';
-import { useAuth } from '../../hooks/context/AuthContext';
+import { useAuth, isDesktopOperatorUser } from '../../hooks/context/AuthContext';
 import { syncBrowserWebuiSessionToDesktop } from '@/renderer/utils/syncBrowserWebuiSession';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
 import { resolveLoginIntentFromSearch } from '@/renderer/utils/enterpriseLoginNavigation';
@@ -63,12 +63,7 @@ const LoginPage: React.FC = () => {
     (loggedInUser?: { role?: string; tenant_id?: string }) => {
       const fromQuery = readRedirectFromSearch(location.search);
       let target = fromQuery ?? consumePostLoginRedirect();
-      return resolvePostLoginRedirectPath(
-        target,
-        loggedInUser?.role,
-        loggedInUser?.tenant_id,
-        isElectronDesktop()
-      );
+      return resolvePostLoginRedirectPath(target, loggedInUser?.role, loggedInUser?.tenant_id, isElectronDesktop());
     },
     [location.search]
   );
@@ -82,9 +77,7 @@ const LoginPage: React.FC = () => {
 
   const handleBack = useCallback(() => {
     const target =
-      loginReturnTo && loginReturnTo !== '/login' && !loginReturnTo.startsWith('/login?')
-        ? loginReturnTo
-        : '/sessions';
+      loginReturnTo && loginReturnTo !== '/login' && !loginReturnTo.startsWith('/login?') ? loginReturnTo : '/sessions';
     void navigate(target, { replace: true });
   }, [loginReturnTo, navigate]);
 
@@ -136,9 +129,7 @@ const LoginPage: React.FC = () => {
   const showLoginMethods = isEnterpriseLogin;
   const showEnterpriseExtras = isBrowserWebUi && enterpriseIntent;
   const pageEdition =
-    providers.mode === 'enterprise' || enterpriseIntent || enterpriseLoginMode
-      ? 'enterprise'
-      : 'standalone';
+    providers.mode === 'enterprise' || enterpriseIntent || enterpriseLoginMode ? 'enterprise' : 'standalone';
 
   const messageTimer = useRef<number | undefined>(undefined);
 
@@ -182,6 +173,15 @@ const LoginPage: React.FC = () => {
 
   useEffect(() => {
     if (status === 'authenticated' && user && !enterpriseLoading) {
+      // A local desktop-operator session is "authenticated", which would normally
+      // bounce off /login. But when the user explicitly chose 「登录企业账号」
+      // (enterprise login intent), keep them on the form so they can sign in with
+      // an enterprise account and replace the local session — otherwise the button
+      // appears to do nothing. After enterprise login `user` is no longer the
+      // desktop operator, so this effect re-runs and redirects normally.
+      if (enterpriseLoginMode && isDesktopOperatorUser(user)) {
+        return;
+      }
       if (isDesktopApp) {
         void syncBrowserWebuiSessionToDesktop().finally(() => {
           navigateAfterLogin(user ?? undefined);
@@ -191,7 +191,7 @@ const LoginPage: React.FC = () => {
       }
       navigateAfterLogin(user ?? undefined);
     }
-  }, [enterpriseLoading, isDesktopApp, navigateAfterLogin, status, user]);
+  }, [enterpriseLoading, enterpriseLoginMode, isDesktopApp, navigateAfterLogin, status, user]);
 
   const handleFormMethodChange = useCallback((value: FormMethod) => {
     setFormMethod(value);
@@ -385,27 +385,17 @@ const LoginPage: React.FC = () => {
   }, [formMethod, t]);
 
   const loginUiLoadError =
-    providers.error === 'db_unavailable'
-      ? 'db_unavailable'
-      : providers.error === 'load_failed'
-        ? 'load_failed'
-        : null;
+    providers.error === 'db_unavailable' ? 'db_unavailable' : providers.error === 'load_failed' ? 'load_failed' : null;
 
   if (status === 'checking' || (isBrowserWebUi && providers.loading)) {
     return <AppLoader />;
   }
 
   const redirectRequiresSignIn =
-    Boolean(postLoginTarget) &&
-    getEnterpriseRouteMetaByPath(postLoginTarget)?.requiresRole !== 'member';
+    Boolean(postLoginTarget) && getEnterpriseRouteMetaByPath(postLoginTarget)?.requiresRole !== 'member';
   const redirectTargetsEnterpriseJoin =
     postLoginTarget === ENTERPRISE_JOIN_PATH || postLoginTarget?.startsWith(`${ENTERPRISE_JOIN_PATH}/`);
-  if (
-    isBrowserWebUi &&
-    redirectTargetsEnterpriseJoin &&
-    status === 'unauthenticated' &&
-    !redirectRequiresSignIn
-  ) {
+  if (isBrowserWebUi && redirectTargetsEnterpriseJoin && status === 'unauthenticated' && !redirectRequiresSignIn) {
     return <Navigate to={ENTERPRISE_JOIN_PATH} replace />;
   }
 
@@ -446,13 +436,11 @@ const LoginPage: React.FC = () => {
   const heroDescription =
     loginEdition === 'admin'
       ? t('login.admin.brandDesc', {
-          defaultValue:
-            '使用本机 WebUI 管理员账户登录，配置认证、邀请码、租户与系统治理；与团队成员登录入口分离。',
+          defaultValue: '使用本机 WebUI 管理员账户登录，配置认证、邀请码、租户与系统治理；与团队成员登录入口分离。',
         })
       : loginEdition === 'enterprise'
         ? t('login.enterprise.brandDesc', {
-            defaultValue:
-              '面向团队的命令行与对话型 AI 体验，统一账号与权限，支持本地、域控与飞书等多种登录方式。',
+            defaultValue: '面向团队的命令行与对话型 AI 体验，统一账号与权限，支持本地、域控与飞书等多种登录方式。',
           })
         : t('login.standalone.brandDesc', {
             defaultValue: '使用本机管理员账户登录，在手机或远程浏览器中管理 1ONE 会话与任务。',
@@ -471,12 +459,10 @@ const LoginPage: React.FC = () => {
         })
       : loginEdition === 'enterprise'
         ? t('login.enterprise.introText', {
-            defaultValue:
-              '支持多租户管理、LDAP 域控集成、飞书/钉钉/企微 SSO，为企业团队提供安全、高效的 AI 工作体验。',
+            defaultValue: '支持多租户管理、LDAP 域控集成、飞书/钉钉/企微 SSO，为企业团队提供安全、高效的 AI 工作体验。',
           })
         : t('login.standalone.introText', {
-            defaultValue:
-              '在浏览器中安全访问本机 1ONE，统一查看任务、会话和运行状态，适合移动办公与远程协作场景。',
+            defaultValue: '在浏览器中安全访问本机 1ONE，统一查看任务、会话和运行状态，适合移动办公与远程协作场景。',
           });
   const illustrationAlt = t('login.heroIllustrationAlt', {
     defaultValue: '企业 AI 工作台主视觉',
@@ -489,16 +475,16 @@ const LoginPage: React.FC = () => {
       className={`login-page login-page--${loginEdition}${isBrowserWebUi ? ' login-page--web' : ' login-page--desktop'}${isDesktopApp ? ' login-page--desktop-app' : ''}`}
     >
       {showLoginHero ? (
-      <LoginHeroPanel
-        badge={heroBadge}
-        title={heroTitle}
-        description={heroDescription}
-        introTitle={heroIntroTitle}
-        introText={heroIntroText}
-        illustrationSrc={heroIllustration}
-        illustrationAlt={illustrationAlt}
-        edition={pageEdition}
-      />
+        <LoginHeroPanel
+          badge={heroBadge}
+          title={heroTitle}
+          description={heroDescription}
+          introTitle={heroIntroTitle}
+          introText={heroIntroText}
+          illustrationSrc={heroIllustration}
+          illustrationAlt={illustrationAlt}
+          edition={pageEdition}
+        />
       ) : null}
 
       <LoginFormCard

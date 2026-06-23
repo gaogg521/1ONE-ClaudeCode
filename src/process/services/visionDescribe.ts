@@ -49,10 +49,7 @@ function stripTrailingV1(url: string): string {
  * Generate a text description for a single image file using the configured model.
  * Returns null if the model lacks vision support or the call fails.
  */
-export async function describeImage(
-  imagePath: string,
-  model: TProviderWithModel
-): Promise<string | null> {
+export async function describeImage(imagePath: string, model: TProviderWithModel): Promise<string | null> {
   if (!isImageFilePath(imagePath)) return null;
   if (!model.apiKey || !model.useModel) return null;
 
@@ -67,11 +64,15 @@ export async function describeImage(
     const base64 = buffer.toString('base64');
     const ext = path.extname(imagePath).toLowerCase();
     const mimeType =
-      ext === '.png' ? 'image/png'
-      : ext === '.gif' ? 'image/gif'
-      : ext === '.webp' ? 'image/webp'
-      : ext === '.bmp' ? 'image/bmp'
-      : 'image/jpeg';
+      ext === '.png'
+        ? 'image/png'
+        : ext === '.gif'
+          ? 'image/gif'
+          : ext === '.webp'
+            ? 'image/webp'
+            : ext === '.bmp'
+              ? 'image/bmp'
+              : 'image/jpeg';
 
     switch (providerType) {
       case 'anthropic':
@@ -98,7 +99,10 @@ export async function describeImage(
  */
 export async function describeImagesForPrompt(
   filePaths: string[],
-  model: TProviderWithModel
+  model: TProviderWithModel,
+  /** Optional fallback vision model, tried when `model` can't describe the image
+   *  (e.g. the active chat model is text-only). */
+  fallbackModel?: TProviderWithModel
 ): Promise<{ imageDescriptionBlock: string; nonImageFiles: string[] }> {
   const imagePaths: string[] = [];
   const nonImageFiles: string[] = [];
@@ -113,7 +117,10 @@ export async function describeImagesForPrompt(
 
   const descriptions: string[] = [];
   for (const imgPath of imagePaths) {
-    const desc = await describeImage(imgPath, model);
+    let desc = await describeImage(imgPath, model);
+    if (!desc && fallbackModel && fallbackModel.useModel !== model.useModel) {
+      desc = await describeImage(imgPath, fallbackModel);
+    }
     if (desc) {
       descriptions.push(`[Image: ${path.basename(imgPath)}]\n${desc}`);
     } else {
@@ -127,11 +134,7 @@ export async function describeImagesForPrompt(
   return { imageDescriptionBlock, nonImageFiles };
 }
 
-async function describeWithOpenAI(
-  base64: string,
-  mimeType: string,
-  model: TProviderWithModel
-): Promise<string | null> {
+async function describeWithOpenAI(base64: string, mimeType: string, model: TProviderWithModel): Promise<string | null> {
   const baseUrl = stripTrailingV1(model.baseUrl || 'https://api.openai.com');
   const dataUrl = `data:${mimeType};base64,${base64}`;
 

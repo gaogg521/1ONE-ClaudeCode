@@ -76,6 +76,9 @@ export function buildSpawnConfig(
   model: TProviderWithModel,
   options: {
     workspace: string;
+    /** Directory for aionrs's own debug logs. Defaults to workspace when omitted.
+     *  Callers should pass an app cache dir to keep logs out of the user's project. */
+    logDir?: string;
     maxTokens?: number;
     maxTurns?: number;
     systemPrompt?: string;
@@ -88,11 +91,11 @@ export function buildSpawnConfig(
   const env: Record<string, string> = {};
   const args: string[] = ['--json-stream', '--provider', provider, '--model', model.useModel];
 
-  // Diagnostic logging: write aionrs internal logs into <workspace>/.aionrs/logs so we can
-  // see TOML parse errors, HTTP request bodies and SSE stalls when the host watchdog fires.
-  // Enabled by default to make production support reports actionable. Override level via
-  // AIONRS_LOG_LEVEL env var (e.g. "info" to quiet, "trace" for max detail).
-  args.push('--log-dir', options.workspace, '--log-level', process.env.AIONRS_LOG_LEVEL || 'debug');
+  // Diagnostic logging: write aionrs internal logs into an app-managed dir (NOT the user's
+  // workspace — that pollutes their project and risks being committed to git). Default level
+  // is "info" to avoid dumping request bodies on disk by default; override via AIONRS_LOG_LEVEL
+  // (e.g. "debug"/"trace") when collecting a support report.
+  args.push('--log-dir', options.logDir || options.workspace, '--log-level', process.env.AIONRS_LOG_LEVEL || 'info');
 
   if (options.maxTokens) {
     args.push('--max-tokens', String(options.maxTokens));
@@ -137,7 +140,8 @@ export function buildSpawnConfig(
   // causing cascading 400 errors after the first tool call.
   // Cap max-turns to 1 for these models to prevent the loop from hanging.
   const useModelLower = (model.useModel ?? '').toLowerCase();
-  const isSeedModel = useModelLower.includes('seed') || useModelLower.includes('thinking') || useModelLower.includes('reasoner');
+  const isSeedModel =
+    useModelLower.includes('seed') || useModelLower.includes('thinking') || useModelLower.includes('reasoner');
   if (isSeedModel && !options.maxTurns) {
     args.push('--max-turns', '1');
   }

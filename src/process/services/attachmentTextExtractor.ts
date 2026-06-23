@@ -25,7 +25,7 @@ import {
 import { isAudioFilePath, isVideoFilePath } from '@/common/chat/messageFiles';
 import { SpeechToTextService } from '@process/bridge/services/SpeechToTextService';
 import { ProcessConfig } from '@process/utils/initStorage';
-import { getBundledFfmpegPath } from '@process/utils/shellEnv';
+import { getBundledFfmpegPath, getBundledFfprobePath } from '@process/utils/shellEnv';
 
 function truncateText(text: string, maxChars: number): { text: string; truncated: boolean } {
   const normalized = text.replace(/\r\n/g, '\n').trim();
@@ -79,10 +79,7 @@ async function renderPdfFirstPagePng(pdfPath: string): Promise<string | null> {
   });
 }
 
-async function describeScannedPdfFirstPage(
-  filePath: string,
-  visionModel: TProviderWithModel
-): Promise<string | null> {
+async function describeScannedPdfFirstPage(filePath: string, visionModel: TProviderWithModel): Promise<string | null> {
   const pageImage = await renderPdfFirstPagePng(filePath);
   if (!pageImage) {
     return null;
@@ -170,6 +167,140 @@ async function extractAudioTrackFromVideo(videoPath: string): Promise<string | n
   });
 }
 
+type VideoMeta = {
+  durationSec?: number;
+  width?: number;
+  height?: number;
+  creationTime?: string;
+  recorder?: string;
+};
+
+/**
+ * Probe video metadata (duration, resolution, recording tool, creation time) via
+ * ffprobe — cheap and highly informative, and lets us sample keyframes by time.
+ * Returns null when ffprobe is unavailable or the file can't be parsed.
+ */
+async function probeVideoMetadata(videoPath: string): Promise<VideoMeta | null> {
+  const ffprobe = getBundledFfprobePath() ?? 'ffprobe';
+  return new Promise((resolve) => {
+    let out = '';
+    const proc = spawn(ffprobe, ['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', videoPath], {
+      windowsHide: true,
+    });
+    proc.stdout?.on('data', (d: Buffer) => {
+      out += d.toString();
+    });
+    proc.on('error', () => resolve(null));
+    proc.on('exit', (code) => {
+      if (code !== 0) {
+        resolve(null);
+        return;
+      }
+      try {
+        const json = JSON.parse(out) as {
+          streams?: Array<Record<string, unknown>>;
+          format?: Record<string, unknown>;
+        };
+        const video = (json.streams || []).find((s) => s.codec_type === 'video') ?? {};
+        const format = json.format || {};
+        const fTags = (format.tags as Record<string, unknown>) || {};
+        const vTags = (video.tags as Record<string, unknown>) || {};
+        const durRaw = (format.duration ?? video.duration) as string | undefined;
+        resolve({
+          durationSec: durRaw ? Math.round(parseFloat(durRaw)) : undefined,
+          width: typeof video.width === 'number' ? video.width : undefined,
+          height: typeof video.height === 'number' ? video.height : undefined,
+          creationTime: (fTags.creation_time ?? vTags.creation_time) as string | undefined,
+          recorder: (fTags.encoder ?? fTags.comment ?? vTags.handler_name) as string | undefined,
+        });
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
+function formatVideoMeta(meta: VideoMeta): string {
+  const bits: string[] = [];
+  if (meta.durationSec) bits.push(`duration ~${meta.durationSec}s`);
+  if (meta.width && meta.height) bits.push(`resolution ${meta.width}x${meta.height}`);
+  if (meta.creationTime) bits.push(`recorded ${meta.creationTime}`);
+  if (meta.recorder) bits.push(`tool ${meta.recorder}`);
+  return bits.join(', ');
+}
+
+/**
+ * Compute up to `maxFrames` evenly-spaced sample timestamps across the video,
+ * including a frame near the start and one just before the end. Mirrors the
+ * "1s / 4s / 7s + first/last" sampling a human would pick for short clips.
+ */
+export function computeSampleTimestamps(durationSec: number | undefined, maxFrames = 5): number[] {
+  if (!durationSec || durationSec <= 0) return [0];
+  const n = Math.min(maxFrames, Math.max(2, Math.ceil(durationSec)));
+  const ts: number[] = [];
+  for (let i = 0; i < n; i++) {
+    let t = (i / (n - 1)) * durationSec;
+    if (i === n - 1) t = Math.max(0, durationSec - 0.3); // avoid black trailing frame
+    ts.push(Math.round(t * 10) / 10);
+  }
+  return [...new Set(ts)];
+}
+
+/** Extract a single frame at timestamp `ts` (seconds) to `outPath`. */
+async function extractFrameAt(videoPath: string, ts: number, outPath: string): Promise<boolean> {
+  const ffmpegCmd = getBundledFfmpegPath() ?? 'ffmpeg';
+  return new Promise((resolve) => {
+    const proc = spawn(
+      ffmpegCmd,
+      ['-y', '-ss', String(ts), '-i', videoPath, '-frames:v', '1', '-q:v', '2', '-vf', 'scale=768:-1', outPath],
+      { stdio: 'ignore', windowsHide: true }
+    );
+    proc.on('error', () => resolve(false));
+    proc.on('exit', (code) => resolve(code === 0));
+  });
+}
+
+/**
+ * Describe a video's visual content by sampling keyframes across its timeline
+ * (duration-aware) and running each through the configured vision model. Frames
+ * are described in parallel; the temp dir is always cleaned up. Returns null when
+ * no frame could be described.
+ */
+async function describeVideoKeyframes(
+  videoPath: string,
+  visionModel: TProviderWithModel,
+  meta: VideoMeta | null
+): Promise<string | null> {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'one-video-frames-'));
+  try {
+    const timestamps = computeSampleTimestamps(meta?.durationSec);
+    const frames: Array<{ path: string; ts: number }> = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      const outPath = path.join(tmpDir, `frame_${i}.png`);
+      if (await extractFrameAt(videoPath, timestamps[i], outPath)) {
+        if (
+          await fs
+            .access(outPath)
+            .then(() => true)
+            .catch(() => false)
+        ) {
+          frames.push({ path: outPath, ts: timestamps[i] });
+        }
+      }
+    }
+    if (frames.length === 0) return null;
+
+    const { describeImage } = await import('@process/services/visionDescribe');
+    const described = await Promise.all(
+      frames.map((f) => describeImage(f.path, visionModel).catch((): string | null => null))
+    );
+    const parts = described.map((d, i) => (d ? `[Frame @${frames[i].ts}s]\n${d}` : '')).filter(Boolean);
+    return parts.length > 0 ? parts.join('\n\n') : null;
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 /**
  * Check if ffmpeg is available on system PATH (used when bundled binary absent).
  */
@@ -185,7 +316,11 @@ async function isFfmpegOnPath(): Promise<boolean> {
  * Transcribe an audio/video file via the configured SpeechToText provider.
  * Returns the transcript text, or null if STT is disabled / unavailable.
  */
-async function transcribeMediaFile(filePath: string, isVideo: boolean): Promise<string | null> {
+async function transcribeMediaFile(
+  filePath: string,
+  isVideo: boolean,
+  fallbackProvider?: TProviderWithModel
+): Promise<string | null> {
   let audioPath = filePath;
   let tempAudioPath: string | null = null;
 
@@ -198,20 +333,33 @@ async function transcribeMediaFile(filePath: string, isVideo: boolean): Promise<
   }
 
   try {
-    const config = await ProcessConfig.get('tools.speechToText').catch((): null => null);
-    if (!config || !config.enabled) return null;
-
     const audioBuffer = await fs.readFile(audioPath);
     const ext = extname(audioPath).toLowerCase();
-    const mimeType = ext === '.wav' ? 'audio/wav' : ext === '.ogg' ? 'audio/ogg' : ext === '.flac' ? 'audio/flac' : 'audio/mpeg';
+    const mimeType =
+      ext === '.wav' ? 'audio/wav' : ext === '.ogg' ? 'audio/ogg' : ext === '.flac' ? 'audio/flac' : 'audio/mpeg';
     const fileName = path.basename(audioPath);
+    const request = { audioBuffer: new Uint8Array(audioBuffer), fileName, mimeType };
 
-    const result = await SpeechToTextService.transcribe({
-      audioBuffer: new Uint8Array(audioBuffer),
-      fileName,
-      mimeType,
-    });
-    return result?.text?.trim() || null;
+    // 1) Explicitly configured STT provider takes precedence.
+    const config = await ProcessConfig.get('tools.speechToText').catch((): null => null);
+    if (config?.enabled) {
+      const result = await SpeechToTextService.transcribe(request).catch((): null => null);
+      if (result?.text?.trim()) return result.text.trim();
+    }
+
+    // 2) Best-effort fallback: try the chat/vision provider's OpenAI-compatible
+    //    /audio/transcriptions endpoint (many gateways proxy Whisper) so audio
+    //    works out of the box. Fails fast → caller shows an actionable note.
+    if (fallbackProvider?.apiKey && fallbackProvider.baseUrl) {
+      const result = await SpeechToTextService.transcribeDirect(request, {
+        baseUrl: fallbackProvider.baseUrl,
+        apiKey: fallbackProvider.apiKey,
+        model: 'whisper-1',
+      }).catch((): null => null);
+      if (result?.text?.trim()) return result.text.trim();
+    }
+
+    return null;
   } catch {
     return null;
   } finally {
@@ -228,16 +376,25 @@ async function transcribeMediaFile(filePath: string, isVideo: boolean): Promise<
  * Excel file blocks all IPC for minutes.
  */
 const ATTACHMENT_PARSE_TIMEOUT_MS = 15_000;
+// Media (audio/video) legitimately takes longer: ffmpeg extraction + remote STT +
+// keyframe vision. Use a generous bound so transcription is not cut off mid-flight.
+const MEDIA_PARSE_TIMEOUT_MS = 120_000;
 
-async function withParseTimeout<T>(label: string, fn: () => Promise<T>): Promise<T> {
+async function withParseTimeout<T>(
+  label: string,
+  fn: () => Promise<T>,
+  timeoutMs = ATTACHMENT_PARSE_TIMEOUT_MS
+): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
       fn(),
       new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => {
-          reject(new Error(`Parsing ${label} timed out after ${ATTACHMENT_PARSE_TIMEOUT_MS / 1000}s. The file may be too large or corrupt.`));
-        }, ATTACHMENT_PARSE_TIMEOUT_MS);
+          reject(
+            new Error(`Parsing ${label} timed out after ${timeoutMs / 1000}s. The file may be too large or corrupt.`)
+          );
+        }, timeoutMs);
       }),
     ]);
   } finally {
@@ -258,9 +415,40 @@ export async function extractAttachmentText(
     const kind = isAudioFilePath(filePath) ? 'audio' : 'video';
     const isVideo = kind === 'video';
 
-    const transcript = await withParseTimeout(fileName, () => transcribeMediaFile(filePath, isVideo));
-    if (transcript) {
-      const { text, truncated } = truncateText(transcript, maxChars);
+    // ffprobe metadata first (duration/resolution/recorder) — cheap, informative,
+    // and drives time-based keyframe sampling below.
+    const meta = isVideo ? await probeVideoMetadata(filePath).catch((): null => null) : null;
+
+    const transcript = await withParseTimeout(
+      fileName,
+      () => transcribeMediaFile(filePath, isVideo, options?.visionModel),
+      MEDIA_PARSE_TIMEOUT_MS
+    );
+
+    // For video, also describe the visual track via duration-aware keyframe sampling
+    // + vision so the model understands the picture, not only the spoken audio.
+    // Works even when STT is off (visual-only understanding). Has its own per-frame
+    // timeout, so it is not wrapped in the short parse-timeout guard.
+    let visualText: string | null = null;
+    if (isVideo && options?.visionModel?.apiKey && options.visionModel.useModel) {
+      visualText = await describeVideoKeyframes(filePath, options.visionModel, meta).catch((): string | null => null);
+    }
+
+    const parts: string[] = [];
+    if (meta) {
+      const metaLine = formatVideoMeta(meta);
+      if (metaLine) parts.push(`[Video metadata]\n${metaLine}`);
+    }
+    if (transcript) parts.push(`[Audio transcript]\n${transcript}`);
+    if (visualText) parts.push(`[Video keyframes]\n${visualText}`);
+    // Metadata alone (no transcript/visual) is still useful, but flag the gap.
+    if (parts.length > 0 && !transcript && !visualText) {
+      parts.push(
+        '(No audio transcript or visual analysis available. Configure Settings → Speech-to-Text or a vision-capable model for deeper analysis.)'
+      );
+    }
+    if (parts.length > 0) {
+      const { text, truncated } = truncateText(parts.join('\n\n'), maxChars);
       return {
         filePath,
         fileName,
@@ -270,15 +458,17 @@ export async function extractAttachmentText(
       };
     }
 
-    // Diagnose failure: STT disabled / ffmpeg missing / transcription error
+    // Diagnose failure: STT disabled / ffmpeg missing / transcription error.
+    // (By this point the configured STT provider AND the best-effort gateway
+    // Whisper fallback have both already been tried.)
     const sttConfig = await ProcessConfig.get('tools.speechToText').catch((): null => null);
     let hint: string;
-    if (!sttConfig?.enabled) {
-      hint = `Automatic transcription is disabled. Enable it in Settings → Speech-to-Text, or use a tool (ffmpeg + whisper) to process ${fileName}.`;
-    } else if (isVideo && !getBundledFfmpegPath() && !(await isFfmpegOnPath())) {
+    if (isVideo && !getBundledFfmpegPath() && !(await isFfmpegOnPath())) {
       hint = `Video transcription requires ffmpeg, which is not installed. Install ffmpeg (https://ffmpeg.org/download.html) and add it to PATH, or use a tool to process ${fileName} manually.`;
+    } else if (!sttConfig?.enabled) {
+      hint = `Could not transcribe automatically (no Speech-to-Text provider configured and the current model's gateway has no Whisper endpoint). Configure Settings → Speech-to-Text, or provide a text summary of ${fileName}.`;
     } else {
-      hint = `Transcription failed. The agent should use a tool (ffmpeg + whisper) to process ${fileName}, or the user should provide a text summary.`;
+      hint = `Transcription failed. Check the Speech-to-Text provider settings, or provide a text summary of ${fileName}.`;
     }
     return {
       filePath,

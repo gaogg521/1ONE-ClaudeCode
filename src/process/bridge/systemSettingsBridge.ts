@@ -145,4 +145,17 @@ export function initSystemSettingsBridge(): void {
   ipcBridge.systemSettings.setCommandQueueEnabled.provider(async ({ enabled }) => {
     await ProcessConfig.set('system.commandQueueEnabled', enabled);
   });
+
+  // ffmpeg/ffprobe media tools: detect availability and one-click download.
+  ipcBridge.systemSettings.getFfmpegStatus.provider(async () => {
+    const { getFfmpegStatus } = await import('@process/services/ffmpegInstaller');
+    return getFfmpegStatus();
+  });
+
+  ipcBridge.systemSettings.downloadFfmpeg.provider(async () => {
+    const { downloadFfmpegTools } = await import('@process/services/ffmpegInstaller');
+    return downloadFfmpegTools((progress) => {
+      ipcBridge.systemSettings.ffmpegDownloadProgress.emit(progress);
+    });
+  });
 }

@@ -53,11 +53,14 @@ export function useEditionFeatures(): EditionFeatures {
     const gate = createEditionGate({ identity });
     const isEnterpriseEdition = managementMode === 'enterprise';
     const isPersonalEdition = !isEnterpriseEdition;
-    const tenantLabel =
-      enterpriseContext?.tenantName ?? enterpriseContext?.tenantId ?? null;
+    const tenantLabel = enterpriseContext?.tenantName ?? enterpriseContext?.tenantId ?? null;
     const showTeamsFeature = gate.can('teams.collaboration');
+    // The enterprise collaboration hub belongs to the enterprise edition only.
+    // In personal (standalone) view it must stay hidden even for an org admin on
+    // an enterprise-connected instance — otherwise personal mode leaks enterprise
+    // entries (org console, CCI, shared sessions). Switch to 企业团队版 to see them.
     const showEnterpriseWorkspaceHub =
-      hasJoinedEnterprise || hasInstanceEnterprise || showEnterpriseAdminNav;
+      isEnterpriseEdition && (hasJoinedEnterprise || hasInstanceEnterprise || showEnterpriseAdminNav);
 
     return {
       managementMode,
