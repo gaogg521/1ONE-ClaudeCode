@@ -69,10 +69,10 @@ describe('createConversationParams', () => {
       'tr'
     );
 
-    expect(resolveLocaleKey('tr')).toBe('tr-TR');
+    expect(resolveLocaleKey('tr')).toBe('en-US');
     expect(loadPresetAssistantResources).toHaveBeenCalledWith({
       customAgentId: 'builtin-cowork',
-      localeKey: 'tr-TR',
+      localeKey: 'en-US',
     });
     expect(params.extra.presetRules).toBe('preset rules');
     expect(params.extra.enabledSkills).toEqual(['moltbook']);

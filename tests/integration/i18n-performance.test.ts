@@ -122,15 +122,15 @@ describe('i18n Performance Tests', () => {
 
       const start = performance.now();
 
-      const jaJPTranslations: Record<string, unknown> = {};
+      const enUSTranslations: Record<string, unknown> = {};
       await Promise.all(
         MODULES.map(async (module) => {
-          const modulePath = path.join(LOCALES_DIR, 'ja-JP', `${module}.json`);
+          const modulePath = path.join(LOCALES_DIR, 'en-US', `${module}.json`);
           const content = await fs.promises.readFile(modulePath, 'utf-8');
-          jaJPTranslations[module] = JSON.parse(content);
+          enUSTranslations[module] = JSON.parse(content);
         })
       );
-      loadedTranslations.set('ja-JP', jaJPTranslations);
+      loadedTranslations.set('en-US', enUSTranslations);
 
       const end = performance.now();
 
@@ -145,7 +145,8 @@ describe('i18n Performance Tests', () => {
       const newMemoryUsage = estimatedSizePerLocale;
 
       const reduction = (oldMemoryUsage - newMemoryUsage) / oldMemoryUsage;
-      expect(reduction).toBeGreaterThan(0.8);
+      // 仅维护 zh-CN + en-US 两种语言：按需加载至少省一半内存。
+      expect(reduction).toBeGreaterThanOrEqual(0.5);
     });
   });
 });

@@ -283,24 +283,26 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
           return;
         }
         desktopSyncInFlightRef.current = true;
-        void syncBrowserWebuiSessionToDesktop()
-          .then(() => {
-            if (getDesktopWebuiBearerToken()) {
-              return refreshAuth();
-            }
-            return undefined;
-          })
-          .then(() => refreshEnterpriseContext())
-          .finally(() => {
-            desktopSyncInFlightRef.current = false;
-          });
+        const runDesktopSync = async () => {
+          await syncBrowserWebuiSessionToDesktop();
+          if (getDesktopWebuiBearerToken()) {
+            await refreshAuth();
+          }
+          await refreshEnterpriseContext();
+        };
+        // 整条链加超时兜底：任一步骤卡死时，超时后仍会复位 in-flight 标志，
+        // 否则一次挂起（如 DB/cookie 卡顿）会让标志永远为 true，永久禁用后续焦点同步。
+        // withEnterpriseBootstrapTimeout 内部已吞错并打日志，同步失败/超时不会冒泡为未捕获 rejection。
+        void withEnterpriseBootstrapTimeout(runDesktopSync(), 'desktopFocusSync').finally(() => {
+          desktopSyncInFlightRef.current = false;
+        });
       }, 800);
     };
     const handleEnterpriseContextRefresh = () => {
       if (desktopSyncInFlightRef.current) {
         return;
       }
-      void refreshEnterpriseContext();
+      void withEnterpriseBootstrapTimeout(refreshEnterpriseContext(), 'enterpriseContextRefresh');
     };
     const shouldSkipBackgroundSync = (): boolean => {
       if (typeof window === 'undefined') {

@@ -434,7 +434,7 @@ const TasksPage: React.FC = () => {
         </Space>
       </div>
 
-      {hasJoinedEnterprise ? (
+      {isEnterpriseEdition && hasJoinedEnterprise ? (
         <div
           className='mb-16px p-12px rd-10px border border-border-2 bg-fill-1 flex items-center justify-between gap-12px flex-wrap'
         >

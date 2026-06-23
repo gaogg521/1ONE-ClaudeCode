@@ -362,6 +362,12 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         };
         sessionStorage.setItem(`aionrs_initial_message_${conversation.id}`, JSON.stringify(initialMessage));
 
+        // Start aionrs bootstrap (worker fork + binary spawn) before navigation so the
+        // first reply feels faster — mirrors the ACP path below. Without this, warmup only
+        // fires after the conversation page mounts, racing the initial message and forcing
+        // the first send to eat the full worker-fork + binary cold-start latency.
+        void ipcBridge.conversation.warmup.invoke({ conversation_id: conversation.id });
+
         await navigate(`/conversation/${conversation.id}`);
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);

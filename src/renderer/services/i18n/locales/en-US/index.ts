@@ -24,6 +24,7 @@ import agent from './agent.json';
 import team from './team.json';
 import memory from './memory.json';
 import nav from './nav.json';
+import sessions from './sessions.json';
 
 export default {
   common,
@@ -47,4 +48,5 @@ export default {
   team,
   memory,
   nav,
+  sessions,
 };

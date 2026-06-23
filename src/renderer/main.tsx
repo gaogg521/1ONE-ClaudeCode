@@ -40,10 +40,7 @@ import { ConfigProvider } from '@arco-design/web-react';
 import '@arco-design/web-react/es/_util/react-19-adapter';
 import '@arco-design/web-react/dist/css/arco.css';
 import enUS from '@arco-design/web-react/es/locale/en-US';
-import jaJP from '@arco-design/web-react/es/locale/ja-JP';
 import zhCN from '@arco-design/web-react/es/locale/zh-CN';
-import zhTW from '@arco-design/web-react/es/locale/zh-TW';
-import koKR from '@arco-design/web-react/es/locale/ko-KR';
 import { useTranslation } from 'react-i18next';
 
 // Styles
@@ -63,31 +60,8 @@ import { WebuiEnterpriseModeProvider } from './hooks/webui/WebuiEnterpriseModePr
 import { OrgConfigSyncListener } from './hooks/webui/OrgConfigSyncListener';
 import HOC from './utils/ui/HOC';
 
-// Patch Korean locale with missing properties from English locale
-const koKRComplete = {
-  ...koKR,
-  Calendar: {
-    ...koKR.Calendar,
-    monthFormat: enUS.Calendar.monthFormat,
-    yearFormat: enUS.Calendar.yearFormat,
-  },
-  DatePicker: {
-    ...koKR.DatePicker,
-    Calendar: {
-      ...koKR.DatePicker.Calendar,
-      monthFormat: enUS.Calendar.monthFormat,
-      yearFormat: enUS.Calendar.yearFormat,
-    },
-  },
-  Form: enUS.Form,
-  ColorPicker: enUS.ColorPicker,
-};
-
 const arcoLocales: Record<string, typeof enUS> = {
   'zh-CN': zhCN,
-  'zh-TW': zhTW,
-  'ja-JP': jaJP,
-  'ko-KR': koKRComplete,
   'en-US': enUS,
 };
 

@@ -1,0 +1,13 @@
+{
+  "title": "Sessions",
+  "new": "New session",
+  "searchPlaceholder": "Search session title or content...",
+  "empty": "No sessions yet. Click \"New session\" to start",
+  "emptySearch": "No matching sessions",
+  "startFirst": "Start your first session",
+  "recentLimitNote": "Showing the 10 most recent by default; older sessions are archived by creation date.",
+  "archiveByDate": "Archive by date",
+  "folderTitle": "Session archive",
+  "folderSubtitleFallback": "Click to view all conversations from this day",
+  "count": "{{count}} items"
+}

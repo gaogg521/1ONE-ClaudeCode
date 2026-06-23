@@ -547,7 +547,7 @@ const SessionsPage: React.FC = () => {
         </Button>
       </div>
 
-      {hasJoinedEnterprise ? (
+      {isEnterpriseEdition && hasJoinedEnterprise ? (
         <div
           style={{
             marginBottom: 16,

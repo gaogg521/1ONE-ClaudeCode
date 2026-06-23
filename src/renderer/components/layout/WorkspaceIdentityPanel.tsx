@@ -58,12 +58,12 @@ function buildOrgLine(
     }
     return t('settings.edition.personal', { defaultValue: '个人版' });
   }
+  // 个人版视图：即便已加入企业，也不显示企业租户名，保持与未加入的个人版一致，避免两版身份混在一起。
+  if (managementMode !== 'enterprise') {
+    return t('settings.edition.personal', { defaultValue: '个人版' });
+  }
   const tenant = profile.tenantName ?? profile.tenantId;
-  const editionLabel =
-    managementMode === 'enterprise'
-      ? t('settings.workspaceIdentity.editionEnterprise', { defaultValue: '企业团队版' })
-      : t('settings.workspaceIdentity.personalView', { defaultValue: '个人版视图' });
-  return `${tenant} · ${editionLabel}`;
+  return `${tenant} · ${t('settings.workspaceIdentity.editionEnterprise', { defaultValue: '企业团队版' })}`;
 }
 
 const GuestProfileMenu: React.FC<{

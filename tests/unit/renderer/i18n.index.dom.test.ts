@@ -65,7 +65,7 @@ describe('renderer i18n localStorage guards', () => {
     vi.clearAllMocks();
     mockI18n.language = 'en-US';
     mockI18n.languageChangedHandler = undefined;
-    mockConfigStorageGet.mockResolvedValue('ja-JP');
+    mockConfigStorageGet.mockResolvedValue('zh-CN');
     mockConfigStorageSet.mockResolvedValue(undefined);
     mockChangeLanguageInvoke.mockResolvedValue(undefined);
     mockOnLanguageChanged.handler = undefined;
@@ -88,7 +88,7 @@ describe('renderer i18n localStorage guards', () => {
   it('initializes without localStorage and still loads the saved language', async () => {
     await import('@/renderer/services/i18n');
     await vi.waitFor(() => {
-      expect(mockI18n.changeLanguage).toHaveBeenCalledWith('ja-JP');
+      expect(mockI18n.changeLanguage).toHaveBeenCalledWith('zh-CN');
     });
     expect(mockI18n.init).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -101,9 +101,9 @@ describe('renderer i18n localStorage guards', () => {
     await import('@/renderer/services/i18n');
     await Promise.resolve();
 
-    await mockOnLanguageChanged.handler?.({ language: 'ko-KR' });
+    await mockOnLanguageChanged.handler?.({ language: 'zh-CN' });
 
-    expect(mockI18n.changeLanguage).toHaveBeenCalledWith('ko-KR');
+    expect(mockI18n.changeLanguage).toHaveBeenCalledWith('zh-CN');
   });
 
   it('persists language through ConfigStorage even when localStorage is unavailable', async () => {
@@ -112,7 +112,7 @@ describe('renderer i18n localStorage guards', () => {
 
     await module.changeLanguage('tr');
 
-    expect(mockConfigStorageSet).toHaveBeenCalledWith('language', 'tr-TR');
-    expect(mockChangeLanguageInvoke).toHaveBeenCalledWith({ language: 'tr-TR' });
+    expect(mockConfigStorageSet).toHaveBeenCalledWith('language', 'zh-CN');
+    expect(mockChangeLanguageInvoke).toHaveBeenCalledWith({ language: 'zh-CN' });
   });
 });

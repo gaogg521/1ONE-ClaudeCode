@@ -163,3 +163,39 @@
 ## 本轮验证状态
 - `tsc --noEmit` exit 0；`oxlint` 0 error；`oxfmt --check` 全过；`check-i18n` 通过；`electron-vite build` 通过；单测全绿（45 个既存失败与本次改动无关，均为 layout/nav 等 UI 测试）。
 - 运行时（切模型、传图/视频、个人版 UI、ffmpeg 下载）需桌面端 `npm run restart` 实测。
+
+---
+
+# 追加记录 — 2026-06-23 晚（边界二次核查 + i18n 结构性修复 + 登录回传体检 + 踩坑）
+
+## 一、个人版/企业版边界二次修复（防"混在一起"）
+上轮加了 `useEditionFeatures.showEnterpriseWorkspaceHub` 助手，但**根本没接到页面里**，页面仍用裸 `hasJoinedEnterprise` 渲染，导致个人版视图仍泄漏企业 UI。本轮真正堵住：
+- `sessions/index.tsx`、`tasks/index.tsx`：「企业协同与平台能力」区块 `hasJoinedEnterprise` → `isEnterpriseEdition && hasJoinedEnterprise`。
+- `Titlebar/index.tsx`：企业通知中心 `showNotificationCenter` 漏判版本 → 加 `isEnterpriseEdition`。
+- `WorkspaceIdentityPanel.tsx` `buildOrgLine`：个人版视图原显示 `{租户} · 个人版视图` 泄漏租户名 → 改为只显示「个人版」。
+
+## 二、i18n 结构性坑（重点教训）
+- **坑1**：`nav`、`sessions` 两个 namespace **未纳入 `i18n-config.json` 的 modules 列表** → `check-i18n` 长期漏检。已补进 modules 根治。
+- **坑2**：`ja/ko/tr/zh-TW` 缺整个 `nav.json`；除 `zh-CN` 外全缺 `sessions.json`（连 `en-US` 也缺）→ 这些语言侧栏导航、会话页文案**回退成简体中文**（fallbackLng=zh-CN）。已补 4 语言 `nav.json` + 5 语言 `sessions.json`，并在各 `index.ts` 挂载。
+- **坑3（待产品确认）**：`supportedLanguages` 声明 **6 种语言（含 tr-TR 土耳其语）**，这是项目既有配置，非本轮新增。但 `settings(445)/common(250)/conversation(42)/login(19)/memory(4)/team(2)/messages(1)` 在 `ja/ko/tr/zh-TW` 大面积缺 key，靠 `defaultValue` 兜底显示中/英。**是否真要维护 6 语言、还是精简 `supportedLanguages`，需先确认，再决定"补译 or 删语言"。**
+- **坑4（流程教训）**：上一轮规划了"分 4 批 ×4 语言补译"的 task 并把前几批标 `completed`，但 `check-i18n` 实证 `common/conversation/login` 根本没补 = **虚假进度**。已纠正 task 状态。补译前必须先与用户对齐语言范围，且以 `check-i18n` 实测为准，不以 task 标记为准。
+
+## 三、企业版登录回传链路体检（桌面端）
+- **两条路径**：账号密码/LDAP = **应用内直登**（JWT 直接写桌面 session，不跳浏览器）；SSO（飞书/钉钉/企微/扫码）= **跳系统浏览器**授权后回传。
+- **回传机制**：`syncBrowserWebuiSessionToDesktop` → IPC `webui.syncBrowserWebuiSession` → 主进程 `WebuiService.syncBrowserWebuiSession`（先内存桥接 `getLatestBrowserWebuiSession` 取 `updatedAt` 最新 + `verifyToken`，否则遍历 localhost/LAN cookie jar 读 token）。触发：`window focus` / `visibilitychange` / `one-enterprise-context-refresh` → `scheduleFullRefresh`(800ms 防抖) → sync → `refreshAuth` → `refreshEnterpriseContext`。
+- **薄弱点（待修，按优先级）**：
+  1. **缺超时**：主进程 `cookies.get/verifyToken/findById` 串行 await 无超时；渲染层 `sync→refreshAuth→refreshEnterpriseContext` 链无整体超时 → DB/cookie 卡顿会让"切回桌面自动刷新"挂起。
+  2. **同步失败静默**：跨实例/token 失效返回 null，UI 无任何提示；`getDesktopSessionToken` 无会话直接 throw，依赖调用方兜底。
+  3. **多实例**：token 用本机密钥 verify，跨实例登录验证失败→同步不到（设计上安全、不串号，但无提示）。
+  4. **`scheduleFullRefresh` 未 `.catch`**：链路 sync 抛错产生 unhandled rejection（有 `.finally` 复位 in-flight 标志，不卡死）。
+
+## 本轮状态
+- 已改：边界 3 处 + i18n 结构性 nav/sessions。
+- **语言范围已定（用户决策）**：只保留 `zh-CN` + `en-US`，**删除 ja-JP / ko-KR / zh-TW / tr-TR**。涉及：4 个 locale 目录、renderer+main 两处 i18n 注册表、`main.tsx` Arco locale 映射（含 koKRComplete）、`LanguageSwitcher`/`login` 语言列表、`utils.resolveLocaleKey`、`i18n.normalizeLanguageCode`、`i18n-config.supportedLanguages`。中英本就齐全，**无需补译**。同步修了 4 个引用旧语言的测试文件。
+- `tsc` exit 0；`check-i18n` 通过（仅 zh-CN/en-US，完整）；受影响 i18n 测试 121 passed。
+- 坑3/坑4 的"补译 ×4 语言"计划随精简语言一并作废。
+- **登录回传薄弱点已修**：`WebuiEnterpriseModeProvider.scheduleFullRefresh` 的 `sync→refreshAuth→refreshEnterpriseContext` 链改用 `withEnterpriseBootstrapTimeout` 包裹。一并解决 #1（同步链卡死时 `desktopSyncInFlightRef` 永不复位 → 永久禁用后续焦点同步）+ #4（未捕获 rejection）；失败/超时有带 label 日志（覆盖 #2 诊断）。`handleEnterpriseContextRefresh` 同样加超时兜底。#3 多实例验证为设计安全（token 验证失败不串号），未改；主进程内部不加超时（渲染层 8s 超时已覆盖症状）。`webuiEnterpriseModeProvider` 测试 9 passed。
+- **会话首发提速**：根因定位——aionrs 首发慢是 `useGuidSend` 的 aionrs 分支漏了「跳转前 warmup」（ACP 分支早有，注释 "so the first reply feels faster"）。已补：创建会话后、`navigate` 前 `void conversation.warmup.invoke`，让 binary 在跳转/渲染期间提前 spawn。临时 `perfTrace` 埋点实测：`send.taskReady` 0ms 证明 worker fork/spawn 已移出首发路径；剩余 ~2.8s 为 `AionrsAgent.send()` 的 `await readyPromise`（binary 连 provider/ready）。首发从 ~5s 降到 ~2.8s。埋点已移除。
+  - **TODO（下一步，用户已选）：预热池方案 A** —— app 启动 / 进 Guid 页时用默认 model+workspace 预起一个待命 aionrs binary，首发复用使 `readyPromise` 已 resolve，消除剩余 ~2.8s。因额度暂缓。
+- **语言切换入口**：语言切换组件本就在「设置→系统→偏好设置」首项（`SystemModalContent.preferenceItems`），但入口太深、用户找不到。已在标题栏（`Titlebar` 工具区）加全局可见的紧凑语言下拉（地球图标 + 简体中文/English），复用 `changeLanguage`。
+- 已 commit + push（不打包，按用户要求）。

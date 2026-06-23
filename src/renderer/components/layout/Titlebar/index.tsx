@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import classNames from 'classnames';
-import { ArrowCircleLeft, ExpandLeft, ExpandRight, MenuFold, MenuUnfold, Plus } from '@icon-park/react';
+import { ArrowCircleLeft, ExpandLeft, ExpandRight, MenuFold, MenuUnfold, Plus, Translate } from '@icon-park/react';
+import { Dropdown, Menu } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { changeLanguage } from '@/renderer/services/i18n';
 
 import { ipcBridge } from '@/common';
 import WindowControls from '../WindowControls';
@@ -28,7 +30,7 @@ const AionLogoMark: React.FC = () => (
 );
 
 const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const appTitle = useMemo(() => '1ONE Code', []);
   const [workspaceCollapsed, setWorkspaceCollapsed] = useState(true);
   const [mobileCenterTitle, setMobileCenterTitle] = useState(appTitle);
@@ -36,7 +38,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const layout = useLayoutContext();
   const auth = useAuth();
   const enterpriseMode = useWebuiEnterpriseMode();
-  const { identity } = useEditionFeatures();
+  const { identity, isEnterpriseEdition } = useEditionFeatures();
   const location = useLocation();
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -79,8 +81,10 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const showSiderToggle = Boolean(layout?.setSiderCollapsed) && !(layout?.isMobile && isSettingsRoute);
   const showBackToChatButton = Boolean(layout?.isMobile && isSettingsRoute);
   const showNewConversationButton = Boolean(layout?.isMobile && workspaceAvailable);
+  // 仅企业团队版视图显示企业通知中心，避免个人版泄漏企业入口。
   const showNotificationCenter = Boolean(
-    enterpriseMode.webuiApiBase &&
+    isEnterpriseEdition &&
+      enterpriseMode.webuiApiBase &&
       enterpriseMode.hasJoinedEnterprise &&
       auth.status === 'authenticated'
   );
@@ -284,6 +288,24 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
       </div>
       <div ref={toolbarRef} className='app-titlebar__toolbar'>
         {!layout?.isMobile ? <EditionModeSwitcher variant='compact' /> : null}
+        <Dropdown
+          trigger='click'
+          position='br'
+          droplist={
+            <Menu onClickMenuItem={(code) => void changeLanguage(code)} selectedKeys={[i18n.language]}>
+              <Menu.Item key='zh-CN'>简体中文</Menu.Item>
+              <Menu.Item key='en-US'>English</Menu.Item>
+            </Menu>
+          }
+        >
+          <button
+            type='button'
+            className={classNames('app-titlebar__button', layout?.isMobile && 'app-titlebar__button--mobile')}
+            aria-label={t('settings.language', { defaultValue: '语言' })}
+          >
+            <Translate theme='outline' size={iconSize} fill='currentColor' />
+          </button>
+        </Dropdown>
         <EnterpriseNotificationCenter enabled={showNotificationCenter} />
         {showNewConversationButton && (
           <button
