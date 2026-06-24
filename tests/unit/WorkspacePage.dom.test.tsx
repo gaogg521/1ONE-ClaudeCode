@@ -53,6 +53,19 @@ vi.mock('@arco-design/web-react', () => ({
     Ellipsis: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
     Paragraph: ({ children }: React.PropsWithChildren) => <p>{children}</p>,
   },
+  Input: ({
+    value,
+    onChange,
+    placeholder,
+  }: {
+    value?: string;
+    onChange?: (value: string) => void;
+    placeholder?: string;
+  }) => <input value={value ?? ''} placeholder={placeholder} onChange={(e) => onChange?.(e.target.value)} />,
+  Popconfirm: ({ children, onOk }: React.PropsWithChildren<{ onOk?: () => void }>) => (
+    <span onClick={onOk}>{children}</span>
+  ),
+  Message: { success: () => undefined, error: () => undefined },
 }));
 
 vi.mock('@/renderer/hooks/context/ConversationHistoryContext', () => ({

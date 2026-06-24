@@ -1,8 +1,11 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, Empty, Typography } from '@arco-design/web-react';
-import { Right, Setting } from '@icon-park/react';
+import { Button, Card, Empty, Input, Message, Popconfirm, Typography } from '@arco-design/web-react';
+import { Delete, Right, Search } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
+import { ipcBridge } from '@/common';
+import { emitter } from '@/renderer/utils/emitter';
+import type { TChatConversation } from '@/common/config/storage';
 import { useConversationHistoryContext } from '@/renderer/hooks/context/ConversationHistoryContext';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { getActivityTime } from '@/renderer/utils/chat/timeline';
@@ -13,6 +16,30 @@ import PageContentShell from '@/renderer/components/layout/PageContentShell';
 import { getProjectDisplayName, readPinnedProjects } from '@/renderer/utils/workspace/pinnedProjects';
 
 const LAST_ACTIVE_TEAM_SCOPE_STORAGE_KEY = 'workspace:last-active-team-scope';
+
+const SEARCH_PAGE_SIZE = 100;
+const SEARCH_MAX_PAGES = 10;
+
+/** Search message contents across conversations; returns conversationId -> preview snippet. */
+async function fetchContentMatchMap(keyword: string): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  let page = 0;
+  while (page < SEARCH_MAX_PAGES) {
+    const result = await ipcBridge.database.searchConversationMessages.invoke({
+      keyword,
+      page,
+      pageSize: SEARCH_PAGE_SIZE,
+    });
+    for (const item of result.items) {
+      if (!map.has(item.conversation.id)) {
+        map.set(item.conversation.id, item.previewText);
+      }
+    }
+    if (!result.hasMore) break;
+    page += 1;
+  }
+  return map;
+}
 
 type WorkspaceEntry = {
   workspace: string;
@@ -84,6 +111,66 @@ const WorkspacePage: React.FC = () => {
   } = useEditionFeatures();
   const { openEnterpriseAdminInBrowser } = useWebuiEnterpriseMode();
   const lastActiveTeamScope = useMemo(() => readLastActiveTeamScope(), []);
+
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [searchMatchMap, setSearchMatchMap] = useState<Map<string, string>>(() => new Map());
+  const [searching, setSearching] = useState(false);
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
+  const trimmedKeyword = searchKeyword.trim();
+
+  useEffect(() => {
+    const kw = trimmedKeyword;
+    if (!kw) {
+      setSearchMatchMap(new Map());
+      setSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const timer = window.setTimeout(() => {
+      void fetchContentMatchMap(kw)
+        .then((map) => {
+          if (!cancelled) setSearchMatchMap(map);
+        })
+        .catch(() => {
+          if (!cancelled) setSearchMatchMap(new Map());
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [trimmedKeyword]);
+
+  const searchResults = useMemo<TChatConversation[]>(() => {
+    const kw = trimmedKeyword.toLowerCase();
+    if (!kw) return [];
+    return conversations
+      .filter((c) => !deletedIds.has(c.id))
+      .filter((c) => c.name?.toLowerCase().includes(kw) || searchMatchMap.has(c.id))
+      .toSorted((a, b) => getActivityTime(b) - getActivityTime(a));
+  }, [conversations, deletedIds, searchMatchMap, trimmedKeyword]);
+
+  const handleDeleteConversation = useCallback(
+    async (id: string) => {
+      try {
+        await ipcBridge.conversation.remove.invoke({ id });
+        setDeletedIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+        emitter.emit('chat.history.refresh');
+        Message.success(t('workspace.search.deleted', { defaultValue: '已删除' }));
+      } catch {
+        Message.error(t('workspace.search.deleteFailed', { defaultValue: '删除失败，请重试' }));
+      }
+    },
+    [t]
+  );
 
   const handleEnterpriseCardClick = useCallback(
     (card: { key: string; path: string }) => {
@@ -244,14 +331,14 @@ const WorkspacePage: React.FC = () => {
             {t('workspace.hub.subtitle', { defaultValue: '以项目/文件夹为中心管理会话与项目相关配置。' })}
           </div>
         </div>
-        <Button
-          icon={<Setting theme='outline' size='16' />}
-          onClick={() => {
-            void navigate('/workspace/settings/projects');
-          }}
-        >
-          {t('workspace.hub.projectSettings', { defaultValue: '项目设置' })}
-        </Button>
+        <Input
+          allowClear
+          prefix={<Search theme='outline' size='14' />}
+          value={searchKeyword}
+          onChange={setSearchKeyword}
+          placeholder={t('workspace.search.placeholder', { defaultValue: '搜索历史会话（标题或内容）…' })}
+          className='w-300px max-w-50vw'
+        />
       </div>
 
       {showEnterpriseWorkspaceHub ? (
@@ -310,6 +397,56 @@ const WorkspacePage: React.FC = () => {
               </Card>
             ))}
           </div>
+        </div>
+      ) : null}
+
+      {trimmedKeyword ? (
+        <div className='mt-16px'>
+          <div className='text-13px font-bold text-t-secondary mb-10px'>
+            {t('workspace.search.resultsTitle', { defaultValue: '搜索结果' })}
+            {searching ? (
+              <span className='text-12px text-t-tertiary font-normal ml-8px'>
+                {t('workspace.search.searching', { defaultValue: '搜索中…' })}
+              </span>
+            ) : null}
+          </div>
+          {searchResults.length === 0 && !searching ? (
+            <Empty description={t('workspace.search.noResults', { defaultValue: '没有匹配的历史会话' })} />
+          ) : (
+            <div className='grid gap-10px'>
+              {searchResults.slice(0, 50).map((c) => (
+                <div
+                  key={c.id}
+                  className='px-14px py-12px rd-12px border border-solid border-[var(--color-border-2)] bg-[var(--color-bg-1)] hover:bg-fill-2 transition-colors cursor-pointer'
+                  onClick={() => navigate(getConversationOpenPath(c))}
+                >
+                  <div className='flex items-center justify-between gap-12px'>
+                    <div className='min-w-0'>
+                      <div className='text-14px font-medium text-t-primary truncate'>
+                        {c.name || t('workspace.search.untitled', { defaultValue: '未命名会话' })}
+                      </div>
+                      <Typography.Ellipsis className='text-12px text-t-tertiary mt-4px max-w-full'>
+                        {searchMatchMap.get(c.id) || c.extra?.workspace || ''}
+                      </Typography.Ellipsis>
+                    </div>
+                    <Popconfirm
+                      title={t('workspace.search.deleteConfirm', { defaultValue: '删除这条历史会话记录？不可恢复。' })}
+                      onOk={() => handleDeleteConversation(c.id)}
+                    >
+                      <Button
+                        type='text'
+                        status='danger'
+                        size='mini'
+                        icon={<Delete theme='outline' size='14' />}
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={t('workspace.search.delete', { defaultValue: '删除' })}
+                      />
+                    </Popconfirm>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : null}
 
