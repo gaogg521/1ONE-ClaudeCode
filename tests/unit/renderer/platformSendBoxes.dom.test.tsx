@@ -65,12 +65,19 @@ vi.mock('@/common', () => ({
       stop: { invoke: (...args: unknown[]) => mockConversationStopInvoke(...args) },
       sendMessage: { invoke: (...args: unknown[]) => mockConversationSendInvoke(...args) },
       responseStream: { on: vi.fn(() => vi.fn()) },
+      turnCompleted: { on: vi.fn(() => vi.fn()) },
+      listChanged: { on: vi.fn(() => vi.fn()) },
+      warmup: { invoke: vi.fn(() => Promise.resolve()) },
     },
     acpConversation: {
       sendMessage: { invoke: (...args: unknown[]) => mockAcpSendInvoke(...args) },
+      responseStream: { on: vi.fn(() => vi.fn()) },
+      turnCompleted: { on: vi.fn(() => vi.fn()) },
     },
     geminiConversation: {
       sendMessage: { invoke: (...args: unknown[]) => mockGeminiSendInvoke(...args) },
+      responseStream: { on: vi.fn(() => vi.fn()) },
+      turnCompleted: { on: vi.fn(() => vi.fn()) },
     },
     openclawConversation: {
       sendMessage: { invoke: (...args: unknown[]) => mockOpenClawSendInvoke(...args) },

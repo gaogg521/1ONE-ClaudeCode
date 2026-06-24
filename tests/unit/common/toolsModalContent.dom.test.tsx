@@ -114,6 +114,7 @@ vi.mock('@arco-design/web-react', () => {
         {children}
       </button>
     ),
+    Tag: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
     Dropdown: ({ children }: React.PropsWithChildren) => <>{children}</>,
     Menu: Object.assign(({ children }: React.PropsWithChildren) => <div>{children}</div>, {
       Item: ({
@@ -226,6 +227,11 @@ vi.mock('@/common/adapter/ipcBridge', () => ({
     getAvailableAgents: {
       invoke: vi.fn(() => Promise.resolve({ success: true, data: [] })),
     },
+  },
+  systemSettings: {
+    getFfmpegStatus: { invoke: vi.fn(() => Promise.resolve({ available: true })) },
+    ffmpegDownloadProgress: { on: vi.fn(() => vi.fn()) },
+    downloadFfmpeg: { invoke: vi.fn(() => Promise.resolve({ success: true })) },
   },
 }));
 
