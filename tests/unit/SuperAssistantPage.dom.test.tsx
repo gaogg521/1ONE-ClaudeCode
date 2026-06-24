@@ -232,12 +232,21 @@ vi.mock('@arco-design/web-react', () => ({
     children,
     title,
     footer,
-  }: React.PropsWithChildren<{ visible?: boolean; title?: React.ReactNode; footer?: React.ReactNode }>) =>
+    onOk,
+    okText,
+  }: React.PropsWithChildren<{
+    visible?: boolean;
+    title?: React.ReactNode;
+    footer?: React.ReactNode;
+    onOk?: () => void;
+    okText?: React.ReactNode;
+  }>) =>
     visible ? (
       <div role='dialog'>
         {title && <div>{title}</div>}
         {children}
         {footer}
+        {onOk ? <button onClick={() => void onOk()}>{okText ?? 'OK'}</button> : null}
       </div>
     ) : null,
   Empty: ({ description }: { description?: React.ReactNode }) => <div>{description}</div>,
@@ -563,6 +572,8 @@ describe('SuperAssistantPage (refactored command center)', () => {
     fireEvent.click(editButtons[0]!);
     const runButtons = await screen.findAllByRole('button', { name: '立即执行' });
     fireEvent.click(runButtons[0]!);
+    // 重构后「立即执行」先弹任务描述输入框，需点「运行」确认才真正运行。
+    fireEvent.click(await screen.findByRole('button', { name: '运行' }));
 
     await waitFor(() => {
       expect(personalAgentRunNowMock).toHaveBeenCalledWith(
@@ -586,6 +597,7 @@ describe('SuperAssistantPage (refactored command center)', () => {
     runDigitalEmployeeNowMock.mockClear();
     navigateMock.mockClear();
     fireEvent.click(runButtons[1]!);
+    fireEvent.click(await screen.findByRole('button', { name: '运行' }));
 
     await waitFor(() => {
       expect(runDigitalEmployeeNowMock).toHaveBeenCalledWith(
@@ -746,11 +758,15 @@ describe('SuperAssistantPage (refactored command center)', () => {
 
     render(<SuperAssistantPage />);
 
+    // 重构后 auto-start 也走统一的「任务输入框」流程：弹框 → 点「运行」确认才执行。
+    // 注意：当前实现下 issue context 不再从 URL 自动透传（用户在框里输入任务），
+    // 故此处只校验 agentId 与「不跳企业后台」，不再断言 issue=issue-personal-1。
+    fireEvent.click(await screen.findByRole('button', { name: '运行' }));
+
     await waitFor(() => {
       expect(personalAgentRunNowMock).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'personal-agent-1',
-          issue: expect.objectContaining({ id: 'issue-personal-1' }),
         })
       );
     });

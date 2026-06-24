@@ -166,8 +166,9 @@ vi.mock('@/renderer/components/base/AionSelect', () => {
     children,
     value,
     onChange,
-  }: React.PropsWithChildren<{ value?: string; onChange?: (value: string) => void }>) => (
-    <select onChange={(event) => onChange?.(event.target.value)} value={value}>
+    ...rest
+  }: React.PropsWithChildren<{ value?: string; onChange?: (value: string) => void; [key: string]: unknown }>) => (
+    <select {...rest} onChange={(event) => onChange?.(event.target.value)} value={value}>
       {children}
     </select>
   );

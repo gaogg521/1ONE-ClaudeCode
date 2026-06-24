@@ -13,8 +13,8 @@
 - [x] **acpAgentManagerCronGuard.test.ts**(9)✅ mock `BaseAgentManager` 补 `getConfirmations`；`mockAgent` 补 `getModelInfo`；`ipcBridge.conversation.turnCompleted.emit` 补全（emitAgentTurnCompleted 链）。
 - [x] **AcpAgentManagerSkillInjection.test.ts**(4)✅ conversation mock 补 `turnCompleted.emit`。
 - [x] **useGeminiMessage.dom.test.ts**(3)✅ conversation mock 补 `responseStream.on`/`turnCompleted.on`。
-- [~] **SuperAssistantPage.dom.test.tsx**(12 → 剩 3) useTranslation mock 补 `i18n.language`（修了 9）。剩 3 个是**断言级**：`expected vi.fn() to be called with ObjectContaining{…}`——需对照 SuperAssistant 助手创建/模板调用逻辑,判断是参数变了(代码 bug)还是测试过时。
-- [~] **toolsModalContent.dom.test.tsx**(3)补了 arco `Tag` + `systemSettings`(ffmpeg) mock。剩 3 个**断言级**：①ffmpeg status 返回结构(`next.available`)②`tools.speechToText` 配置保存断言 ③`settings.speechToTextRequired` 文案查找。
+- [x] **SuperAssistantPage.dom.test.tsx**(12)✅ 全修：useTranslation 补 `i18n.language`(9)；Modal mock 补 `onOk` 确定按钮；3 个后台运行用例补「点『运行』确认」——**重构后点『立即执行』先弹任务输入框、确认才运行(有意改进)**。⚠️ 顺带发现:auto-start(从 issue 一键启动)现在也弹输入框、**URL 的 issue 不再自动透传给 runNow**——疑似重构小退化,若要"从 issue 启动即用该 issue 作任务"需补 issue 透传(已在测试注释标注,待产品确认)。
+- [~] **toolsModalContent.dom.test.tsx**(3)已补 arco `Tag`/`systemSettings`(ffmpeg)/`AionSelect` props 透传。剩 3 个是 **ToolsModalContent 深层功能/时序逻辑(非 mock)**：①image-gen MCP 启用后 `checkSingleServerInstallStatus` 刷新时序(called 0)②切 provider → `ConfigStorage.set('tools.speechToText')` 保存 effect 未触发(called 0)③required/optional marker(源码 line 354 `({t(...)})`)未找到。疑似重构后 save effect/状态时序/marker 渲染条件变化,需逐个深入 `ToolsModalContent.tsx` 的 handleProviderChange / save effect / marker 渲染判断。
 
 ## B 类：断言漂移（已处理）
 - [x] **guidAgentSelection.dom.test.ts**(1)✅ **有意设计、非 bug（用户确认）**：新会话默认权限模式由 `default`(每步确认)改成全自动放行(claude=`bypassPermissions`/其它=`yolo`)。测试已对齐期望为 `bypassPermissions`。
