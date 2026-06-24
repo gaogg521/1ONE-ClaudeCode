@@ -124,8 +124,11 @@ const NAV_ITEMS: NavItem[] = [
 export function getSidebarNavItems(gate: SidebarNavGate): NavItem[] {
   let items = NAV_ITEMS.filter((item) => !item.capability || gate.can(item.capability));
   if (gate.can('issues.teamPlanning')) {
-    // 企业团队版：需求看板与任务看板合并到 Issues，避免侧栏重复入口
-    items = items.filter((x) => x.path !== '/tasks');
+    // 企业团队版：需求看板与任务看板合并到 Issues，避免侧栏重复入口。
+    // 同时把 /tasks 并入 Issues 的匹配路径，这样在 /tasks 路由时 Issues 项仍会高亮。
+    items = items
+      .filter((x) => x.path !== '/tasks')
+      .map((x) => (x.path === '/issues' ? { ...x, paths: [...(x.paths ?? []), '/tasks'] } : x));
   }
   return items;
 }

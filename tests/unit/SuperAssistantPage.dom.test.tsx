@@ -47,6 +47,7 @@ vi.mock('react-i18next', () => ({
         return result.replaceAll(`{{${key}}}`, String(value ?? ''));
       }, template);
     },
+    i18n: { language: 'zh-CN', changeLanguage: vi.fn() },
   }),
 }));
 

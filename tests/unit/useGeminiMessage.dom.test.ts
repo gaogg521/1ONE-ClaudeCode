@@ -26,6 +26,8 @@ vi.mock('@/common', () => ({
       get: { invoke: (...args: unknown[]) => mockGetInvoke(...args) },
       update: { invoke: vi.fn().mockResolvedValue(null) },
       stop: { invoke: vi.fn().mockResolvedValue(null) },
+      responseStream: { on: vi.fn(() => vi.fn()) },
+      turnCompleted: { on: vi.fn(() => vi.fn()) },
     },
     database: {
       getConversationMessages: { invoke: vi.fn().mockResolvedValue([]) },

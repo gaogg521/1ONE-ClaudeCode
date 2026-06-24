@@ -39,7 +39,8 @@ describe('useEditionFeatures', () => {
     expect(result.current.isPersonalEdition).toBe(true);
     expect(result.current.hasJoinedEnterprise).toBe(true);
     expect(result.current.showTeamsFeature).toBe(false);
-    expect(result.current.showEnterpriseWorkspaceHub).toBe(true);
+    // 个人版视图即便已加入企业，也不展示「企业协同与平台能力」hub（见 useEditionFeatures：加了 isEnterpriseEdition && 守卫）。
+    expect(result.current.showEnterpriseWorkspaceHub).toBe(false);
     expect(result.current.tenantLabel).toBe('欢乐互娱有限公司');
   });
 

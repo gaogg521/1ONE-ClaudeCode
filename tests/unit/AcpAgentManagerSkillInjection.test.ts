@@ -35,6 +35,7 @@ vi.mock('@/common', () => ({
         remove: { emit: vi.fn() },
       },
       responseStream: { emit: vi.fn() },
+      turnCompleted: { emit: vi.fn() },
     },
   },
 }));

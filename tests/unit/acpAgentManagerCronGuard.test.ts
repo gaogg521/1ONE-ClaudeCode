@@ -28,7 +28,10 @@ vi.mock('@process/utils/initStorage', () => ({
   ProcessConfig: { getConfig: vi.fn(() => ({})), get: vi.fn() },
 }));
 vi.mock('@/common', () => ({
-  ipcBridge: { acpConversation: { responseStream: { emit: vi.fn() } } },
+  ipcBridge: {
+    acpConversation: { responseStream: { emit: vi.fn() } },
+    conversation: { turnCompleted: { emit: vi.fn() }, responseStream: { emit: vi.fn() } },
+  },
 }));
 vi.mock('@process/services/database', () => ({
   getDatabase: vi.fn(() => Promise.resolve({ updateConversation: vi.fn() })),
@@ -77,6 +80,9 @@ vi.mock('@process/task/BaseAgentManager', () => ({
       return false;
     }
     addConfirmation() {}
+    getConfirmations() {
+      return [];
+    }
   },
 }));
 
@@ -100,7 +106,7 @@ import type { AcpBackend } from '../../src/common/types/acpTypes';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-type MockAgent = { sendMessage: ReturnType<typeof vi.fn> };
+type MockAgent = { sendMessage: ReturnType<typeof vi.fn>; getModelInfo: ReturnType<typeof vi.fn> };
 
 function makeManager(conversationId = 'conv-test') {
   const manager = new AcpAgentManager({
@@ -111,6 +117,7 @@ function makeManager(conversationId = 'conv-test') {
   // Inject a mock agent and pre-resolve bootstrap so initAgent() returns immediately
   const mockAgent: MockAgent = {
     sendMessage: vi.fn(),
+    getModelInfo: vi.fn(() => null),
   };
   (manager as unknown as { agent: MockAgent }).agent = mockAgent;
   (manager as unknown as { bootstrap: Promise<MockAgent> }).bootstrap = Promise.resolve(mockAgent);
