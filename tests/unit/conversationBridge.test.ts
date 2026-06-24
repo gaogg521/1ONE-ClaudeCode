@@ -34,6 +34,9 @@ vi.mock('../../src/common', () => ({
       getWorkspace: makeChannel('getWorkspace'),
       responseSearchWorkSpace: makeChannel('responseSearchWorkSpace'),
       warmup: makeChannel('warmup'),
+      prewarmCreate: makeChannel('prewarmCreate'),
+      prewarmClaim: makeChannel('prewarmClaim'),
+      finalizeFromPrewarm: makeChannel('finalizeFromPrewarm'),
       confirmMessage: makeChannel('conversation.confirm.message'),
       confirmation: {
         confirm: makeChannel('confirmation.confirm'),

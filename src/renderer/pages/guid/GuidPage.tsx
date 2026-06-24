@@ -24,6 +24,7 @@ import { useGuidInput } from './hooks/useGuidInput';
 import { useGuidMention } from './hooks/useGuidMention';
 import { useGuidModelSelection } from './hooks/useGuidModelSelection';
 import { useGuidSend } from './hooks/useGuidSend';
+import { useAionrsPrewarm } from './hooks/useAionrsPrewarm';
 import { useTypewriterPlaceholder } from './hooks/useTypewriterPlaceholder';
 import { ConfigStorage } from '@/common/config/storage';
 import { ACP_BACKENDS_ALL, type PresetAgentType } from '@/common/types/acpTypes';
@@ -133,6 +134,16 @@ const GuidPage: React.FC = () => {
     closeAllTabs,
     openTab,
     t,
+  });
+
+  // Pre-spawn an aionrs worker once model + workspace are picked, so the first
+  // send skips the ~2.8s readyPromise wait. Debounced 200ms inside the hook.
+  useAionrsPrewarm({
+    selectedAgent: agentSelection.selectedAgent,
+    currentModel: modelSelection.currentModel,
+    workspace: guidInput.dir,
+    selectedMode: agentSelection.selectedMode,
+    loading: guidInput.loading,
   });
 
   // --- Coordinated handlers (depend on multiple hooks) ---

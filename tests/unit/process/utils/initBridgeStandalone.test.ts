@@ -57,6 +57,7 @@ vi.mock('@process/services/ConversationServiceImpl', () => ({
 
 vi.mock('@process/task/workerTaskManagerSingleton', () => ({
   workerTaskManager: {},
+  aionrsPrewarmPool: { register: vi.fn(), claim: vi.fn(), currentKey: vi.fn() },
 }));
 
 vi.mock('@process/bridge/applicationBridgeCore', () => ({

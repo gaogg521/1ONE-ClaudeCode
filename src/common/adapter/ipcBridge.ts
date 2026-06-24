@@ -56,6 +56,26 @@ export const conversation = {
   ), // 更新对话信息
   reset: bridge.buildProvider<void, IResetConversationParams>('reset-conversation'), // 重置对话
   warmup: bridge.buildProvider<void, { conversation_id: string }>('conversation.warmup'), // 预热对话 bootstrap
+  // Aionrs prewarm pool — see src/process/task/AionrsPrewarmPool.ts
+  // prewarmCreate: pre-spawn an aionrs worker against a placeholder conversation; pool dedup is keyed on { providerId, useModel, workspace }.
+  // prewarmClaim:  Guid send-time lookup; returns the prewarmed conversation_id if config matches, else null.
+  // finalizeFromPrewarm: after claim, overwrite the placeholder name + extra with the real user message context.
+  prewarmCreate: bridge.buildProvider<
+    { conversation_id: string } | null,
+    {
+      key: string;
+      type: 'aionrs';
+      model: TProviderWithModel;
+      workspace?: string;
+      customWorkspace?: boolean;
+      sessionMode?: string;
+    }
+  >('conversation.prewarm.create'),
+  prewarmClaim: bridge.buildProvider<{ conversation_id: string } | null, { key: string }>('conversation.prewarm.claim'),
+  finalizeFromPrewarm: bridge.buildProvider<
+    boolean,
+    { conversation_id: string; name: string; extra?: Record<string, unknown> }
+  >('conversation.prewarm.finalize'),
   stop: bridge.buildProvider<IBridgeResponse<{}>, { conversation_id: string }>('chat.stop.stream'), // 停止会话
   sendMessage: bridge.buildProvider<IBridgeResponse<{ input?: string; files?: string[] }>, ISendMessageParams>(
     'chat.send.message'

@@ -12,14 +12,16 @@ import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
 import type { TeamSessionService } from '@process/team/TeamSessionService';
 import { ipcBridge } from '@/common';
 import { removeFromMessageCache } from '@process/utils/message';
-import {
-  ProcessChat,
-  ProcessConfig,
-} from '@process/utils/initStorage';
+import { ProcessChat, ProcessConfig } from '@process/utils/initStorage';
 import type AcpAgentManager from '../task/AcpAgentManager';
 import type { GeminiAgentManager } from '../task/GeminiAgentManager';
 import { AionrsApprovalStore, type AionrsManager } from '../task/AionrsManager';
-import { buildConversationTurnCompletedEvent, emitConversationTurnCompleted } from '@process/utils/emitConversationTurnCompleted';
+import type { AionrsPrewarmPool } from '../task/AionrsPrewarmPool';
+import { PLACEHOLDER_CONVERSATION_NAME } from '../task/AionrsPrewarmPool';
+import {
+  buildConversationTurnCompletedEvent,
+  emitConversationTurnCompleted,
+} from '@process/utils/emitConversationTurnCompleted';
 import type OpenClawAgentManager from '../task/OpenClawAgentManager';
 import { refreshTrayMenu } from '@process/utils/tray';
 import { readDirectoryRecursive } from '@process/utils';
@@ -52,7 +54,8 @@ const VALID_CONVERSATION_TYPES = new Set<TChatConversation['type']>([
 export function initConversationBridge(
   conversationService: IConversationService,
   workerTaskManager: IWorkerTaskManager,
-  teamSessionService?: TeamSessionService
+  teamSessionService?: TeamSessionService,
+  aionrsPrewarmPool?: AionrsPrewarmPool
 ): void {
   const sideQuestionService = new ConversationSideQuestionService(conversationService);
 
@@ -410,6 +413,77 @@ export function initConversationBridge(
       // aionrs auto-starts in its constructor; getOrBuildTask above is sufficient.
     } catch {
       // Ignore errors — warmup is best-effort
+    }
+  });
+
+  // Aionrs prewarm pool — used by the Guid page to pre-spawn an aionrs worker
+  // once the user has chosen model + workspace, eliminating the ~2.8s
+  // readyPromise wait on first send. See AionrsPrewarmPool.ts for design notes.
+  ipcBridge.conversation.prewarmCreate.provider(async (params) => {
+    if (!aionrsPrewarmPool) return null;
+    if (params?.type !== 'aionrs') return null;
+    try {
+      // Dedup: same key already in pool → return existing id and skip rebuild.
+      const existingId = aionrsPrewarmPool.currentConversationIdFor(params.key);
+      if (existingId) return { conversation_id: existingId };
+
+      // Create a placeholder aionrs conversation. We deliberately do NOT call
+      // emitConversationListChanged: the placeholder should not surface in the
+      // sidebar while the user is still on the Guid page.
+      const t0 = Date.now();
+      const conversation = await conversationService.createConversation({
+        type: 'aionrs',
+        name: PLACEHOLDER_CONVERSATION_NAME,
+        model: params.model,
+        extra: {
+          workspace: params.workspace,
+          customWorkspace: params.customWorkspace,
+          sessionMode: params.sessionMode,
+        },
+        source: '1one',
+      } as CreateConversationParams);
+      console.log(`[aionrs:prewarm:main] DB create +${Date.now() - t0}ms id=${conversation.id}`);
+
+      // Trigger worker fork + AionrsManager construction (which auto-spawns the binary).
+      const manager = await workerTaskManager.getOrBuildTask(conversation.id);
+      console.log(`[aionrs:prewarm:main] worker ready +${Date.now() - t0}ms`);
+
+      aionrsPrewarmPool.register({
+        key: params.key,
+        conversation_id: conversation.id,
+        manager,
+        createdAt: Date.now(),
+      });
+
+      return { conversation_id: conversation.id };
+    } catch (error) {
+      console.warn('[conversationBridge] prewarm.create failed:', error);
+      return null;
+    }
+  });
+
+  ipcBridge.conversation.prewarmClaim.provider(async ({ key }) => {
+    if (!aionrsPrewarmPool) return null;
+    return aionrsPrewarmPool.claim(key);
+  });
+
+  // Promote a prewarmed placeholder conversation to a real one by writing
+  // back the user's real name + extra. mergeExtra=true preserves anything the
+  // running AionrsManager already persisted (e.g. lastModelId, aionrsSessionId).
+  ipcBridge.conversation.finalizeFromPrewarm.provider(async ({ conversation_id, name, extra }) => {
+    try {
+      const updates: Partial<TChatConversation> = { name };
+      if (extra) {
+        (updates as { extra?: Record<string, unknown> }).extra = extra;
+      }
+      await conversationService.updateConversation(conversation_id, updates, true);
+      const existing = await conversationService.getConversation(conversation_id);
+      if (existing) emitConversationListChanged(existing, 'created');
+      await refreshTrayMenuSafely();
+      return true;
+    } catch (error) {
+      console.warn('[conversationBridge] finalizeFromPrewarm failed:', error);
+      return false;
     }
   });
 

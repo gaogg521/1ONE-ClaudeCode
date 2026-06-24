@@ -18,6 +18,7 @@ import OpenClawAgentManager from './OpenClawAgentManager';
 import NanoBotAgentManager from './NanoBotAgentManager';
 import RemoteAgentManager from './RemoteAgentManager';
 import { AionrsManager } from './AionrsManager';
+import { AionrsPrewarmPool } from './AionrsPrewarmPool';
 
 const agentFactory = new AgentFactory();
 
@@ -86,3 +87,8 @@ agentFactory.register('aionrs', (conv, opts) => {
 
 const conversationRepo = new SqliteConversationRepository();
 export const workerTaskManager = new WorkerTaskManager(agentFactory, conversationRepo);
+export const aionrsPrewarmPool = new AionrsPrewarmPool(workerTaskManager, conversationRepo);
+
+// Clean up any placeholder conversations left behind by previous crashes / hard kills.
+// Safe to fire-and-forget: failures are logged inside sweep.
+void AionrsPrewarmPool.sweepPlaceholderConversations(conversationRepo);

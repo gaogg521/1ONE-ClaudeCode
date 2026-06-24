@@ -196,6 +196,15 @@
 - 坑3/坑4 的"补译 ×4 语言"计划随精简语言一并作废。
 - **登录回传薄弱点已修**：`WebuiEnterpriseModeProvider.scheduleFullRefresh` 的 `sync→refreshAuth→refreshEnterpriseContext` 链改用 `withEnterpriseBootstrapTimeout` 包裹。一并解决 #1（同步链卡死时 `desktopSyncInFlightRef` 永不复位 → 永久禁用后续焦点同步）+ #4（未捕获 rejection）；失败/超时有带 label 日志（覆盖 #2 诊断）。`handleEnterpriseContextRefresh` 同样加超时兜底。#3 多实例验证为设计安全（token 验证失败不串号），未改；主进程内部不加超时（渲染层 8s 超时已覆盖症状）。`webuiEnterpriseModeProvider` 测试 9 passed。
 - **会话首发提速**：根因定位——aionrs 首发慢是 `useGuidSend` 的 aionrs 分支漏了「跳转前 warmup」（ACP 分支早有，注释 "so the first reply feels faster"）。已补：创建会话后、`navigate` 前 `void conversation.warmup.invoke`，让 binary 在跳转/渲染期间提前 spawn。临时 `perfTrace` 埋点实测：`send.taskReady` 0ms 证明 worker fork/spawn 已移出首发路径；剩余 ~2.8s 为 `AionrsAgent.send()` 的 `await readyPromise`（binary 连 provider/ready）。首发从 ~5s 降到 ~2.8s。埋点已移除。
-  - **TODO（下一步，用户已选）：预热池方案 A** —— app 启动 / 进 Guid 页时用默认 model+workspace 预起一个待命 aionrs binary，首发复用使 `readyPromise` 已 resolve，消除剩余 ~2.8s。因额度暂缓。
+  - **预热池方案 B（已落地）** —— 消除剩余 ~2.8s 的 `await readyPromise`，目标首发 <500ms。
+    - **设计抉择**：放弃严格「过户」（要 rewire `AionrsManager` 里 5+ 处 `conversation_id` 使用点 + binary session_id + aionrsSessionId 持久化字段，风险面大）。改用「预热即建会话」：预热时直接 `conversationService.createConversation` 一个占位会话（name=`__prewarm__`），manager 持有真实 conversation_id；send 时 key 命中就 finalize（改 name + merge extra），未命中删占位 + kill 走原 create。manager/binary/DB 三者 id 自始至终一致，不动 `AionrsManager` 一行。
+    - **时机**：Guid 页 watch `[selectedAgent==='aionrs', currentModel.id, useModel, dir, sessionMode]`，稳定 200ms 后触发 `conversation.prewarmCreate` IPC（`useAionrsPrewarm` hook）。
+    - **认领 key**：`${provider.id}::${useModel}::${workspace}` —— 同 provider 多 model 也能区分；workspace 为空时用占位空串保持稳定。
+    - **池行为**：容量 1。同 key 重复触发 no-op + 刷新 TTL；不同 key 来了先 evict（kill worker + 删 DB 占位）再装新的。15s TTL 自动 evict 防泄漏。启动期 `AionrsPrewarmPool.sweepPlaceholderConversations` 扫一次脏占位（崩溃时的兜底）。
+    - **侧栏不闪现**：`conversationService.createConversation` 不 emit `listChanged`，占位 conversation 在 finalize 前不进入侧栏；finalize 时才 emit `created`。
+    - **失败兜底**：`prewarm.create` / `prewarm.claim` / `finalizeFromPrewarm` 任何环节失败渲染层都自动回落到原 `conversation.create.invoke + warmup` 路径，性能损失但行为不变。
+    - **文件**：新增 `src/process/task/AionrsPrewarmPool.ts`、`src/renderer/pages/guid/hooks/useAionrsPrewarm.ts`、`tests/unit/process/task/AionrsPrewarmPool.test.ts`（6 单测覆盖 register/claim/evict/TTL/sweep）；改 `ipcBridge.ts`（3 通道）、`conversationBridge.ts`（3 handler）、`bridge/index.ts` + `initBridgeStandalone.ts`（注入 pool）、`workerTaskManagerSingleton.ts`（导出 pool + 启动扫描）、`useGuidSend.ts`（aionrs 分支 claim 优先 fallback create）、`GuidPage.tsx`（挂 hook）。
+    - **验证**：`tsc --noEmit` exit 0；`oxlint` 0 errors；`oxfmt --check` 全过；`vitest run conversationBridge*/aionrsImageToolResult/initBridgeStandalone/AionrsPrewarmPool` 28 passed。运行时需桌面端 `npm run restart` 实测首发延迟（预热命中应 <500ms，未命中走原 ~2.8s 路径）。
+    - **未实施**：其他 agent 类型（ACP 已有 warmup 够用；其余无诉求）；池容量 >1；跨进程持久化。
 - **语言切换入口**：语言切换组件本就在「设置→系统→偏好设置」首项（`SystemModalContent.preferenceItems`），但入口太深、用户找不到。已在标题栏（`Titlebar` 工具区）加全局可见的紧凑语言下拉（地球图标 + 简体中文/English），复用 `changeLanguage`。
 - 已 commit + push（不打包，按用户要求）。

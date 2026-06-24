@@ -16,7 +16,7 @@ import { acpDetector } from '@process/agent/acp/AcpDetector';
 import { SqliteChannelRepository } from '@process/services/database/SqliteChannelRepository';
 import { SqliteConversationRepository } from '@process/services/database/SqliteConversationRepository';
 import { ConversationServiceImpl } from '@process/services/ConversationServiceImpl';
-import { workerTaskManager } from '@process/task/workerTaskManagerSingleton';
+import { workerTaskManager, aionrsPrewarmPool } from '@process/task/workerTaskManagerSingleton';
 import { initAcpConversationBridge } from '@process/bridge/acpConversationBridge';
 import { initAuthBridge } from '@process/bridge/authBridge';
 import { initBedrockBridge } from '@process/bridge/bedrockBridge';
@@ -58,7 +58,7 @@ export async function initBridgeStandalone(): Promise<void> {
   initShellBridgeStandalone();
   initFileWatchBridge();
   initFsBridge();
-  initConversationBridge(conversationService, workerTaskManager);
+  initConversationBridge(conversationService, workerTaskManager, undefined, aionrsPrewarmPool);
   initGeminiConversationBridge(workerTaskManager);
   initGeminiBridge();
   initBedrockBridge();

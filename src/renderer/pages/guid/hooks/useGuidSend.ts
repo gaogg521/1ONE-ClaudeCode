@@ -12,6 +12,7 @@ import { emitter } from '@/renderer/utils/emitter';
 import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
 import { updateWorkspaceTime } from '@/renderer/utils/workspace/workspaceHistory';
 import { isAcpRoutedPresetType, type PresetAgentType } from '@/common/types/acpTypes';
+import { buildPrewarmKey } from './useAionrsPrewarm';
 import { Message } from '@arco-design/web-react';
 import { useCallback, useRef } from 'react';
 import { type TFunction } from 'i18next';
@@ -326,22 +327,54 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     // Aionrs path
     if (selectedAgent === 'aionrs') {
       const aionrsAgentInfo = agentInfo || findAgentByKey(selectedAgentKey);
+      const realExtra = {
+        defaultFiles: files,
+        workspace: finalWorkspace,
+        customWorkspace: isCustomWorkspace,
+        presetRules: isPreset ? presetRules : undefined,
+        enabledSkills: isPreset ? enabledSkills : undefined,
+        presetAssistantId: isPreset ? aionrsAgentInfo?.customAgentId : undefined,
+        sessionMode: selectedMode,
+      };
 
       try {
-        const conversation = await ipcBridge.conversation.create.invoke({
-          type: 'aionrs',
-          name: input,
-          model: currentModel!,
-          extra: {
-            defaultFiles: files,
-            workspace: finalWorkspace,
-            customWorkspace: isCustomWorkspace,
-            presetRules: isPreset ? presetRules : undefined,
-            enabledSkills: isPreset ? enabledSkills : undefined,
-            presetAssistantId: isPreset ? aionrsAgentInfo?.customAgentId : undefined,
-            sessionMode: selectedMode,
-          },
-        });
+        // Try to claim a prewarmed worker. Pool key must match the one
+        // produced by useAionrsPrewarm exactly, or we miss.
+        const prewarmKey = buildPrewarmKey(currentModel!, finalWorkspace);
+        const t0 = performance.now();
+        const claimed = await ipcBridge.conversation.prewarmClaim
+          .invoke({ key: prewarmKey })
+          .catch((): { conversation_id: string } | null => null);
+
+        let conversation: TChatConversation | undefined;
+        if (claimed?.conversation_id) {
+          console.log(`[aionrs:prewarm] claim HIT +${Math.round(performance.now() - t0)}ms`);
+          // Hit: promote the placeholder conversation to the real one.
+          const finalized = await ipcBridge.conversation.finalizeFromPrewarm
+            .invoke({ conversation_id: claimed.conversation_id, name: input, extra: realExtra })
+            .catch(() => false);
+          if (finalized) {
+            console.log(`[aionrs:prewarm] finalize +${Math.round(performance.now() - t0)}ms`);
+            // Refetch so the renderer has the full conversation object (extra, model, etc.).
+            conversation = await ipcBridge.conversation.get
+              .invoke({ id: claimed.conversation_id })
+              .catch((): TChatConversation | undefined => undefined);
+          }
+        } else {
+          console.log(`[aionrs:prewarm] claim MISS +${Math.round(performance.now() - t0)}ms — fallback to create+warmup`);
+        }
+
+        // Fallback: no prewarmed worker or finalize failed — go through the
+        // original create + warmup path.
+        if (!conversation) {
+          conversation = await ipcBridge.conversation.create.invoke({
+            type: 'aionrs',
+            name: input,
+            model: currentModel!,
+            extra: realExtra,
+          });
+          console.log(`[aionrs:prewarm] fallback create done +${Math.round(performance.now() - t0)}ms`);
+        }
 
         if (!conversation || !conversation.id) {
           alert('Failed to create Aion CLI conversation. Please ensure aionrs is installed.');
@@ -362,10 +395,9 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         };
         sessionStorage.setItem(`aionrs_initial_message_${conversation.id}`, JSON.stringify(initialMessage));
 
-        // Start aionrs bootstrap (worker fork + binary spawn) before navigation so the
-        // first reply feels faster — mirrors the ACP path below. Without this, warmup only
-        // fires after the conversation page mounts, racing the initial message and forcing
-        // the first send to eat the full worker-fork + binary cold-start latency.
+        // For the non-prewarm path, still kick off worker bootstrap before navigation so
+        // the first reply feels faster — mirrors the ACP path below. The prewarm path
+        // already has a fully ready worker, so warmup is a no-op cache hit there.
         void ipcBridge.conversation.warmup.invoke({ conversation_id: conversation.id });
 
         await navigate(`/conversation/${conversation.id}`);

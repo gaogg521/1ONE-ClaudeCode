@@ -17,6 +17,7 @@ import { initMemoryBridge } from './memoryBridge';
 import { initBedrockBridge } from './bedrockBridge';
 import { initChannelBridge } from './channelBridge';
 import { initConversationBridge } from './conversationBridge';
+import { aionrsPrewarmPool } from '@process/task/workerTaskManagerSingleton';
 import { initCronBridge } from './cronBridge';
 import { initDatabaseBridge } from './databaseBridge';
 import { initDialogBridge } from './dialogBridge';
@@ -68,7 +69,7 @@ export function initAllBridges(deps: BridgeDependencies): void {
   initMemoryBridge(deps.conversationRepo);
   initFsBridge();
   initFileWatchBridge();
-  initConversationBridge(deps.conversationService, deps.workerTaskManager, deps.teamSessionService);
+  initConversationBridge(deps.conversationService, deps.workerTaskManager, deps.teamSessionService, aionrsPrewarmPool);
   initApplicationBridge(deps.workerTaskManager);
   initGeminiConversationBridge(deps.workerTaskManager);
   // 额外的 Gemini 辅助桥（订阅检测等）需要在对话桥初始化后可用 / extra helpers after core bridges
