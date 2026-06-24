@@ -446,19 +446,11 @@ export const useGuidAgentSelection = ({
         // 3. Default: auto-approve so users aren't prompted on every tool call.
         // Previously defaulted to 'default' which interrupted every command
         // with a confirmation dialog — most users want full-auto.
-        const autoApproveValues: Record<string, string> = {
-          claude: 'bypassPermissions',
-          gemini: 'yolo',
-          codex: 'yolo',
-          iflow: 'yolo',
-          qwen: 'yolo',
-        };
-        const autoMode = autoApproveValues[configKey];
-        if (autoMode) {
-          const modes = getAgentModes(configKey);
-          if (modes.some((m) => m.value === autoMode)) {
-            _setSelectedMode(autoMode);
-          }
+        // Dynamically find the YOLO mode for any backend instead of hardcoding.
+        const modes = getAgentModes(configKey);
+        const yoloOption = modes.find((m) => m.value === 'bypassPermissions' || m.value === 'yolo');
+        if (yoloOption) {
+          _setSelectedMode(yoloOption.value);
         }
       } catch {
         /* silent */

@@ -13,6 +13,7 @@
  *
  * Key design:
  * - Uses serialized keys (tool kind + title + rawInput) as cache identifiers
+ * - Also stores broad keys (kind + title only) for "approve once, auto-approve all similar" UX
  * - Only caches "allow_always" decisions
  * - Scoped to a single conversation/session
  */
@@ -64,6 +65,10 @@ function serializeKey(key: AcpApprovalKey): string {
   });
 }
 
+function serializeBroadKey(key: AcpApprovalKey): string {
+  return JSON.stringify({ kind: key.kind || 'unknown', title: key.title || '' });
+}
+
 /**
  * AcpApprovalStore - Caches approval decisions for the ACP session
  */
@@ -84,8 +89,8 @@ export class AcpApprovalStore {
    */
   put(key: AcpApprovalKey, optionId: string): void {
     if (optionId === 'allow_always') {
-      const serialized = serializeKey(key);
-      this.map.set(serialized, optionId);
+      this.map.set(serializeKey(key), optionId);
+      this.map.set(serializeBroadKey(key), optionId);
     }
   }
 
@@ -93,7 +98,8 @@ export class AcpApprovalStore {
    * Check if key has allow_always status
    */
   isApprovedForSession(key: AcpApprovalKey): boolean {
-    return this.get(key) === 'allow_always';
+    if (this.get(key) === 'allow_always') return true;
+    return this.map.has(serializeBroadKey(key));
   }
 
   /**

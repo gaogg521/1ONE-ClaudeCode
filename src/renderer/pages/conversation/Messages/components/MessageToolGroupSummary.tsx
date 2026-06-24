@@ -82,7 +82,7 @@ const buildParamSummary = (kind: string, rawInput?: Record<string, unknown>): st
     return (rawInput.file_path as string) || (rawInput.path as string) || (rawInput.fileName as string);
   }
   if (kind === 'execute') {
-    return rawInput.command as string;
+    return (rawInput.command as string) || (rawInput.cmd as string) || (rawInput.script as string);
   }
   if (kind === 'search' || kind === 'grep') {
     const parts: string[] = [];
@@ -102,7 +102,7 @@ const buildParamSummary = (kind: string, rawInput?: Record<string, unknown>): st
   }
 
   // Fallback: pick the first meaningful param value
-  for (const key of ['file_path', 'command', 'path', 'pattern', 'query', 'url']) {
+  for (const key of ['file_path', 'command', 'cmd', 'path', 'pattern', 'query', 'url']) {
     if (rawInput[key] && typeof rawInput[key] === 'string') return rawInput[key] as string;
   }
   return undefined;
@@ -130,10 +130,19 @@ const ToolAcpMapper = (message: IMessageAcpToolCall): ToolItem | undefined => {
 
   const keyParam = buildParamSummary(update.kind, update.rawInput);
 
+  const descFromRawInput =
+    !keyParam && update.rawInput
+      ? Object.entries(update.rawInput)
+          .filter(([, v]) => v != null && v !== '')
+          .map(([k, v]) => `${k}=${typeof v === 'string' ? v.slice(0, 60) : v}`)
+          .join(', ')
+          .slice(0, 120) || undefined
+      : undefined;
+
   return {
     key: update.toolCallId,
     name: update.title,
-    desc: keyParam || (update.rawInput?.command as string) || update.kind,
+    desc: keyParam || descFromRawInput || update.kind || 'unknown',
     status:
       update.status === 'completed'
         ? 'success'

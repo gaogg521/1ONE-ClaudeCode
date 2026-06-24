@@ -39,6 +39,8 @@ export interface AgentModeOption {
  * - Codex: default modes stay sandboxed; a dedicated unsafe full-auto mode disables the sandbox
  * - Goose: mode set at startup only, not during session
  * - Cursor: agent/plan/ask modes via ACP session/set_mode (verified via `agent acp` session/new response)
+ * - Other ACP backends (kimi, goose, auggie, copilot, qoder, vibe, droid, codebuddy):
+ *   No native session/set_mode support — YOLO is enforced at the 1ONE approval layer.
  */
 export const AGENT_MODES: Record<string, AgentModeOption[]> = {
   claude: [
@@ -88,6 +90,11 @@ export const AGENT_MODES: Record<string, AgentModeOption[]> = {
   ],
 };
 
+const DEFAULT_ACP_MODES: AgentModeOption[] = [
+  { value: 'default', label: 'Default' },
+  { value: 'yolo', label: 'YOLO' },
+];
+
 /**
  * Get available modes for a given backend
  * Returns empty array if backend doesn't support mode switching
@@ -97,7 +104,7 @@ export const AGENT_MODES: Record<string, AgentModeOption[]> = {
  */
 export function getAgentModes(backend: string | undefined): AgentModeOption[] {
   if (!backend) return [];
-  return AGENT_MODES[backend] || [];
+  return AGENT_MODES[backend] || DEFAULT_ACP_MODES;
 }
 
 /**
@@ -108,5 +115,5 @@ export function getAgentModes(backend: string | undefined): AgentModeOption[] {
  */
 export function supportsModeSwitch(backend: string | undefined): boolean {
   if (!backend) return false;
-  return backend in AGENT_MODES && AGENT_MODES[backend].length > 0;
+  return true;
 }

@@ -208,3 +208,71 @@
     - **未实施**：其他 agent 类型（ACP 已有 warmup 够用；其余无诉求）；池容量 >1；跨进程持久化。
 - **语言切换入口**：语言切换组件本就在「设置→系统→偏好设置」首项（`SystemModalContent.preferenceItems`），但入口太深、用户找不到。已在标题栏（`Titlebar` 工具区）加全局可见的紧凑语言下拉（地球图标 + 简体中文/English），复用 `changeLanguage`。
 - 已 commit + push（不打包，按用户要求）。
+
+---
+
+# 追加记录 — 2026-06-24（ACP Agent 一次批准、全局放行）
+
+## 背景
+
+kimi/goose/auggie 等 ACP 后端在执行本地文件操作（整理桌面文件、移动/删除文件等）时，每条命令都弹权限确认框，用户体验极差。根因：
+1. **YOLO 模式选项缺失** — kimi 等后端不在 `AGENT_MODES` 里，Guid 页面无法选 YOLO
+2. **ApprovalStore 精确匹配** — 即使用户点了"始终允许"，换一条命令就得重新批准
+3. **1ONE 层缺 fallback** — 后端 CLI 不支持 `session/set_mode` 时没有兜底自动批准机制
+
+## 修改清单
+
+### 1. 给所有 ACP 后端添加 YOLO 模式选项
+
+**文件**: `src/renderer/utils/model/agentModes.ts`
+
+- 新增 `DEFAULT_ACP_MODES` 常量（`[default, yolo]`）
+- `getAgentModes()` fallback：不在 `AGENT_MODES` 里的后端返回 `DEFAULT_ACP_MODES`
+- `supportsModeSwitch()` 对所有有 backend 的后端返回 `true`
+
+### 2. Guid 页面默认选 YOLO 覆盖所有后端
+
+**文件**: `src/renderer/pages/guid/hooks/useGuidAgentSelection.ts`
+
+- 替换硬编码的 `autoApproveValues` map（仅 5 个后端），改为从 `getAgentModes()` 动态查找 yolo/bypassPermissions 选项
+- 效果：kimi/goose/auggie 等首次进入 Guid 页面时自动选中 YOLO 模式
+
+### 3. AcpAgent handlePermissionRequest 添加 yoloMode 自动批准
+
+**文件**: `src/process/agent/acp/index.ts`（handlePermissionRequest ~行 1148）
+
+- 在 ApprovalStore 检查之后、弹窗之前新增 `this.extra.yoloMode` 判断
+- 为 true 时直接 resolve allow_once，不弹 UI
+- 效果：即使后端 CLI 不支持 `session/set_mode`，1ONE 也在自己这层自动批准所有权限请求
+
+### 4. ApprovalStore 支持 kind+title 级别模糊匹配
+
+**文件**: `src/process/agent/acp/ApprovalStore.ts`
+
+- 新增 `serializeBroadKey()`：只序列化 `kind` + `title`（不含 `rawInput`）
+- `put()` 存 `allow_always` 时同时存精确 key 和 broad key
+- `isApprovedForSession()` 先查精确 key，再查 broad key
+- 效果：non-YOLO 模式下，用户批准一次 `ExecCommand dir ...`，后续所有 `ExecCommand` 自动通过
+
+### 5. 启动时 yoloModeMap 扩展 + 静默 fallback
+
+**文件**: `src/process/agent/acp/index.ts`（enableYoloMode ~行 495 + startSession ~行 363）
+
+- `enableYoloMode()`：不在 yoloModeMap 里的后端尝试通用 `'yolo'` session mode，失败静默
+- `startSession` yolo 分支：同样对未知后端 try `applySessionMode('yolo', false, ...)`
+- 效果：能用 CLI 原生 YOLO 就用，不能用就走第 3 步的 1ONE 层兜底
+
+## 涉及文件
+
+| 文件 | 改动类型 |
+|------|---------|
+| `src/renderer/utils/model/agentModes.ts` | 新增 DEFAULT_ACP_MODES + fallback 逻辑 |
+| `src/renderer/pages/guid/hooks/useGuidAgentSelection.ts` | 动态查找 yolo 替代硬编码 map |
+| `src/process/agent/acp/index.ts` | handlePermissionRequest yoloMode 检查 + enableYoloMode fallback |
+| `src/process/agent/acp/ApprovalStore.ts` | broad key 模糊匹配 |
+
+## 验证状态
+
+- `tsc --noEmit` exit 0
+- `vitest run` 469 passed（2 个 toolsModalContent 既存失败与本次无关）
+- 运行时需桌面端 `npm run restart` 实测：选 kimi/qwen agent → 发"帮我整理桌面文件" → 确认不弹权限框

@@ -360,7 +360,9 @@ export class AcpAgent {
         if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: session created ${Date.now() - sessionStart}ms`);
       }
 
-      // YOLO mode: bypass all permission checks for supported backends
+      // YOLO mode: bypass all permission checks for supported backends.
+      // For backends not in the map, try generic 'yolo' silently — the 1ONE-level
+      // auto-approve in handlePermissionRequest will handle the rest.
       if (this.extra.yoloMode) {
         const yoloModeMap: Partial<Record<AcpBackend, string>> = {
           claude: CLAUDE_YOLO_SESSION_MODE,
@@ -371,6 +373,8 @@ export class AcpAgent {
         const sessionMode = yoloModeMap[this.extra.backend];
         if (sessionMode) {
           await this.applySessionMode(sessionMode, true, `${this.extra.backend} YOLO mode`);
+        } else {
+          await this.applySessionMode('yolo', false, `${this.extra.backend} YOLO mode (generic)`);
         }
       } else if (this.extra.sessionMode && this.extra.sessionMode !== 'default') {
         // Apply non-default, non-YOLO session mode (e.g., acceptEdits, auto, dontAsk, plan)
@@ -499,11 +503,17 @@ export class AcpAgent {
     if (this.connection.isConnected && this.connection.hasActiveSession) {
       const yoloModeMap: Partial<Record<AcpBackend, string>> = {
         claude: CLAUDE_YOLO_SESSION_MODE,
+        codebuddy: CODEBUDDY_YOLO_SESSION_MODE,
         qwen: QWEN_YOLO_SESSION_MODE,
+        iflow: IFLOW_YOLO_SESSION_MODE,
       };
       const sessionMode = yoloModeMap[this.extra.backend];
       if (sessionMode) {
         await this.connection.setSessionMode(sessionMode);
+      } else {
+        // Backend doesn't have a known yolo session mode — try generic 'yolo', fail silently.
+        // The 1ONE-level auto-approve in handlePermissionRequest will handle the rest.
+        try { await this.connection.setSessionMode('yolo'); } catch { /* silent */ }
       }
     }
   }
@@ -1151,6 +1161,13 @@ export class AcpAgent {
         return;
       }
 
+      // 1ONE-level yolo fallback: auto-approve all permissions when yoloMode is on,
+      // even if the backend CLI doesn't support session/set_mode natively.
+      if (this.extra.yoloMode) {
+        resolve({ optionId: pickAllowOnceOptionId(data.options) });
+        return;
+      }
+
       const command =
         typeof data.toolCall.rawInput?.command === 'string' ? data.toolCall.rawInput.command : undefined;
       if (data.toolCall.kind === 'execute' && isReadOnlyUrlFetchCommand(command)) {
@@ -1445,6 +1462,7 @@ export class AcpAgent {
           kind: mapKindToValidType(data.toolCall.kind),
           content: data.toolCall.content || [],
           locations: data.toolCall.locations || [],
+          rawInput: data.toolCall.rawInput,
         },
       };
 
