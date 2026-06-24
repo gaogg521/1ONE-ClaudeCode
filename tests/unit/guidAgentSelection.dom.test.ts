@@ -265,7 +265,9 @@ describe('useGuidAgentSelection – preset agent config resolution', () => {
     });
   });
 
-  it('selectedMode defaults to "default" when no preferred mode is saved', async () => {
+  // Default mode is intentionally auto-approve (bypassPermissions for claude / yolo for
+  // others) so users aren't prompted on every tool call — see useGuidAgentSelection.
+  it('selectedMode defaults to auto-approve (bypassPermissions) when no preferred mode is saved', async () => {
     setupMocks({ acpConfig: {} });
 
     const { result } = renderHook(() => useGuidAgentSelection(hookOptions));
@@ -283,7 +285,7 @@ describe('useGuidAgentSelection – preset agent config resolution', () => {
       expect(result.current.isPresetAgent).toBe(true);
     });
 
-    expect(result.current.selectedMode).toBe('default');
+    expect(result.current.selectedMode).toBe('bypassPermissions');
   });
 
   it('non-preset agent uses its own key for model cache lookup', async () => {

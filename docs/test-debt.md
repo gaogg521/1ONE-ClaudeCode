@@ -24,8 +24,8 @@
 
 ## B 类：断言漂移（先判断是代码 bug 还是测试过时，谨慎改）
 
-- [ ] **tests/unit/guidAgentSelection.dom.test.ts**（1）— `expected 'bypassPermissions' to be 'default'`
-  默认权限模式由 `default` 变成 `bypassPermissions`。**⚠️ 权限/安全相关，先确认是有意变更还是回归**，再决定改代码还是改测试。
+- [x] **tests/unit/guidAgentSelection.dom.test.ts**（1）✅ 已查清 + 修
+  **结论：有意设计，非 bug（已与用户确认）**。`useGuidAgentSelection` 注释写明：新会话默认权限模式由 `default`(每步确认)改成全自动放行（claude=`bypassPermissions` / 其它=`yolo`），免去每次工具确认。测试过时，已对齐期望为 `bypassPermissions`。
 - [ ] **tests/unit/useEditionFeatures.dom.test.ts**（1）— `expected false to be true`
   某 edition 能力判断结果变了。对照 `useEditionFeatures` 当前逻辑确认。
 - [ ] **tests/unit/layoutNavItems.test.ts**（1）— `expected [ '/enterprise/cteam', … ] to include '/tasks'`
