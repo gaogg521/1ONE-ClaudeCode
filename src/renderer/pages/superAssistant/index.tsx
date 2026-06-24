@@ -944,7 +944,7 @@ const SuperAssistantPage: React.FC = () => {
   );
 
   const handleRunAgentNow = useCallback(
-    async (ref: AgentCardRef | ManagedAgentRef): Promise<void> => {
+    async (ref: AgentCardRef | ManagedAgentRef, prefillPrompt?: string): Promise<void> => {
       const managed = 'teamAgent' in ref ? ref : resolveManagedAgent(teams, superAssistantData.agentExecutionGroups, ref);
       if (!managed) {
         return;
@@ -958,7 +958,9 @@ const SuperAssistantPage: React.FC = () => {
         defaultValue: '输入本轮要执行的任务，例如：调研 Claude Code 4.5 发布后的社区反馈',
       });
       setPendingRunPrompt({ ref: ref as AgentCardRef, agentName, placeholder });
-      setRunPromptInput('');
+      // Auto-start from an issue pre-fills the issue text as the task so the
+      // run isn't silently stripped of its context (user can still edit/clear).
+      setRunPromptInput(prefillPrompt ?? '');
     },
     [teams, superAssistantData.agentExecutionGroups, t]
   );
@@ -1432,7 +1434,7 @@ const SuperAssistantPage: React.FC = () => {
     if (!showTeamsFeature) {
       const personalAgentRef = resolvePrimaryPersonalAgentRef(superAssistantData.agentExecutionGroups);
       if (personalAgentRef) {
-        await handleRunAgentNow(personalAgentRef);
+        await handleRunAgentNow(personalAgentRef, currentIssue.subject);
         return;
       }
       Message.info(

@@ -758,15 +758,15 @@ describe('SuperAssistantPage (refactored command center)', () => {
 
     render(<SuperAssistantPage />);
 
-    // 重构后 auto-start 也走统一的「任务输入框」流程：弹框 → 点「运行」确认才执行。
-    // 注意：当前实现下 issue context 不再从 URL 自动透传（用户在框里输入任务），
-    // 故此处只校验 agentId 与「不跳企业后台」，不再断言 issue=issue-personal-1。
+    // auto-start 从 issue 一键启动：任务框预填该 issue 的 subject，点「运行」确认即用。
+    // issue 内容透传给 runNow（修复了重构一度丢失 issue context 的退化）。
     fireEvent.click(await screen.findByRole('button', { name: '运行' }));
 
     await waitFor(() => {
       expect(personalAgentRunNowMock).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'personal-agent-1',
+          issue: expect.objectContaining({ subject: '个人 Issue 自动处理' }),
         })
       );
     });
