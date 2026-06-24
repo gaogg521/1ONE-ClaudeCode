@@ -902,14 +902,14 @@ const MediaToolsSettingsSection: React.FC = () => {
       <div className='space-y-8px text-13px'>
         <div className='flex items-center gap-8px'>
           <span className='text-t-secondary w-72px'>ffmpeg</span>
-          <span className={status?.ffmpeg.available ? 'text-green-600' : 'text-t-tertiary'}>
-            {sourceLabel(status?.ffmpeg.source)}
+          <span className={status?.ffmpeg?.available ? 'text-green-600' : 'text-t-tertiary'}>
+            {sourceLabel(status?.ffmpeg?.source)}
           </span>
         </div>
         <div className='flex items-center gap-8px'>
           <span className='text-t-secondary w-72px'>ffprobe</span>
-          <span className={status?.ffprobe.available ? 'text-green-600' : 'text-t-tertiary'}>
-            {sourceLabel(status?.ffprobe.source)}
+          <span className={status?.ffprobe?.available ? 'text-green-600' : 'text-t-tertiary'}>
+            {sourceLabel(status?.ffprobe?.source)}
           </span>
         </div>
       </div>

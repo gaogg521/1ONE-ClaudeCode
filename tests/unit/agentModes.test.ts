@@ -42,8 +42,11 @@ describe('getAgentModes', () => {
     expect(modes[0].value).toBe('default');
   });
 
-  it('returns empty array for unknown backend', () => {
-    expect(getAgentModes('nonexistent')).toEqual([]);
+  it('returns default+YOLO modes for unknown ACP backend', () => {
+    const modes = getAgentModes('nonexistent');
+    expect(modes).toHaveLength(2);
+    expect(modes[0].value).toBe('default');
+    expect(modes[1].value).toBe('yolo');
   });
 
   it('returns empty array for undefined', () => {

@@ -125,6 +125,7 @@ vi.mock('@arco-design/web-react', () => {
       ),
     }),
     Modal: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+    Progress: ({ percent }: { percent?: number }) => <div data-testid='progress' data-percent={percent} />,
     Switch: ({
       checked,
       disabled,
@@ -230,9 +231,27 @@ vi.mock('@/common/adapter/ipcBridge', () => ({
     },
   },
   systemSettings: {
-    getFfmpegStatus: { invoke: vi.fn(() => Promise.resolve({ available: true })) },
+    getFfmpegStatus: {
+      invoke: vi.fn(() =>
+        Promise.resolve({
+          ffmpeg: { available: true, source: 'path' },
+          ffprobe: { available: true, source: 'path' },
+          ready: true,
+          toolsDir: '/tmp/tools',
+        })
+      ),
+    },
     ffmpegDownloadProgress: { on: vi.fn(() => vi.fn()) },
-    downloadFfmpeg: { invoke: vi.fn(() => Promise.resolve({ success: true })) },
+    downloadFfmpeg: {
+      invoke: vi.fn(() =>
+        Promise.resolve({
+          ffmpeg: { available: true, source: 'path' },
+          ffprobe: { available: true, source: 'path' },
+          ready: true,
+          toolsDir: '/tmp/tools',
+        })
+      ),
+    },
   },
 }));
 
