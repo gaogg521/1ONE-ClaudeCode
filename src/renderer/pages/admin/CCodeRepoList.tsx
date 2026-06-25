@@ -92,7 +92,12 @@ const CCodeRepoList: React.FC = () => {
         />
       ),
     },
-    { title: '操作', render: (_: unknown, r: CodeRepo) => <Button size='mini' status='danger' icon={<Delete />} onClick={() => void handleDelete(r.id)} /> },
+    { title: '操作', render: (_: unknown, r: CodeRepo) => <Button size='mini' status='danger' icon={<Delete />} onClick={() => Modal.confirm({
+      title: '删除代码库',
+      content: `确定删除「${r.name}」吗？此操作不可撤销。`,
+      okButtonProps: { status: 'danger' },
+      onOk: () => handleDelete(r.id),
+    })} /> },
   ];
 
   return (

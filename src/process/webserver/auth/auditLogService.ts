@@ -19,6 +19,30 @@ export const GOVERNANCE_AUDIT_ACTIONS = {
 
 export type GovernanceAuditAction = (typeof GOVERNANCE_AUDIT_ACTIONS)[keyof typeof GOVERNANCE_AUDIT_ACTIONS];
 
+// DevOps 资源审计动作（覆盖敏感写操作：删除/创建/状态变更）。
+export const DEVOPS_AUDIT_ACTIONS = {
+  requirementCreate: 'devops.requirement.create',
+  requirementUpdate: 'devops.requirement.update',
+  requirementDelete: 'devops.requirement.delete',
+  pipelineCreate: 'devops.pipeline.create',
+  pipelineUpdate: 'devops.pipeline.update',
+  pipelineRun: 'devops.pipeline.run',
+  mcpCreate: 'devops.mcp.create',
+  mcpUpdate: 'devops.mcp.update',
+  mcpDelete: 'devops.mcp.delete',
+  mcpToggle: 'devops.mcp.toggle',
+  ragDocumentDelete: 'devops.rag.document_delete',
+  codeRepoCreate: 'devops.ccode.create',
+  codeRepoDelete: 'devops.ccode.delete',
+  artifactRepoCreate: 'devops.cpack.repo_create',
+  artifactRepoDelete: 'devops.cpack.repo_delete',
+  milestoneCreate: 'devops.milestone.create',
+  testCaseUpdate: 'devops.ctest.update',
+  valueStreamCreate: 'devops.cflow.create',
+} as const;
+
+export type DevopsAuditAction = (typeof DEVOPS_AUDIT_ACTIONS)[keyof typeof DEVOPS_AUDIT_ACTIONS];
+
 function resolveClientIp(req: Request): string {
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string' && forwarded.trim()) {
@@ -63,5 +87,40 @@ export async function recordGovernanceAudit(
       );
   } catch (error) {
     console.warn('[AuditLog] recordGovernanceAudit failed:', error);
+  }
+}
+
+/**
+ * Record a DevOps resource audit entry. `resource` is a free-form label
+ * (e.g. "requirement:<id>", "mcp:<id>:<name>"). Failures are non-blocking.
+ */
+export async function recordDevopsAudit(
+  req: Request,
+  action: DevopsAuditAction,
+  resource: string
+): Promise<void> {
+  try {
+    const db = await getDatabase();
+    const driver = db.getDriver();
+    const tenantId = (req.user?.tenant_id ?? DEFAULT_TENANT_ID).trim() || DEFAULT_TENANT_ID;
+    const now = Date.now();
+    driver
+      .prepare(
+        `INSERT INTO audit_logs (id, tenant_id, user_id, username, action, resource, ip_address, user_agent, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        randomUUID(),
+        tenantId,
+        req.user?.id ?? null,
+        req.user?.username ?? null,
+        action,
+        resource,
+        resolveClientIp(req),
+        String(req.headers['user-agent'] ?? ''),
+        now
+      );
+  } catch (error) {
+    console.warn('[AuditLog] recordDevopsAudit failed:', error);
   }
 }

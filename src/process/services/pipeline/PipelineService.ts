@@ -519,7 +519,23 @@ export class PipelineService {
 
       logger.append(`$ ${command}\n`);
 
+      // Restrict cwd to a workspace dir (fallback to system temp) so commands don't
+      // run in the server's process directory. Sanitize env to a minimal allowlist
+      // to avoid leaking secrets into untrusted shell commands.
+      const workspaceDir = process.env.ONE_PIPELINE_WORKSPACE_DIR || process.env.TEMP || process.env.TMP || '/tmp';
+      const safeEnv: NodeJS.ProcessEnv = {};
+      const allowedEnvKeys = isWindows
+        ? ['PATH', 'PATHEXT', 'SystemRoot', 'TEMP', 'TMP', 'USERPROFILE', 'APPDATA']
+        : ['PATH', 'HOME', 'TEMP', 'TMP', 'LANG', 'LC_ALL'];
+      for (const key of allowedEnvKeys) {
+        if (process.env[key]) {
+          safeEnv[key] = process.env[key];
+        }
+      }
+
       const child = spawn(shellCmd, shellArgs, {
+        cwd: workspaceDir,
+        env: safeEnv,
         detached: !isWindows,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,

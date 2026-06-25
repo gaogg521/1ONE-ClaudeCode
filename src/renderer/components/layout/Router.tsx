@@ -31,8 +31,6 @@ const MilestoneView = React.lazy(() => import('@renderer/pages/admin/MilestoneVi
 const CPackArtifactRepo = React.lazy(() => import('@renderer/pages/admin/CPackArtifactRepo'));
 const CCodeRepoList = React.lazy(() => import('@renderer/pages/admin/CCodeRepoList'));
 const CMeasDashboard = React.lazy(() => import('@renderer/pages/admin/CMeasDashboard'));
-const CTestManagement = React.lazy(() => import('@renderer/pages/admin/CTestManagement'));
-const CFlowBoard = React.lazy(() => import('@renderer/pages/admin/CFlowBoard'));
 const EnterpriseJoinLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseJoinLayout'));
 const EnterpriseLayout = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseLayout'));
 const EnterpriseHome = React.lazy(() => import('@renderer/pages/enterprise/EnterpriseHome'));
@@ -214,6 +212,7 @@ const PanelRoute: React.FC = () => {
           <Route path='/settings/skills-hub' element={withRouteFallback(SkillsHubSettings)} />
           <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
           <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
+          <Route path='/settings/usage' element={<Navigate to='/enterprise/usage' replace />} />
           <Route path='/settings/display' element={<Navigate to='/settings/tools' replace />} />
           <Route path='/settings/about' element={<Navigate to='/settings/system?section=about' replace />} />
           <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />
@@ -245,9 +244,6 @@ const PanelRoute: React.FC = () => {
             <Route path='cpack' element={withRouteFallback(CPackArtifactRepo)} />
             <Route path='ccode' element={withRouteFallback(CCodeRepoList)} />
             <Route path='cmeas' element={withRouteFallback(CMeasDashboard)} />
-            <Route path='ctest' element={withRouteFallback(CTestManagement)} />
-            <Route path='cflow' element={withRouteFallback(CFlowBoard)} />
-            <Route path='cagent' element={<Navigate to='/super-assistant?tab=overview' replace />} />
             <Route path='usage' element={withRouteFallback(EnterpriseUsagePage)} />
             <Route path='security' element={withRouteFallback(EnterpriseSecurityPage)} />
           </Route>

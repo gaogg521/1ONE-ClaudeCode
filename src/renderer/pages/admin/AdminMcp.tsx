@@ -38,6 +38,7 @@ import {
   importMcpRegistryBatch,
   listMcpRegistry,
   saveMcpRegistry,
+  toggleMcpRegistryEnabled,
   type McpRegistryRecord,
 } from '@/renderer/utils/enterpriseApi/modules';
 
@@ -114,13 +115,9 @@ const AdminMcp: React.FC = () => {
       enabled: record.enabled,
     });
 
-    // For editing, show dynamic env inputs.
-    // If it has saved keys, we can prepopulate with empty values and let them see the placeholders.
-    if (record.hasKeys) {
-      setEnvList([{ key: '', value: '' }]);
-    } else {
-      setEnvList([{ key: '', value: '' }]);
-    }
+    // 编辑态：展示动态 env 输入行，让用户填新 key 或覆盖已有 key 的值。
+    // hasKeys=true 时后端不会返回明文 value，用户填写 '******' 占位会被后端保留原值。
+    setEnvList([{ key: '', value: '' }]);
     setModalVisible(true);
   };
 
@@ -184,16 +181,7 @@ const AdminMcp: React.FC = () => {
   const handleToggleStatus = useCallback(
     async (record: McpConnector, checked: boolean) => {
       try {
-        await saveMcpRegistry({
-          id: record.id,
-          name: record.name,
-          type: record.type,
-          endpoint: record.endpoint,
-          enabled: checked,
-          env: {},
-          scope: record.scope,
-          ...(record.team_id ? { team_id: record.team_id } : {}),
-        });
+        await toggleMcpRegistryEnabled(record.id, checked);
         Message.success(t('admin.mcp.messages.saveSuccess', { defaultValue: '状态更新成功' }));
         await connectorsState.reload();
       } catch (e) {

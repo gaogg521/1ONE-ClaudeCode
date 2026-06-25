@@ -79,8 +79,9 @@ export async function previewEnterpriseInvite(codeRaw: string): Promise<Enterpri
   if (!invite) {
     throw new EnterpriseJoinError('INVALID_CODE', 'Invite code not found');
   }
-  const ctx = await resolveEnterpriseContext(invite.tenant_id);
-  return { tenantId: ctx.tenantId, tenantName: ctx.tenantName ?? ctx.tenantId };
+  // 不再向预览端点泄露租户名/租户 ID（防止企业存在性枚举）。
+  // 加入企业成功后再返回完整租户信息。
+  return { tenantId: '', tenantName: '', valid: true };
 }
 
 async function findActiveInviteByCode(code: string): Promise<EnterpriseInviteRecord | null> {

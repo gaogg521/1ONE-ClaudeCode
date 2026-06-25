@@ -40,6 +40,7 @@ const AdminSkills: React.FC = () => {
   const [batchJson, setBatchJson] = useState('');
   const [batchError, setBatchError] = useState<string | null>(null);
   const [batchSaving, setBatchSaving] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
@@ -82,7 +83,7 @@ const AdminSkills: React.FC = () => {
       Message.warning(t('admin.scope.teamRequired', { defaultValue: '请选择团队' }));
       return;
     }
-    setBatchSaving(true);
+    setSaving(true);
     try {
       await saveSkill({
         id: editId,
@@ -99,7 +100,7 @@ const AdminSkills: React.FC = () => {
     } catch (error) {
       Message.error(getEnterpriseActionError(error, t('admin.skills.saveFailed', { defaultValue: '保存失败' })));
     }
-    finally { setBatchSaving(false); }
+    finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
@@ -195,7 +196,7 @@ const AdminSkills: React.FC = () => {
         </ModuleDataState>
       </Card>
 
-      <Modal title={editId ? t('admin.skills.editTitle', { defaultValue: '编辑技能' }) : t('admin.skills.createTitle', { defaultValue: '新建技能' })} visible={modalVisible} onCancel={() => setModalVisible(false)} onOk={handleSave} confirmLoading={batchSaving} okText={t('common.confirm', { defaultValue: '确定' })} cancelText={t('common.cancel', { defaultValue: '取消' })}>
+      <Modal title={editId ? t('admin.skills.editTitle', { defaultValue: '编辑技能' }) : t('admin.skills.createTitle', { defaultValue: '新建技能' })} visible={modalVisible} onCancel={() => setModalVisible(false)} onOk={handleSave} confirmLoading={saving} okText={t('common.confirm', { defaultValue: '确定' })} cancelText={t('common.cancel', { defaultValue: '取消' })}>
         <Form layout='vertical'>
           <Form.Item label={t('admin.skills.name', { defaultValue: '名称' })} required><Input value={form.name} onChange={(v) => setForm((s) => ({ ...s, name: v }))} /></Form.Item>
           <Form.Item label={t('admin.skills.description', { defaultValue: '描述' })}><Input value={form.description} onChange={(v) => setForm((s) => ({ ...s, description: v }))} /></Form.Item>

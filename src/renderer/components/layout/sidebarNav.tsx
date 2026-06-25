@@ -28,6 +28,7 @@ export type NavItem = {
   path: string;
   paths?: string[];
   capability?: EditionCapability;
+  hidden?: boolean;
 };
 
 export type SidebarNavGate = {
@@ -66,7 +67,6 @@ const NAV_ITEMS: NavItem[] = [
     labelKey: 'nav.agentAssistant',
     labelDefault: '超级助手',
     path: '/super-assistant',
-    paths: ['/enterprise/cagent'],
   },
   {
     icon: <NetworkDrive theme='outline' size={18} />,
@@ -88,6 +88,7 @@ const NAV_ITEMS: NavItem[] = [
     labelDefault: '企业后台',
     path: '/enterprise',
     capability: 'admin.console',
+    hidden: true,
   },
   {
     icon: <Link theme='outline' size={18} />,

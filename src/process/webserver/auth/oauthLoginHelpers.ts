@@ -17,7 +17,8 @@ import { refreshUserAfterEnterpriseAutoJoin } from '@process/webserver/auth/ente
 
 function normalizeWebRole(role: string | undefined): 'member' | 'org_admin' | 'system_admin' {
   if (!role) return 'member';
-  if (role === 'admin') return 'system_admin';
+  // 统一：历史 'admin' 一律归一化为 'org_admin'，与 authRoutes.ts 对齐。
+  if (role === 'admin') return 'org_admin';
   if (role === 'user') return 'member';
   if (role === 'system_admin' || role === 'org_admin' || role === 'member') return role;
   return 'member';

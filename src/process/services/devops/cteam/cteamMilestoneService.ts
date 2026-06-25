@@ -40,4 +40,25 @@ export class CteamMilestoneService {
     });
     return { id };
   }
+
+  static async updateMilestone(input: {
+    tenantId: string;
+    id: string;
+    name?: string;
+    description?: string;
+    dueDate?: string;
+  }): Promise<boolean> {
+    return MilestoneRepository.update({
+      id: input.id,
+      tenantId: input.tenantId,
+      name: input.name !== undefined ? input.name.trim() : undefined,
+      description: input.description,
+      dueDate: input.dueDate,
+      now: Date.now(),
+    });
+  }
+
+  static async deleteMilestone(tenantId: string, id: string): Promise<boolean> {
+    return MilestoneRepository.delete(id, tenantId);
+  }
 }

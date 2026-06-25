@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { useEnterpriseAsyncData } from '@/renderer/hooks/enterprise/modules/useEnterpriseAsyncData';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
+import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import AdminPageWrapper from '@/renderer/pages/admin/components/AdminPageWrapper';
 import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
 import ModulePageHeader from '@/renderer/pages/admin/components/ModulePageHeader';
@@ -34,11 +35,26 @@ const DEFAULT_USAGE_STATS = {
 const EnterpriseUsagePage: React.FC = () => {
   const { t } = useTranslation();
   const { effectiveRole } = useWebuiEnterpriseMode();
+  const { isEnterpriseEdition } = useEditionFeatures();
   const isAdmin = isEnterpriseAdminRole(effectiveRole);
+  // 个人版：只显示 Token 排行，不显示成员看板和资源统计卡。
+  const showEnterprisePanels = isEnterpriseEdition;
+
+  const membersState = useEnterpriseAsyncData(
+    // 个人版不调用成员看板接口（个人版无"成员"概念，避免无意义请求）。
+    showEnterprisePanels ? listMemberDashboard : async (): Promise<MemberDashboardRecord[]> => [],
+    [],
+    t('admin.usage.memberLoadFailed', { defaultValue: '加载成员状态失败' })
+  );
 
   const loadStats = useCallback(async () => {
-    const [members, pipelines, ragDocuments, mcpTools, skills] = await Promise.all([
-      listMemberDashboard(),
+    if (!showEnterprisePanels) {
+      // 个人版：资源统计卡不显示，直接返回默认值，避免无意义请求。
+      return { users: 0, pipelines: 0, ragDocs: 0, mcpTools: 0, skills: 0 };
+    }
+    // 复用 membersState 的数据，避免重复请求 listMemberDashboard。
+    const members = membersState.data;
+    const [pipelines, ragDocuments, mcpTools, skills] = await Promise.all([
       listPipelines(),
       listRagDocuments(),
       listMcpRegistry(),
@@ -51,7 +67,7 @@ const EnterpriseUsagePage: React.FC = () => {
       mcpTools: mcpTools.filter((item) => Boolean(item.enabled)).length,
       skills: skills.length,
     };
-  }, []);
+  }, [membersState.data, showEnterprisePanels]);
 
   const statsState = useEnterpriseAsyncData(
     loadStats,
@@ -59,14 +75,9 @@ const EnterpriseUsagePage: React.FC = () => {
     t('admin.usage.loadFailed', { defaultValue: '加载使用统计失败' })
   );
 
-  const membersState = useEnterpriseAsyncData(
-    listMemberDashboard,
-    [],
-    t('admin.usage.memberLoadFailed', { defaultValue: '加载成员状态失败' })
-  );
-
   const agentUsageState = useEnterpriseAsyncData(
-    () => (isAdmin ? listAgentTokenUsage(30) : Promise.resolve({ days: 30, totalTokens: 0, agents: [] })),
+    // 个人版也展示 Token 排行（后端按 tenant_id='default' 聚合个人会话）。
+    () => listAgentTokenUsage(30),
     { days: 30, totalTokens: 0, agents: [] as AgentTokenUsageRecord[] },
     t('admin.usage.agentTokensLoadFailed', { defaultValue: '加载 Agent Token 统计失败' })
   );
@@ -172,45 +183,52 @@ const EnterpriseUsagePage: React.FC = () => {
         <ModulePageHeader
           title={t('settings.enterpriseConsole.navUsage', { defaultValue: '使用统计' })}
           description={
-            isAdmin
-              ? t('admin.usage.descAdmin', {
-                  defaultValue: '企业团队资源使用全景与成员实时状态，统计各模块活跃数据。',
-                })
-              : t('admin.usage.descMember', {
-                  defaultValue: '查看您所在团队可见的资源用量与队友状态（基于团队 membership 过滤）。',
+            showEnterprisePanels
+              ? isAdmin
+                ? t('admin.usage.descAdmin', {
+                    defaultValue: '企业团队资源使用全景与成员实时状态，统计各模块活跃数据。',
+                  })
+                : t('admin.usage.descMember', {
+                    defaultValue: '查看您所在团队可见的资源用量与队友状态（基于团队 membership 过滤）。',
+                  })
+              : t('admin.usage.descPersonal', {
+                  defaultValue: '统计您各会话与智能体的 Token 用量，近 30 天数据。',
                 })
           }
         />
 
-        <ModuleDataState
-          loading={statsState.loading}
-          error={statsState.error}
-          empty={false}
-          emptyDescription=''
-        >
-          <Row gutter={[16, 16]}>
-            {statCards.map((card) => (
-              <Col key={card.title} xs={12} sm={8} lg={6}>
-                <Card
-                  bordered={false}
-                  className='rd-12px text-center'
-                  style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}
-                >
-                  <Statistic title={card.title} value={card.value} />
-                </Card>
-              </Col>
-            ))}
-          </Row>
-        </ModuleDataState>
+        {showEnterprisePanels ? (
+          <ModuleDataState
+            loading={statsState.loading}
+            error={statsState.error}
+            empty={false}
+            emptyDescription=''
+          >
+            <Row gutter={[16, 16]}>
+              {statCards.map((card) => (
+                <Col key={card.title} xs={12} sm={8} lg={6}>
+                  <Card
+                    bordered={false}
+                    className='rd-12px text-center'
+                    style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}
+                  >
+                    <Statistic title={card.title} value={card.value} />
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          </ModuleDataState>
+        ) : null}
 
-        <Card
-          bordered={false}
-          className='rd-12px'
-          title={
-            <div className='flex items-center gap-12px'>
-              <span className='font-600'>
-                {isAdmin
-                  ? t('admin.usage.memberBoard', { defaultValue: '成员看板' })
+        {showEnterprisePanels ? (
+          <Card
+            bordered={false}
+            className='rd-12px'
+            title={
+              <div className='flex items-center gap-12px'>
+                <span className='font-600'>
+                  {isAdmin
+                    ? t('admin.usage.memberBoard', { defaultValue: '成员看板' })
                   : t('admin.usage.teamMemberBoard', { defaultValue: '团队成员看板' })}
               </span>
               <Tag color='green' size='small'>
@@ -242,73 +260,72 @@ const EnterpriseUsagePage: React.FC = () => {
             />
           </ModuleDataState>
         </Card>
+      ) : null}
 
-        {isAdmin ? (
-          <Card
-            bordered={false}
-            className='rd-12px'
-            title={t('admin.usage.agentTokenBoard', { defaultValue: '数字员工 Token 排行' })}
-          >
-            <Typography.Paragraph type='secondary' className='text-12px mt-0 mb-12px'>
-              {t('admin.usage.agentTokenBoardHint', {
-                defaultValue:
-                  '按近 {{days}} 天会话汇总（基于会话 extra.lastTokenUsage 快照；未单独计费）。参考产品「用量」页的 Agent 排行榜。',
-                days: agentUsageState.data.days,
-              })}
-            </Typography.Paragraph>
-            <ModuleDataState
-              loading={agentUsageState.loading}
-              error={agentUsageState.error}
-              empty={agentUsageState.data.agents.length === 0}
-              emptyDescription={t('admin.usage.agentTokenEmpty', {
-                defaultValue: '暂无数字员工会话 Token 记录。请先让成员创建数字员工并执行「立即执行」或定时任务。',
-              })}
-            >
-              <div className='mb-12px'>
-                <Statistic
-                  title={t('admin.usage.agentTokenTotal', { defaultValue: '合计 Token（估算）' })}
-                  value={agentUsageState.data.totalTokens}
-                  groupSeparator
-                />
-              </div>
-              <Table
-                data={agentUsageState.data.agents}
-                rowKey='agentKey'
-                size='small'
-                border={false}
-                pagination={{ pageSize: 10, showTotal: true }}
-                columns={[
-                  {
-                    title: t('admin.usage.agentTokenName', { defaultValue: '智能体' }),
-                    dataIndex: 'agentName',
-                  },
-                  {
-                    title: t('admin.usage.agentTokenSource', { defaultValue: '类型' }),
-                    dataIndex: 'source',
-                    render: (value: AgentTokenUsageRecord['source']) => (
-                      <Tag size='small' color={value === 'personal' ? 'arcoblue' : 'purple'}>
-                        {value === 'personal'
-                          ? t('admin.usage.agentTokenPersonal', { defaultValue: '个人数字员工' })
-                          : value === 'team'
-                            ? t('admin.usage.agentTokenTeam', { defaultValue: '团队 Agent' })
-                            : t('admin.usage.agentTokenSession', { defaultValue: '会话' })}
-                      </Tag>
-                    ),
-                  },
-                  {
-                    title: t('admin.usage.agentTokenConversations', { defaultValue: '会话数' }),
-                    dataIndex: 'conversationCount',
-                  },
-                  {
-                    title: t('admin.usage.agentTokenTotalCol', { defaultValue: 'Token' }),
-                    dataIndex: 'totalTokens',
-                    render: (value: number) => value.toLocaleString(),
-                  },
-                ]}
-              />
-            </ModuleDataState>
-          </Card>
-        ) : null}
+      <Card
+        bordered={false}
+        className='rd-12px'
+        title={t('admin.usage.agentTokenBoard', { defaultValue: '数字员工 Token 排行' })}
+      >
+        <Typography.Paragraph type='secondary' className='text-12px mt-0 mb-12px'>
+          {t('admin.usage.agentTokenBoardHint', {
+            defaultValue:
+              '按近 {{days}} 天会话汇总（基于会话 extra.lastTokenUsage 快照；未单独计费）。',
+            days: agentUsageState.data.days,
+          })}
+        </Typography.Paragraph>
+        <ModuleDataState
+          loading={agentUsageState.loading}
+          error={agentUsageState.error}
+          empty={agentUsageState.data.agents.length === 0}
+          emptyDescription={t('admin.usage.agentTokenEmpty', {
+            defaultValue: '暂无会话 Token 记录。发起对话后这里会统计各智能体的 Token 用量。',
+          })}
+        >
+          <div className='mb-12px'>
+            <Statistic
+              title={t('admin.usage.agentTokenTotal', { defaultValue: '合计 Token（估算）' })}
+              value={agentUsageState.data.totalTokens}
+              groupSeparator
+            />
+          </div>
+          <Table
+            data={agentUsageState.data.agents}
+            rowKey='agentKey'
+            size='small'
+            border={false}
+            pagination={{ pageSize: 10, showTotal: true }}
+            columns={[
+              {
+                title: t('admin.usage.agentTokenName', { defaultValue: '智能体' }),
+                dataIndex: 'agentName',
+              },
+              {
+                title: t('admin.usage.agentTokenSource', { defaultValue: '类型' }),
+                dataIndex: 'source',
+                render: (value: AgentTokenUsageRecord['source']) => (
+                  <Tag size='small' color={value === 'personal' ? 'arcoblue' : 'purple'}>
+                    {value === 'personal'
+                      ? t('admin.usage.agentTokenPersonal', { defaultValue: '个人数字员工' })
+                      : value === 'team'
+                        ? t('admin.usage.agentTokenTeam', { defaultValue: '团队 Agent' })
+                        : t('admin.usage.agentTokenSession', { defaultValue: '会话' })}
+                  </Tag>
+                ),
+              },
+              {
+                title: t('admin.usage.agentTokenConversations', { defaultValue: '会话数' }),
+                dataIndex: 'conversationCount',
+              },
+              {
+                title: t('admin.usage.agentTokenTotalCol', { defaultValue: 'Token' }),
+                dataIndex: 'totalTokens',
+                render: (value: number) => value.toLocaleString(),
+              },
+            ]}
+          />
+        </ModuleDataState>
+      </Card>
       </div>
     </AdminPageWrapper>
   );

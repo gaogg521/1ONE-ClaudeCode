@@ -518,6 +518,7 @@ const AdminTeams: React.FC = () => {
         visible={addVisible}
         confirmLoading={saving}
         memberUserIds={memberUserIds}
+        members={membersState.data}
         onCancel={() => setAddVisible(false)}
         onConfirm={handleAddMember}
       />

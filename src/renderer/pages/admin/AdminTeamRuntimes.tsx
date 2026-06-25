@@ -24,7 +24,7 @@ const AdminTeamRuntimes: React.FC = () => {
   const asAdmin = isEnterpriseAdminRole(user?.role);
   const channel = isElectronDesktop() ? 'desktop' : 'browser';
 
-  const { data: nodes, isLoading, mutate } = useSWR(
+  const { data: nodes, isLoading, error, mutate } = useSWR(
     user?.id ? `admin-team-runtime/${tenantId}/${asAdmin ? 'admin' : 'member'}` : null,
     () =>
       syncFleetWithAdminBackend({
@@ -54,15 +54,23 @@ const AdminTeamRuntimes: React.FC = () => {
           })}
         </Typography.Paragraph>
       </div>
-      <Card loading={isLoading}>
-        <TeamRuntimeFleetPanel
-          enabled
-          teamIds={undefined}
-          nodesOverride={nodes}
-          onRefresh={refresh}
-          loading={isLoading}
-        />
-      </Card>
+      {error ? (
+        <Card>
+          <Typography.Text type='error'>
+            {t('admin.teamRuntimes.loadError', { defaultValue: '加载运行时节点失败，请检查企业后台服务是否可用。' })}
+          </Typography.Text>
+        </Card>
+      ) : (
+        <Card loading={isLoading}>
+          <TeamRuntimeFleetPanel
+            enabled
+            teamIds={undefined}
+            nodesOverride={nodes}
+            onRefresh={refresh}
+            loading={isLoading}
+          />
+        </Card>
+      )}
     </AdminPageWrapper>
   );
 };

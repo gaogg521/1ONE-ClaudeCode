@@ -79,7 +79,7 @@ export function registerCciRoutes(app: Express, auth: DevopsRouteAuth): void {
     }
   });
 
-  app.post('/api/admin/pipelines/run/:pipelineId', apiRateLimiter, auth, async (req, res) => {
+  app.post('/api/admin/pipelines/run/:pipelineId', apiRateLimiter, auth, requireDevopsAdmin, async (req, res) => {
     try {
       const data = await CciService.triggerPipelineRun(
         String(req.params.pipelineId),

@@ -3,7 +3,9 @@ import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/pl
 import type { IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
 import { useExtensionSettingsTabs } from '@/renderer/hooks/extensions/useExtensionSettingsTabs';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
+import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import {
+  Analysis,
   Communication,
   Earth,
   Lightning,
@@ -55,6 +57,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const isDesktop = isElectronDesktop();
+  const { isPersonalEdition } = useEditionFeatures();
 
   const { extensionTabs } = useExtensionSettingsTabs();
   const { resolveExtTabName } = useExtI18n();
@@ -90,7 +93,19 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
       system: { id: 'system', label: t('settings.system'), icon: <System />, path: 'system' },
     };
 
-    const result: SiderItem[] = BUILTIN_TAB_IDS.map((id) => builtinMap[id]);
+    // 个人版在「系统」后追加「使用统计」入口，跳转到 /enterprise/usage（个人版只显示 Token 排行）。
+    // 企业版用户从企业后台导航进入，这里不重复显示。
+    if (isPersonalEdition) {
+      builtinMap.usage = {
+        id: 'usage',
+        label: t('settings.usage', { defaultValue: '使用统计' }),
+        icon: <Analysis />,
+        path: 'usage',
+      };
+    }
+
+    const builtinOrder = isPersonalEdition ? [...BUILTIN_TAB_IDS, 'usage' as const] : BUILTIN_TAB_IDS;
+    const result: SiderItem[] = builtinOrder.map((id) => builtinMap[id]).filter(Boolean);
 
     // Extension tabs with position anchoring
     const beforeMap = new Map<string, IExtensionSettingsTab[]>();
@@ -146,7 +161,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
     }
 
     return result;
-  }, [t, isDesktop, extensionTabs, resolveExtTabName]);
+  }, [t, isDesktop, extensionTabs, resolveExtTabName, isPersonalEdition]);
 
   const siderTooltipProps = getSiderTooltipProps(tooltipEnabled);
   return (

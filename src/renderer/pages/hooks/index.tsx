@@ -129,7 +129,7 @@ const HooksPage: React.FC = () => {
             noDataElement={
               <div className='text-center py-32px text-t-secondary text-12px'>
                 <div className='text-16px mb-8px'>🪝</div>
-                暂无 Hook — 读取自 <code>~/.claude/settings.json</code>
+                暂无 Hook 配置，点击上方「添加 Hook」开始
               </div>
             }
           />

@@ -152,6 +152,16 @@ export function setupBasicMiddleware(app: Express): void {
       next();
       return;
     }
+    // tiny-csrf only reads _csrf from req.body; copy header token to body as fallback
+    // so that clients using x-csrf-token header (after ensureCsrfTokenForMutation) also pass validation.
+    if (
+      req.body &&
+      typeof req.body === 'object' &&
+      !req.body._csrf &&
+      typeof req.headers['x-csrf-token'] === 'string'
+    ) {
+      req.body._csrf = req.headers['x-csrf-token'];
+    }
     try {
       csrfMw(req, res, next);
     } catch {

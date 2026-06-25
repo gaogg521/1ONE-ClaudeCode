@@ -113,7 +113,11 @@ const MilestoneView: React.FC = () => {
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16px'>
           {milestonesState.data.map((m) => {
             const progress = m.epic_count > 0 ? Math.round((m.completed_count / m.epic_count) * 100) : 0;
-            const isOverdue = m.due_date ? new Date(m.due_date).getTime() < now : false;
+            // due_date 是 'YYYY-MM-DD' 字符串，new Date() 会解析为 UTC 00:00，在 UTC+8 会提前 8 小时误判逾期。
+            // 改为本地当天 23:59:59 比较，截止日内不算逾期。
+            const isOverdue = m.due_date
+              ? new Date(`${m.due_date}T23:59:59`).getTime() < now
+              : false;
             return (
               <Card
                 key={m.id}

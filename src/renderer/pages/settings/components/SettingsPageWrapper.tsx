@@ -7,6 +7,7 @@ import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/pl
 import type { IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
 import { useExtensionSettingsTabs } from '@/renderer/hooks/extensions/useExtensionSettingsTabs';
 import {
+  Analysis,
   Communication,
   Earth,
   LinkCloud,
@@ -18,6 +19,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
+import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import { BUILTIN_TAB_IDS, resolveSettingsTabAnchor } from './SettingsSider';
 import './settings.css';
 
@@ -31,7 +33,7 @@ type NavItem = { label: string; icon: React.ReactElement; path: string; id: stri
 
 type TranslateFn = (key: string, options?: { defaultValue?: string }) => string;
 
-export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): NavItem[] {
+export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn, isPersonalEdition = false): NavItem[] {
   const builtinMap: Record<string, NavItem> = {
     model: { id: 'model', label: t('settings.model'), icon: <LinkCloud theme='outline' size='16' />, path: 'model' },
     assistants: {
@@ -62,7 +64,17 @@ export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): 
     system: { id: 'system', label: t('settings.system'), icon: <System theme='outline' size='16' />, path: 'system' },
   };
 
-  return BUILTIN_TAB_IDS.map((id) => builtinMap[id]);
+  if (isPersonalEdition) {
+    builtinMap.usage = {
+      id: 'usage',
+      label: t('settings.usage', { defaultValue: '使用统计' }),
+      icon: <Analysis theme='outline' size='16' />,
+      path: 'usage',
+    };
+  }
+
+  const order = isPersonalEdition ? [...BUILTIN_TAB_IDS, 'usage' as const] : BUILTIN_TAB_IDS;
+  return order.map((id) => builtinMap[id]).filter(Boolean);
 }
 
 const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, className, contentClassName }) => {
@@ -72,6 +84,7 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
   const { pathname } = useLocation();
   const { t } = useTranslation();
   const isDesktop = isElectronDesktop();
+  const { isPersonalEdition } = useEditionFeatures();
   const isWorkspaceScoped = pathname.startsWith('/workspace/settings/');
 
   const { extensionTabs } = useExtensionSettingsTabs();
@@ -105,7 +118,7 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
   }, []);
 
   const menuItems = React.useMemo(() => {
-    const builtins = getBuiltinSettingsNavItems(isDesktop, t);
+    const builtins = getBuiltinSettingsNavItems(isDesktop, t, isPersonalEdition);
 
     // Insert extension tabs before system (unanchored default) or at anchor position
     const result = [...builtins];

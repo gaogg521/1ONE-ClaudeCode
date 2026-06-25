@@ -270,6 +270,10 @@ export async function deleteMcpRegistry(id: string): Promise<void> {
   await enterpriseMutate(`/api/admin/mcp/registry/${id}`, 'DELETE', {});
 }
 
+export async function toggleMcpRegistryEnabled(id: string, enabled: boolean): Promise<void> {
+  await enterpriseMutate(`/api/admin/mcp/registry/${id}/toggle`, 'PATCH', { enabled });
+}
+
 export async function importMcpRegistryBatch(
   items: Record<string, unknown>[]
 ): Promise<{ count: number }> {

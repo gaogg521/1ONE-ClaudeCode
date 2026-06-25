@@ -7,6 +7,7 @@
 export type EnterpriseInvitePreview = {
   tenantId: string;
   tenantName: string;
+  valid: boolean;
 };
 
 export type EnterpriseInviteRecord = {

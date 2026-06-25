@@ -25,9 +25,6 @@ export type EnterpriseNavKey =
   | 'cpack'
   | 'ccode'
   | 'cmeas'
-  | 'ctest'
-  | 'cflow'
-  | 'cagent'
   | 'usage'
   | 'security';
 
@@ -60,9 +57,6 @@ export const ENTERPRISE_MILESTONES_PATH = '/enterprise/milestones';
 export const ENTERPRISE_CPACK_PATH = '/enterprise/cpack';
 export const ENTERPRISE_CCODE_PATH = '/enterprise/ccode';
 export const ENTERPRISE_CMEAS_PATH = '/enterprise/cmeas';
-export const ENTERPRISE_CTEST_PATH = '/enterprise/ctest';
-export const ENTERPRISE_CFLOW_PATH = '/enterprise/cflow';
-export const ENTERPRISE_CAGENT_PATH = '/enterprise/cagent';
 export const ENTERPRISE_USAGE_PATH = '/enterprise/usage';
 export const ENTERPRISE_SECURITY_PATH = '/enterprise/security';
 
@@ -139,7 +133,6 @@ export const ENTERPRISE_ROUTE_META: EnterpriseRouteMeta[] = [
     path: ENTERPRISE_PIPELINE_EDITOR_PATH,
     requiresRole: 'admin',
     platformPolicy: 'all',
-    visibleInNav: false,
   },
   {
     key: 'milestones',
@@ -166,36 +159,15 @@ export const ENTERPRISE_ROUTE_META: EnterpriseRouteMeta[] = [
     platformPolicy: 'all',
   },
   {
-    key: 'ctest',
-    path: ENTERPRISE_CTEST_PATH,
-    requiresRole: 'member',
-    platformPolicy: 'all',
-    visibleInNav: false,
-  },
-  {
-    key: 'cflow',
-    path: ENTERPRISE_CFLOW_PATH,
-    requiresRole: 'member',
-    platformPolicy: 'all',
-    visibleInNav: false,
-  },
-  {
-    key: 'cagent',
-    path: ENTERPRISE_CAGENT_PATH,
-    requiresRole: 'member',
-    platformPolicy: 'all',
-    visibleInNav: false,
-  },
-  {
     key: 'usage',
     path: ENTERPRISE_USAGE_PATH,
-    requiresRole: 'member',
+    requiresRole: 'admin',
     platformPolicy: 'all',
   },
   {
     key: 'security',
     path: ENTERPRISE_SECURITY_PATH,
-    requiresRole: 'member',
+    requiresRole: 'admin',
     platformPolicy: 'all',
   },
 ];

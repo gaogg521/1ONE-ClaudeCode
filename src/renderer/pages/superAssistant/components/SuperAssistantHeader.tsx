@@ -53,7 +53,11 @@ const SuperAssistantHeader: React.FC<SuperAssistantHeaderProps> = ({
           </div>
         ) : null}
         <div className='mt-8px flex flex-wrap gap-8px text-12px text-t-secondary'>
-          <Tag color='arcoblue'>
+          <Tag
+            color='arcoblue'
+            style={{ cursor: 'pointer' }}
+            onClick={onOpenIssues}
+          >
             {t('common.superAssistant.header.openIssues', {
               defaultValue: '待处理任务 {{count}}',
               count: openIssueCount,

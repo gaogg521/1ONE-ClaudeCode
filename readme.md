@@ -537,8 +537,71 @@ flowchart TB
 
 ```bash
 git clone https://github.com/gaogg521/1ONE-Claude-Code.git && cd 1ONE-Claude-Code
-npm install && npx electron-rebuild -f -w better-sqlite3 && npm run restart
+npm install && npm run restart
 ```
+
+---
+
+<a id="building"></a>
+
+## 📦 打包发行版（Build Distributables）
+
+### Windows（NSIS 安装包 + ZIP）
+
+在 Windows 机器上运行：
+
+```bash
+npm install
+npm run dist:win
+```
+
+输出：`out/1ONE Code-{version}-win-x64.exe` 和 `.zip`
+
+---
+
+### macOS（DMG + ZIP）
+
+在 Mac 机器（Intel 或 Apple Silicon）上运行：
+
+```bash
+npm install
+npm run dist:mac
+```
+
+其余资产全部**自动处理**，无需手动准备：
+
+| 资产 | 自动来源 |
+|---|---|
+| `bun` darwin binary | 从 `oven-sh/bun` GitHub Releases 下载 |
+| `bundled-agent-toolkit` | 在 Mac 上执行 `npm install`，自动获取 darwin 原生模块预编译包 |
+| `aionrs` darwin binary | 已随仓库提交（`resources/bundled-aionrs/darwin-{arm64,x64}/aionrs`，v0.1.33）；升级版本时运行 `AIONRS_ALLOW_DOWNLOAD=1 npm run prepare:aionrs` |
+| `better-sqlite3` / `bcrypt` / `node-pty` | `afterPack` hook 自动用 `prebuild-install` 重编 |
+
+构建完成后无需签名即可使用，用户首次打开时选择「右键 → 打开」绕过 Gatekeeper，或运行：
+
+```bash
+xattr -cr "/Applications/1ONE Code.app"
+```
+
+指定架构：
+
+```bash
+npm run dist:mac -- --arm64   # Apple Silicon
+npm run dist:mac -- --x64     # Intel
+```
+
+输出：`out/1ONE Code-{version}-mac-{arch}.dmg` 和 `.zip`
+
+---
+
+### Linux（Debian 包）
+
+```bash
+npm install
+npm run dist:linux
+```
+
+输出：`out/1ONE Code-{version}-linux-x64.deb`
 
 ---
 

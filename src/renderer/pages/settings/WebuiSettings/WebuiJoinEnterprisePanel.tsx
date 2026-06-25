@@ -198,20 +198,8 @@ const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ emb
                 content={
                   <div className='flex flex-col gap-4px'>
                     <div>
-                      {t('settings.webui.invitePreviewTenant', {
-                        tenant: invitePreview.tenantName,
-                        defaultValue: '目标企业：{{tenant}}',
-                      })}
-                    </div>
-                    <div className='text-12px opacity-80'>
-                      {t('settings.webui.invitePreviewTenantId', {
-                        tenantId: invitePreview.tenantId,
-                        defaultValue: '组织 ID：{{tenantId}}',
-                      })}
-                    </div>
-                    <div className='text-12px opacity-80'>
-                      {t('settings.webui.invitePreviewConfirmHint', {
-                        defaultValue: '确认信息无误后，点击下方「加入企业」。',
+                      {t('settings.webui.invitePreviewValid', {
+                        defaultValue: '邀请码有效，确认后点击「加入企业」。',
                       })}
                     </div>
                   </div>
@@ -278,20 +266,8 @@ const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ emb
               content={
                 <div className='flex flex-col gap-4px'>
                   <div>
-                    {t('settings.webui.invitePreviewTenant', {
-                      tenant: invitePreview.tenantName,
-                      defaultValue: '目标企业：{{tenant}}',
-                    })}
-                  </div>
-                  <div className='text-12px opacity-80'>
-                    {t('settings.webui.invitePreviewTenantId', {
-                      tenantId: invitePreview.tenantId,
-                      defaultValue: '组织 ID：{{tenantId}}',
-                    })}
-                  </div>
-                  <div className='text-12px opacity-80'>
-                    {t('settings.webui.invitePreviewConfirmHint', {
-                      defaultValue: '确认信息无误后，点击下方「加入企业」。',
+                    {t('settings.webui.invitePreviewValid', {
+                      defaultValue: '邀请码有效，确认后点击「加入企业」。',
                     })}
                   </div>
                 </div>

@@ -1,2 +1,5 @@
 [providers.openai]
 api = "openai-completions"
+
+[providers.openai.compat]
+max_tokens_field = "max_completion_tokens"

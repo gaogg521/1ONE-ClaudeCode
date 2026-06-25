@@ -26,6 +26,7 @@ type TeamAddMemberModalProps = {
   visible: boolean;
   confirmLoading: boolean;
   memberUserIds: Set<string>;
+  members: Array<{ user_id: string; username: string }>;
   onCancel: () => void;
   onConfirm: (userId: string, role: TeamMemberRole) => Promise<void>;
 };
@@ -41,6 +42,7 @@ const TeamAddMemberModal: React.FC<TeamAddMemberModalProps> = ({
   visible,
   confirmLoading,
   memberUserIds,
+  members,
   onCancel,
   onConfirm,
 }) => {
@@ -138,6 +140,14 @@ const TeamAddMemberModal: React.FC<TeamAddMemberModalProps> = ({
         return;
       }
 
+      // 先按 LDAP username 检查是否已是团队成员（避免 resolve 创建孤儿本地账号）。
+      // memberUserIds 是 modal 打开瞬间的快照，可能过时；后端 addTeamMember 会再次校验。
+      const existingMember = members.find((m) => m.username === entry.username);
+      if (existingMember && memberUserIds.has(existingMember.user_id)) {
+        Message.warning(`${entry.username} 已是团队成员`);
+        return;
+      }
+
       const resolved = await enterpriseMutate<{ userId: string; username: string; created: boolean }>(
         '/api/admin/ldap/users/resolve',
         'POST',
@@ -154,7 +164,7 @@ const TeamAddMemberModal: React.FC<TeamAddMemberModalProps> = ({
     } catch (e) {
       Message.error(getEnterpriseActionError(e, '添加成员失败'));
     }
-  }, [ldapResults, localUserId, memberUserIds, onConfirm, role, selectedLdapDn, source]);
+  }, [ldapResults, localUserId, memberUserIds, members, onConfirm, role, selectedLdapDn, source]);
 
   const ldapColumns = useMemo(
     () => [

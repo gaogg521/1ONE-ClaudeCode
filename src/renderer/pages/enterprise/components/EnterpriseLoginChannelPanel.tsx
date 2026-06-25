@@ -126,7 +126,7 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
       {
         id: 'ldap',
         labelKey: 'login.methods.ldap',
-        labelDefault: 'LDAP',
+        labelDefault: 'LDAP/域控',
         accent: '#6366f1',
         icon: <DataServer theme='filled' size={20} fill='#6366f1' />,
       },
@@ -340,7 +340,7 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
     <form className={styles.form} onSubmit={(event) => void handlePasswordLogin(event)}>
       <Typography.Text className={styles.formTitle}>
         {passwordChannel === 'ldap'
-          ? t('login.methods.ldap', { defaultValue: 'LDAP 域控' })
+          ? t('login.methods.ldap', { defaultValue: 'LDAP/域控' })
           : t('login.methods.local', { defaultValue: '本地账户' })}
       </Typography.Text>
       <Typography.Text className={styles.label}>{t('login.accountName', { defaultValue: '账户名' })}</Typography.Text>

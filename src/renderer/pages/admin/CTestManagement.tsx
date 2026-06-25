@@ -61,12 +61,8 @@ const CTestManagement: React.FC = () => {
     [selectedPlan]
   );
   const casesState = useEnterpriseAsyncData<TestCaseRecord[]>(casesLoader, [], '加载测试用例失败');
-
-  // 选中计划变化时自动重新加载用例
-  useEffect(() => {
-    void casesState.reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPlan?.id]);
+  // selectedPlan 变化时 casesLoader 重建 → useEnterpriseAsyncData 内部 effect 自动重载，
+  // 无需再手动调 reload（否则会双重加载并引入竞态）。
 
   // 需求列表（用于关联下拉）
   const reqsState = useEnterpriseAsyncData(listRequirementsTree, [], '');

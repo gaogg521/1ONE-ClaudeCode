@@ -431,13 +431,26 @@ export function registerAdminRoutes(app: Express): void {
       }
 
       const now = Date.now();
-      const ONLINE_THRESHOLD_MS = 15 * 60 * 1000; // 15分钟内登录视为在线
-      const TODAY_START = new Date();
-      TODAY_START.setHours(0, 0, 0, 0);
-      const todayStartMs = TODAY_START.getTime();
-
-      // 查询今日任务完成情况
+      // 在线判定改用 team_runtime_nodes.last_seen_at（心跳每 3 分钟刷新），
+      // 与 TeamRuntimeRegistry.OFFLINE_AFTER_MS 对齐，而不是 last_login（仅登录瞬间写）。
+      const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 心跳 5 分钟内视为在线
       const userIds = users.map((u) => u.id);
+
+      // 查询每个用户最新的运行时心跳
+      const heartbeatRows = userIds.length > 0
+        ? (driver.prepare(
+            `SELECT user_id, MAX(last_seen_at) AS last_seen
+             FROM team_runtime_nodes
+             WHERE tenant_id = ? AND user_id IN (${userIds.map(() => '?').join(',')})
+             GROUP BY user_id`
+          ).all(adminTenantId, ...userIds) as Array<{ user_id: string; last_seen: number | null }>)
+        : [];
+      const heartbeatByUser = new Map<string, number>();
+      for (const row of heartbeatRows) {
+        if (row.last_seen) heartbeatByUser.set(row.user_id, row.last_seen);
+      }
+
+      // 任务统计：返回全量累计（无今日过滤），与 UI 文案"任务完成"对齐。
       const taskRows = userIds.length > 0
         ? (driver.prepare(
             `SELECT owner, status, COUNT(*) as cnt FROM team_tasks
@@ -459,7 +472,8 @@ export function registerAdminRoutes(app: Express): void {
         success: true,
         data: users.map((u) => {
           const lastLogin = u.last_login ?? 0;
-          const isOnline = lastLogin > 0 && (now - lastLogin) < ONLINE_THRESHOLD_MS;
+          const lastSeen = heartbeatByUser.get(u.id) ?? 0;
+          const isOnline = lastSeen > 0 && (now - lastSeen) < ONLINE_THRESHOLD_MS;
           const tasks = tasksByUser.get(u.id) ?? { total: 0, completed: 0, inProgress: 0 };
           return {
             id: u.id,
@@ -479,13 +493,10 @@ export function registerAdminRoutes(app: Express): void {
     }
   });
 
-  // GET /api/admin/agent-token-usage — per digital employee / agent session token totals (admin only)
+  // GET /api/admin/agent-token-usage — per digital employee / agent session token totals
+  // 企业版：admin 看全租户聚合；个人版：任意已认证用户看自己 tenant_id='default' 的会话聚合。
   app.get('/api/admin/agent-token-usage', apiRateLimiter, auth, async (req, res) => {
     try {
-      if (!isEnterpriseAdminRole(req.user!.role)) {
-        res.status(403).json({ success: false, message: 'Admin only' });
-        return;
-      }
       const tenantId = resolveAdminTenantId(req);
       const daysRaw = Number(req.query.days);
       const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 90) : 30;
@@ -649,7 +660,12 @@ export function registerAdminRoutes(app: Express): void {
            FROM team_memberships m
            JOIN users u ON u.id = m.user_id
            WHERE m.tenant_id = ? AND m.team_id = ?
-           ORDER BY m.role DESC, u.username ASC`
+           ORDER BY CASE m.role
+             WHEN 'owner' THEN 0
+             WHEN 'admin' THEN 1
+             WHEN 'member' THEN 2
+             ELSE 3
+           END, u.username ASC`
         )
         .all(tenantId, teamId) as Array<Record<string, unknown>>;
       res.json({ success: true, data: rows });
@@ -682,6 +698,21 @@ export function registerAdminRoutes(app: Express): void {
       const db = await getDatabase();
       const driver = db.getDriver();
       const now = Date.now();
+      // If the user is already a member, refuse to silently downgrade an owner.
+      // Re-adding an existing owner with a lower role must go through the
+      // dedicated update-member-role endpoint (which has last-owner protection).
+      if (role !== 'owner') {
+        const existingMembership = driver
+          .prepare(`SELECT role FROM team_memberships WHERE tenant_id = ? AND team_id = ? AND user_id = ?`)
+          .get(tenantId, teamId, userId) as { role: string } | undefined;
+        if (existingMembership?.role === 'owner') {
+          res.status(400).json({
+            success: false,
+            message: '该成员是团队 owner，不能通过添加成员接口降级，请使用修改成员角色接口',
+          });
+          return;
+        }
+      }
       driver.prepare(
         `INSERT INTO team_memberships (tenant_id, team_id, user_id, role, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)
@@ -707,6 +738,19 @@ export function registerAdminRoutes(app: Express): void {
       }
       const db = await getDatabase();
       const driver = db.getDriver();
+      // Last-owner protection: cannot demote/remove the only owner.
+      const currentMembership = driver
+        .prepare(`SELECT role FROM team_memberships WHERE tenant_id = ? AND team_id = ? AND user_id = ?`)
+        .get(tenantId, teamId, userId) as { role: string } | undefined;
+      if (currentMembership?.role === 'owner' && role !== 'owner') {
+        const ownerCountRow = driver
+          .prepare(`SELECT COUNT(*) AS cnt FROM team_memberships WHERE tenant_id = ? AND team_id = ? AND role = 'owner'`)
+          .get(tenantId, teamId) as { cnt: number };
+        if (ownerCountRow.cnt <= 1) {
+          res.status(400).json({ success: false, message: '不能降级团队唯一的 owner，请先添加另一个 owner' });
+          return;
+        }
+      }
       const now = Date.now();
       driver.prepare(
         `UPDATE team_memberships SET role = ?, updated_at = ?
@@ -727,6 +771,19 @@ export function registerAdminRoutes(app: Express): void {
       const userId = String(req.params.userId);
       const db = await getDatabase();
       const driver = db.getDriver();
+      // Last-owner protection: cannot remove the only owner.
+      const currentMembership = driver
+        .prepare(`SELECT role FROM team_memberships WHERE tenant_id = ? AND team_id = ? AND user_id = ?`)
+        .get(tenantId, teamId, userId) as { role: string } | undefined;
+      if (currentMembership?.role === 'owner') {
+        const ownerCountRow = driver
+          .prepare(`SELECT COUNT(*) AS cnt FROM team_memberships WHERE tenant_id = ? AND team_id = ? AND role = 'owner'`)
+          .get(tenantId, teamId) as { cnt: number };
+        if (ownerCountRow.cnt <= 1) {
+          res.status(400).json({ success: false, message: '不能移除团队唯一的 owner，请先添加另一个 owner' });
+          return;
+        }
+      }
       driver.prepare(`DELETE FROM team_memberships WHERE tenant_id = ? AND team_id = ? AND user_id = ?`).run(tenantId, teamId, userId);
       res.json({ success: true });
     } catch (err) {
@@ -847,6 +904,12 @@ export function registerAdminRoutes(app: Express): void {
         return;
       }
       const target = await UserRepository.findById(id);
+      // Cross-tenant guard: admin may only modify users in their own tenant.
+      const targetTenantId = (target as { tenant_id?: string | null } | null)?.tenant_id ?? 'default';
+      if (targetTenantId !== resolveAdminTenantId(req)) {
+        res.status(403).json({ success: false, message: '不能修改其他企业的用户' });
+        return;
+      }
       if (target && isSystemAdminRole(target.role) && mapped !== 'system_admin') {
         await assertCanRevokeSystemAdmin(id);
       }
@@ -1011,6 +1074,13 @@ export function registerAdminRoutes(app: Express): void {
       // 不能删除自己
       if (req.user?.id === id) {
         res.status(400).json({ success: false, message: '不能删除自己的账号' });
+        return;
+      }
+      // Cross-tenant guard: admin may only delete users in their own tenant.
+      const target = await UserRepository.findById(id);
+      const targetTenantId = (target as { tenant_id?: string | null } | null)?.tenant_id ?? 'default';
+      if (targetTenantId !== resolveAdminTenantId(req)) {
+        res.status(403).json({ success: false, message: '不能删除其他企业的用户' });
         return;
       }
       await UserRepository.deleteUser(id);

@@ -67,4 +67,36 @@ export class MilestoneRepository {
       )
       .run(input.id, input.tenantId, input.name, input.description, input.dueDate, input.now, input.now);
   }
+
+  static async update(input: {
+    id: string;
+    tenantId: string;
+    name?: string;
+    description?: string;
+    dueDate?: string;
+    now: number;
+  }): Promise<boolean> {
+    const db = await getDatabase();
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    if (input.name !== undefined) { fields.push('name = ?'); values.push(input.name); }
+    if (input.description !== undefined) { fields.push('description = ?'); values.push(input.description); }
+    if (input.dueDate !== undefined) { fields.push('due_date = ?'); values.push(input.dueDate); }
+    if (fields.length === 0) return false;
+    fields.push('updated_at = ?');
+    values.push(input.now);
+    values.push(input.id, input.tenantId);
+    const result = db.getDriver()
+      .prepare(`UPDATE milestones SET ${fields.join(', ')} WHERE id = ? AND tenant_id = ?`)
+      .run(...values);
+    return result.changes > 0;
+  }
+
+  static async delete(id: string, tenantId: string): Promise<boolean> {
+    const db = await getDatabase();
+    const result = db.getDriver()
+      .prepare(`DELETE FROM milestones WHERE id = ? AND tenant_id = ?`)
+      .run(id, tenantId);
+    return result.changes > 0;
+  }
 }

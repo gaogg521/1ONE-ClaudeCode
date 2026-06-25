@@ -836,7 +836,7 @@ export const adminUsers = {
     { id: string; username: string; role: 'user' | 'admin' },
     { username: string; password: string; role: 'user' | 'admin' }
   >('admin.users.create'),
-  setRole: bridge.buildProvider<boolean, { id: string; role: 'user' | 'admin' }>('admin.users.set-role'),
+  setRole: bridge.buildProvider<boolean, { id: string; role: 'user' | 'admin' | 'system_admin' }>('admin.users.set-role'),
   sendResetPasswordCode: bridge.buildProvider<{ maskedEmail: string }, void>('admin.users.send-reset-password-code'),
   resetPassword: bridge.buildProvider<boolean, { id: string; password: string; emailCode: string }>(
     'admin.users.reset-password'
@@ -890,7 +890,7 @@ export const webui = {
     'webui.get-enterprise-context'
   ),
   previewEnterpriseInvite: bridge.buildProvider<
-    IBridgeResponse<{ tenantId: string; tenantName: string }>,
+    IBridgeResponse<{ tenantId: string; tenantName: string; valid: boolean }>,
     { code: string }
   >('webui.preview-enterprise-invite'),
   joinEnterprise: bridge.buildProvider<

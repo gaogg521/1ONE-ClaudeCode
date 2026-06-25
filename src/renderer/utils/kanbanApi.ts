@@ -113,8 +113,12 @@ export const adminApi = {
       : apiFetch<AdminUser>('/api/admin/users', { method: 'POST', body: JSON.stringify({ username, password, role }) }),
 
   setRole: (id: string, role: KanbanRole | UserDbRole) => {
-    const desktopRole =
-      role === 'admin' || role === 'system_admin' || role === 'org_admin' ? 'admin' : 'user';
+    // 桌面端 IPC 通道接受 'user' | 'admin' | 'system_admin'。
+    // system_admin 直传；org_admin/admin 映射为 'admin'（IPC 层再映射为 org_admin）；其余为 'user'。
+    const desktopRole: 'user' | 'admin' | 'system_admin' =
+      role === 'system_admin' ? 'system_admin'
+        : role === 'admin' || role === 'org_admin' ? 'admin'
+          : 'user';
     return isElectron()
       ? ipcBridge.adminUsers.setRole.invoke({ id, role: desktopRole })
       : apiFetch('/api/admin/users/' + id + '/role', { method: 'PATCH', body: JSON.stringify({ role }) });

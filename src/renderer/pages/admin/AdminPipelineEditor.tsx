@@ -152,6 +152,7 @@ const PipelineEditor: React.FC = () => {
   const [runId, setRunId] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<string>('');
   const [runLog, setRunLog] = useState<string>('');
+  const [stagesStatusMap, setStagesStatusMap] = useState<Record<string, string>>({});
   const [runLoading, setRunLoading] = useState(false);
   const [customTemplates, setCustomTemplates] = useState<StageDef[]>([]);
   const [saveTemplateVisible, setSaveTemplateVisible] = useState(false);
@@ -205,6 +206,14 @@ const PipelineEditor: React.FC = () => {
         const data = await getPipelineRun(runId);
         setRunStatus(data.status);
         setRunLog(data.log_content || '');
+        // 解析每个 stage 的真实状态，避免假进度。
+        try {
+          const stagesStatus = JSON.parse(data.stages_status_json || '[]') as Array<{ name?: string; status?: string }>;
+          setStagesStatusMap(stagesStatus.reduce<Record<string, string>>((acc, s) => {
+            if (s.name && s.status) acc[s.name] = s.status;
+            return acc;
+          }, {}));
+        } catch { /* ignore parse errors */ }
         if (['success', 'failed', 'cancelled'].includes(data.status)) setRunId(null);
       } catch (error) {
         setEditorError(getEnterpriseActionError(error, '加载流水线运行状态失败'));
@@ -273,7 +282,17 @@ const PipelineEditor: React.FC = () => {
   const renderStageStatus = (stageIdx: number): 'wait' | 'process' | 'finish' | 'error' => {
     if (!runStatus || runStatus === 'pending') return 'wait';
     if (runStatus === 'success') return 'finish';
-    if (runStatus === 'running') return stageIdx < stages.length / 2 ? 'finish' : 'process';
+    if (runStatus === 'running') {
+      // 优先使用后端 stages_status_json 中的真实状态。
+      const stageName = stages[stageIdx]?.name;
+      const realStatus = stageName ? stagesStatusMap[stageName] : undefined;
+      if (realStatus === 'success') return 'finish';
+      if (realStatus === 'running') return 'process';
+      if (realStatus === 'failed') return 'error';
+      if (realStatus === 'skipped') return 'wait';
+      // 后端未返回该 stage 状态时，按索引回退（前序完成、当前进行）。
+      return stageIdx < stages.length / 2 ? 'finish' : 'process';
+    }
     return 'error';
   };
 

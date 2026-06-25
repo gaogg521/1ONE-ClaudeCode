@@ -33,21 +33,8 @@ type FormMethod = 'local' | 'ldap';
 
 const REMEMBER_ME_KEY = 'rememberMe';
 const REMEMBERED_USERNAME_KEY = 'rememberedUsername';
-const REMEMBERED_PASSWORD_KEY = 'rememberedPassword';
-
-const obfuscate = (text: string): string => {
-  const encoded = btoa(encodeURIComponent(text));
-  return encoded.split('').toReversed().join('');
-};
-
-const deobfuscate = (text: string): string => {
-  try {
-    const reversed = text.split('').toReversed().join('');
-    return decodeURIComponent(atob(reversed));
-  } catch {
-    return '';
-  }
-};
+// 密码不再持久化到 localStorage（即使可逆编码也等同于明文存储）。
+// "记住我"只记住用户名，登录态由服务端 session/token 维持。
 
 const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -155,9 +142,7 @@ const LoginPage: React.FC = () => {
     const isRememberMe = localStorage.getItem(REMEMBER_ME_KEY) === 'true';
     if (isRememberMe) {
       const storedUsername = localStorage.getItem(REMEMBERED_USERNAME_KEY);
-      const storedPassword = localStorage.getItem(REMEMBERED_PASSWORD_KEY);
-      if (storedUsername) setUsername(deobfuscate(storedUsername));
-      if (storedPassword) setPassword(deobfuscate(storedPassword));
+      if (storedUsername) setUsername(storedUsername);
       setRememberMe(true);
     }
     window.setTimeout(() => {
@@ -269,12 +254,10 @@ const LoginPage: React.FC = () => {
       if (result.success) {
         if (rememberMe) {
           localStorage.setItem(REMEMBER_ME_KEY, 'true');
-          localStorage.setItem(REMEMBERED_USERNAME_KEY, obfuscate(trimmedUsername));
-          localStorage.setItem(REMEMBERED_PASSWORD_KEY, obfuscate(password));
+          localStorage.setItem(REMEMBERED_USERNAME_KEY, trimmedUsername);
         } else {
           localStorage.removeItem(REMEMBER_ME_KEY);
           localStorage.removeItem(REMEMBERED_USERNAME_KEY);
-          localStorage.removeItem(REMEMBERED_PASSWORD_KEY);
         }
 
         showMessage({ type: 'success', text: t('login.success') });

@@ -156,7 +156,10 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
   });
 
   ipcBridge.adminUsers.setRole.provider(async ({ id, role }) => {
-    const mappedRole = role === 'admin' ? 'org_admin' : 'member';
+    // 桌面端 IPC 传入 'user' | 'admin' | 'system_admin'，统一映射到 DB 角色。
+    // 注意：'admin' 历史含义是 org_admin（部门管理员），不是 system_admin。
+    const mappedRole: 'member' | 'org_admin' | 'system_admin' =
+      role === 'system_admin' ? 'system_admin' : role === 'admin' ? 'org_admin' : 'member';
     await UserRepository.setRole(id, mappedRole);
     return true;
   });

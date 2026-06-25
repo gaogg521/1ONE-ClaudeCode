@@ -6,6 +6,8 @@
 
 import type { Express, Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import multer from 'multer';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -28,6 +30,7 @@ import {
   queueRagDocumentIndexing,
 } from '@process/services/rag/RagDocumentImportService';
 import { PipelineService } from '@process/services/pipeline/PipelineService';
+import { recordDevopsAudit, DEVOPS_AUDIT_ACTIONS } from '../auth/auditLogService';
 import { registerCciRoutes } from './devops/cciRoutes';
 import { registerCcodeRoutes } from './devops/ccodeRoutes';
 import { registerCflowRoutes } from './devops/cflowRoutes';
@@ -146,6 +149,72 @@ async function optionalAuth(req: Request, res: Response, next: NextFunction): Pr
 
 function isScopeError(value: ResolvedResourceScope | ResourceScopeError): value is ResourceScopeError {
   return 'error' in value;
+}
+
+/**
+ * SSRF guard for user-supplied fetch URLs.
+ * Rejects non-http(s) protocols, private/loopback/link-local/multicast IPs,
+ * and hostnames that resolve to private IPs (basic DNS-rebinding mitigation).
+ */
+async function assertSafeFetchUrl(rawUrl: string): Promise<URL> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error('Invalid URL');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Only http/https protocols are allowed');
+  }
+  const host = parsed.hostname;
+  if (!host) {
+    throw new Error('Invalid host');
+  }
+  // If host is a literal IP, check it directly; otherwise resolve DNS.
+  const ipVersion = isIP(host);
+  const ipsToCheck: string[] = [];
+  if (ipVersion) {
+    ipsToCheck.push(host);
+  } else {
+    try {
+      const records = await lookup(host, { all: true });
+      for (const r of records) {
+        ipsToCheck.push(r.address);
+      }
+    } catch {
+      throw new Error('Failed to resolve hostname');
+    }
+  }
+  for (const ip of ipsToCheck) {
+    if (isPrivateOrLoopbackIp(ip)) {
+      throw new Error('Fetching private/loopback addresses is not allowed');
+    }
+  }
+  return parsed;
+}
+
+function isPrivateOrLoopbackIp(ip: string): boolean {
+  // IPv4
+  const v4 = ip.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if (a === 10) return true;
+    if (a === 127) return true; // loopback
+    if (a === 0) return true; // 0.0.0.0/8
+    if (a === 169 && b === 254) return true; // link-local
+    if (a === 172 && b >= 16 && b <= 31) return true; // private
+    if (a === 192 && b === 168) return true; // private
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+    if (a >= 224) return true; // multicast / reserved
+    return false;
+  }
+  // IPv6
+  const lower = ip.toLowerCase();
+  if (lower === '::' || lower === '::1') return true; // any / loopback
+  if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // unique local
+  if (lower.startsWith('fe80')) return true; // link-local
+  if (lower.startsWith('ff')) return true; // multicast
+  return false;
 }
 
 function insertRagDocumentRecord(input: {
@@ -292,7 +361,8 @@ export function registerDevOpsRoutes(app: Express): void {
 
       let content = '';
       try {
-        const fetchRes = await fetch(url.trim(), { headers: { 'User-Agent': '1ONE-RAG/1.0' } });
+        const safeUrl = await assertSafeFetchUrl(url.trim());
+        const fetchRes = await fetch(safeUrl, { headers: { 'User-Agent': '1ONE-RAG/1.0' } });
         if (!fetchRes.ok) {
           res.status(400).json({ success: false, message: `HTTP ${fetchRes.status}` });
           return;
@@ -504,6 +574,7 @@ export function registerDevOpsRoutes(app: Express): void {
         );
 
       res.json({ success: true, data: { id } });
+      void recordDevopsAudit(req, DEVOPS_AUDIT_ACTIONS.requirementCreate, `requirement:${id}:${type}`);
     } catch (err) {
       console.error('[DevOpsRoute] create requirement error:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
@@ -511,7 +582,7 @@ export function registerDevOpsRoutes(app: Express): void {
   });
 
   // PATCH /api/admin/requirements/:id — 更新需求状态、优先级、指派人
-  app.patch('/api/admin/requirements/:id', apiRateLimiter, optionalAuth, async (req, res) => {
+  app.patch('/api/admin/requirements/:id', apiRateLimiter, auth, async (req, res) => {
     try {
       const tenantId = resolveTenantId(req);
       const id = String(req.params.id);
@@ -521,11 +592,19 @@ export function registerDevOpsRoutes(app: Express): void {
       const driver = db.getDriver();
 
       const existing = driver
-        .prepare(`SELECT type, status FROM requirements WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as { type: string; status: string } | undefined;
+        .prepare(`SELECT type, status, creator_id FROM requirements WHERE id = ? AND tenant_id = ?`)
+        .get(id, tenantId) as { type: string; status: string; creator_id: string | null } | undefined;
 
       if (!existing) {
         res.status(404).json({ success: false, message: 'Requirement not found' });
+        return;
+      }
+
+      // Ownership: enterprise admins can edit any card; members only their own.
+      const currentUserId = resolvePersonalResourceOwnerId(req);
+      const isMemberOnly = !isEnterpriseAdminRole(req.user?.role);
+      if (isMemberOnly && existing.creator_id && existing.creator_id !== currentUserId) {
+        res.status(403).json({ success: false, message: 'You can only edit requirements you created' });
         return;
       }
 
@@ -637,6 +716,7 @@ export function registerDevOpsRoutes(app: Express): void {
       }
 
       res.json({ success: true });
+      void recordDevopsAudit(req, DEVOPS_AUDIT_ACTIONS.requirementUpdate, `requirement:${id}`);
     } catch (err) {
       console.error('[DevOpsRoute] update requirement error:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
@@ -652,6 +732,23 @@ export function registerDevOpsRoutes(app: Express): void {
       const db = await getDatabase();
       const driver = db.getDriver();
 
+      const existing = driver
+        .prepare(`SELECT creator_id FROM requirements WHERE id = ? AND tenant_id = ?`)
+        .get(id, tenantId) as { creator_id: string | null } | undefined;
+
+      if (!existing) {
+        res.status(404).json({ success: false, message: 'Requirement not found' });
+        return;
+      }
+
+      // Ownership: enterprise admins can delete any card; members only their own.
+      const currentUserId = resolvePersonalResourceOwnerId(req);
+      const isMemberOnly = !isEnterpriseAdminRole(req.user?.role);
+      if (isMemberOnly && existing.creator_id && existing.creator_id !== currentUserId) {
+        res.status(403).json({ success: false, message: 'You can only delete requirements you created' });
+        return;
+      }
+
       const result = driver
         .prepare(`DELETE FROM requirements WHERE id = ? AND tenant_id = ?`)
         .run(id, tenantId);
@@ -662,6 +759,7 @@ export function registerDevOpsRoutes(app: Express): void {
       }
 
       res.json({ success: true });
+      void recordDevopsAudit(req, DEVOPS_AUDIT_ACTIONS.requirementDelete, `requirement:${id}`);
     } catch (err) {
       console.error('[DevOpsRoute] delete requirement error:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
@@ -946,6 +1044,7 @@ export function registerDevOpsRoutes(app: Express): void {
       }
 
       res.json({ success: true });
+      void recordDevopsAudit(req, DEVOPS_AUDIT_ACTIONS.ragDocumentDelete, `rag_document:${id}`);
     } catch (err) {
       console.error('[DevOpsRoute] delete RAG document error:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
@@ -1082,6 +1181,8 @@ export function registerDevOpsRoutes(app: Express): void {
       }
 
       res.json({ success: true });
+      const mcpAction = id ? DEVOPS_AUDIT_ACTIONS.mcpUpdate : DEVOPS_AUDIT_ACTIONS.mcpCreate;
+      void recordDevopsAudit(req, mcpAction, `mcp:${id ?? ''}:${name.trim()}`);
     } catch (err) {
       console.error('[DevOpsRoute] set MCP server error:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
@@ -1113,8 +1214,38 @@ export function registerDevOpsRoutes(app: Express): void {
       }
 
       res.json({ success: true });
+      void recordDevopsAudit(req, DEVOPS_AUDIT_ACTIONS.mcpDelete, `mcp:${id}`);
     } catch (err) {
       console.error('[DevOpsRoute] delete MCP error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  // PATCH /api/admin/mcp/registry/:id/toggle — 仅切换 enabled，不触碰 env_json
+  // 专用端点，避免 saveMcpRegistry 路径的 env 合并逻辑误清凭证
+  app.patch('/api/admin/mcp/registry/:id/toggle', apiRateLimiter, auth, async (req, res) => {
+    try {
+      const tenantId = resolveTenantId(req);
+      const id = String(req.params.id);
+      const enabled = req.body?.enabled === true;
+
+      const db = await getDatabase();
+      const driver = db.getDriver();
+
+      const resource = getScopedResourceOrNull(driver, tenantId, 'mcp_registry', id);
+      if (!resource || !canManageScopedResource(req, driver, tenantId, resource)) {
+        res.status(404).json({ success: false, message: 'MCP not found' });
+        return;
+      }
+
+      driver
+        .prepare(`UPDATE mcp_registry SET enabled = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`)
+        .run(enabled ? 1 : 0, Date.now(), id, tenantId);
+
+      res.json({ success: true });
+      void recordDevopsAudit(req, DEVOPS_AUDIT_ACTIONS.mcpToggle, `mcp:${id}:enabled=${enabled}`);
+    } catch (err) {
+      console.error('[DevOpsRoute] toggle MCP error:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1186,7 +1317,15 @@ export function registerDevOpsRoutes(app: Express): void {
       const db = await getDatabase(); const driver = db.getDriver(); const now = Date.now();
       const stmt = driver.prepare(`INSERT OR IGNORE INTO mcp_registry (id, tenant_id, name, type, endpoint, env_json, enabled, scope, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,1,'personal',?,?,?)`);
       let count = 0;
-      driver.transaction(() => { for (const item of items) { if (item.name?.trim()) { stmt.run(randomUUID(), tenantId, item.name.trim(), item.type||'sse', item.endpoint||'', item.env_json||'{}', userId, now, now); count++; } } })();
+      driver.transaction(() => {
+        for (const item of items) {
+          if (item.name?.trim()) {
+            const itemType = ['sse', 'stdio'].includes(item.type) ? item.type : 'sse';
+            stmt.run(randomUUID(), tenantId, item.name.trim(), itemType, item.endpoint || '', item.env_json || '{}', userId, now, now);
+            count++;
+          }
+        }
+      })();
       res.json({ success: true, data: { count } });
     } catch (err) { res.status(500).json({ success: false, message: 'Internal server error' }); }
   });

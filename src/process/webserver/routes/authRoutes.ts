@@ -89,7 +89,9 @@ function normalizePostLoginTarget(raw: unknown): string {
 
 function normalizeWebRole(role: string | undefined): 'member' | 'org_admin' | 'system_admin' {
   if (!role) return 'member';
-  if (role === 'admin') return 'system_admin';
+  // 统一：历史 'admin' 一律归一化为 'org_admin'（中等权限），避免登录路径与
+  // 改角色路径（adminRoutes.ts roleMap）语义不一致导致权限静默升降。
+  if (role === 'admin') return 'org_admin';
   if (role === 'user') return 'member';
   if (role === 'system_admin' || role === 'org_admin' || role === 'member') return role;
   return 'member';

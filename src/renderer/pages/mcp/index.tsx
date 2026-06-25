@@ -21,11 +21,20 @@ function getTransportLabel(server: IMcpServer): string {
   return t;
 }
 
-function getStatusTag(server: IMcpServer) {
+function getStatusTag(server: IMcpServer, onTest?: () => void) {
   if (server.status === 'testing') return <Tag color='orange' size='small'>连接中</Tag>;
   if (server.status === 'connected') return <Tag color='green' size='small'>已连接</Tag>;
   if (server.status === 'error') return <Tag color='red' size='small'>连接失败</Tag>;
-  return <Tag color='gray' size='small'>未测试</Tag>;
+  return (
+    <Tag
+      color='gray'
+      size='small'
+      style={onTest ? { cursor: 'pointer' } : undefined}
+      onClick={onTest ? (e) => { e.stopPropagation(); onTest(); } : undefined}
+    >
+      未测试{onTest ? ' · 点击测试' : ''}
+    </Tag>
+  );
 }
 
 const MCPPage: React.FC = () => {
@@ -112,7 +121,14 @@ const MCPPage: React.FC = () => {
                         {getTransportLabel(server)}
                       </code>
                     </td>
-                    <td style={{ padding: '12px' }}>{getStatusTag(server)}</td>
+                    <td style={{ padding: '12px' }}>
+                      {getStatusTag(
+                        server,
+                        server.status !== 'connected' && server.status !== 'testing'
+                          ? () => handleTestMcpConnection(server)
+                          : undefined
+                      )}
+                    </td>
                     <td style={{ padding: '12px' }}>
                       {toolCount > 0 && (
                         <Badge

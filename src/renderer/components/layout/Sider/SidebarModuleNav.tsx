@@ -33,8 +33,9 @@ const SidebarModuleNav: React.FC<SidebarModuleNavProps> = ({
   const navigate = useNavigate();
   const { gate, managementMode } = useEditionFeatures();
   // 个人版视图下隐藏「企业后台」入口，切到企业版视图才显示——避免两个版本入口混在一个界面。
+  // hidden: true 的条目永久隐藏（如侧栏「企业后台」按钮，入口已在左下角身份面板，避免冗余）。
   const items = getSidebarNavItems(gate).filter(
-    (item) => item.capability !== 'admin.console' || managementMode === 'enterprise'
+    (item) => !item.hidden && (item.capability !== 'admin.console' || managementMode === 'enterprise')
   );
   const iconOnly = collapsed && !isMobile;
   const tooltipEnabled = iconOnly;

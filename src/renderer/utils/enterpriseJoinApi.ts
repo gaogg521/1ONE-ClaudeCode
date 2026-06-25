@@ -23,7 +23,7 @@ export async function previewEnterpriseInvite(code: string): Promise<EnterpriseI
     if (!result.success || !result.data) {
       throw new Error(result.msg || 'Preview failed');
     }
-    return result.data;
+    return { ...result.data, valid: result.data.valid ?? true };
   }
   return fetchWebuiApiJson<EnterpriseInvitePreview>(
     `/api/auth/enterprise-invite/preview?code=${encodeURIComponent(code)}`

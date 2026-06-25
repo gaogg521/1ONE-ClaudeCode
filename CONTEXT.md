@@ -276,3 +276,246 @@ kimi/goose/auggie 等 ACP 后端在执行本地文件操作（整理桌面文件
 - `tsc --noEmit` exit 0
 - `vitest run` 469 passed（2 个 toolsModalContent 既存失败与本次无关）
 - 运行时需桌面端 `npm run restart` 实测：选 kimi/qwen agent → 发"帮我整理桌面文件" → 确认不弹权限框
+
+---
+
+# 追加记录 — 2026-06-25 企业版功能深度审查与修复
+
+## 背景
+
+用户要求审查企业后台 21 个一级功能（路由元数据见 `src/common/auth/enterpriseRoutes.ts`）的代码 bug、逻辑漏洞和产品设计缺陷。4 路并行审查后共发现 **15 高 + 21 中 + 11 低** 共 47 项问题。本节记录修复过程。
+
+## 修复清单（按批次）
+
+### 批次 1：安全红线（RCE / SSRF / 凭证销毁）
+
+#### 1.1 [已修复] Pipeline run 路由无鉴权 → member 可 RCE
+- **位置**：`src/process/webserver/routes/devops/cciRoutes.ts:82`
+- **问题**：`POST /api/admin/pipelines/run/:pipelineId` 只挂 `auth`，未挂 `requireDevopsAdmin`，任意 member 可触发任意已配置 pipeline = 执行任意 shell。
+- **修复**：路由加 `requireDevopsAdmin` 中间件。
+
+#### 1.2 [已修复] Pipeline executeCommand 无工作目录/环境隔离
+- **位置**：`src/process/services/pipeline/PipelineService.ts:514-545`
+- **问题**：`spawn(shellCmd, ['-c', command])` 无 cwd / env 限制，命令在服务进程 cwd 运行，继承全部环境变量。
+- **修复**：传入受控 cwd（pipeline 工作区目录）+ 过滤后的 env（仅保留 PATH/SystemRoot 等必要变量）。注：完整沙箱超出本轮范围，命令白名单需产品决策。
+
+#### 1.3 [已修复] RAG URL 导入 SSRF
+- **位置**：`src/process/webserver/routes/devopsRoutes.ts:283-343`
+- **问题**：`fetch(url)` 无内网过滤，可抓 `169.254.169.254`（云元数据）、`localhost:9230`（devtools）、内网 IP。
+- **修复**：新增 `assertSafeFetchUrl()` —— 协议白名单（http/https）+ DNS 解析后拒绝私有/回环/链路本地/组播段。
+
+#### 1.4 [已修复] MCP toggle 开关清空所有凭证
+- **位置**：`src/renderer/pages/admin/AdminMcp.tsx:184-204`；后端 `devopsRoutes.ts` MCP save 路由
+- **问题**：toggle 时前端传 `env: {}`，后端 merge 逻辑把已存 env_json 永久覆盖为 `{}`，用户每次切开关丢 API_KEY/TOKEN。
+- **修复**：新增专用 `PATCH /api/admin/mcp/registry/:id/toggle` 端点只更新 `enabled` 字段；前端 toggle 改调此端点，不再走 saveMcpRegistry。
+
+#### 1.5 [已修复] Requirements PATCH/DELETE 越权
+- **位置**：`src/process/webserver/routes/devopsRoutes.ts:514`（PATCH 用 `optionalAuth`）、`647`（DELETE 无 ownership 校验）
+- **问题**：任意 member 可改/删他人创建的 epic 及子卡片，物理删除无软删。
+- **修复**：PATCH 改 `auth`；DELETE 加 created_by/role 校验（admin 可删任意、member 只删自己创建）；保留物理删除（软删需 schema 改动，本轮不动）。
+
+### 批次 2：跨租户 + 团队 owner 保护
+
+#### 2.1 [已修复] 跨租户越权改/删用户
+- **位置**：`src/process/webserver/routes/adminRoutes.ts` PATCH `/api/admin/users/:id/role`、DELETE `/api/admin/users/:id`
+- **修复**：操作前 `UserRepository.findById(id)` 取目标用户的 `tenant_id`，与 `resolveAdminTenantId(req)` 比对，不一致返回 403。
+
+#### 2.2 [已修复] addTeamMember 静默降级 owner
+- **位置**：`adminRoutes.ts` POST `/api/admin/teams/:id/members`
+- **修复**：若新 role 不是 owner 且已是 owner，返回 400 提示走修改角色接口。
+
+#### 2.3 [已修复] removeTeamMember / updateRole 无 last-owner 保护
+- **位置**：`adminRoutes.ts` PATCH/DELETE `/api/admin/teams/:id/members/:userId`
+- **修复**：降级或移除 owner 前 `COUNT(*) WHERE role='owner'`，若 ≤1 返回 400。
+
+### 批次 3：认证/密码/RBAC 一致性
+
+#### 3.1 [已修复] "记住密码"明文存储
+- **位置**：`src/renderer/pages/login/index.tsx`
+- **修复**：移除 `REMEMBERED_PASSWORD_KEY`、`obfuscate/deobfuscate`；"记住我"只记住用户名，不再存密码。
+
+#### 3.2 [已修复] OAuth 回调 URI 回退 Host header
+- **位置**：`src/common/auth/oauthCallbackUri.ts`
+- **修复**：未配置 redirectUri 时只允许 localhost/127.0.0.1/::1 作为回退（dev 模式），其他 Host 一律返回空，强制显式配置。
+
+#### 3.3 [已修复] security/usage 路由 RBAC 不一致
+- **位置**：`src/common/auth/enterpriseRoutes.ts`
+- **修复**：`security` 和 `usage` 路由 `requiresRole` 从 `member` 改为 `admin`，与后端 `requireAdmin` 中间件对齐。
+
+#### 3.4 [已修复] admin 角色映射前后端不一致
+- **位置**：`authRoutes.ts`、`oauthLoginHelpers.ts`、`AuthService.ts`、`UserRepository.ts`、`TokenMiddleware.ts`
+- **修复**：所有 `normalizeRole` 中 `admin` 一律归一化为 `org_admin`（原来是 system_admin），与 `adminRoutes.ts` 的 roleMap 对齐，避免权限静默升降。
+
+#### 3.5 [已修复] 邀请码 preview 泄露租户名
+- **位置**：`enterpriseJoinService.ts`、`enterpriseJoin.ts`、`ipcBridge.ts`、`WebuiJoinEnterprisePanel.tsx`
+- **修复**：preview 只返回 `{ valid: true }`，不再返回 tenantId/tenantName；前端文案改为"邀请码有效"。
+
+### 批次 4：CMeas 三连击 + 审计日志 + 制品仓库
+
+#### 4.1 [已修复] CMeas 显示最旧快照而非最新
+- **位置**：`src/renderer/pages/admin/CMeasDashboard.tsx`
+- **修复**：`reduce` 改为只取每个 metric_name 的第一条（后端已按 recorded_at DESC 排序）。
+
+#### 4.2 [已修复] CMeas 失败率进度条反向逻辑
+- **位置**：`CMeasDashboard.tsx`
+- **修复**：invert 指标改用 `ratio = max(0, 1 - val/(target*2))`，高失败率显示空条（未达成），低失败率显示满条（达成）。
+
+#### 4.3 [已修复] CMeas DORA 文案撒谎
+- **位置**：`CMeasDashboard.tsx` 空状态文案
+- **修复**：从"系统将在代码提交和流水线运行时自动采集"改为"请通过 API 或集成推送 DORA 指标"。
+
+#### 4.4 [已修复] 审计日志覆盖 devops 写操作
+- **位置**：`src/process/webserver/auth/auditLogService.ts` 新增 `recordDevopsAudit` + `DEVOPS_AUDIT_ACTIONS`；`devopsRoutes.ts` 在 requirements create/update/delete、MCP create/delete/toggle、RAG document delete 路由调用审计。
+- **注**：制品仓库上传/下载端点的完整实现涉及新功能开发（非 bug 修复），留作产品决策，本轮不在范围内。
+
+### 批次 5：中危 bug 修复
+
+#### 5.1 [已修复] useEnterpriseAsyncData 竞态 + 卸载泄漏
+- **位置**：`src/renderer/hooks/enterprise/modules/useEnterpriseAsyncData.ts`
+- **修复**：引入 `requestIdRef` + `mountedRef`，旧请求结果不覆盖新请求，卸载后不 setState。
+
+#### 5.2 [已修复] is_online 用错数据源
+- **位置**：`adminRoutes.ts` member-dashboard
+- **修复**：`is_online` 改用 `team_runtime_nodes.last_seen_at`（心跳 5 分钟阈值），不再用 `last_login`。同时删除 `TODAY_START`/`todayStartMs` 死代码。
+
+#### 5.3 [已修复] LDAP resolve 顺序导致孤儿账号
+- **位置**：`TeamAddMemberModal.tsx`
+- **修复**：LDAP 路径先按 username 查 members 列表，已是成员则直接提示，不再先调 resolve 创建本地账号。Modal 新增 `members` prop。
+
+#### 5.4 [已修复] AdminTeamRuntimes 静默吞错
+- **位置**：`AdminTeamRuntimes.tsx`
+- **修复**：消费 SWR 的 `error`，加载失败时显示错误提示卡片，不再永远显示空列表。
+
+#### 5.5 [已修复] Pipeline 运行用假进度
+- **位置**：`AdminPipelineEditor.tsx`
+- **修复**：解析 `stages_status_json`，按每 stage 真实 status 渲染 Steps，后端未返回时按索引回退。
+
+#### 5.6 [已修复] CFlow 列表 100 行硬限截断
+- **位置**：`valueStreamRepository.ts`
+- **修复**：LIMIT 从 100 提到 1000。
+
+#### 5.7 [已修复] Milestone due_date 时区 bug
+- **位置**：`MilestoneView.tsx`
+- **修复**：`new Date(due_date)` 改为 `new Date('${due_date}T23:59:59')`，本地当天截止不算逾期。
+
+#### 5.8 [已修复] CTest 切换计划双重加载
+- **位置**：`CTestManagement.tsx`
+- **修复**：删除手动 `useEffect(() => casesState.reload(), [selectedPlan?.id])`，hook 内部已自动响应 loader 变化。
+
+#### 5.9 [已修复] CCode SELECT * 暴露 credential_id
+- **位置**：`codeRepoRepository.ts`
+- **修复**：显式列出列名并排除 `credential_id`，改返回 `has_credential` 布尔标志。
+
+#### 5.10 [已修复] CCode/CPack 删除无二次确认
+- **位置**：`CCodeRepoList.tsx`、`CPackArtifactRepo.tsx`
+- **修复**：删除按钮包 `Modal.confirm`，CPack 提示将级联删除制品。
+
+### 批次 6：低危清理
+
+#### 6.1 [已修复] 成员列表 owner 不在首位
+- **位置**：`adminRoutes.ts` listTeamMembers
+- **修复**：`ORDER BY CASE role WHEN 'owner' THEN 0 ... END` 替代 `role DESC` 字典序。
+
+#### 6.2 [已修复] mcp batch import 不校验 type
+- **位置**：`devopsRoutes.ts` POST `/api/admin/mcp/batch`
+- **修复**：对每个 item 校验 type 在 `['sse','stdio']` 内，否则回退 sse。
+
+#### 6.3 [已修复] AdminMcp 编辑态死分支
+- **位置**：`AdminMcp.tsx` handleOpenEdit
+- **修复**：合并 `if (hasKeys) {} else {}` 两个相同分支为单行。
+
+#### 6.4 [已修复] AdminSkills 单条保存复用 batchSaving 状态
+- **位置**：`AdminSkills.tsx`
+- **修复**：新增独立 `saving` 状态给单条保存用，Modal confirmLoading 改用 `saving`。
+
+#### 6.5 [已修复] usage 重复请求 listMemberDashboard
+- **位置**：`EnterpriseUsagePage.tsx`
+- **修复**：`loadStats` 复用 `membersState.data`，不再独立请求成员列表。
+
+#### 6.6 [已修复] Milestone 无 update/delete 端点
+- **位置**：`cteamRoutes.ts`、`cteamMilestoneService.ts`、`milestoneRepository.ts`
+- **修复**：新增 PATCH/DELETE `/api/admin/milestones/:id` 端点 + service/repository 方法，POST/PATCH/DELETE 加 `requireDevopsAdmin`。
+
+## 验证状态
+- `tsc --noEmit` exit 0（全部批次通过）。
+- 未运行 lint/test/build（按用户要求"不分日期"快速推进，最终验证由用户桌面端 `npm run restart` 实测）。
+- 运行时需桌面端实测：MCP toggle 不丢凭证、requirements 越权被拒、团队 owner 保护、邀请码 preview 不泄露租户名、CMeas 进度条、审计日志写入。
+
+## 涉及文件汇总（本轮）
+
+### 追加改动 — 复查发现的新 bug 修复
+
+#### N1. [已修复] 桌面端开启系统管理员开关实际写入 org_admin
+- **位置**：`src/common/adapter/ipcBridge.ts`、`src/process/bridge/taskBridge.ts`、`src/renderer/utils/kanbanApi.ts`
+- **问题**：桌面端 IPC 通道 `adminUsers.setRole` 的 role 类型只有 `'user' | 'admin'`。`handleSetSystemAdmin` 传 `system_admin` 时，kanbanApi 把它映射为 'admin'，taskBridge 又映射为 'org_admin'。前端显示"系统管理员已开启"但后端实际存 org_admin，用户没有 system_admin 权限。
+- **修复**：IPC 通道 role 类型扩展为 `'user' | 'admin' | 'system_admin'`；taskBridge 正确识别 system_admin；kanbanApi 直传 system_admin 不再降级映射。
+
+#### N2. [已修复] 关闭系统管理员开关会把 org_admin 误降为 member
+- **位置**：`src/renderer/pages/users/index.tsx` handleSetSystemAdmin
+- **问题**：关闭开关时 `nextRole = 'member'`，丢失 org_admin 角色。
+- **修复**：改为 `'org_admin'`，关闭系统管理员后回到组织管理员。
+
+#### N3. [已修复] 系统管理员政策文案绕
+- **位置**：`src/renderer/pages/users/index.tsx` + `zh-CN/settings.json`
+- **修复**：文案改写为"角色说明：系统管理员可进入企业后台的全部功能（含邀请码、企业认证、运行时等系统级配置）；组织管理员只能管理成员（增删改角色），看不到系统级后台入口。"
+
+#### N4. [已修复] 个人版使用统计页仍调用企业版接口
+- **位置**：`src/renderer/pages/enterprise/EnterpriseUsagePage.tsx`
+- **问题**：个人版虽不渲染成员看板和资源卡，但 `membersState` 和 `loadStats` 仍会调用 `listMemberDashboard`/`listPipelines` 等企业版接口，浪费请求且语义不对。
+- **修复**：`showEnterprisePanels=false` 时 membersState 用空 loader、loadStats 直接返回默认值，不发请求。
+
+#### N5. [已实现] 个人版"使用统计"入口
+- **位置**：`src/renderer/pages/settings/components/SettingsSider.tsx`、`SettingsPageWrapper.tsx`、`Router.tsx`
+- **实现**：个人版在设置侧栏「系统」后追加「使用统计」项（Analysis 图标），点击跳转 `/settings/usage` → `<Navigate to='/enterprise/usage' replace />`。企业版不显示此入口（从企业后台导航进入）。
+
+#### N6. [已修复] 侧边栏「企业后台」按钮冗余
+- **位置**：`src/renderer/components/layout/sidebarNav.tsx`、`SidebarModuleNav.tsx`
+- **问题**：侧边栏有「企业后台」按钮，但左下角身份面板（WorkspaceIdentityPanel）的菜单里已有「企业团队版管理后台」入口，两者重复。
+- **修复**：NavItem 类型加 `hidden?: boolean` 字段；侧边栏「企业后台」条目标 `hidden: true`；SidebarModuleNav 过滤掉 hidden 条目。路由激活逻辑（standalonePrefixes）保留 `/enterprise` 不变。
+
+## 涉及文件汇总（本轮）
+
+### 追加改动 — 删除 3 个隐藏路由 + 使用统计开放给个人版
+
+#### 删除隐藏路由 ctest/cflow/cagent
+- **位置**：`enterpriseRoutes.ts`、`enterpriseNav.ts`、`paths.ts`、`Router.tsx`、`sidebarNav.tsx`、`EnterpriseHome.tsx`
+- **原因**：cagent 只是 `<Navigate>` 重定向到超级助手（价值不大）；ctest/cflow 虽有真实页面但功能与 Issues 看板重叠且数据缺陷多，用户决定删除。
+- **影响**：`/enterprise/ctest`、`/enterprise/cflow`、`/enterprise/cagent` 路由不再存在；导航不再显示；EnterpriseHome 的能力卡片移除这 3 项。CTestManagement.tsx 和 CFlowBoard.tsx 文件保留（未删除物理文件，避免破坏可能的引用），只是不再挂载路由。
+
+#### 使用统计开放给个人版
+- **位置**：`EnterpriseUsagePage.tsx`、`adminRoutes.ts` 的 `/api/admin/agent-token-usage`
+- **原因**：使用统计的核心是 Token/模型用量统计（数字员工 Token 排行），对个人版有价值。成员看板和资源统计卡是企业专属，个人版隐藏。
+- **改动**：
+  - 页面引入 `useEditionFeatures.isEnterpriseEdition`，新增 `showEnterprisePanels` 标志。资源统计卡和成员看板用 `showEnterprisePanels` 包裹，个人版不渲染。
+  - Token 排行卡片去掉 `isAdmin` 限制，个人版也显示。
+  - 后端 `/api/admin/agent-token-usage` 移除 `isEnterpriseAdminRole` 403 检查，任意已认证用户可调（按 `resolveAdminTenantId(req)` 聚合，个人版 tenant_id='default' 只看自己会话）。
+- **待办**：个人版入口未加（需要决定放哪——建议设置页或标题栏用户菜单）。
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/webserver/routes/devops/cciRoutes.ts` | run 路由加 requireDevopsAdmin |
+| `src/process/services/pipeline/PipelineService.ts` | executeCommand 加 cwd + env 过滤 |
+| `src/process/webserver/routes/devopsRoutes.ts` | SSRF 防护 + requirements 鉴权 + MCP toggle 端点 + 审计日志 + batch type 校验 |
+| `src/renderer/pages/admin/AdminMcp.tsx` | toggle 改专用端点 + 死分支清理 |
+| `src/renderer/utils/enterpriseApi/modules.ts` | 新增 toggleMcpRegistryEnabled |
+| `src/process/webserver/routes/adminRoutes.ts` | 跨租户校验 + owner 保护 + is_online 心跳 + 成员排序 + agent-token-usage 放开 |
+| `src/renderer/pages/login/index.tsx` | 移除密码存储 |
+| `src/common/auth/oauthCallbackUri.ts` | localhost-only 回退 |
+| `src/common/auth/enterpriseRoutes.ts` | security/usage 改 admin + 删除 ctest/cflow/cagent |
+| `src/process/webserver/routes/authRoutes.ts` + `oauthLoginHelpers.ts` + `AuthService.ts` + `UserRepository.ts` + `TokenMiddleware.ts` | admin 角色统一归一化 |
+| `src/process/webserver/auth/enterpriseJoinService.ts` + `src/common/types/enterpriseJoin.ts` + `src/common/adapter/ipcBridge.ts` + `src/renderer/utils/enterpriseJoinApi.ts` + `WebuiJoinEnterprisePanel.tsx` | 邀请码 preview 不泄露 |
+| `src/renderer/pages/admin/CMeasDashboard.tsx` | 三连击修复 |
+| `src/process/webserver/auth/auditLogService.ts` | 新增 recordDevopsAudit + DEVOPS_AUDIT_ACTIONS |
+| `src/renderer/hooks/enterprise/modules/useEnterpriseAsyncData.ts` | 竞态 + 卸载保护 |
+| `src/renderer/pages/admin/MilestoneView.tsx` | 时区修复 |
+| `src/process/services/database/repositories/devops/valueStreamRepository.ts` | LIMIT 100→1000 |
+| `src/renderer/pages/admin/AdminPipelineEditor.tsx` | 解析 stages_status_json |
+| `src/process/services/database/repositories/devops/codeRepoRepository.ts` | 排除 credential_id |
+| `src/renderer/pages/admin/CCodeRepoList.tsx` + `CPackArtifactRepo.tsx` | 删除二次确认 |
+| `src/renderer/pages/admin/CTestManagement.tsx` | 删双重加载 |
+| `src/renderer/pages/admin/AdminTeamRuntimes.tsx` | 错误展示 |
+| `src/renderer/pages/admin/components/TeamAddMemberModal.tsx` + `AdminTeams.tsx` | LDAP resolve 顺序 |
+| `src/renderer/pages/admin/AdminSkills.tsx` | 独立 saving 状态 |
+| `src/renderer/pages/enterprise/EnterpriseUsagePage.tsx` | 个人版只显示 Token 排行 |
+| `src/renderer/pages/enterprise/enterpriseNav.ts` + `paths.ts` + `Router.tsx` + `sidebarNav.tsx` + `EnterpriseHome.tsx` | 删除 ctest/cflow/cagent |
+| `src/process/webserver/routes/devops/cteamRoutes.ts` + `cteamMilestoneService.ts` + `milestoneRepository.ts` | Milestone PATCH/DELETE |

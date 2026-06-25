@@ -167,7 +167,9 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
   const handleSetSystemAdmin = (id: string, enabled: boolean) => {
     const run = async () => {
       try {
-        const nextRole: UserDbRole = enabled ? 'system_admin' : 'member';
+        // 关闭系统管理员开关时，回到组织管理员（而非成员），避免误降级。
+        // 如果该用户原本就是 member（被临时授予 system_admin），UI 上不会出现这个开关。
+        const nextRole: UserDbRole = enabled ? 'system_admin' : 'org_admin';
         await adminApi.setRole(id, nextRole);
         setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role: nextRole } : u)));
         Message.success(t('settings.users.roleUpdated', { defaultValue: '角色已更新' }));
@@ -526,7 +528,7 @@ const UsersPage: React.FC<UsersPageProps> = ({ enterpriseAccess = 'full' }) => {
           className='mb-12px'
           content={t('settings.users.systemAdminPolicyHint', {
             defaultValue:
-              '「系统管理员」默认关闭。开启后该用户可进入企业团队版管理后台；请慎重授权。组织管理员（Admin）可管理成员，但不具备系统管理员后台入口。',
+              '角色说明：系统管理员可进入企业后台的全部功能（含邀请码、企业认证、运行时等系统级配置）；组织管理员只能管理成员（增删改角色），看不到系统级后台入口。系统管理员开关默认关闭，请按需开启。',
           })}
         />
       ) : null}

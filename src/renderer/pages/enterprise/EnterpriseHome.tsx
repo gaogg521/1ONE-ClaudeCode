@@ -9,14 +9,21 @@ import { Button, Card, Grid, Statistic, Tag, Typography } from '@arco-design/web
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
+  Analysis,
   Book,
+  Calendar,
+  CheckOne,
+  Code,
   EveryUser,
+  Exchange,
   Globe,
+  Inbox,
   Lock,
   Mail,
   Peoples,
   Plug,
   Right,
+  Robot,
   Server,
   Thunderbolt,
   TicketOne,
@@ -50,8 +57,6 @@ const CAPABILITY_KEYS = new Set<EnterpriseNavKey>([
   'cpack',
   'cmeas',
   'ccode',
-  'ctest',
-  'cflow',
 ]);
 
 const CAPABILITY_SUMMARY: Partial<Record<EnterpriseNavKey, string>> = {
@@ -60,8 +65,6 @@ const CAPABILITY_SUMMARY: Partial<Record<EnterpriseNavKey, string>> = {
   cpack: '制品仓库、制品资产与分发出口。',
   cmeas: 'DORA 指标与交付效能分析。',
   ccode: '代码资产接入与交付链路关联。',
-  ctest: '测试计划、用例与状态聚合。',
-  cflow: '需求到发布的价值流打点与瓶颈分析。',
 };
 
 const CARD_ICONS: Record<EnterpriseNavKey, React.ReactNode> = {
@@ -77,13 +80,10 @@ const CARD_ICONS: Record<EnterpriseNavKey, React.ReactNode> = {
   mcp: <Plug theme='outline' size={18} />,
   skills: <Thunderbolt theme='outline' size={18} />,
   'pipeline-editor': <Thunderbolt theme='outline' size={18} />,
-  milestones: <Thunderbolt theme='outline' size={18} />,
-  cpack: <Thunderbolt theme='outline' size={18} />,
-  ccode: <Thunderbolt theme='outline' size={18} />,
-  cmeas: <Thunderbolt theme='outline' size={18} />,
-  ctest: <Thunderbolt theme='outline' size={18} />,
-  cflow: <Thunderbolt theme='outline' size={18} />,
-  cagent: <Thunderbolt theme='outline' size={18} />,
+  milestones: <Calendar theme='outline' size={18} />,
+  cpack: <Inbox theme='outline' size={18} />,
+  ccode: <Code theme='outline' size={18} />,
+  cmeas: <Analysis theme='outline' size={18} />,
   usage: <Peoples theme='outline' size={18} />,
   security: <Lock theme='outline' size={18} />,
 };
@@ -93,18 +93,20 @@ const EnterpriseHome: React.FC = () => {
   const navigate = useNavigate();
   const { enterpriseContext } = useWebuiEnterpriseMode();
   const runtime = useEnterpriseRuntime();
-  const canViewOverviewMetrics = ['mcp', 'rag', 'pipeline-editor', 'ccode'].some((key) =>
-    runtime.visibleNavItems.some((item) => item.key === key)
-  );
+  const canViewMcp = runtime.visibleNavItems.some((item) => item.key === 'mcp');
+  const canViewRag = runtime.visibleNavItems.some((item) => item.key === 'rag');
+  const canViewPipeline = runtime.visibleNavItems.some((item) => item.key === 'pipeline-editor');
+  const canViewCode = runtime.visibleNavItems.some((item) => item.key === 'ccode');
+  const canViewOverviewMetrics = canViewMcp || canViewRag || canViewPipeline || canViewCode;
   const loadMetrics = useCallback(async () => {
     if (!canViewOverviewMetrics) {
       return DEFAULT_METRICS;
     }
     const [mcpRegistry, ragDocuments, pipelines, codeRepos] = await Promise.all([
-      listMcpRegistry(),
-      listRagDocuments(),
-      listPipelines(),
-      listCodeRepos(),
+      canViewMcp ? listMcpRegistry() : Promise.resolve([]),
+      canViewRag ? listRagDocuments() : Promise.resolve([]),
+      canViewPipeline ? listPipelines() : Promise.resolve([]),
+      canViewCode ? listCodeRepos() : Promise.resolve([]),
     ]);
     return {
       mcpCount: mcpRegistry.filter((item) => Boolean(item.enabled)).length,
@@ -112,26 +114,19 @@ const EnterpriseHome: React.FC = () => {
       pipelineCount: pipelines.length,
       repoCount: codeRepos.length,
     };
-  }, [canViewOverviewMetrics]);
+  }, [canViewOverviewMetrics, canViewMcp, canViewRag, canViewPipeline, canViewCode]);
   const metricsState = useEnterpriseAsyncData(
     loadMetrics,
     DEFAULT_METRICS,
     '加载企业概览指标失败'
   );
 
-  const metricExtraText = canViewOverviewMetrics
-    ? {
-        pipeline: '持续集成编排与执行入口',
-        mcp: '外部集成安全代理连通',
-        rag: '全离线 WASM 语义向量模型',
-        repo: '代码资产已接入交付链路',
-      }
-    : {
-        pipeline: '当前角色暂无流水线概览权限',
-        mcp: '当前角色暂无 MCP 概览权限',
-        rag: '当前角色暂无知识库概览权限',
-        repo: '当前角色暂无代码资产概览权限',
-      };
+  const metricExtraText = {
+    pipeline: canViewPipeline ? '持续集成编排与执行入口' : '当前角色暂无流水线概览权限',
+    mcp: canViewMcp ? '外部集成安全代理连通' : '当前角色暂无 MCP 概览权限',
+    rag: canViewRag ? '全离线 WASM 语义向量模型' : '当前角色暂无知识库概览权限',
+    repo: canViewCode ? '代码资产已接入交付链路' : '当前角色暂无代码资产概览权限',
+  };
 
   const tenantLabel = resolveEnterpriseTenantDisplayLabel(
     enterpriseContext?.tenantId,

@@ -18,14 +18,16 @@ export class CodeRepoRepository {
   ): Promise<unknown[]> {
     const db = await getDatabase();
     const driver = db.getDriver();
+    // 显式列出列名，排除 credential_id 防止凭据泄露给前端。
+    const selectCols = 'id, tenant_id, name, url, provider, default_branch, scope, team_id, created_by, created_at, updated_at, (CASE WHEN credential_id IS NULL OR credential_id = \'\' THEN 0 ELSE 1 END) AS has_credential';
     if (isAdmin) {
       return driver
-        .prepare(`SELECT * FROM code_repos WHERE tenant_id = ? ORDER BY created_at DESC`)
+        .prepare(`SELECT ${selectCols} FROM code_repos WHERE tenant_id = ? ORDER BY created_at DESC`)
         .all(tenantId) as unknown[];
     }
     return driver
       .prepare(
-        `SELECT * FROM code_repos WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY created_at DESC`
+        `SELECT ${selectCols} FROM code_repos WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY created_at DESC`
       )
       .all(tenantId, userId, tenantId, userId) as unknown[];
   }

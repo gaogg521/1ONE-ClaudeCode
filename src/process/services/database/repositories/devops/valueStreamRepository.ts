@@ -17,7 +17,7 @@ export class ValueStreamRepository {
          LEFT JOIN requirements r ON vs.requirement_id = r.id
          WHERE vs.tenant_id = ?
          ORDER BY vs.entry_time DESC
-         LIMIT 100`
+         LIMIT 1000`
       )
       .all(tenantId) as unknown[];
   }

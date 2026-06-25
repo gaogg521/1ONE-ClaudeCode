@@ -48,7 +48,7 @@ function unwrap<T>(result: IQueryResult<T>, errorMessage: string): T {
 function mapUser(row: IUser): AuthUser {
   const normalizeRole = (role: IUser['role'] | null | undefined): 'member' | 'org_admin' | 'system_admin' => {
     if (!role) return 'member';
-    if (role === 'admin') return 'system_admin';
+    if (role === 'admin') return 'org_admin';
     if (role === 'user') return 'member';
     if (role === 'system_admin' || role === 'org_admin' || role === 'member') return role;
     return 'member';

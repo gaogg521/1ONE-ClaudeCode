@@ -10,7 +10,26 @@ export function resolveOAuthCallbackUri(configuredRedirectUri: string, callbackP
     return configured;
   }
   const origin = requestOrigin.trim().replace(/\/+$/, '');
-  return origin ? `${origin}${callbackPath.startsWith('/') ? callbackPath : `/${callbackPath}`}` : '';
+  if (!origin) {
+    return '';
+  }
+  // Security: never trust an arbitrary Host header for the OAuth redirect URI.
+  // Only allow localhost/127.0.0.1 origins as an automatic fallback (dev mode).
+  // Production deployments must configure an explicit redirectUri.
+  if (!isLocalhostOrigin(origin)) {
+    return '';
+  }
+  return `${origin}${callbackPath.startsWith('/') ? callbackPath : `/${callbackPath}`}`;
+}
+
+function isLocalhostOrigin(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    const host = parsed.hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  } catch {
+    return false;
+  }
 }
 
 export function readRequestOrigin(req: { protocol?: string; get?: (name: string) => string | undefined }): string {

@@ -45,9 +45,6 @@ const NAV_LABELS: Record<
   cpack: { labelKey: 'admin.cpack.nav', labelDefault: '制品仓库' },
   ccode: { labelKey: 'admin.ccode.nav', labelDefault: '代码库' },
   cmeas: { labelKey: 'admin.cmeas.nav', labelDefault: '效能洞察' },
-  ctest: { labelKey: 'admin.ctest.nav', labelDefault: '测试管理' },
-  cflow: { labelKey: 'admin.cflow.nav', labelDefault: '价值流' },
-  cagent: { labelKey: 'admin.cagent.nav', labelDefault: 'Agent 助手' },
   usage: { labelKey: 'settings.enterpriseConsole.navUsage', labelDefault: '使用统计' },
   security: { labelKey: 'settings.enterpriseConsole.navSecurity', labelDefault: '安全与审计' },
 };

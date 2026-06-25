@@ -45,32 +45,32 @@ const AboutModalContent: React.FC = () => {
     window.dispatchEvent(new CustomEvent('one-open-update-modal', { detail: { source: 'about' } }));
   };
 
-  const REPO = 'https://github.com/gaogg521/1ONE-ClaudeCode';
+  const SITE = 'https://1oneclaw.com';
 
   const linkItems = [
     {
       title: t('settings.helpDocumentation'),
-      url: `${REPO}#readme`,
+      url: `${SITE}/docs`,
       icon: <Right theme='outline' size='16' />,
     },
     {
       title: t('settings.updateLog'),
-      url: `${REPO}/releases`,
+      url: `${SITE}/changelog`,
       icon: <Right theme='outline' size='16' />,
     },
     {
       title: t('settings.feedback'),
-      url: `${REPO}/issues`,
+      url: `${SITE}/feedback`,
       icon: <Right theme='outline' size='16' />,
     },
     {
       title: t('settings.contactMe'),
-      url: REPO,
+      url: `${SITE}/contact`,
       icon: <Right theme='outline' size='16' />,
     },
     {
       title: t('settings.officialWebsite'),
-      url: REPO,
+      url: SITE,
       icon: <Right theme='outline' size='16' />,
     },
   ];
@@ -100,7 +100,7 @@ const AboutModalContent: React.FC = () => {
               <div
                 className='text-t-primary cursor-pointer hover:text-t-secondary transition-colors p-4px'
                 onClick={() =>
-                  openLink(REPO).catch((error) =>
+                  openLink(SITE).catch((error) =>
                     console.error('Failed to open link:', error)
                   )
                 }
