@@ -4,6 +4,7 @@
  */
 
 import common from './common.json';
+import admin from './admin.json';
 import agentMode from './agentMode.json';
 import update from './update.json';
 import login from './login.json';
@@ -28,6 +29,7 @@ import sessions from './sessions.json';
 
 export default {
   common,
+  admin,
   agentMode,
   update,
   login,

@@ -4,6 +4,7 @@
   "supportedLanguages": ["zh-CN", "en-US"],
   "modules": [
     "common",
+    "admin",
     "agentMode",
     "update",
     "login",

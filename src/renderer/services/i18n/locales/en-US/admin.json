@@ -1,0 +1,422 @@
+{
+  "kanban": {
+    "message": {
+      "loadFailed": "加载看板需求数据失败",
+      "created": "创建成功",
+      "createFailed": "Create failed",
+      "epicCreated": "已创建史诗：{{name}}",
+      "updateFailed": "看板状态流转更新失败",
+      "deleted": "卡片已物理删除",
+      "deleteFailed": "删除失败",
+      "aiFailed": "AI 自动拆解失败，请检查数据库配置",
+      "milestoneBound": "已更新版本里程碑绑定"
+    },
+    "validation": {
+      "subjectRequired": "标题不能为空",
+      "promptRequired": "请输入业务需求描述"
+    },
+    "ai": {
+      "success": "AI Agent 已根据输入创建 1 张特性卡和 {{count}} 张拆解卡片。",
+      "desc": "请输入宏观业务需求描述。AI 研发助手将全自动：1. 创建 Feature 特性主卡；2. 深度分析并级联衍生出多级 User Story 开发卡，分别自动滑入相应的开发、设计看板中，大幅减少人工录入开销。",
+      "promptLabel": "需求详情",
+      "placeholder": "例如：在1ONE Code 企业版中加一个 RAG 本地知识库。它需要有解析、切片、余弦搜索 playground，并补齐管理员角色边界与回归测试，最后确保没有回归。"
+    },
+    "pageTitle": "CTeam 敏捷协同看板",
+    "pageDesc": "企业级需求管理：树形拆解、敏捷任务状态流转，融合 AI 智能自动拆单技术。",
+    "button": {
+      "aiDecompose": "AI 需求一键拆单",
+      "newCard": "新建卡片",
+      "aiExecute": "AI 分析并拆解"
+    },
+    "batchImport": "批量导入",
+    "epicsTitle": "史诗列表 (Epics)",
+    "modal": {
+      "newEpicTitle": "创建新史诗",
+      "newCardTitle": "创建需求卡片",
+      "aiTitle": "✨ AI Agent 需求一键拆单（CTeam 敏捷场景）",
+      "detailTitle": "卡片详情"
+    },
+    "form": {
+      "epicPlaceholder": "史诗名称",
+      "type": "类别",
+      "subject": "标题",
+      "description": "描述",
+      "priority": "优先级",
+      "status": "看板泳道"
+    },
+    "card": {
+      "subCount": "包含 {{count}} 个子项"
+    },
+    "milestoneBound": "已绑定里程碑",
+    "milestoneLabel": "版本里程碑",
+    "milestonePlaceholder": "选择里程碑",
+    "openMilestones": "Milestones",
+    "column": {
+      "empty": "拖拽卡片至此"
+    },
+    "batchImportPrompt": "粘贴需求 JSON 数组:\\n[{\"type\":\"story\",\"subject\":\"标题\",\"description\":\"描述\",\"priority\":\"medium\",\"status\":\"backlog\"}]",
+    "confirm": {
+      "deleteCard": "确定物理删除该张看板卡片吗？"
+    }
+  },
+  "mcp": {
+    "messages": {
+      "loadFailed": "加载 MCP 服务失败",
+      "saveSuccess": "MCP service saved",
+      "saveFailed": "Failed to save MCP service",
+      "deleteSuccess": "删除 MCP 服务成功",
+      "deleteFailed": "Failed to delete MCP service"
+    },
+    "table": {
+      "name": "服务名称",
+      "type": "传输类型",
+      "endpoint": "端点 / 命令",
+      "scope": "归属",
+      "enabled": "状态",
+      "actions": "操作",
+      "edit": "编辑"
+    },
+    "title": "MCP 代理注册",
+    "desc": "注册并管理团队 MCP 代理。成员可创建个人或团队工具，管理员可设为组织共享。",
+    "batchImport": "批量导入",
+    "addConnector": "注册服务",
+    "empty": "暂无 MCP 服务，点击上方开始注册。",
+    "modal": {
+      "titleEdit": "编辑 MCP 服务",
+      "titleAdd": "注册新 MCP 服务",
+      "name": "服务名称",
+      "namePlaceholder": "例如：postgres-database-tool",
+      "type": "传输类型",
+      "endpoint": "端点或命令行",
+      "endpointPlaceholderStdio": "例如：npx -y @modelcontextprotocol/server-postgres",
+      "endpointPlaceholderSse": "例如：http://localhost:3001/sse",
+      "enabled": "启用状态",
+      "credentials": "环境变量凭证 (Credentials)",
+      "addEnv": "添加凭证",
+      "envKey": "变量名 (Key, 如 API_KEY)",
+      "envValuePlaceholderSaved": "****** (保留已保存的值)",
+      "envValue": "凭证值 (Value)",
+      "noEnv": "无需环境变量凭证"
+    },
+    "validation": {
+      "nameRequired": "请输入服务名称",
+      "endpointRequired": "请输入端点地址或启动命令"
+    }
+  },
+  "scope": {
+    "teamRequired": "Please select a team",
+    "label": "可见范围",
+    "personal": "个人",
+    "team": "团队共享",
+    "organization": "组织共享",
+    "teamSelect": "所属团队",
+    "teamPlaceholder": "选择团队",
+    "teamLabel": "团队",
+    "createdBy": "创建者"
+  },
+  "pipeline": {
+    "title": "CCI 持续集成流水线编排器",
+    "editorDesc": "可视化拖拽编排 Stage/Job，内置 50+ 原子模板，支持质量红线拦截与多环境部署。",
+    "button": {
+      "run": "▶ 运行流水线"
+    },
+    "introTitle": "CCI 的意义：流水线编排、运行与质量闸口",
+    "introDesc": "先编排最小 Stage，再保存、运行和查看日志。当前编辑器使用简化视图，但会自动转换为执行器可运行的 jobs/commands 结构。",
+    "introSteps": "最小使用路径：1. 新建或选择流水线 2. 添加 Stage 命令 3. 保存 4. 运行并查看结果日志",
+    "list": "流水线列表",
+    "empty": "暂无流水线",
+    "create": "新建流水线",
+    "newPipeline": "新建流水线",
+    "selectOrCreate": "选择或新建一条流水线开始编排",
+    "name": "流水线名称",
+    "stages": "Stage 编排（拖拽排序）",
+    "noStages": "暂无 Stage，点击下方按钮添加",
+    "addStage": "添加 Stage",
+    "addFromTemplate": "从原子模板添加",
+    "runResult": "执行结果",
+    "templateLibrary": "模板库",
+    "customTemplates": "我的自定义模板",
+    "builtinTemplates": "内置原子模板（50+）",
+    "editStage": "编辑 Stage",
+    "saveAsTemplate": "保存为自定义模板",
+    "stageName": "Stage 名称",
+    "stageCommand": "执行命令",
+    "stageEnabled": "启用",
+    "saveTemplateTitle": "保存为自定义模板",
+    "templateName": "模板名称",
+    "templateNamePlaceholder": "例如：我的 Node.js 构建流程",
+    "templateCommand": "命令预览",
+    "message": {
+      "loadFailed": "获取流水线配置失败",
+      "triggered": "流水线已成功触发编译构建",
+      "starting": "正在初始化流水线环境...\\n",
+      "triggerFailed": "触发执行失败"
+    },
+    "desc": "国产高性能、强管控的编译构建流水线。自动卡控代码 Lint 规范与质量红线门槛。",
+    "consoleTitle": "持续集成构建控制台日志",
+    "consolePlaceholder": "控制台就绪。点击上方“运行”开始流式监控编译状态..."
+  },
+  "rag": {
+    "messages": {
+      "loadFailed": "加载文档失败",
+      "addSuccess": "文档索引成功",
+      "addFailed": "索引文档失败",
+      "deleteSuccess": "文档删除成功",
+      "deleteFailed": "删除文档失败",
+      "searchFailed": "检索失败",
+      "scopeUpdated": "可见范围已更新",
+      "scopeUpdateFailed": "更新可见范围失败"
+    },
+    "urlRequired": "请输入URL",
+    "urlSuccess": "URL 文档导入成功",
+    "urlFailed": "导入失败",
+    "feishuUrlRequired": "请输入飞书文档链接",
+    "feishuSuccess": "飞书文档已提交导入，后台索引中",
+    "feishuFailed": "飞书文档导入失败",
+    "table": {
+      "title": "标题",
+      "content": "内容摘要",
+      "lastError": "失败原因：{{message}}",
+      "actions": "操作",
+      "editScope": "归属"
+    },
+    "title": "RAG 知识库",
+    "desc": "管理团队向量化文档。成员可创建个人或团队共享知识，管理员可设为组织级共享。",
+    "uploadFile": "上传文件",
+    "uploadSuccess": "文件上传成功，后台索引导入中",
+    "uploadFailed": "上传失败",
+    "importUrl": "URL 导入",
+    "importFeishu": "企业飞书导入",
+    "addDoc": "粘贴文本",
+    "modelNotReady": "Embedding 模型未就绪",
+    "modelNotReadyDesc": "向量化模型正在初始化或下载中（约 80MB），导入的文档将在模型就绪后自动完成索引。若长时间未就绪，请检查网络连接或查看服务日志。错误信息：{{msg}}",
+    "documentsCard": "已索引的文档",
+    "empty": "暂无文档，点击上方开始导入。",
+    "playgroundCard": "语义检索测试",
+    "searchPlaceholder": "输入查询词测试语义匹配...",
+    "results": "检索结果",
+    "noResults": "暂无检索结果，输入上方查询词开始测试",
+    "score": "得分",
+    "modal": {
+      "addTitle": "添加新文档",
+      "docTitle": "文档标题",
+      "titlePlaceholder": "例如：1ONE Code 企业版部署说明",
+      "docContent": "文档内容",
+      "contentPlaceholder": "请输入文档全文，系统会自动对大段文本进行切片并向量化。",
+      "editScopeTitle": "调整文档可见范围"
+    },
+    "validation": {
+      "titleRequired": "请输入标题",
+      "contentRequired": "请输入内容"
+    },
+    "urlImportTitle": "URL 导入文档",
+    "urlLabel": "文档 URL",
+    "urlTitleLabel": "标题（可选）",
+    "urlTitlePlaceholder": "留空则自动从URL提取",
+    "feishuImportTitle": "企业飞书文档导入",
+    "feishuUrlLabel": "飞书文档链接",
+    "feishuTitleLabel": "标题（可选）",
+    "feishuTitlePlaceholder": "留空则自动读取飞书文档标题",
+    "feishuHint": "该入口会复用企业控制台中已配置的飞书应用凭证，不再走匿名网页抓取。"
+  },
+  "skills": {
+    "loadFailed": "加载失败",
+    "nameRequired": "Name required",
+    "updated": "Updated",
+    "created": "Created",
+    "saveFailed": "Save failed",
+    "deleted": "Deleted",
+    "deleteFailed": "删除失败",
+    "name": "名称",
+    "description": "描述",
+    "scope": "归属",
+    "enabled": "启用",
+    "actions": "操作",
+    "confirmDelete": "确定删除？",
+    "title": "企业 Skills 技能仓库",
+    "desc": "统一管理团队 AI 技能。成员可创建个人或团队共享技能，管理员可设为组织共享。",
+    "batchImport": "批量导入",
+    "create": "新建技能",
+    "empty": "暂无技能，点击上方\"新建技能\"开始创建",
+    "editTitle": "编辑技能",
+    "createTitle": "新建技能",
+    "content": "Skill 内容 (Markdown)"
+  },
+  "teamRuntimes": {
+    "title": "Team runtimes",
+    "desc": "Aggregates machine names, IPs, and installed agents reported by desktop and browser clients. Synced with the super-admin backend.",
+    "loadError": "Failed to load runtime nodes. Check that the enterprise backend service is available."
+  },
+  "teams": {
+    "messages": {
+      "loadFailed": "加载失败",
+      "operationFailed": "加载成员失败",
+      "loadTasksFailed": "加载团队任务失败",
+      "created": "团队已创建",
+      "createFailed": "Create failed",
+      "updated": "团队已更新",
+      "updateFailed": "Update failed",
+      "taskCreated": "任务已创建",
+      "deleted": "Deleted",
+      "deleteFailed": "删除失败",
+      "memberAdded": "成员已添加/更新",
+      "roleUpdated": "Role updated",
+      "memberRemoved": "成员已移除",
+      "removeFailed": "移除失败"
+    },
+    "validation": {
+      "nameWorkspaceRequired": "name/workspace 不能为空",
+      "nameRequired": "请填写团队名称",
+      "taskSubjectRequired": "请填写任务标题"
+    },
+    "table": {
+      "username": "用户名",
+      "role": "Role",
+      "actions": "操作",
+      "taskTitle": "标题",
+      "status": "状态",
+      "owner": "负责人",
+      "name": "名称",
+      "workspace": "工作区"
+    },
+    "button": {
+      "remove": "移除",
+      "delete": "删除",
+      "refresh": "Refresh",
+      "createTeam": "创建团队",
+      "manageMembers": "管理成员",
+      "editTeam": "编辑团队",
+      "addMember": "添加成员",
+      "createTask": "新建任务",
+      "create": "创建",
+      "cancel": "Cancel",
+      "saveChanges": "保存修改"
+    },
+    "confirm": {
+      "deleteTask": "确定删除该任务？"
+    },
+    "page": {
+      "title": "团队与权限"
+    },
+    "pageDesc": "管理企业团队、成员角色与协同任务，作为 CTeam 的组织与执行入口。",
+    "card": {
+      "teamList": "团队列表",
+      "membersOf": "成员：{{name}}",
+      "members": "Member",
+      "tasksOf": "团队任务：{{name}}"
+    },
+    "empty": "暂无团队，请先创建团队。",
+    "emptyMembers": "当前团队暂无成员。",
+    "placeholder": {
+      "selectTeam": "从左侧选择一个团队以管理成员"
+    },
+    "emptyTasks": "当前团队暂无任务。",
+    "modal": {
+      "createTeam": "创建团队",
+      "editTeam": "编辑团队",
+      "createTask": "新建团队任务"
+    },
+    "form": {
+      "name": "名称",
+      "workspace": "工作区",
+      "workspacePlaceholder": "例如：D:\\\\workspace\\\\teamA",
+      "workspaceMode": "工作区模式",
+      "taskTitle": "标题",
+      "description": "描述",
+      "ownerUserId": "负责人 userId（可选）",
+      "ownerPlaceholder": "对应用户管理中的 user id"
+    }
+  },
+  "cflow": {
+    "title": "Value stream",
+    "desc": "端到端交付可视化。精细度量各阶段等待时间与处理时间，精准识别协作瓶颈。数据由 CTeam 需求状态流转自动打点。",
+    "bottleneck": "阶段平均处理时间（瓶颈识别）",
+    "empty": "暂无价值流数据。在 CTeam 中推进需求状态后，数据将自动出现在这里。",
+    "flowEfficiencyFormula": "流动效率 = 处理时间 / (等待 + 处理)",
+    "flowEfficiency": "流动效率",
+    "totalWait": "总等待",
+    "totalProcess": "总处理",
+    "wait": "等待",
+    "process": "处理"
+  },
+  "cmeas": {
+    "title": "CMeas performance insights",
+    "desc": "DORA four metrics + end-to-end data analysis from requirements to deployment.",
+    "aiDiagnosis": "AI performance diagnosis",
+    "noData": "No metric data yet. Push DORA metrics via API or integration.",
+    "aiSuggestion": "Based on current DORA metrics, the team performs well on lead time and deploy frequency. Focus on reducing change failure rate by enforcing quality gates in CI pipelines (unit test coverage > 80%)."
+  },
+  "ctest": {
+    "caseSubject": "用例标题",
+    "caseSteps": "步骤",
+    "caseExpected": "预期结果",
+    "caseStatus": "状态",
+    "caseActions": "执行",
+    "pass": "通过",
+    "fail": "失败",
+    "reset": "重置",
+    "title": "Test management",
+    "desc": "测试计划、用例管理与执行状态追踪。",
+    "newPlan": "新建测试计划",
+    "plans": "测试计划",
+    "noPlans": "暂无测试计划",
+    "selectPlan": "请选择测试计划",
+    "addCase": "添加用例",
+    "selectPlanHint": "从左侧选择一个测试计划开始管理用例",
+    "noCases": "暂无测试用例，点击「添加用例」开始",
+    "planName": "计划名称",
+    "planDesc": "描述",
+    "linkedReq": "关联需求（可选）",
+    "selectReq": "选择关联的需求/Story"
+  },
+  "security": {
+    "loadFailed": "加载审计日志失败",
+    "colTime": "时间",
+    "colActor": "操作者",
+    "colAction": "操作",
+    "colTarget": "对象",
+    "colIp": "IP",
+    "descAdmin": "全组织操作审计日志与安全事件追踪，保障企业团队数据合规。",
+    "descMember": "查看您与同团队成员的操作审计记录（不含其他团队）。",
+    "empty": "暂无审计日志。操作记录将自动生成。",
+    "emptyMember": "暂无团队相关审计记录。"
+  },
+  "usage": {
+    "memberLoadFailed": "Failed to load member status",
+    "loadFailed": "Failed to load usage statistics",
+    "agentTokensLoadFailed": "Failed to load agent token statistics",
+    "statMembers": "Enterprise members",
+    "statTeamMembers": "Team members",
+    "statRag": "RAG knowledge chunks",
+    "statMcp": "MCP tools",
+    "statSkills": "Skills",
+    "statPipelines": "Pipelines",
+    "memberName": "Member",
+    "memberRole": "Role",
+    "memberStatus": "Online status",
+    "lastSeen": "最近：{{time}}",
+    "memberTasks": "Tasks completed",
+    "taskProgress": "{{completed}}/{{total}} 已完成",
+    "taskInProgress": "{{n}} 进行中",
+    "descAdmin": "Enterprise team resource usage overview and real-time member status.",
+    "descMember": "View resource usage and teammate status visible to your team (filtered by team membership).",
+    "descPersonal": "Token usage across your sessions and agents, last 30 days.",
+    "memberBoard": "Member board",
+    "teamMemberBoard": "Team member board",
+    "onlineCount": "{{n}} online",
+    "onlineHint": "Active within 15 minutes counts as online",
+    "noMembers": "No member data",
+    "noTeamMembers": "No team member data. Join a team first.",
+    "agentTokenBoard": "Digital employee token leaderboard",
+    "agentTokenBoardHint": "Aggregated by sessions in the last {{days}} days (based on conversation extra.lastTokenUsage snapshots; not separately billed).",
+    "agentTokenEmpty": "No session token records yet. Token usage per agent will appear here after conversations start.",
+    "agentTokenTotal": "Total tokens (estimated)",
+    "agentTokenName": "Agent",
+    "agentTokenSource": "Type",
+    "agentTokenPersonal": "Personal digital employee",
+    "agentTokenTeam": "Team agent",
+    "agentTokenSession": "Session",
+    "agentTokenConversations": "Conversations",
+    "agentTokenTotalCol": "Token"
+  }
+}
