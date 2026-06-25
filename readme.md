@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>全球少有的「开源 · 多 Agent · 可远程 · 可协同 · 可私有化」AI 操作系统</strong><br>
+  <strong>全球少有的「开源 · 多 Agent · 多模态 · 可远程 · 可协同 · 可私有化」AI 操作系统</strong><br>
   <em>不是 Claude Code 换皮，不是 Cursor 平替 —— 一个人用是创作引擎，一个团队用是交付平台</em>
 </p>
 
@@ -26,8 +26,8 @@
     <img src="https://img.shields.io/badge/⬇️%20立即下载-最新版本-32CD32?style=for-the-badge" alt="Download" height="45">
   </a>
   &nbsp;&nbsp;
-  <a href="./docs/">
-    <img src="https://img.shields.io/badge/📖%20使用文档-查看详情-0369a1?style=for-the-badge" alt="Docs" height="45">
+  <a href="https://1oneclaw.com/docs">
+    <img src="https://img.shields.io/badge/📖%20使用文档-1oneclaw.com-0369a1?style=for-the-badge" alt="Docs" height="45">
   </a>
 </p>
 
@@ -35,7 +35,7 @@
 
 <a id="highlights"></a>
 
-## 🔥 六张王牌：为什么 1ONE 不是「又一个 AI 聊天工具」
+## 🔥 七张王牌：为什么 1ONE 不是「又一个 AI 聊天工具」
 
 市面上大多数产品只做一件事：**在 IDE 里补全代码**，或 **绑死单一 Claude Agent 聊天**。
 
@@ -44,11 +44,12 @@
 | # | 独特点 | 你得到什么 | 竞品通常做不到 |
 |---|--------|------------|----------------|
 | 1 | **多 Agent 原生指挥台** | Claude Code、Codex、Gemini、OpenClaw、Cursor Agent… **一个界面统管**，MCP/Skills 配一次全员复用 | 多数只支持单一 Agent 或 IDE 插件式接入 |
-| 2 | **WebUI 远程 + IM 触达** | 桌面、浏览器、手机、飞书/钉钉/微信 **同一套 Agent**；下班也能管 AI | Cursor / Copilot / 原生 Claude Code **无独立 WebUI** |
-| 3 | **个人版 & 企业团队版同 UI** | 标题栏一键切身份，**界面不换**，数据按租户隔离 | 商业产品个人版与企业版往往是两套系统 |
-| 4 | **数字员工可交付** | 配置 Cron、绑定 Issue、产出 HTML/Word/飞书文档，**能跑、能交活** | 聊天工具只给文本，不管交付物 |
-| 5 | **内置 DevOps 平台** | Issues → Agent → **CTeam / CCI 流水线 / 制品库 / 效能洞察**，不是外挂 | IDE 助手不涉及需求协同与 CI/CD |
-| 6 | **开源免费 + 私有化** | MIT 协议、Docker/内网部署、**数据不出域**，国内团队可直接落地 | 闭源 SaaS 按人头 $10–40/月收费 |
+| 2 | **多模态深度解析** | 图片 / PDF / **视频关键帧采样** / 音频转写 —— 全部「转文字注入 Agent」，纯文本引擎也能看懂多媒体 | Cursor / Copilot 仅支持图片粘贴，无视频/音频解析 |
+| 3 | **WebUI 远程 + IM 触达** | 桌面、浏览器、手机、飞书/钉钉/微信 **同一套 Agent**；下班也能管 AI | Cursor / Copilot / 原生 Claude Code **无独立 WebUI** |
+| 4 | **个人版 & 企业团队版同 UI** | 标题栏一键切身份，**界面不换**，数据按租户隔离 | 商业产品个人版与企业版往往是两套系统 |
+| 5 | **数字员工可交付** | 配置 Cron、绑定 Issue、产出 HTML/Word/飞书文档，**能跑、能交活** | 聊天工具只给文本，不管交付物 |
+| 6 | **内置 DevOps 平台** | Issues → Agent → **CTeam / CCI 流水线 / 制品库 / 效能洞察**，不是外挂 | IDE 助手不涉及需求协同与 CI/CD |
+| 7 | **开源免费 + 私有化** | MIT 协议、Docker/内网部署、**数据不出域**，国内团队可直接落地 | 闭源 SaaS 按人头 $10–40/月收费 |
 
 > **一句话**：Cursor 帮你写下一行代码；Copilot 帮你补全一个函数；**1ONE 帮你管一整支 AI 队伍，并把产出写进团队的交付流程。**
 
@@ -62,6 +63,7 @@
 |----------|:-------------------:|:------:|:--------------:|:----------------:|
 | **产品性质** | ✅ 开源免费 | 🔒 闭源 | 🔒 闭源 | 🔒 闭源 |
 | **多 Agent 并存** | ✅ 原生 | ⚠️ 有限 | ⚠️ 弱 | ❌ 单一 |
+| **多模态（图/视频/音频/PDF）** | ✅ 全模态转写注入 | ⚠️ 仅图片 | ⚠️ 仅图片 | ⚠️ 图片有限 |
 | **独立 WebUI 远程** | ✅ 桌面+浏览器+手机 | ❌ | ❌ | ❌ |
 | **IM 渠道（飞书/钉钉/微信）** | ✅ | ❌ | ❌ | ❌ |
 | **数字员工 + Cron 自动化** | ✅ | ❌ | ❌ | ⚠️ 有限 |
@@ -83,8 +85,9 @@
 <details open>
   <summary><strong>📋 目录</strong></summary>
 
-- [六张王牌：产品独特点](#highlights)
+- [七张王牌：产品独特点](#highlights)
 - [竞争优势对比](#comparison)
+- [多模态：让纯文本 Agent 也能看懂世界](#multimodal)
 - [个人版：一个人，一支 AI 军团](#personal-edition)
 - [企业团队版：把 AI 写进交付流程](#team-edition)
 - [管理后台：组织治理 + DevOps 不另购 SaaS](#admin-platform)
@@ -97,6 +100,43 @@
 - [FAQ](#tech)
 
 </details>
+
+---
+
+<a id="multimodal"></a>
+
+## 🎬 多模态：让纯文本 Agent 也能看懂世界
+
+大多数 AI 工具的多模态仅停留在「粘贴图片」。1ONE 走得更远 —— **把图片、PDF、视频、音频全部「转文字」注入 Agent 上下文**，即使是纯文本引擎（如 aionrs）也能处理多媒体输入。
+
+### 支持的模态
+
+| 模态 | 处理方式 | 技术亮点 |
+|------|----------|----------|
+| 🖼️ **图片** | 多模态模型直接识别；非多模态模型走视觉模型转描述 | 自动选择已配置的视觉模型兜底，Kimi K2.6/Qwen-VL 等 |
+| 📄 **PDF** | 文本抽取 + 干净文件卡片预览（替代卡死的 Chromium iframe） | 大 PDF 不卡 UI，内容直注 Agent |
+| 🎬 **视频** | ffprobe 元数据 + **时长感知均匀采样 ≤5 关键帧** + 逐帧 `describeImage` | 借鉴豆包流程，长视频不漏关键信息 |
+| 🔊 **音频** | STT 转写：已配置 provider → 对话/视觉模型网关 `/audio/transcriptions` → whisper-1 兜底 | 三级回退保证可用 |
+| 💻 **本地电脑操作** | Agent 可执行本地文件操作、整理桌面、运行命令 | ACP 后端 YOLO 模式 + 模糊匹配权限批准 |
+
+### 多模态实战截图
+
+<p align="center">
+  <img src="./resources/视频解读.png" alt="视频解读" width="98%">
+</p>
+<p align="center"><sub>视频解读：自动采样关键帧，逐帧描述注入 Agent，长视频也能精准问答</sub></p>
+
+<p align="center">
+  <img src="./resources/PDF解读.png" alt="PDF 解读" width="98%">
+</p>
+<p align="center"><sub>PDF 解读：文本抽取直注 Agent，不再卡 Chromium 预览</sub></p>
+
+<p align="center">
+  <img src="./resources/会话执行本地电脑的操作.png" alt="本地电脑操作" width="98%">
+</p>
+<p align="center"><sub>Agent 执行本地操作：整理桌面、移动文件、运行命令 —— YOLO 模式不弹权限框</sub></p>
+
+> **设计哲学**：多模态不是「支持粘贴」，而是「让 Agent 真正理解你的素材」。视频采样、音频转写、PDF 抽取 —— 每一步都把非文本变成 Agent 能消化的结构化文字。
 
 ---
 
@@ -113,6 +153,8 @@
 | 能力 | 亮点 |
 |------|------|
 | **多 Agent 统管** | Claude Code / Codex / Gemini / OpenClaw / Cursor Agent 等 **自动发现、一键切换** |
+| **多模态输入** | 图片 / PDF / **视频关键帧** / 音频转写，**纯文本 Agent 也能看懂多媒体** |
+| **本地电脑操作** | Agent 可整理桌面、移动文件、运行命令，**YOLO 模式免确认** |
 | **内置专业助手** | PPT、游戏、文档、开发等 **数十个助手开箱即用**，也可自定义角色 |
 | **任意模型接入** | OpenAI-compatible、New-API、Ollama… **图形化配 Key，不绑单一厂商** |
 | **MCP 一键接入** | 外部工具 **配一次、所有 Agent 共享**；内置 CodeGraph 等工具包 |
@@ -128,7 +170,8 @@
 ### 个人版典型场景
 
 - 🎮 **一句话做游戏 / PPT / 文档** —— 不会代码也能产出可交付文件
-- 💻 **多 Agent 并行写代码** —— Claude 写后端、Codex 写测试，同一界面切换
+- 🎬 **视频问答 / PDF 解读** —— 丢个视频问剧情，丢个 PDF 问要点，Agent 真懂
+- 💻 **让 Agent 整理电脑** —— "帮我整理桌面文件" + YOLO 模式，不弹框直接干
 - 📱 **手机远程盯 Agent** —— WebUI 打开就能看进度、收结果
 - ⏰ **定时日报/巡检** —— Cron 绑定数字员工，每天自动跑
 
@@ -201,7 +244,7 @@
 <p align="center"><sub>组织统一 Skills，一键下发到每位成员的 Agent</sub></p>
 
 <p align="center">
-  <img src="./resources/工作空间.png" alt="工作区企业入口" width="98%">
+  <img src="./resources/团队工作区能力展示.png" alt="团队工作区能力" width="98%">
 </p>
 <p align="center"><sub>工作区「企业协同与平台能力」：Issues / CAgent / 管理后台 / CCI 一键直达</sub></p>
 
@@ -233,6 +276,11 @@ flowchart LR
 <p align="center"><sub>Issue 详情：评论、关联任务、跳转 Agent 处理 —— 需求与 AI 执行不断链</sub></p>
 
 <p align="center">
+  <img src="./resources/任务看板.png" alt="任务看板" width="98%">
+</p>
+<p align="center"><sub>任务看板：拖拽流转，Agent 与人协作推进</sub></p>
+
+<p align="center">
   <img src="./resources/团队版的代码仓库.png" alt="团队代码库" width="98%">
 </p>
 <p align="center"><sub>企业代码资产接入，关联 Agent 工作区与交付链路</sub></p>
@@ -257,6 +305,8 @@ flowchart LR
 | **CPack / CCode** | 制品库、代码资产 |
 | **CMeas 效能洞察** | DORA 指标、交付分析 |
 | **组织 RAG / MCP / Skills** | 统一配置、审计、下发 |
+| **使用统计** | Token 用量排行、成员活跃度、资源计数 |
+| **安全与审计** | 敏感操作审计日志、治理动作留痕 |
 
 <p align="center">
   <img src="./resources/企业团队版的超级管理员后台.png" alt="组织管理后台" width="98%">
@@ -290,12 +340,15 @@ flowchart LR
 | **界面** | 主工作台 | **同一套**主工作台 | 独立企业控制台 |
 | **登录** | 本机 / 本地 WebUI | 企业账号 / LDAP / 飞书 | 管理员账号 |
 | **多 Agent & 助手** | ✅ | ✅ | — |
+| **多模态（图/视频/音频/PDF）** | ✅ | ✅ | — |
+| **本地电脑操作** | ✅ | ✅ | — |
 | **数字员工 & Cron** | ✅ 个人 scope | ✅ 个人 + 团队 scope | — |
 | **个人 Issues** | ✅ | ✅ | — |
 | **团队 Issues / 任务 / 共享会话** | — | ✅ | — |
 | **团队页 / 组织 RAG / MCP 下发** | — | ✅ | 配置 |
 | **CTeam / CCI / 制品库** | — | 按角色 | ✅ |
-| **从哪进** | 标题栏 → 个人版 | 标题栏 → 企业团队版 | 侧栏「管理后台」 |
+| **使用统计（Token 排行）** | ✅ 个人 | ✅ 全租户 | ✅ |
+| **从哪进** | 标题栏 → 个人版 | 标题栏 → 企业团队版 | 左下角身份面板 → 管理后台 |
 
 ```mermaid
 flowchart TB
@@ -325,22 +378,23 @@ flowchart TB
   DB["SQLite<br/>会话 / 消息 / 团队 / 租户"]
   WS["Express + WebSocket + JWT"]
   Workers["Worker 子进程<br/>Claude / Gemini / ACP …"]
+  Media["多模态解析<br/>ffprobe / whisper / 视觉模型"]
 
   UI <-->|IPC 或 WebSocket| Bridge
   Bridge --> DB & WS & Workers
+  Workers --> Media
 ```
 
 | 进程 | 职责 |
 |------|------|
-| **Main** | 数据库、Bridge、WebUI 服务、Cron |
+| **Main** | 数据库、Bridge、WebUI 服务、Cron、多模态调度 |
 | **Renderer** | React UI（桌面与浏览器共用） |
 | **Worker** | 各 Agent 隔离子进程，互不影响 |
 
 - WebUI 与桌面 **复用同一套 Bridge** —— 不是两套代码
 - 企业 API 按 **租户 scope** 隔离 —— 个人数据不会混入组织池
+- 多模态解析在 **Worker 侧** 完成，结果以文字注入 Agent 上下文，UI 不卡
 - 身份通过 `IdentitySnapshot` + `EditionGate` 统一管控
-
-规格：[`docs/product/edition-and-identity-spec.md`](./docs/product/edition-and-identity-spec.md) · [`docs/product/cagent-vs-1one-architecture.md`](./docs/product/cagent-vs-1one-architecture.md)
 
 | 运行模式 | 命令 |
 |----------|------|
@@ -355,7 +409,22 @@ flowchart TB
 
 ## 📸 功能截图 Gallery
 
-> 全宽单图展示，便于查看细节。
+### 🎬 多模态：图 / 视频 / 音频 / PDF 全模态
+
+<p align="center">
+  <img src="./resources/视频解读.png" alt="视频解读" width="98%">
+</p>
+<p align="center"><sub>视频解读：关键帧采样 + 逐帧描述，长视频精准问答</sub></p>
+
+<p align="center">
+  <img src="./resources/PDF解读.png" alt="PDF 解读" width="98%">
+</p>
+<p align="center"><sub>PDF 解读：文本抽取直注 Agent</sub></p>
+
+<p align="center">
+  <img src="./resources/会话执行本地电脑的操作.png" alt="本地操作" width="98%">
+</p>
+<p align="center"><sub>Agent 执行本地操作：整理桌面、移动文件、运行命令</sub></p>
 
 ### 🌐 WebUI 远程：Agent 不绑在工位上
 
@@ -390,6 +459,11 @@ flowchart TB
   <img src="./resources/内置大量助手.png" alt="内置助手" width="98%">
 </p>
 <p align="center"><sub>数十个专业助手，个人与团队复用</sub></p>
+
+<p align="center">
+  <img src="./resources/助手.png" alt="助手中心" width="98%">
+</p>
+<p align="center"><sub>助手中心：专业角色一键选用</sub></p>
 
 <p align="center">
   <img src="./resources/助手1.png" alt="自定义助手" width="98%">
@@ -466,9 +540,14 @@ flowchart TB
 <p align="center"><sub>绑定会话 · 执行历史 · 启停</sub></p>
 
 <p align="center">
-  <img src="./resources/通讯渠道控制2.png" alt="IM 渠道" width="98%">
+  <img src="./resources/通讯渠道控制.png" alt="IM 渠道" width="98%">
 </p>
 <p align="center"><sub>飞书 / 钉钉 / 微信触发 Agent 并回传</sub></p>
+
+<p align="center">
+  <img src="./resources/通讯渠道控制2.png" alt="IM 渠道 2" width="98%">
+</p>
+<p align="center"><sub>多渠道统一管理</sub></p>
 
 ### ✨ 一句话创作：看见 Agent 的交付力
 
@@ -509,7 +588,7 @@ flowchart TB
 <p align="center">
   <img src="./resources/开机启动和多语言.png" alt="多语言" width="98%">
 </p>
-<p align="center"><sub>开机自启 · 多语言</sub></p>
+<p align="center"><sub>开机自启 · 多语言（中/英）</sub></p>
 
 ---
 
@@ -526,6 +605,8 @@ flowchart TB
 1. **会话** → 选 Agent（推荐 1ONE CODE）
 2. **设置 → 模型** → 填 API Key
 3. 开聊；有项目就绑 **工作区**
+4. 想看视频/PDF？直接拖文件进对话框
+5. 想让 Agent 整理电脑？开 YOLO 模式，说"帮我整理桌面"
 
 ### 路线 B：团队 / 企业
 
@@ -618,8 +699,6 @@ npm run dist:linux
 
 **管理员：** 创建企业 → 发邀请码 → 配 LDAP/飞书 → 开 CTeam/CCI/RAG
 
-文档：[`edition-personal-vs-enterprise.md`](./docs/product/edition-personal-vs-enterprise.md) · [`WEBUI_GUIDE.md`](./docs/WEBUI_GUIDE.md)
-
 ---
 
 <a id="tech"></a>
@@ -632,6 +711,12 @@ npm run dist:linux
 | UI | Arco Design + UnoCSS |
 | 存储 | SQLite + ConfigStorage |
 | 后端 | Express + WebSocket + JWT + MCP |
+| 多模态 | ffprobe + whisper + 视觉模型 + mammoth（PDF/Word） |
+
+<details>
+<summary><strong>多模态支持哪些格式？</strong></summary>
+图片（PNG/JPG/GIF/WebP）、PDF、视频（MP4/MOV 等，ffprobe 采样关键帧）、音频（MP3/WAV/M4A 等，whisper 转写）。所有模态最终「转文字」注入 Agent 上下文，纯文本引擎也能处理。
+</details>
 
 <details>
 <summary><strong>个人版和企业团队版界面一样吗？</strong></summary>
@@ -644,17 +729,26 @@ npm run dist:linux
 </details>
 
 <details>
+<summary><strong>Agent 能操作我的电脑吗？安全吗？</strong></summary>
+能。通过 ACP 协议，Agent 可执行本地文件操作、运行命令。YOLO 模式下免确认，非 YOLO 模式有<strong>模糊匹配权限批准</strong>（批准一次 ExecCommand，后续同类命令自动放行）。所有操作可审计。
+</details>
+
+<details>
 <summary><strong>LAN 访问 WebUI 样式异常？</strong></summary>
 执行 <code>npm run build:webui</code> 后 Ctrl+F5 强刷。
 </details>
-
-架构：[`docs/tech/architecture.md`](./docs/tech/architecture.md)
 
 ---
 
 ## 🤝 参与贡献
 
 [Issue](https://github.com/gaogg521/1ONE-Claude-Code/issues) · [Discussion](https://github.com/gaogg521/1ONE-Claude-Code/discussions) · [Releases](https://github.com/gaogg521/1ONE-Claude-Code/releases)
+
+- 📖 文档：[1oneclaw.com/docs](https://1oneclaw.com/docs)
+- 📝 更新日志：[1oneclaw.com/changelog](https://1oneclaw.com/changelog)
+- 💬 意见反馈：[1oneclaw.com/feedback](https://1oneclaw.com/feedback)
+- 📧 联系我们：[1oneclaw.com/contact](https://1oneclaw.com/contact)
+- 🌐 官网：[1oneclaw.com](https://1oneclaw.com)
 
 <p align="center">
   <sub>Built by <a href="https://github.com/gaogg521">gaogg521</a> · MIT License</sub>
