@@ -452,6 +452,8 @@
     "editionAccessSystemAdminOnly": "仅系统管理员可修改此设置",
     "onboardingTitle": "加入或创建企业",
     "onboardingBadge": "1ONE Code 企业版",
+    "bootstrapCreateTitle": "创建企业组织",
+    "bootstrapCreateDesc": "认领系统管理员后，创建企业即可邀请成员、配置组织治理。",
     "onboardingDesc": "企业版工作区入口：先通过飞书、钉钉、企微、LDAP 等方式登录，再用邀请码加入组织。成员与认证管理请从侧栏「管理后台」进入。",
     "entryPathsTitle": "进入1ONE Code 企业版",
     "entryPathsDesc": "以下方式可并存：① 使用企业账号登录（LDAP 域控、飞书、钉钉、企业微信等）；② 登录后用邀请码加入组织。",

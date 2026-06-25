@@ -212,7 +212,7 @@ const PanelRoute: React.FC = () => {
           <Route path='/settings/skills-hub' element={withRouteFallback(SkillsHubSettings)} />
           <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
           <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
-          <Route path='/settings/usage' element={<Navigate to='/enterprise/usage' replace />} />
+          <Route path='/settings/usage' element={withRouteFallback(EnterpriseUsagePage)} />
           <Route path='/settings/display' element={<Navigate to='/settings/tools' replace />} />
           <Route path='/settings/about' element={<Navigate to='/settings/system?section=about' replace />} />
           <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />

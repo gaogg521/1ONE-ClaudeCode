@@ -388,6 +388,52 @@ export class WebuiService {
     };
   }
 
+  /**
+   * Desktop bootstrap claim of instance system_admin (no browser WebUI login needed).
+   * Mirrors POST /api/admin/instance/claim-system-admin but runs over IPC using the
+   * built-in operator row as the principal.
+   */
+  static async claimSystemAdmin(): Promise<{ role: string }> {
+    const adminUser = await this.getAdminUser();
+    const { claimSystemAdmin } = await import('@process/webserver/auth/instanceGovernance');
+    await claimSystemAdmin(adminUser.id, adminUser.role);
+    return { role: 'system_admin' };
+  }
+
+  /**
+   * Demote this machine from server back to client: archive the local enterprise data to a
+   * file (kept on disk, recoverable later — not deleted), then dissolve the local enterprise
+   * (members + conversations move back to personal/default, system_admin downgrades). The
+   * built-in operator keeps org_admin so it can create an enterprise again later.
+   */
+  static async demoteToClient(): Promise<{ archivePath: string }> {
+    const { app } = await import('electron');
+    const fs = await import('fs');
+    const path = await import('path');
+    const { getDatabase } = await import('@process/services/database');
+    const driver = (await getDatabase()).getDriver();
+
+    const tenants = driver.prepare("SELECT * FROM tenants WHERE id != 'default'").all();
+    const users = driver
+      .prepare("SELECT id, username, role, tenant_id, email FROM users WHERE tenant_id != 'default'")
+      .all();
+    const archiveDir = path.join(app.getPath('userData'), 'enterprise-archive');
+    fs.mkdirSync(archiveDir, { recursive: true });
+    const archivePath = path.join(archiveDir, `enterprise-${Date.now()}.json`);
+    fs.writeFileSync(archivePath, JSON.stringify({ archivedAt: Date.now(), tenants, users }, null, 2), 'utf-8');
+
+    const dissolve = driver.transaction(() => {
+      driver.prepare("UPDATE conversations SET tenant_id = 'default' WHERE tenant_id != 'default'").run();
+      driver.prepare("UPDATE users SET tenant_id = 'default' WHERE tenant_id != 'default'").run();
+      driver.prepare("UPDATE users SET role = 'org_admin' WHERE id = 'system_default_user' AND role = 'system_admin'").run();
+      driver.prepare("UPDATE users SET role = 'member' WHERE role = 'system_admin'").run();
+      driver.prepare("DELETE FROM tenants WHERE id != 'default'").run();
+    });
+    dissolve();
+    await AuthService.invalidateAllTokens();
+    return { archivePath };
+  }
+
   static async getDesktopSessionToken(): Promise<{ token: string }> {
     const synced = await WebuiService.syncBrowserWebuiSession();
     if (synced?.token) {

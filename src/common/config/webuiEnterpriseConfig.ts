@@ -16,6 +16,37 @@ export const WEBUI_USER_CHOSE_STANDALONE_KEY = 'webui.userChoseStandalone' as co
 
 export const DEFAULT_WEBUI_MANAGEMENT_MODE: WebuiManagementMode = 'standalone';
 
+/**
+ * Enterprise deployment role for this machine:
+ * - 'client' (default): a terminal that hosts no enterprise. Points at a remote server
+ *   when an address is set; with no address it behaves like a plain personal instance.
+ * - 'server': this machine hosts the enterprise (set when the user creates an enterprise).
+ * Keeps a single server per LAN: everyone stays a client until they create an enterprise,
+ * and demoting a server back to client clears the local enterprise + downgrades system_admin.
+ */
+export type WebuiDeploymentRole = 'server' | 'client';
+export const WEBUI_DEPLOYMENT_ROLE_KEY = 'webui.deploymentRole' as const;
+export const WEBUI_ENTERPRISE_SERVER_URL_KEY = 'webui.enterpriseServerUrl' as const;
+export const DEFAULT_WEBUI_DEPLOYMENT_ROLE: WebuiDeploymentRole = 'client';
+
+export function normalizeWebuiDeploymentRole(value: unknown): WebuiDeploymentRole {
+  return value === 'server' ? 'server' : 'client';
+}
+
+/** Normalize a user-entered server address to an origin (prepends http:// when missing). */
+export function normalizeEnterpriseServerUrl(raw: string | null | undefined): string | null {
+  const v = (raw ?? '').trim();
+  if (!v) {
+    return null;
+  }
+  const withScheme = /^https?:\/\//i.test(v) ? v : `http://${v}`;
+  try {
+    return new URL(withScheme).origin;
+  } catch {
+    return null;
+  }
+}
+
 export type EnterpriseContextSnapshot = {
   joined: boolean;
   tenantId: string;

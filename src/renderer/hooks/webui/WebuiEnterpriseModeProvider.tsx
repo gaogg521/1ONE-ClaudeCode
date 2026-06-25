@@ -22,6 +22,7 @@ import {
   type WebuiManagementMode,
   WEBUI_MANAGEMENT_MODE_KEY,
   WEBUI_USER_CHOSE_STANDALONE_KEY,
+  WEBUI_DEPLOYMENT_ROLE_KEY,
   normalizeWebuiManagementMode,
   readBrowserWebuiManagementMode,
   writeBrowserWebuiManagementMode,
@@ -482,11 +483,20 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   const canClaimSystemAdmin = enterpriseContext?.canClaimSystemAdmin === true;
 
   const claimSystemAdminRole = useCallback(async () => {
-    await adminApi.claimSystemAdmin();
+    // Desktop has no browser WebUI bearer token, so the HTTP claim endpoint 401s.
+    // Claim over IPC instead (built-in operator row as principal); browser WebUI keeps HTTP.
+    if (isDesktop) {
+      const res = await webui.claimSystemAdmin.invoke();
+      if (!res?.success) {
+        throw new Error(res?.msg || 'Failed to claim system admin');
+      }
+    } else {
+      await adminApi.claimSystemAdmin();
+    }
     await refreshAuth();
     await refreshEnterpriseContext();
     window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
-  }, [refreshAuth, refreshEnterpriseContext]);
+  }, [isDesktop, refreshAuth, refreshEnterpriseContext]);
 
   const joinWithInviteCode = useCallback(
     async (code: string) => {
@@ -503,12 +513,18 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   const createEnterpriseOrganization = useCallback(
     async (name: string) => {
       await createEnterprise(name);
+      // Creating an enterprise makes this machine the server (single-server-per-LAN model).
+      if (isDesktop) {
+        await ConfigStorage.set(WEBUI_DEPLOYMENT_ROLE_KEY, 'server').catch((): undefined => undefined);
+      } else if (typeof window !== 'undefined') {
+        window.localStorage.setItem(WEBUI_DEPLOYMENT_ROLE_KEY, 'server');
+      }
       await refreshAuth();
       await persistEnterpriseWorkspaceEdition();
       setManagementModeState('enterprise');
       await refreshEnterpriseContext();
     },
-    [refreshAuth, refreshEnterpriseContext]
+    [isDesktop, refreshAuth, refreshEnterpriseContext]
   );
 
   const value = useMemo<WebuiEnterpriseModeValue>(

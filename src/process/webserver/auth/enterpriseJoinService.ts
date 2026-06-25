@@ -151,8 +151,11 @@ export async function createEnterpriseTenant(
   const tenantId = `tenant_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
   const now = Date.now();
   const driver = await getSqliteDriver();
-  // 使用事务保护：创建租户 + 更新用户 + 设置角色必须原子操作
-  // Transaction protection: create tenant + update user + set role must be atomic
+  // 使用事务保护：创建租户 + 更新用户租户必须原子操作
+  // Transaction protection: create tenant + move user into it must be atomic.
+  // The creator KEEPS system_admin (instance-level governance) so they can manage
+  // auth/invites and grant system_admin to teammates right after creating the org —
+  // downgrading to org_admin here would leave the instance with no system_admin.
   const createTransaction = driver.transaction(() => {
     driver
       .prepare(`INSERT INTO tenants (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)`)
@@ -160,9 +163,6 @@ export async function createEnterpriseTenant(
     driver
       .prepare(`UPDATE users SET tenant_id = ?, updated_at = ? WHERE id = ?`)
       .run(tenantId, now, userId);
-    driver
-      .prepare(`UPDATE users SET role = ?, updated_at = ? WHERE id = ?`)
-      .run('org_admin', now, userId);
   });
   createTransaction();
   await AuthService.invalidateAllTokens();

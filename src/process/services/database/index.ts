@@ -212,12 +212,22 @@ export class OneCmdDatabase {
 
   private ensureSystemUser(): void {
     const now = Date.now();
+    // Insert the built-in operator with role 'org_admin' explicitly. On a fresh
+    // install this row is created AFTER migrations run, so the per-row migrations
+    // that promote system_default_user never match it — without an explicit role
+    // it would fall back to the schema default 'member' and the instance could
+    // never claim system_admin (hard lockout: no claim, no enterprise, no console).
     this.db
       .prepare(
-        `INSERT OR IGNORE INTO users (id, username, email, password_hash, avatar_path, created_at, updated_at, last_login, jwt_secret)
-         VALUES (?, ?, NULL, ?, NULL, ?, ?, NULL, NULL)`
+        `INSERT OR IGNORE INTO users (id, username, email, password_hash, avatar_path, created_at, updated_at, last_login, jwt_secret, role)
+         VALUES (?, ?, NULL, ?, NULL, ?, ?, NULL, NULL, 'org_admin')`
       )
       .run(this.defaultUserId, this.defaultUserId, this.systemPasswordPlaceholder, now, now);
+    // Self-heal databases created by older builds where the placeholder landed on
+    // 'member' before this fix. The built-in account must never be a plain member.
+    this.db
+      .prepare(`UPDATE users SET role = 'org_admin', updated_at = ? WHERE id = ? AND role = 'member'`)
+      .run(now, this.defaultUserId);
   }
 
   getSystemUser(): IUser | null {

@@ -28,6 +28,7 @@ import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useTranslation } from 'react-i18next';
 import { useSettingsViewMode } from '../settingsViewContext';
 import WebuiJoinEnterprisePanel from '@/renderer/pages/settings/WebuiSettings/WebuiJoinEnterprisePanel';
+import EnterpriseDeploymentModeCard from '@/renderer/pages/settings/WebuiSettings/EnterpriseDeploymentModeCard';
 import WebuiStandaloneBanner from '@/renderer/pages/settings/WebuiSettings/WebuiStandaloneBanner';
 import { isSystemAdminRole } from '@/common/auth/enterpriseRoles';
 import { fetchWebuiApi } from '@/renderer/utils/webuiApiBase';
@@ -1156,6 +1157,7 @@ const WebuiModalContent: React.FC = () => {
         {!enterpriseModeLoading && hasJoinedEnterprise && !isPageMode ? <WebuiStandaloneBanner /> : null}
         {!enterpriseModeLoading && !hasJoinedEnterprise ? (
           <div className='mt-16px flex flex-col gap-12px'>
+            <EnterpriseDeploymentModeCard />
             <Collapse
               bordered={false}
               defaultActiveKey={['enterprise']}

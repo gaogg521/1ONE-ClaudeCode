@@ -83,6 +83,10 @@ export interface IConfigStorageRefer {
   'webui.desktop.allowRemote'?: boolean;
   /** WebUI 管理界面模式：单机 WebUI 或企业版后台 / WebUI settings mode: standalone vs enterprise admin */
   'webui.managementMode'?: 'standalone' | 'enterprise';
+  /** Enterprise deployment role: this machine is the server, or a client pointing at a remote server. */
+  'webui.deploymentRole'?: 'server' | 'client';
+  /** Remote enterprise server origin this machine connects to when in client mode. */
+  'webui.enterpriseServerUrl'?: string;
   /** 桌面模式下 WebUI 端口 / WebUI port in desktop mode */
   'webui.desktop.port'?: number;
   /** User explicitly chose standalone WebUI mode (skip enterprise auto-redirect). */

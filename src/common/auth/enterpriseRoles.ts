@@ -122,6 +122,13 @@ export function resolveOAuthPostLoginRedirectPath(
   tenantId: string | undefined
 ): string {
   const target = resolvePostLoginRedirectPath(rawTarget, role, tenantId, false);
+  // OAuth sign-in succeeded: never bounce an authenticated user back to the enterprise
+  // join/login page just because there is no enterprise to join yet — that is the SSO
+  // sign-in loop. Land them in the personal workspace instead; they can still join via
+  // invite code later, once an admin has actually created the enterprise.
+  if (target === ENTERPRISE_JOIN_PATH && !hasEnterpriseTenant(tenantId)) {
+    return ENTERPRISE_WORKSPACE_PATH;
+  }
   if (target.startsWith('/settings') || target.startsWith('/login')) {
     return hasEnterpriseTenant(tenantId) ? ENTERPRISE_WORKSPACE_PATH : '/sessions';
   }

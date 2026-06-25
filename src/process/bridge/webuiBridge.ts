@@ -85,6 +85,20 @@ export function initWebuiBridge(): void {
     }, 'Get enterprise context');
   });
 
+  webui.claimSystemAdmin.provider(async () => {
+    return WebuiService.handleAsync(async () => {
+      const data = await WebuiService.claimSystemAdmin();
+      return { success: true, data };
+    }, 'Claim system admin');
+  });
+
+  webui.demoteToClient.provider(async () => {
+    return WebuiService.handleAsync(async () => {
+      const data = await WebuiService.demoteToClient();
+      return { success: true, data };
+    }, 'Demote to client');
+  });
+
   webui.previewEnterpriseInvite.provider(async ({ code }) => {
     return WebuiService.handleAsync(async () => {
       const data = await WebuiService.previewEnterpriseInvite(code);

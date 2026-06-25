@@ -167,7 +167,7 @@ describe('enterpriseJoinService', () => {
       });
     });
 
-    it('creates tenant and promotes creator to org_admin', async () => {
+    it('creates tenant and keeps creator as system_admin (no downgrade)', async () => {
       findByIdMock.mockResolvedValueOnce({
         id: 'admin',
         tenant_id: 'default',
@@ -181,6 +181,11 @@ describe('enterpriseJoinService', () => {
       expect(mockDriver.transaction).toHaveBeenCalled();
       expect(mockPrepareInstance.run).toHaveBeenCalled();
       expect(invalidateAllTokensMock).toHaveBeenCalled();
+      const preparedSqls = mockDriver.prepare.mock.calls.map((c) => String(c[0]));
+      // Moves the creator into the new tenant...
+      expect(preparedSqls.some((sql) => /UPDATE\s+users\s+SET\s+tenant_id/i.test(sql))).toBe(true);
+      // ...but never downgrades their role — that would leave the instance with no system_admin.
+      expect(preparedSqls.some((sql) => /UPDATE\s+users\s+SET\s+role/i.test(sql))).toBe(false);
       expect(updateTenantIdMock).not.toHaveBeenCalled();
       expect(setRoleMock).not.toHaveBeenCalled();
     });

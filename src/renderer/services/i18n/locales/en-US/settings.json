@@ -452,6 +452,8 @@
     "editionAccessSystemAdminOnly": "Only system administrators can change this setting",
     "onboardingTitle": "Join or create an organization",
     "onboardingBadge": "1ONE Code Enterprise",
+    "bootstrapCreateTitle": "Create an organization",
+    "bootstrapCreateDesc": "After claiming system administrator, create an organization to invite members and configure governance.",
     "onboardingDesc": "Enterprise workspace entry: sign in with Feishu, DingTalk, WeCom, LDAP, or a local account, then join with an invite code. Member and auth management lives in Admin console in the sidebar.",
     "entryPathsTitle": "Enter enterprise mode",
     "entryPathsDesc": "Both paths work together: ① Sign in with an enterprise account (LDAP, Feishu, DingTalk, WeCom); ② After sign-in, join with an invite code below.",

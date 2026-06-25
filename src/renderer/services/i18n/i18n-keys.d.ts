@@ -2352,6 +2352,8 @@ export type I18nKey =
   | 'settings.enterpriseConsole.adminAuthHint'
   | 'settings.enterpriseConsole.backToConsoleHome'
   | 'settings.enterpriseConsole.backToPersonal'
+  | 'settings.enterpriseConsole.bootstrapCreateDesc'
+  | 'settings.enterpriseConsole.bootstrapCreateTitle'
   | 'settings.enterpriseConsole.capabilityTitle'
   | 'settings.enterpriseConsole.cardAuthDesc'
   | 'settings.enterpriseConsole.cardInvitesDesc'

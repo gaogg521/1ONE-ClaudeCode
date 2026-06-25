@@ -21,6 +21,13 @@ import { normalizeEnterpriseApiError } from '@/renderer/utils/enterpriseApi/erro
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { readEnterpriseApiOrigins, rememberEnterpriseApiOrigin } from '@/renderer/utils/rememberEnterpriseApiOrigin';
 import { getDesktopWebuiBearerToken } from '@/renderer/utils/syncBrowserWebuiSession';
+import { ConfigStorage } from '@/common/config/storage';
+import {
+  WEBUI_DEPLOYMENT_ROLE_KEY,
+  WEBUI_ENTERPRISE_SERVER_URL_KEY,
+  normalizeWebuiDeploymentRole,
+  normalizeEnterpriseServerUrl,
+} from '@/common/config/webuiEnterpriseConfig';
 
 const AUTH_USER_BACKOFF_MS = 4000;
 let authUserBackoffUntil = 0;
@@ -104,9 +111,38 @@ function normalizeWebuiOrigin(url: string): string | null {
 }
 
 /**
+ * Enterprise client mode: the remote server origin this machine is configured to point at,
+ * or null when this machine is a server (default) / no valid address is set.
+ */
+export async function getClientEnterpriseServerOrigin(): Promise<string | null> {
+  try {
+    let role: unknown;
+    let url: unknown;
+    if (isElectronDesktop()) {
+      role = await ConfigStorage.get(WEBUI_DEPLOYMENT_ROLE_KEY);
+      url = await ConfigStorage.get(WEBUI_ENTERPRISE_SERVER_URL_KEY);
+    } else if (typeof window !== 'undefined') {
+      role = window.localStorage.getItem(WEBUI_DEPLOYMENT_ROLE_KEY);
+      url = window.localStorage.getItem(WEBUI_ENTERPRISE_SERVER_URL_KEY);
+    }
+    if (normalizeWebuiDeploymentRole(role) !== 'client') {
+      return null;
+    }
+    return normalizeEnterpriseServerUrl(typeof url === 'string' ? url : null);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Origin for opening the admin WebUI login in a browser (dedicated port when available).
  */
 export async function getWebuiAdminBrowserOrigin(): Promise<string | null> {
+  // Enterprise client mode: open the remote server the user configured, not the local one.
+  const clientOrigin = await getClientEnterpriseServerOrigin();
+  if (clientOrigin) {
+    return clientOrigin;
+  }
   if (!isElectronDesktop()) {
     return typeof window !== 'undefined' ? window.location.origin : null;
   }

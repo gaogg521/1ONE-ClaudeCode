@@ -35,6 +35,7 @@ import { resolveEnterpriseTenantDisplayLabel } from '@/common/auth/enterpriseRol
 import type { EnterpriseNavKey } from '@/renderer/pages/enterprise/enterpriseNav';
 import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
 import PageContentShell from '@/renderer/components/layout/PageContentShell';
+import EnterpriseBootstrapBanner from '@/renderer/pages/enterprise/components/EnterpriseBootstrapBanner';
 import {
   listCodeRepos,
   listMcpRegistry,
@@ -146,6 +147,8 @@ const EnterpriseHome: React.FC = () => {
 
   return (
     <PageContentShell contentClassName='max-w-1200px pb-40px' disableOverflow>
+      {/* 0. 引导横幅：未认领系统管理员 / 未建企业时显示（认领→建企业一步到位） */}
+      <EnterpriseBootstrapBanner className='mb-16px' />
       {/* 1. 现代头部 PageHeader (深邃靛蓝渐变) */}
       <div
         className='rd-12px p-24px mb-24px text-white relative overflow-hidden'

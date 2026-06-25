@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Titlebar from '@/renderer/components/layout/Titlebar';
 import EditionModeSwitcher from '@/renderer/components/layout/EditionModeSwitcher';
+import EnterpriseBootstrapBanner from '@/renderer/pages/enterprise/components/EnterpriseBootstrapBanner';
 import styles from '@/renderer/pages/enterprise/EnterpriseLayout.module.css';
 
 type DesktopFeatureItem = {
@@ -111,6 +112,9 @@ const DesktopEnterprisePlaceholder: React.FC<DesktopEnterprisePlaceholderProps> 
                   '桌面端适合日常聊天与本地 WebUI 配置。成员管理、认证与邀请码等完整能力请在浏览器中登录后使用。',
               })}
             </p>
+
+            {/* 未认领系统管理员 / 未建企业时，桌面端直接走 IPC 认领并创建企业，无需先去浏览器登录 */}
+            <EnterpriseBootstrapBanner className='mb-16px' />
 
             <ul className={styles.desktopFeatureList}>
               {desktopFeatureItems.map((item) => (

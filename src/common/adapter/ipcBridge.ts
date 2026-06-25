@@ -889,6 +889,12 @@ export const webui = {
   getEnterpriseContext: bridge.buildProvider<IBridgeResponse<IWebUIEnterpriseContext>, void>(
     'webui.get-enterprise-context'
   ),
+  claimSystemAdmin: bridge.buildProvider<IBridgeResponse<{ role: string }>, void>(
+    'webui.claim-system-admin'
+  ),
+  demoteToClient: bridge.buildProvider<IBridgeResponse<{ archivePath: string }>, void>(
+    'webui.demote-to-client'
+  ),
   previewEnterpriseInvite: bridge.buildProvider<
     IBridgeResponse<{ tenantId: string; tenantName: string; valid: boolean }>,
     { code: string }

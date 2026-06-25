@@ -24,4 +24,11 @@ describe('resolveOAuthPostLoginRedirectPath', () => {
   it('sends member OAuth legacy /enterprise/auth redirect to console home fallback', () => {
     expect(resolveOAuthPostLoginRedirectPath('/enterprise/auth', 'member', 'tenant_acme')).toBe('/enterprise');
   });
+
+  it('does not loop SSO sign-in back to the join page when no enterprise exists', () => {
+    // No enterprise tenant yet: an authenticated SSO user must land in the personal
+    // workspace, not be bounced back to /enterprise/join (which re-triggers login → loop).
+    expect(resolveOAuthPostLoginRedirectPath('/enterprise/join', 'member', 'default')).toBe('/sessions');
+    expect(resolveOAuthPostLoginRedirectPath('/enterprise/users', 'member', 'default')).toBe('/sessions');
+  });
 });

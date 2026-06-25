@@ -42,7 +42,7 @@ const WebuiJoinEnterprisePanel: React.FC<WebuiJoinEnterprisePanelProps> = ({ emb
   const [createLoading, setCreateLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'join' | 'create'>('join');
   const showCreateEnterpriseTab =
-    !embedded && canCreateEnterprise && isEnterpriseAdminRole(effectiveRole ?? user?.role);
+    canCreateEnterprise && isEnterpriseAdminRole(effectiveRole ?? user?.role);
 
   const mapJoinError = useCallback(
     (err: unknown): string => {
