@@ -46,6 +46,30 @@ function readTokenTotal(extra: ConversationExtraSlice): number {
   return Math.max(0, usage.totalTokens);
 }
 
+/**
+ * conversations.model may hold a full provider-config JSON (with apiKey etc.), not a plain
+ * model name. Extract just the active model label — never leak the raw blob into the payload.
+ */
+function parseModelLabel(raw: string | null | undefined): string | undefined {
+  const v = (raw ?? '').trim();
+  if (!v) {
+    return undefined;
+  }
+  if (v.startsWith('{')) {
+    try {
+      const obj = JSON.parse(v) as { useModel?: unknown; model?: unknown };
+      const picked =
+        (typeof obj.useModel === 'string' && obj.useModel) ||
+        (Array.isArray(obj.model) && typeof obj.model[0] === 'string' && obj.model[0]) ||
+        '';
+      return picked ? String(picked).slice(0, 60) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return v.slice(0, 60);
+}
+
 function resolveAgentKey(
   conv: TChatConversation,
   extra: ConversationExtraSlice
@@ -143,7 +167,7 @@ export async function aggregateAgentTokenUsageForTenant(
     const tokens = readTokenTotal(extra);
     const msgTotal = Math.max(0, Number(row.msg_total) || 0);
     const msgError = Math.max(0, Number(row.msg_error) || 0);
-    const model = (row.model ?? '').trim() || undefined;
+    const model = parseModelLabel(row.model);
     const existing = buckets.get(resolved.key);
     if (existing) {
       existing.conversationCount += 1;
