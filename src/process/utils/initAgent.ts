@@ -149,8 +149,9 @@ const buildWorkspaceWidthFiles = async (
   const customWorkspace = providedCustomWorkspace !== undefined ? providedCustomWorkspace : !!workspace;
 
   if (!workspace) {
-    const tempPath = getSystemDir().workDir;
-    workspace = path.join(tempPath, defaultWorkspaceName);
+    // 默认工作空间集中放到应用数据目录的 workspaces/ 子文件夹(持久,不再散落在根目录)。
+    const workspacesRoot = path.join(getSystemDir().workDir, 'workspaces');
+    workspace = path.join(workspacesRoot, defaultWorkspaceName);
     await fs.mkdir(workspace, { recursive: true });
   } else {
     // 规范化路径：去除末尾斜杠，解析为绝对路径
@@ -176,7 +177,7 @@ export const createGeminiAgent = async (
   excludeBuiltinSkills?: string[]
 ): Promise<TChatConversation> => {
   const { workspace: newWorkspace, customWorkspace: finalCustomWorkspace } = await buildWorkspaceWidthFiles(
-    `gemini-temp-${Date.now()}`,
+    `gemini-${Date.now()}`,
     workspace,
     defaultFiles,
     customWorkspace
@@ -230,7 +231,7 @@ export const createGeminiAgent = async (
 export const createAcpAgent = async (options: ICreateConversationParams): Promise<TChatConversation> => {
   const { extra } = options;
   const { workspace, customWorkspace } = await buildWorkspaceWidthFiles(
-    `${extra.backend}-temp-${Date.now()}`,
+    `${extra.backend}-${Date.now()}`,
     extra.workspace,
     extra.defaultFiles,
     extra.customWorkspace
@@ -284,7 +285,7 @@ export const createAcpAgent = async (options: ICreateConversationParams): Promis
 export const createNanobotAgent = async (options: ICreateConversationParams): Promise<TChatConversation> => {
   const { extra } = options;
   const { workspace, customWorkspace } = await buildWorkspaceWidthFiles(
-    `nanobot-temp-${Date.now()}`,
+    `nanobot-${Date.now()}`,
     extra.workspace,
     extra.defaultFiles,
     extra.customWorkspace
@@ -318,7 +319,7 @@ export const createNanobotAgent = async (options: ICreateConversationParams): Pr
 export const createRemoteAgent = async (options: ICreateConversationParams): Promise<TChatConversation> => {
   const { extra } = options;
   const { workspace, customWorkspace } = await buildWorkspaceWidthFiles(
-    `remote-temp-${Date.now()}`,
+    `remote-${Date.now()}`,
     extra.workspace,
     extra.defaultFiles,
     extra.customWorkspace
@@ -351,7 +352,7 @@ export const createRemoteAgent = async (options: ICreateConversationParams): Pro
 export const createAionrsAgent = async (options: ICreateConversationParams): Promise<TChatConversation> => {
   const { extra } = options;
   const { workspace, customWorkspace } = await buildWorkspaceWidthFiles(
-    `aionrs-temp-${Date.now()}`,
+    `aionrs-${Date.now()}`,
     extra.workspace,
     extra.defaultFiles,
     extra.customWorkspace
@@ -379,7 +380,7 @@ export const createAionrsAgent = async (options: ICreateConversationParams): Pro
 export const createOpenClawAgent = async (options: ICreateConversationParams): Promise<TChatConversation> => {
   const { extra } = options;
   const { workspace, customWorkspace } = await buildWorkspaceWidthFiles(
-    `openclaw-temp-${Date.now()}`,
+    `openclaw-${Date.now()}`,
     extra.workspace,
     extra.defaultFiles,
     extra.customWorkspace
