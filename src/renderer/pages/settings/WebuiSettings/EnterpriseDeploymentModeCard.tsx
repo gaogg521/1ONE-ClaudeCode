@@ -5,8 +5,9 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, Input, Message, Modal, Radio, Typography } from '@arco-design/web-react';
+import { Alert, Button, Input, Message, Modal, Radio, Tag, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
+import { useEnterpriseServerHeartbeat } from '@/renderer/hooks/enterprise/useEnterpriseServerHeartbeat';
 import { webui } from '@/common/adapter/ipcBridge';
 import { ConfigStorage } from '@/common/config/storage';
 import { isElectronDesktop } from '@/renderer/utils/platform';
@@ -54,6 +55,9 @@ const EnterpriseDeploymentModeCard: React.FC = () => {
   const [url, setUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const { hasInstanceEnterprise, refreshEnterpriseContext } = useWebuiEnterpriseMode();
+  const heartbeat = useEnterpriseServerHeartbeat(
+    role === 'client' ? normalizeEnterpriseServerUrl(url) : null
+  );
 
   useEffect(() => {
     void readDeploymentConfig().then((c) => {
@@ -142,6 +146,20 @@ const EnterpriseDeploymentModeCard: React.FC = () => {
               defaultValue: '例如 192.168.1.10:25809',
             })}
           />
+          {normalizeEnterpriseServerUrl(url) ? (
+            <div className='mt-6px'>
+              <Tag
+                size='small'
+                color={heartbeat === 'online' ? 'green' : heartbeat === 'offline' ? 'red' : 'gray'}
+              >
+                {heartbeat === 'online'
+                  ? t('settings.webui.deployServerOnline', { defaultValue: '服务器在线' })
+                  : heartbeat === 'offline'
+                    ? t('settings.webui.deployServerOffline', { defaultValue: '服务器离线（检查地址或服务器是否启动）' })
+                    : t('settings.webui.deployServerChecking', { defaultValue: '检测中…' })}
+              </Tag>
+            </div>
+          ) : null}
         </div>
       ) : (
         <Alert
