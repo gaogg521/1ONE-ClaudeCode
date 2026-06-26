@@ -401,6 +401,20 @@ export class WebuiService {
   }
 
   /**
+   * Per-agent token usage for the built-in operator's tenant (default for personal edition).
+   * Desktop personal usage page reads this over IPC to avoid the unauthenticated WebUI HTTP path.
+   */
+  static async getAgentTokenUsage(days = 30) {
+    const adminUser = await this.getAdminUser();
+    const safeDays = Math.min(Math.max(Math.floor(days) || 30, 1), 90);
+    const { aggregateAgentTokenUsageForTenant } = await import('@process/services/usage/agentTokenUsage');
+    const sinceMs = Date.now() - safeDays * 24 * 60 * 60 * 1000;
+    const agents = await aggregateAgentTokenUsageForTenant(adminUser.tenant_id, { sinceMs });
+    const totalTokens = agents.reduce((sum, row) => sum + row.totalTokens, 0);
+    return { days: safeDays, totalTokens, agents };
+  }
+
+  /**
    * Demote this machine from server back to client: archive the local enterprise data to a
    * file (kept on disk, recoverable later — not deleted), then dissolve the local enterprise
    * (members + conversations move back to personal/default, system_admin downgrades). The

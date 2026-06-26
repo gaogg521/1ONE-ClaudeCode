@@ -92,6 +92,13 @@ export function initWebuiBridge(): void {
     }, 'Claim system admin');
   });
 
+  webui.getAgentTokenUsage.provider(async ({ days } = {}) => {
+    return WebuiService.handleAsync(async () => {
+      const data = await WebuiService.getAgentTokenUsage(days ?? 30);
+      return { success: true, data };
+    }, 'Get agent token usage');
+  });
+
   webui.demoteToClient.provider(async () => {
     return WebuiService.handleAsync(async () => {
       const data = await WebuiService.demoteToClient();

@@ -892,6 +892,22 @@ export const webui = {
   claimSystemAdmin: bridge.buildProvider<IBridgeResponse<{ role: string }>, void>(
     'webui.claim-system-admin'
   ),
+  getAgentTokenUsage: bridge.buildProvider<
+    IBridgeResponse<{
+      days: number;
+      totalTokens: number;
+      agents: Array<{
+        agentKey: string;
+        agentName: string;
+        source: 'personal' | 'team' | 'session';
+        ownerUserId?: string;
+        conversationCount: number;
+        totalTokens: number;
+        lastActivityAt: number;
+      }>;
+    }>,
+    { days?: number }
+  >('webui.get-agent-token-usage'),
   demoteToClient: bridge.buildProvider<IBridgeResponse<{ archivePath: string }>, void>(
     'webui.demote-to-client'
   ),

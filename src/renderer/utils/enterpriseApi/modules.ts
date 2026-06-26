@@ -6,6 +6,8 @@
 
 import { getCsrfToken } from '@process/webserver/middleware/csrfClient';
 import { fetchWebuiApi } from '@/renderer/utils/webuiApiBase';
+import { webui } from '@/common/adapter/ipcBridge';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import type { UserNotificationRecord } from '@/common/types/userNotification';
 import { enterpriseGet, enterpriseMutate } from './client';
 
@@ -402,6 +404,15 @@ export type AgentTokenUsageSummary = {
 };
 
 export async function listAgentTokenUsage(days = 30): Promise<AgentTokenUsageSummary> {
+  // Desktop reads over IPC (built-in operator tenant) so the personal usage page does not
+  // hang on the authenticated WebUI HTTP endpoint when there is no WebUI login session.
+  if (isElectronDesktop()) {
+    const res = await webui.getAgentTokenUsage.invoke({ days });
+    if (!res?.success || !res.data) {
+      throw new Error(res?.msg || 'Failed to load agent token usage');
+    }
+    return res.data as AgentTokenUsageSummary;
+  }
   return enterpriseGet<AgentTokenUsageSummary>(`/api/admin/agent-token-usage?days=${days}`);
 }
 
