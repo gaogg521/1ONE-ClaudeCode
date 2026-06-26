@@ -31,12 +31,6 @@ type ConversationExtraSlice = {
   lastTokenUsage?: TokenUsageData;
 };
 
-function parseExtra(extra: unknown): ConversationExtraSlice {
-  if (!extra || typeof extra !== 'object') {
-    return {};
-  }
-  return extra as ConversationExtraSlice;
-}
 
 function readTokenTotal(extra: ConversationExtraSlice): number {
   const usage = extra.lastTokenUsage;
@@ -112,26 +106,53 @@ export async function aggregateAgentTokenUsageForTenant(
   options: { sinceMs?: number; limit?: number } = {}
 ): Promise<AgentTokenUsageRow[]> {
   const sinceMs = options.sinceMs ?? Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const rowLimit = options.limit ?? 5000;
   const db = await getDatabase();
   const driver = db.getDriver();
+
+  // Use json_extract to pull only the needed scalar fields from extra — avoids loading
+  // large text blobs (e.g. contextContent) into Node.js memory for every conversation.
+  // Message counts use a single aggregate JOIN instead of per-row correlated subqueries.
   const rows = driver
     .prepare(
-      `SELECT c.id, c.name, c.type, c.extra, c.user_id, c.updated_at, c.model,
-        (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) AS msg_total,
-        (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.status = 'error') AS msg_error
+      `SELECT
+         c.id, c.name, c.type, c.user_id, c.updated_at, c.model,
+         json_extract(c.extra, '$.personalAgentId') AS personalAgentId,
+         json_extract(c.extra, '$.agentName')       AS agentName,
+         json_extract(c.extra, '$.teamId')          AS teamId,
+         json_extract(c.extra, '$.cronJobId')       AS cronJobId,
+         CAST(json_extract(c.extra, '$.lastTokenUsage.totalTokens') AS INTEGER) AS totalTokens,
+         COALESCE(mc.msg_total, 0) AS msg_total,
+         COALESCE(mc.msg_error, 0) AS msg_error
        FROM conversations c
+       LEFT JOIN (
+         SELECT conversation_id,
+                COUNT(*) AS msg_total,
+                SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS msg_error
+           FROM messages
+          WHERE conversation_id IN (
+                  SELECT id FROM conversations
+                   WHERE tenant_id = ? AND updated_at >= ?
+                   LIMIT ?
+                )
+          GROUP BY conversation_id
+       ) mc ON c.id = mc.conversation_id
        WHERE c.tenant_id = ? AND c.updated_at >= ?
        ORDER BY c.updated_at DESC
        LIMIT ?`
     )
-    .all(tenantId, sinceMs, options.limit ?? 5000) as Array<{
+    .all(tenantId, sinceMs, rowLimit, tenantId, sinceMs, rowLimit) as Array<{
     id: string;
     name: string;
     type: string;
-    extra: string;
     user_id: string;
     updated_at: number;
     model: string | null;
+    personalAgentId: string | null;
+    agentName: string | null;
+    teamId: string | null;
+    cronJobId: string | null;
+    totalTokens: number | null;
     msg_total: number;
     msg_error: number;
   }>;
@@ -147,12 +168,13 @@ export async function aggregateAgentTokenUsageForTenant(
   const buckets = new Map<string, AgentTokenUsageRow>();
 
   for (const row of rows) {
-    let extra: ConversationExtraSlice = {};
-    try {
-      extra = parseExtra(JSON.parse(row.extra));
-    } catch {
-      extra = {};
-    }
+    const extra: ConversationExtraSlice = {
+      personalAgentId: row.personalAgentId ?? undefined,
+      agentName: row.agentName ?? undefined,
+      teamId: row.teamId ?? undefined,
+      cronJobId: row.cronJobId ?? undefined,
+      lastTokenUsage: row.totalTokens != null ? { totalTokens: row.totalTokens } : undefined,
+    };
     const conv = {
       id: row.id,
       name: row.name,
@@ -175,7 +197,7 @@ export async function aggregateAgentTokenUsageForTenant(
       existing.callCount += msgTotal;
       existing.errorCount += msgError;
       existing.lastActivityAt = Math.max(existing.lastActivityAt, row.updated_at);
-      // rows are DESC by updated_at, so the first non-empty model seen is the most recent.
+      // rows are DESC by updated_at so the first non-empty model seen is the most recent.
       if (!existing.model && model) {
         existing.model = model;
       }
