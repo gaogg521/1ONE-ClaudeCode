@@ -12,7 +12,7 @@ import { ProcessConfig } from '@process/utils/initStorage';
  * Used only as a soft fallback when a provider has no explicit `vision` capability tag.
  */
 const VISION_MODEL_HINT =
-  /vision|[-_]vl\b|\bvl[-_]|gpt-?4o|gpt-?4\.1|gpt-?5|\bo4\b|gemini|claude-3|claude-4|glm-4v|qwen[\d.]*-?vl|pixtral|llava|internvl|minicpm-v|step-1v|kimi-(?:latest|k2\.?[5-9]|thinking)|moonshot.*vision|doubao.*vision/i;
+  /vision|[-_]vl\b|\bvl[-_]|gpt-?4o|gpt-?4\.1|gpt-?5|\bo4\b|gemini|claude-3|claude-4|glm-4v|qwen[\d.]*-?vl|pixtral|llava|internvl|minicpm-v|step-1v|kimi-(?:latest|k2[.-]?[5-9]|thinking)|moonshot.*vision|doubao.*vision/i;
 
 /** True when the model id looks like a natively-multimodal model. */
 export function modelLooksMultimodal(modelId: string | undefined): boolean {

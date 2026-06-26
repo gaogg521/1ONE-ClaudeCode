@@ -55,6 +55,7 @@ import {
 } from './utils';
 import path from 'path';
 import os from 'os';
+import { loadSkillsContent } from '@process/utils/initStorage';
 
 // Global registry for current agent instance (used by flashFallbackHandler)
 let currentGeminiAgent: GeminiAgent | null = null;
@@ -601,10 +602,22 @@ export class GeminiAgent {
       console.log(`[GeminiAgent] No presetRules to inject`);
     }
 
-    // Note: Skills (技能定义) are prepended to the first message in send() method
-    // Skills provide capabilities/tools descriptions, injected at runtime
-    // 注意：Skills 在 send() 方法中 prepend 到第一条消息
-    // Skills 提供能力/工具描述，在运行时注入
+    // Pre-inject enabled skills content into userMemory so models don't need to call activate_skill.
+    // This lets kimi-k2-6 and other models that can't reliably pass tool arguments use skill content directly.
+    if (this.enabledSkills && this.enabledSkills.length > 0) {
+      try {
+        const skillsContent = await loadSkillsContent(this.enabledSkills);
+        if (skillsContent) {
+          const currentMemory = this.config.getUserMemory();
+          const skillsSection = `[Pre-loaded Skills]\n${skillsContent}`;
+          const combined = currentMemory ? `${currentMemory}\n\n${skillsSection}` : skillsSection;
+          this.config.setUserMemory(combined);
+          console.log(`[GeminiAgent] Pre-injected ${this.enabledSkills.length} skill(s) into userMemory`);
+        }
+      } catch (e) {
+        console.warn(`[GeminiAgent] Failed to pre-inject skills:`, e);
+      }
+    }
 
     // 注册对话级别的自定义工具
     await this.toolConfig.registerCustomTools(this.config, this.geminiClient);

@@ -568,3 +568,111 @@ kimi/goose/auggie 等 ACP 后端在执行本地文件操作（整理桌面文件
 - 全新编译打 1.23.10 包验证:个人版使用统计不卡 + 四列、设置→WebUI 部署开关 + 心跳、飞书登录不死循环、工作空间落 `userData/workspaces/`。
 - 数据故障转移走"备份+导入"(用户拍板,不做 P2P),尚未实现。
 - 内网单服务器探测/广播:暂用手动开关 + 填地址,未做自动发现。
+
+---
+
+# 追加记录 — 2026-06-26 下午（kimi-k2-6 助手工具调用修复 + skill 预注入）
+
+分支 `fix/enterprise-bootstrap-deployment`。本轮排查全局设置助手无法正常工作的问题，并实现 skill 自动预加载。
+
+## 一、产品已有能力：会话导出
+
+用户询问是否支持将会话导出为 PDF/MD 到指定目录。
+
+**答：已有，但格式是 ZIP 包而非单文件 PDF。** 具体实现位于：
+
+- **UI 入口**：历史会话列表右键菜单「导出」按钮，也支持批量勾选后批量导出
+- **核心 hook**：`src/renderer/pages/conversation/GroupedHistory/hooks/useExport.ts`
+- **导出内容**：每个会话打包为一个 ZIP，内含：
+  - `{topic}/conversation/conversation.json` — 完整消息 JSON
+  - `{topic}/conversation/conversation.md` — Markdown 格式对话内容（已实现）
+  - `{topic}/workspace/` — 会话工作区文件（如生成的 xlsx/docx/png 等）
+- **目标目录**：弹出目录选择器，默认桌面；WebUI 环境弹前端目录选择组件
+- **批量导出**：多会话合并进同一 ZIP（`batch-export-{timestamp}.zip`）
+
+目前 **不支持直接导出单文件 PDF**，如需 PDF 需用户自行打印 Markdown 或浏览器另存。
+
+## 二、kimi-k2-6 全局助手不可用问题分析
+
+### 根因
+
+kimi-k2-6 在调用工具时，对所有工具调用均生成空参数 `{}`（不传任何参数），而 aioncli-core 的 JSON Schema 验证会拒绝缺少必填字段的调用。
+
+两种典型错误（在 View Steps 中可见）：
+
+| 工具 | 必填字段 | 实际参数 | 错误 |
+|------|---------|---------|------|
+| `activate_skill` | `name` | `{}` | `params must have required property 'name'` |
+| `ReadFile` | `file_path` | `{}` | `params must have required property 'file_path'` |
+
+**影响范围**：所有 `presetAgentType: 'gemini'` 的助手预设（财务建模助手、Excel 助手、Word 助手、PPT 助手等），当用户选择 kimi-k2-6 模型时，skill 无法通过 `activate_skill` 加载，导致助手无效。
+
+### 已有机制
+
+- `enabledSkills`（`defaultEnabledSkills` 在 AssistantPreset config）：把 skill 目录 symlink 到 `.gemini/skills/`，供 SkillManager 发现
+- `activate_skill` 工具：模型调用它来加载 skill 内容到对话上下文
+- `LOAD_SKILL` 文本检测（`GeminiAgentManager.ts:902-912`）：检测模型文本输出中 `[LOAD_SKILL:...]`，直接注入内容，但同样依赖模型能正确生成特定格式文本
+
+kimi-k2-6 空参数问题需在模型层面修复，短期内无解。
+
+## 三、修复 1：视觉模型正则匹配 kimi-k2-6 格式
+
+**文件**：`src/process/services/visionModelResolver.ts`
+
+**问题**：`VISION_MODEL_HINT` 正则中 kimi 的分支为 `kimi-(?:latest|k2\.?[5-9]|thinking)`，其中 `k2\.?[5-9]` 匹配 `k2.6`（点号）但**不匹配 `k2-6`（连字符）**。
+
+**修复**：将 `k2\.?[5-9]` 改为 `k2[.-]?[5-9]`，兼容带点和带连字符的版本命名。
+
+```ts
+// 修复前
+kimi-(?:latest|k2\.?[5-9]|thinking)
+
+// 修复后
+kimi-(?:latest|k2[.-]?[5-9]|thinking)
+```
+
+## 四、修复 2：gemini 助手 skill 内容预注入 userMemory
+
+**文件**：`src/process/agent/gemini/index.ts`
+
+**方案**：在 `GeminiAgent.init()` 中，`presetRules` 注入 userMemory 之后，立即将 `enabledSkills` 的完整内容（通过 `loadSkillsContent()`）也注入 userMemory，使模型在会话开始前就持有 skill 内容，**不再需要调用 `activate_skill`**。
+
+**关键代码位置**（~605 行）：
+```ts
+import { loadSkillsContent } from '@process/utils/initStorage';
+
+// 在 init() 里 presetRules 注入之后追加：
+if (this.enabledSkills && this.enabledSkills.length > 0) {
+  const skillsContent = await loadSkillsContent(this.enabledSkills);
+  if (skillsContent) {
+    const currentMemory = this.config.getUserMemory();
+    const skillsSection = `[Pre-loaded Skills]\n${skillsContent}`;
+    const combined = currentMemory ? `${currentMemory}\n\n${skillsSection}` : skillsSection;
+    this.config.setUserMemory(combined);
+  }
+}
+```
+
+**`loadSkillsContent` 读取路径**（按优先级）：
+1. `config/builtin-skills/_builtin/{skillName}/` — 自动内置 skills
+2. `config/builtin-skills/{skillName}/` — 打包内置 skills（app 启动时从 resources/ 同步）
+3. `config/skills/{skillName}/` — 用户自定义 skills
+
+读取内容包含 SKILL.md 及 `runtimeFiles`（如 creating.md 等引用文件），带缓存。
+
+**效果**：所有有 `enabledSkills` 的预设助手（财务建模助手等）从会话第一条消息起就拥有完整 skill 内容，kimi-k2-6 无需调用任何工具即可按 skill 指导执行任务。
+
+## 五、踩的坑
+
+1. **CONTEXT.md 已有 6-26 的记录段但不完整**：文件末尾已有"追加记录 — 2026-06-26"的标题，本次是在该段追加。
+
+2. **visionModelResolver 正则要仔细看**：正则中 `\.?` 匹配"0或1个点"，但 kimi 实际用连字符 `k2-6`——两者差一个字符，容易漏看。修改为 `[.-]?` 同时兼容两种格式。
+
+3. **kimi-k2-6 空参数问题无法在应用层完美解决**：对于 `ReadFile` 调用空参数（模型不知道要读哪个文件），根本无法猜测参数，只能靠 skill 预注入让模型先有完整指导再行动，减少模型需要调用文件读取工具的场景。
+
+4. **skill 预注入会增加上下文长度**：`officecli-financial-model` skill（含 creating.md）大约几千 token，每个会话多消耗一次系统上下文。对于 kimi-k2-6（超大上下文窗口）影响不大。
+
+## 六、验证状态
+
+- `tsc --noEmit` exit 0（无类型错误）
+- 运行时验证：需 `npm run restart` 后，用 kimi-k2-6 开启财务建模助手，发送任务，确认 View Steps 中不再出现 `activate_skill params must have required property 'name'` 错误
