@@ -395,6 +395,9 @@ export type AgentTokenUsageRecord = {
   conversationCount: number;
   totalTokens: number;
   lastActivityAt: number;
+  model?: string;
+  callCount: number;
+  errorCount: number;
 };
 
 export type AgentTokenUsageSummary = {

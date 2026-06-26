@@ -322,6 +322,40 @@ const EnterpriseUsagePage: React.FC = () => {
                 dataIndex: 'totalTokens',
                 render: (value: number) => value.toLocaleString(),
               },
+              {
+                title: t('admin.usage.agentTokenModel', { defaultValue: '模型' }),
+                dataIndex: 'model',
+                render: (value?: string) => value || '—',
+              },
+              {
+                title: t('admin.usage.agentTokenCalls', { defaultValue: '次数' }),
+                dataIndex: 'callCount',
+                render: (value?: number) => (value ?? 0).toLocaleString(),
+              },
+              {
+                title: t('admin.usage.agentTokenSuccessRate', { defaultValue: '成功率' }),
+                key: 'successRate',
+                render: (_: unknown, record: AgentTokenUsageRecord) => {
+                  const total = record.callCount ?? 0;
+                  if (total <= 0) return '—';
+                  const rate = Math.round(((total - (record.errorCount ?? 0)) / total) * 100);
+                  return (
+                    <Tag size='small' color={rate >= 90 ? 'green' : rate >= 70 ? 'orange' : 'red'}>
+                      {rate}%
+                    </Tag>
+                  );
+                },
+              },
+              {
+                title: t('admin.usage.agentTokenFailRate', { defaultValue: '失败率' }),
+                key: 'failRate',
+                render: (_: unknown, record: AgentTokenUsageRecord) => {
+                  const total = record.callCount ?? 0;
+                  if (total <= 0) return '—';
+                  const rate = Math.round(((record.errorCount ?? 0) / total) * 100);
+                  return `${rate}%`;
+                },
+              },
             ]}
           />
         </ModuleDataState>

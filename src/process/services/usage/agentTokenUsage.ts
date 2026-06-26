@@ -15,6 +15,12 @@ export type AgentTokenUsageRow = {
   conversationCount: number;
   totalTokens: number;
   lastActivityAt: number;
+  /** Model of the most recent conversation for this agent (may be empty). */
+  model?: string;
+  /** Total messages across this agent's conversations (interaction count). */
+  callCount: number;
+  /** Messages with status 'error' (used for success/failure rate). */
+  errorCount: number;
 };
 
 type ConversationExtraSlice = {
@@ -86,10 +92,12 @@ export async function aggregateAgentTokenUsageForTenant(
   const driver = db.getDriver();
   const rows = driver
     .prepare(
-      `SELECT id, name, type, extra, user_id, updated_at
-       FROM conversations
-       WHERE tenant_id = ? AND updated_at >= ?
-       ORDER BY updated_at DESC
+      `SELECT c.id, c.name, c.type, c.extra, c.user_id, c.updated_at, c.model,
+        (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) AS msg_total,
+        (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.status = 'error') AS msg_error
+       FROM conversations c
+       WHERE c.tenant_id = ? AND c.updated_at >= ?
+       ORDER BY c.updated_at DESC
        LIMIT ?`
     )
     .all(tenantId, sinceMs, options.limit ?? 5000) as Array<{
@@ -99,6 +107,9 @@ export async function aggregateAgentTokenUsageForTenant(
     extra: string;
     user_id: string;
     updated_at: number;
+    model: string | null;
+    msg_total: number;
+    msg_error: number;
   }>;
 
   const personalNameById = new Map<string, string>();
@@ -130,11 +141,20 @@ export async function aggregateAgentTokenUsageForTenant(
         ? personalNameById.get(extra.personalAgentId)!
         : resolved.name;
     const tokens = readTokenTotal(extra);
+    const msgTotal = Math.max(0, Number(row.msg_total) || 0);
+    const msgError = Math.max(0, Number(row.msg_error) || 0);
+    const model = (row.model ?? '').trim() || undefined;
     const existing = buckets.get(resolved.key);
     if (existing) {
       existing.conversationCount += 1;
       existing.totalTokens += tokens;
+      existing.callCount += msgTotal;
+      existing.errorCount += msgError;
       existing.lastActivityAt = Math.max(existing.lastActivityAt, row.updated_at);
+      // rows are DESC by updated_at, so the first non-empty model seen is the most recent.
+      if (!existing.model && model) {
+        existing.model = model;
+      }
     } else {
       buckets.set(resolved.key, {
         agentKey: resolved.key,
@@ -144,6 +164,9 @@ export async function aggregateAgentTokenUsageForTenant(
         conversationCount: 1,
         totalTokens: tokens,
         lastActivityAt: row.updated_at,
+        model,
+        callCount: msgTotal,
+        errorCount: msgError,
       });
     }
   }

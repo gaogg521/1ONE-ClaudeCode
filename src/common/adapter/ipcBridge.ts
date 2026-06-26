@@ -904,6 +904,9 @@ export const webui = {
         conversationCount: number;
         totalTokens: number;
         lastActivityAt: number;
+        model?: string;
+        callCount: number;
+        errorCount: number;
       }>;
     }>,
     { days?: number }
