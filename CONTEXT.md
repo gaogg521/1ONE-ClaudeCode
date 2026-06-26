@@ -519,3 +519,52 @@ kimi/goose/auggie 等 ACP 后端在执行本地文件操作（整理桌面文件
 | `src/renderer/pages/enterprise/EnterpriseUsagePage.tsx` | 个人版只显示 Token 排行 |
 | `src/renderer/pages/enterprise/enterpriseNav.ts` + `paths.ts` + `Router.tsx` + `sidebarNav.tsx` + `EnterpriseHome.tsx` | 删除 ctest/cflow/cagent |
 | `src/process/webserver/routes/devops/cteamRoutes.ts` + `cteamMilestoneService.ts` + `milestoneRepository.ts` | Milestone PATCH/DELETE |
+
+---
+
+# 追加记录 — 2026-06-26（企业版部署状态机 / 使用统计 / 工作空间 + 踩坑）
+
+分支 `fix/enterprise-bootstrap-deployment`。承接 6-25 企业审查,本轮聚焦"全新环境企业版能否转起来"+ 使用统计卡死 + 工作空间。
+
+## 一、完成的功能
+
+### 1. 企业版初始化链路修复（4 项）
+- **① 全新安装 admin 卡 `member` 死锁**：初始化顺序 `initSchema → runMigrations → ensureSystemUser`,全新库跑 migration 时占位行还不存在 → 之后插占位行落 schema 默认 `member`,`initializeDefaultAdmin` Case 2 又不设 role → admin=member → 认领/建企业/进后台全锁死。修复 `database/index.ts` `ensureSystemUser`:INSERT 显式 `role='org_admin'` + 自愈 UPDATE(已坏 member 提为 org_admin)。
+- **② 桌面认领系统管理员**：原走 HTTP(桌面无登录态 401)。新增 IPC `webui.claimSystemAdmin`,桌面走 IPC、浏览器走 HTTP。认领入口前置到 `EnterpriseBootstrapBanner`(概览页 + 桌面占位页)。
+- **③ 建企业**：`WebuiJoinEnterprisePanel` 放开 `embedded` 创建 tab;`createEnterpriseTenant` 建完**保持 system_admin**(原会降级)。
+- **④ 飞书 SSO 死循环兜底**：无企业 tenant 时 JIT 加不进 → 回跳逻辑把未加入用户送回 `/enterprise/join` → 循环。修 `resolveOAuthPostLoginRedirectPath`:登录成功但无企业 → 落 `/sessions`,不弹回登录页。测试 `enterpriseRoles.oauthRedirect.test.ts`。
+
+### 2. 客户端/服务器部署状态机
+- 配置 `webui.deploymentRole`(**默认 client**) + `webui.enterpriseServerUrl`。创建企业=变 server+system_admin;切回 client=`WebuiService.demoteToClient` **归档不删**(导出 JSON 到 `userData/enterprise-archive/`,再瓦解本机企业、降级)。
+- 客户端连远程靠 `getWebuiAdminBrowserOrigin` client 模式返回远程地址;**故意不动 `getWebuiApiBaseUrl`**(整台机后端入口,改它=远程认证+跨域 cookie 深水区)。
+- 设置入口 `EnterpriseDeploymentModeCard`(设置→WebUI) + 心跳 `useEnterpriseServerHeartbeat`(client 每 30s no-cors ping,显示在线/离线)。容错只做心跳:离线兜底已被"降级仍可用个人版"覆盖、备份导入已被"归档不删"覆盖(用户决策)。
+
+### 3. 使用统计（个人版也可用 + 卡死修复 + 增强）
+- 入口:`Router.tsx` 把 `/settings/usage` 从 `Navigate /enterprise/usage`(被企业 layout 拦)改为直接渲染 `EnterpriseUsagePage`。
+- **卡死修复**:桌面 `listAgentTokenUsage` 改走 IPC `webui.getAgentTokenUsage`(绕过 HTTP admin API 无认证态挂起)。
+- **增强**:Token 排行加 模型/次数/成功率/失败率(`agentTokenUsage.ts` 聚合 `conversations.model` + `messages.status='error'`)。
+- **卡死真因(关键)**:`conversations.model` 实际存的是**整个 provider 配置大 JSON(含 apiKey、modelHealth)**,原样进 IPC payload 几 MB → 卡死 + **泄露 apiKey**。改 `parseModelLabel` 只取 `useModel`,payload 骤降。
+
+### 4. 工作空间默认目录
+- `initAgent.ts`:未指定 workspace 时默认从散落 userData 根目录的 `xxx-temp-<ts>` 改为集中放 `userData/workspaces/`,去掉各 agent `-temp-` 命名。
+
+## 二、踩的坑（重要教训）
+1. **诊断用错环境数据**：飞书死循环先后猜"无企业"→"redirectUri IP 不一致"→才定位真因。我读本机库、用户跑**另一台机**的库,且沙箱 PowerShell `$APPDATA` 会重定向到 `Local\Packages\Claude_*`——**多台机/沙箱视图极易混淆,诊断前先确认数据来自哪台机**。
+2. **"数据丢了"是误判**：用户重装后会话变少,实为两台机数据不同 + 沙箱差异,userData 库其实完好。
+3. **"装了没新功能"真因**：用户把 `out\win-unpacked\1onecode.exe`(打包**中间产物**)当测试入口直接双击,开了 6 个进程**占用 win-unpacked** → `dist:win` 反复 `EPERM`。教训:测试用 `npm start`(dev)或装正式 `.exe`,**别跑 out\win-unpacked**;打包前 `Get-Process -Name 1onecode | Stop-Process`,必要时删整个 `out/` 强制全量重编译。
+4. **使用统计卡死**：根因不是 SQL 慢(实测 0.03s),是 `conversations.model` 大 JSON 进 payload。**别假设列存的是字面值**。
+5. **频繁 bump+打包**：1.23.5→1.23.10 打了多次,效率低。教训:攒齐一批改动再 bump 一次出包。
+
+## 三、commit（分支 `fix/enterprise-bootstrap-deployment`）
+- `1a8caa9` 企业版初始化链路修复与客户端/服务器部署模式
+- `1471ece` 个人版使用统计改走 IPC（1.23.6）
+- `4648b8d` 使用统计 Token 排行增加模型/次数/成功率/失败率
+- `00fede8` 1.23.7
+- `2d39dc8` 客户端心跳检测（1.23.8）
+- `d5fb62d` 1.23.9（工作空间默认目录）
+- `4ff98d3` 使用统计 model 列只取真实模型名,修卡死与 apiKey 泄露（1.23.10）
+
+## 四、待办 / 下一步
+- 全新编译打 1.23.10 包验证:个人版使用统计不卡 + 四列、设置→WebUI 部署开关 + 心跳、飞书登录不死循环、工作空间落 `userData/workspaces/`。
+- 数据故障转移走"备份+导入"(用户拍板,不做 P2P),尚未实现。
+- 内网单服务器探测/广播:暂用手动开关 + 填地址,未做自动发现。
