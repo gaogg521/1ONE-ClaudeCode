@@ -21,6 +21,7 @@ import { aionrsPrewarmPool } from '@process/task/workerTaskManagerSingleton';
 import { initCronBridge } from './cronBridge';
 import { initDatabaseBridge } from './databaseBridge';
 import { initDialogBridge } from './dialogBridge';
+import { initExportBridge } from './exportBridge';
 import { initDocumentBridge } from './documentBridge';
 import { initFileWatchBridge } from './fileWatchBridge';
 import { initFsBridge } from './fsBridge';
@@ -64,6 +65,7 @@ export interface BridgeDependencies {
  */
 export function initAllBridges(deps: BridgeDependencies): void {
   initDialogBridge();
+  initExportBridge();
   initShellBridge();
   initHooksBridge();
   initMemoryBridge(deps.conversationRepo);
@@ -128,6 +130,7 @@ export {
   initCronBridge,
   initDatabaseBridge,
   initDialogBridge,
+  initExportBridge,
   initDocumentBridge,
   initExtensionsBridge,
   initFsBridge,

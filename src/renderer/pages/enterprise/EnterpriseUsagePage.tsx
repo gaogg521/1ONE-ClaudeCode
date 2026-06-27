@@ -11,18 +11,20 @@ import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
 import AdminPageWrapper from '@/renderer/pages/admin/components/AdminPageWrapper';
 import ModuleDataState from '@/renderer/pages/admin/components/ModuleDataState';
 import ModulePageHeader from '@/renderer/pages/admin/components/ModulePageHeader';
+import GatewayUsagePanel from './GatewayUsagePanel';
 import {
-  listAgentTokenUsage,
   listMemberDashboard,
   listMcpRegistry,
   listPipelines,
   listRagDocuments,
   listSkills,
-  type AgentTokenUsageRecord,
   type MemberDashboardRecord,
 } from '@/renderer/utils/enterpriseApi/modules';
 
 const { Row, Col } = Grid;
+
+const EMPTY_MEMBERS: MemberDashboardRecord[] = [];
+const emptyMemberLoader = async (): Promise<MemberDashboardRecord[]> => EMPTY_MEMBERS;
 
 const DEFAULT_USAGE_STATS = {
   users: 0,
@@ -42,8 +44,9 @@ const EnterpriseUsagePage: React.FC = () => {
 
   const membersState = useEnterpriseAsyncData(
     // 个人版不调用成员看板接口（个人版无"成员"概念，避免无意义请求）。
-    showEnterprisePanels ? listMemberDashboard : async (): Promise<MemberDashboardRecord[]> => [],
-    [],
+    // 必须用稳定引用（非内联箭头函数），否则每次 render 都产生新引用 → 无限循环卡死。
+    showEnterprisePanels ? listMemberDashboard : emptyMemberLoader,
+    EMPTY_MEMBERS,
     t('admin.usage.memberLoadFailed', { defaultValue: '加载成员状态失败' })
   );
 
@@ -73,13 +76,6 @@ const EnterpriseUsagePage: React.FC = () => {
     loadStats,
     DEFAULT_USAGE_STATS,
     t('admin.usage.loadFailed', { defaultValue: '加载使用统计失败' })
-  );
-
-  const agentUsageState = useEnterpriseAsyncData(
-    // 个人版也展示 Token 排行（后端按 tenant_id='default' 聚合个人会话）。
-    () => listAgentTokenUsage(30),
-    { days: 30, totalTokens: 0, agents: [] as AgentTokenUsageRecord[] },
-    t('admin.usage.agentTokensLoadFailed', { defaultValue: '加载 Agent Token 统计失败' })
   );
 
   const statCards = [
@@ -265,100 +261,10 @@ const EnterpriseUsagePage: React.FC = () => {
       <Card
         bordered={false}
         className='rd-12px'
-        title={t('admin.usage.agentTokenBoard', { defaultValue: '数字员工 Token 排行' })}
+        title={t('admin.usage.gatewayTokenBoard', { defaultValue: '模型 Token 用量（LiteLLM 网关）' })}
+        style={{ background: 'var(--color-bg-1)' }}
       >
-        <Typography.Paragraph type='secondary' className='text-12px mt-0 mb-12px'>
-          {t('admin.usage.agentTokenBoardHint', {
-            defaultValue:
-              '按近 {{days}} 天会话汇总（基于会话 extra.lastTokenUsage 快照；未单独计费）。',
-            days: agentUsageState.data.days,
-          })}
-        </Typography.Paragraph>
-        <ModuleDataState
-          loading={agentUsageState.loading}
-          error={agentUsageState.error}
-          empty={agentUsageState.data.agents.length === 0}
-          emptyDescription={t('admin.usage.agentTokenEmpty', {
-            defaultValue: '暂无会话 Token 记录。发起对话后这里会统计各智能体的 Token 用量。',
-          })}
-        >
-          <div className='mb-12px'>
-            <Statistic
-              title={t('admin.usage.agentTokenTotal', { defaultValue: '合计 Token（估算）' })}
-              value={agentUsageState.data.totalTokens}
-              groupSeparator
-            />
-          </div>
-          <Table
-            data={agentUsageState.data.agents}
-            rowKey='agentKey'
-            size='small'
-            border={false}
-            pagination={{ pageSize: 10, showTotal: true }}
-            columns={[
-              {
-                title: t('admin.usage.agentTokenName', { defaultValue: '智能体' }),
-                dataIndex: 'agentName',
-              },
-              {
-                title: t('admin.usage.agentTokenSource', { defaultValue: '类型' }),
-                dataIndex: 'source',
-                render: (value: AgentTokenUsageRecord['source']) => (
-                  <Tag size='small' color={value === 'personal' ? 'arcoblue' : 'purple'}>
-                    {value === 'personal'
-                      ? t('admin.usage.agentTokenPersonal', { defaultValue: '个人数字员工' })
-                      : value === 'team'
-                        ? t('admin.usage.agentTokenTeam', { defaultValue: '团队 Agent' })
-                        : t('admin.usage.agentTokenSession', { defaultValue: '会话' })}
-                  </Tag>
-                ),
-              },
-              {
-                title: t('admin.usage.agentTokenConversations', { defaultValue: '会话数' }),
-                dataIndex: 'conversationCount',
-              },
-              {
-                title: t('admin.usage.agentTokenTotalCol', { defaultValue: 'Token' }),
-                dataIndex: 'totalTokens',
-                render: (value: number) => value.toLocaleString(),
-              },
-              {
-                title: t('admin.usage.agentTokenModel', { defaultValue: '模型' }),
-                dataIndex: 'model',
-                render: (value?: string) => value || '—',
-              },
-              {
-                title: t('admin.usage.agentTokenCalls', { defaultValue: '次数' }),
-                dataIndex: 'callCount',
-                render: (value?: number) => (value ?? 0).toLocaleString(),
-              },
-              {
-                title: t('admin.usage.agentTokenSuccessRate', { defaultValue: '成功率' }),
-                key: 'successRate',
-                render: (_: unknown, record: AgentTokenUsageRecord) => {
-                  const total = record.callCount ?? 0;
-                  if (total <= 0) return '—';
-                  const rate = Math.round(((total - (record.errorCount ?? 0)) / total) * 100);
-                  return (
-                    <Tag size='small' color={rate >= 90 ? 'green' : rate >= 70 ? 'orange' : 'red'}>
-                      {rate}%
-                    </Tag>
-                  );
-                },
-              },
-              {
-                title: t('admin.usage.agentTokenFailRate', { defaultValue: '失败率' }),
-                key: 'failRate',
-                render: (_: unknown, record: AgentTokenUsageRecord) => {
-                  const total = record.callCount ?? 0;
-                  if (total <= 0) return '—';
-                  const rate = Math.round(((record.errorCount ?? 0) / total) * 100);
-                  return `${rate}%`;
-                },
-              },
-            ]}
-          />
-        </ModuleDataState>
+        <GatewayUsagePanel />
       </Card>
       </div>
     </AdminPageWrapper>

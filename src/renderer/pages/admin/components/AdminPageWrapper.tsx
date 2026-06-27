@@ -17,6 +17,7 @@ const AdminPageWrapper: React.FC<{
       className={className}
       contentClassName={contentClassName}
       disableOverflow
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       {children}
     </PageContentShell>

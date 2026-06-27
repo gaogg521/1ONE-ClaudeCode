@@ -114,7 +114,10 @@
     "printedToConsole": "Element info logged to console",
     "inspectElement": "Inspect element",
     "inspectElementEnable": "Enable element inspector",
-    "inspectElementDisable": "Disable element inspector"
+    "inspectElementDisable": "Disable element inspector",
+    "exportPdf": "Export as PDF",
+    "exportPdfSuccess": "PDF saved successfully",
+    "exportPdfFailed": "Failed to export PDF"
   },
   "ppt": {
     "loading": "Starting PPT preview...",

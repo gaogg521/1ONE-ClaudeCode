@@ -9,6 +9,7 @@ import { vs, vs2015 } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
 import katex from 'katex';
 
+import { ipcBridge } from '@/common';
 import { copyText } from '@/renderer/utils/ui/clipboard';
 import { Message } from '@arco-design/web-react';
 import { Copy, Down, Up } from '@icon-park/react';
@@ -179,6 +180,32 @@ function CodeBlock(props: CodeBlockProps) {
             {'<' + language.toLocaleLowerCase() + '>'}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {language === 'html' && (
+              <span
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                title={t('preview.html.exportPdf')}
+                onClick={() => {
+                  void ipcBridge.exportApi.htmlToPdf
+                    .invoke({ html: formatCode(children), defaultName: 'document.pdf' })
+                    .catch(() => Message.error(t('preview.html.exportPdfFailed')));
+                }}
+              >
+                <svg
+                  width='18'
+                  height='18'
+                  viewBox='0 0 24 24'
+                  fill='none'
+                  stroke='var(--text-secondary)'
+                  strokeWidth='2'
+                >
+                  <path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' />
+                  <polyline points='14 2 14 8 20 8' />
+                  <line x1='9' y1='13' x2='15' y2='13' />
+                  <line x1='9' y1='17' x2='15' y2='17' />
+                  <polyline points='9 9 10 9 11 9' />
+                </svg>
+              </span>
+            )}
             <Copy
               theme='outline'
               size='18'

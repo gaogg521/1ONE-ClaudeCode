@@ -340,11 +340,17 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       try {
         // Try to claim a prewarmed worker. Pool key must match the one
         // produced by useAionrsPrewarm exactly, or we miss.
-        const prewarmKey = buildPrewarmKey(currentModel!, finalWorkspace);
+        // Guard: currentModel may be undefined if no model is selected yet.
+        const prewarmKey =
+          currentModel?.id && currentModel?.useModel
+            ? buildPrewarmKey(currentModel, finalWorkspace)
+            : null;
         const t0 = performance.now();
-        const claimed = await ipcBridge.conversation.prewarmClaim
-          .invoke({ key: prewarmKey })
-          .catch((): { conversation_id: string } | null => null);
+        const claimed = prewarmKey
+          ? await ipcBridge.conversation.prewarmClaim
+              .invoke({ key: prewarmKey })
+              .catch((): { conversation_id: string } | null => null)
+          : null;
 
         let conversation: TChatConversation | undefined;
         if (claimed?.conversation_id) {
@@ -367,10 +373,13 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         // Fallback: no prewarmed worker or finalize failed — go through the
         // original create + warmup path.
         if (!conversation) {
+          if (!currentModel) {
+            throw new Error(t('guid.noModelSelected', { defaultValue: 'No model selected. Please select a model first.' }));
+          }
           conversation = await ipcBridge.conversation.create.invoke({
             type: 'aionrs',
             name: input,
-            model: currentModel!,
+            model: currentModel,
             extra: realExtra,
           });
           console.log(`[aionrs:prewarm] fallback create done +${Math.round(performance.now() - t0)}ms`);

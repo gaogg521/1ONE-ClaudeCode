@@ -106,42 +106,44 @@ export async function aggregateAgentTokenUsageForTenant(
   options: { sinceMs?: number; limit?: number } = {}
 ): Promise<AgentTokenUsageRow[]> {
   const sinceMs = options.sinceMs ?? Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const rowLimit = options.limit ?? 5000;
+  // Cap at 500 recent conversations — enough to cover all active agents while keeping
+  // json_extract cost bounded. Large extra blobs (contextContent etc.) make unlimited
+  // scans extremely slow when json_extract must parse every row.
+  const rowLimit = Math.min(options.limit ?? 500, 500);
   const db = await getDatabase();
   const driver = db.getDriver();
-
-  // Use json_extract to pull only the needed scalar fields from extra — avoids loading
-  // large text blobs (e.g. contextContent) into Node.js memory for every conversation.
-  // Message counts use a single aggregate JOIN instead of per-row correlated subqueries.
+  // CTE filters conversations once and reuses the result for both the main query and
+  // the messages aggregate — avoids the large IN list that forces a full messages scan.
   const rows = driver
     .prepare(
-      `SELECT
-         c.id, c.name, c.type, c.user_id, c.updated_at, c.model,
-         json_extract(c.extra, '$.personalAgentId') AS personalAgentId,
-         json_extract(c.extra, '$.agentName')       AS agentName,
-         json_extract(c.extra, '$.teamId')          AS teamId,
-         json_extract(c.extra, '$.cronJobId')       AS cronJobId,
-         CAST(json_extract(c.extra, '$.lastTokenUsage.totalTokens') AS INTEGER) AS totalTokens,
-         COALESCE(mc.msg_total, 0) AS msg_total,
-         COALESCE(mc.msg_error, 0) AS msg_error
-       FROM conversations c
-       LEFT JOIN (
-         SELECT conversation_id,
+      `WITH top_convs AS (
+         SELECT id FROM conversations
+          WHERE tenant_id = ? AND updated_at >= ?
+          ORDER BY updated_at DESC
+          LIMIT ?
+       ),
+       msg_agg AS (
+         SELECT m.conversation_id,
                 COUNT(*) AS msg_total,
-                SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS msg_error
-           FROM messages
-          WHERE conversation_id IN (
-                  SELECT id FROM conversations
-                   WHERE tenant_id = ? AND updated_at >= ?
-                   LIMIT ?
-                )
-          GROUP BY conversation_id
-       ) mc ON c.id = mc.conversation_id
-       WHERE c.tenant_id = ? AND c.updated_at >= ?
-       ORDER BY c.updated_at DESC
-       LIMIT ?`
+                SUM(CASE WHEN m.status = 'error' THEN 1 ELSE 0 END) AS msg_error
+           FROM messages m
+           INNER JOIN top_convs ON m.conversation_id = top_convs.id
+           GROUP BY m.conversation_id
+       )
+       SELECT c.id, c.name, c.type, c.user_id, c.updated_at, c.model,
+              json_extract(c.extra, '$.personalAgentId') AS personalAgentId,
+              json_extract(c.extra, '$.agentName')       AS agentName,
+              json_extract(c.extra, '$.teamId')          AS teamId,
+              json_extract(c.extra, '$.cronJobId')       AS cronJobId,
+              CAST(json_extract(c.extra, '$.lastTokenUsage.totalTokens') AS INTEGER) AS totalTokens,
+              COALESCE(ma.msg_total, 0) AS msg_total,
+              COALESCE(ma.msg_error, 0) AS msg_error
+         FROM conversations c
+         INNER JOIN top_convs ON c.id = top_convs.id
+         LEFT JOIN msg_agg ma ON c.id = ma.conversation_id
+         ORDER BY c.updated_at DESC`
     )
-    .all(tenantId, sinceMs, rowLimit, tenantId, sinceMs, rowLimit) as Array<{
+    .all(tenantId, sinceMs, rowLimit) as Array<{
     id: string;
     name: string;
     type: string;

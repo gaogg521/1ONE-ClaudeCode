@@ -155,6 +155,12 @@ interface PreviewToolbarProps {
   onInspectModeToggle?: () => void;
 
   /**
+   * 导出 PDF（仅HTML类型使用）
+   * Export as PDF (only for HTML type)
+   */
+  onExportPdf?: () => void;
+
+  /**
    * 左侧额外渲染内容
    * Extra content rendered on the left section
    */
@@ -199,6 +205,7 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
   onClose,
   inspectMode,
   onInspectModeToggle,
+  onExportPdf,
   leftExtra,
   rightExtra,
 }) => {
@@ -492,6 +499,31 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                 <path d='M13 13l6 6' />
               </svg>
               <span>{inspectMode ? t('preview.html.inspecting') : t('preview.html.inspectElement')}</span>
+            </div>
+          )}
+
+          {isHTML && onExportPdf && (
+            <div
+              className={toolbarBtn}
+              onClick={onExportPdf}
+              title={t('preview.html.exportPdf')}
+            >
+              <svg
+                width={toolbarIconSize}
+                height={toolbarIconSize}
+                viewBox='0 0 24 24'
+                fill='none'
+                stroke='currentColor'
+                strokeWidth='2'
+                className='text-t-secondary'
+              >
+                <path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' />
+                <polyline points='14 2 14 8 20 8' />
+                <line x1='9' y1='13' x2='15' y2='13' />
+                <line x1='9' y1='17' x2='15' y2='17' />
+                <polyline points='9 9 10 9 11 9' />
+              </svg>
+              <span>{t('preview.html.exportPdf')}</span>
             </div>
           )}
         </div>

@@ -114,7 +114,10 @@
     "printedToConsole": "已在控制台打印元素信息",
     "inspectElement": "审核元素",
     "inspectElementEnable": "开启审核元素",
-    "inspectElementDisable": "关闭审核元素"
+    "inspectElementDisable": "关闭审核元素",
+    "exportPdf": "导出 PDF",
+    "exportPdfSuccess": "PDF 已保存",
+    "exportPdfFailed": "导出 PDF 失败"
   },
   "ppt": {
     "loading": "正在启动 PPT 预览...",

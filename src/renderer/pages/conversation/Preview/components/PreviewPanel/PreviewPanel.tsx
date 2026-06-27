@@ -370,6 +370,28 @@ const PreviewPanel: React.FC = () => {
     }
   }, [content, contentType, metadata?.fileName, metadata?.filePath, metadata?.language, messageApi, t]);
 
+  // 导出 HTML 为 PDF / Export HTML content as PDF
+  const handleExportPdf = useCallback(async () => {
+    const baseName = (metadata?.fileName ?? 'document').replace(/\.html?$/i, '');
+    const defaultName = `${baseName}.pdf`;
+    try {
+      const result = await ipcBridge.exportApi.htmlToPdf.invoke({ html: content, defaultName });
+      if (result?.success) {
+        try {
+          messageApi.success(t('preview.html.exportPdfSuccess'));
+        } catch {
+          // Context holder may be unmounted
+        }
+      }
+    } catch {
+      try {
+        messageApi.error(t('preview.html.exportPdfFailed'));
+      } catch {
+        // Context holder may be unmounted
+      }
+    }
+  }, [content, metadata?.fileName, messageApi, t]);
+
   // 在系统默认应用中打开文件 / Open file in system default application
   const handleOpenInSystem = useCallback(async () => {
     if (!metadata?.filePath) {
@@ -728,6 +750,7 @@ const PreviewPanel: React.FC = () => {
             onClose={collapsePreview}
             inspectMode={inspectMode}
             onInspectModeToggle={() => setInspectMode(!inspectMode)}
+            onExportPdf={isHTML ? handleExportPdf : undefined}
             leftExtra={toolbarExtras?.left}
             rightExtra={toolbarExtras?.right}
           />

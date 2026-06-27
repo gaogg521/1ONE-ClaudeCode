@@ -1,7 +1,7 @@
 {
   "platform": "win32",
   "arch": "x64",
-  "generatedAt": "2026-06-24T15:25:28.252Z",
+  "generatedAt": "2026-06-26T12:22:48.942Z",
   "packages": {
     "codegraph": {
       "version": "0.7.9",

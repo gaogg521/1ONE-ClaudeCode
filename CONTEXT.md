@@ -676,3 +676,89 @@ if (this.enabledSkills && this.enabledSkills.length > 0) {
 
 - `tsc --noEmit` exit 0（无类型错误）
 - 运行时验证：需 `npm run restart` 后，用 kimi-k2-6 开启财务建模助手，发送任务，确认 View Steps 中不再出现 `activate_skill params must have required property 'name'` 错误
+
+---
+
+# 追加记录 — 2026-06-27（使用统计卡死根因修复 + 网关 Token 面板 + HTML→PDF 导出）
+
+分支 `fix/enterprise-bootstrap-deployment`。
+
+## 一、使用统计页面卡死根因定位与修复
+
+### 根因（React 无限 render 循环）
+
+**文件**：`src/renderer/pages/enterprise/EnterpriseUsagePage.tsx`
+
+个人版（`showEnterprisePanels=false`）进入使用统计页面后立即完全卡死，无法点击、无法输入，原因是：
+
+```tsx
+// 错误写法：每次 render 创建新的 async 函数引用
+useEnterpriseAsyncData(
+  showEnterprisePanels ? listMemberDashboard : async (): Promise<MemberDashboardRecord[]> => [],
+  [],
+  ...
+)
+```
+
+`async () => []` 是内联函数，每次 render 产生新引用 → `useEnterpriseAsyncData` 的 `useCallback([..., loader])` 随之失效 → `useEffect([reload])` 每次 render 后重新触发 → `setLoading(true/false)` → 触发新 render → **无限循环，JS 主线程卡死**。
+
+**修复**：将空 loader 提升为模块级稳定常量：
+
+```tsx
+const EMPTY_MEMBERS: MemberDashboardRecord[] = [];
+const emptyMemberLoader = async (): Promise<MemberDashboardRecord[]> => EMPTY_MEMBERS;
+
+// 在组件内：
+showEnterprisePanels ? listMemberDashboard : emptyMemberLoader  // 稳定引用，不再无限循环
+```
+
+## 二、Electron frameless 窗口输入无法点击修复
+
+**文件**：`src/renderer/styles/layout.css`、`src/renderer/pages/admin/components/AdminPageWrapper.tsx`
+
+之前 `.settings-page-wrapper` 有 `no-drag` + `pointer-events: auto !important` 保护，但 Admin 页面（使用统计、企业后台）走 `AdminPageWrapper`，缺乏此保护。
+
+**修复**：
+- `layout.css`：给 `.arco-layout-content, .arco-layout-content *` 全局加 `-webkit-app-region: no-drag`（覆盖所有中间 wrapper 元素），对 input/button/select 加 `pointer-events: auto !important`
+- `AdminPageWrapper.tsx`：加 `style={{ WebkitAppRegion: 'no-drag' }}`
+
+## 三、LiteLLM 网关 Token 用量面板
+
+**新文件**：`src/renderer/pages/enterprise/GatewayUsagePanel.tsx`
+
+新增独立面板，填入 LiteLLM 网关地址 + API Key 后拉取 `/global/spend/models`，展示近 30 天各模型 Token/费用/占比/请求数排行。关键设计：
+- `fetchData` 加 `AbortController` 15s 超时，防止网关不可达时 `loading=true` 永久卡死
+- 首次无 localStorage 存储时展示填写表单（不发请求）；有保存地址时自动拉取
+- `useEffect([savedUrl, savedKey, editing, fetchData])` 条件触发，无 URL 时不发请求
+
+接入位置：`EnterpriseUsagePage.tsx` 使用统计页底部增加网关 Token 用量卡片（Card 背景用 `--color-bg-1` 与页面主题一致）。
+
+## 四、HTML → PDF 导出功能（主进程 Electron 方案）
+
+**新文件**：`src/process/bridge/exportBridge.ts`
+
+利用 Electron 内置 `webContents.printToPDF()`，通过 `data:text/html;...` URL 加载 HTML 到隐藏 BrowserWindow，导出 PDF。无需 puppeteer 等外部依赖。
+
+**改动文件**：
+- `src/common/adapter/ipcBridge.ts` — 新增 `exportApi.htmlToPdf` IPC 通道
+- `src/process/bridge/index.ts` — 注册 `initExportBridge()`
+- `src/process/bridge/exportBridge.ts` — 新文件，实现 printToPDF 逻辑
+- `src/renderer/pages/conversation/Preview/components/PreviewPanel/PreviewPanel.tsx` — HTML 预览面板加"导出 PDF"回调
+- `src/renderer/pages/conversation/Preview/components/PreviewPanel/PreviewToolbar.tsx` — 工具栏加 PDF 图标按钮（仅 HTML 类型显示）
+- `src/renderer/components/Markdown/CodeBlock.tsx` — `html` 代码块头部加 PDF 导出图标
+- `src/renderer/services/i18n/locales/en-US/preview.json` — `exportPdf/exportPdfSuccess/exportPdfFailed` 键
+- `src/renderer/services/i18n/locales/zh-CN/preview.json` — 同上中文
+
+## 五、使用统计数据增强
+
+**文件**：`src/process/services/usage/agentTokenUsage.ts`、`src/process/services/database/migrations.ts`
+
+Token 排行新增 模型名（从 conversations.model JSON 中 parseModelLabel 提取）、对话次数、成功率、失败率统计，SQL 用 `json_extract` + `JOIN messages` 计算。
+
+`useGuidSend.ts`：aionrs 分支预热 warmup 从 navigate 前调整为更早触发，减少首发延迟。
+
+## 六、验证状态
+
+- 使用统计页面进入不再卡死（用户实测通过）
+- `npm run restart` 成功启动，无编译错误
+- 待验证：PDF 导出按钮实际生成 PDF；网关面板填写后拉取数据

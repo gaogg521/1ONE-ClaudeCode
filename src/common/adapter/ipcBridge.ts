@@ -246,6 +246,12 @@ export const dialog = {
     | undefined
   >('show-open'), // 打开文件/文件夹选择窗口
 };
+export const exportApi = {
+  htmlToPdf: bridge.buildProvider<
+    { success: boolean; filePath?: string; error?: string },
+    { html: string; defaultName?: string }
+  >('export.html-to-pdf'), // 将 HTML 内容渲染并导出为 PDF
+};
 export const fs = {
   getFilesByDir: bridge.buildProvider<Array<IDirOrFile>, { dir: string; root: string }>('get-file-by-dir'), // 获取指定文件夹下所有文件夹和文件列表
   getImageBase64: bridge.buildProvider<string, { path: string }>('get-image-base64'), // 获取图片base64

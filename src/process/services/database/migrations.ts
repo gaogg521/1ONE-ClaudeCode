@@ -1961,6 +1961,26 @@ const migration_v50: IMigration = {
 };
 
 /**
+ * Migration v50 -> v51: Index for usage-stats query (tenant_id, updated_at)
+ * The usage-statistics CTE filters by (tenant_id, updated_at >= ?) — without this
+ * index SQLite falls back to a full conversations scan for every stats page load.
+ */
+const migration_v51: IMigration = {
+  version: 51,
+  name: 'Add tenant_id+updated_at index on conversations for usage stats',
+  up: (db) => {
+    db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_conversations_tenant_updated ON conversations(tenant_id, updated_at DESC)'
+    );
+    console.log('[Migration v51] Added idx_conversations_tenant_updated');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_conversations_tenant_updated');
+    console.log('[Migration v51] Rolled back: dropped idx_conversations_tenant_updated');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -1995,6 +2015,7 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v48,
   migration_v49,
   migration_v50,
+  migration_v51,
 ];
 
 /**

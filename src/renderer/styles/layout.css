@@ -144,6 +144,22 @@
   background-color: var(--fill-0) !important;
 }
 
+/* Electron frameless (frame:false on Windows): entire content area must not be a drag region.
+   Mirror of .settings-page-wrapper fix but applied globally so admin pages also work. */
+.arco-layout-content,
+.arco-layout-content * {
+  -webkit-app-region: no-drag;
+}
+.arco-layout-content input,
+.arco-layout-content textarea,
+.arco-layout-content button,
+.arco-layout-content [role='button'],
+.arco-layout-content .arco-input,
+.arco-layout-content .arco-input-inner-wrapper,
+.arco-layout-content .arco-select-view {
+  pointer-events: auto !important;
+}
+
 /* Mobile sidebar positioning */
 /* Use dvh for better mobile browser support (iOS Chrome/Safari) */
 @media (max-width: 767px) {
