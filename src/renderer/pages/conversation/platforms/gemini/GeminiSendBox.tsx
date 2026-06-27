@@ -212,16 +212,18 @@ const GeminiSendBox: React.FC<{
 
   // Use useLatestRef to keep latest setters to avoid re-registering handler
   const setContentRef = useLatestRef(setContent);
+  const latestContentRef = useLatestRef(content);
   const atPathRef = useLatestRef(atPath);
 
   // Register handler for adding text from preview panel to sendbox
   useEffect(() => {
     const handler = (text: string) => {
-      const newContent = content ? `${content}\n${text}` : text;
+      const base = latestContentRef.current;
+      const newContent = base ? `${base}\n${text}` : text;
       setContentRef.current(newContent);
     };
     setSendBoxHandler(handler);
-  }, [setSendBoxHandler, content]);
+  }, [setSendBoxHandler]);
 
   // Listen for sendbox.fill event to populate input from external sources
   useAddEventListener(

@@ -249,8 +249,11 @@ export const useAionrsMessage = (
               });
             }
             setStreamRunning(false);
+            streamRunningRef.current = false;
             setWaitingResponse(false);
+            waitingResponseRef.current = false;
             setThought({ subject: '', description: '' });
+            hasContentInTurnRef.current = false;
             scheduleMessageSync();
             if (message.msg_id) {
               void processCompletedAssistantMessage(message.msg_id);
