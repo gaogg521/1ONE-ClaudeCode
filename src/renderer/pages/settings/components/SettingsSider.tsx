@@ -4,6 +4,7 @@ import type { IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
 import { useExtensionSettingsTabs } from '@/renderer/hooks/extensions/useExtensionSettingsTabs';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
+import { useShowUsageStats } from '@/renderer/hooks/system/useShowUsageStats';
 import {
   Analysis,
   Communication,
@@ -58,6 +59,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
   const { pathname } = useLocation();
   const isDesktop = isElectronDesktop();
   const { isPersonalEdition } = useEditionFeatures();
+  const showUsageStats = useShowUsageStats();
 
   const { extensionTabs } = useExtensionSettingsTabs();
   const { resolveExtTabName } = useExtI18n();
@@ -93,9 +95,8 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
       system: { id: 'system', label: t('settings.system'), icon: <System />, path: 'system' },
     };
 
-    // 个人版在「系统」后追加「使用统计」入口，跳转到 /enterprise/usage（个人版只显示 Token 排行）。
-    // 企业版用户从企业后台导航进入，这里不重复显示。
-    if (isPersonalEdition) {
+    // 个人版在「系统」后追加「使用统计」入口（需用户在系统设置中手动开启，默认隐藏）。
+    if (isPersonalEdition && showUsageStats) {
       builtinMap.usage = {
         id: 'usage',
         label: t('settings.usage', { defaultValue: '使用统计' }),
@@ -104,7 +105,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
       };
     }
 
-    const builtinOrder = isPersonalEdition ? [...BUILTIN_TAB_IDS, 'usage' as const] : BUILTIN_TAB_IDS;
+    const builtinOrder = isPersonalEdition && showUsageStats ? [...BUILTIN_TAB_IDS, 'usage' as const] : BUILTIN_TAB_IDS;
     const result: SiderItem[] = builtinOrder.map((id) => builtinMap[id]).filter(Boolean);
 
     // Extension tabs with position anchoring
@@ -161,7 +162,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
     }
 
     return result;
-  }, [t, isDesktop, extensionTabs, resolveExtTabName, isPersonalEdition]);
+  }, [t, isDesktop, extensionTabs, resolveExtTabName, isPersonalEdition, showUsageStats]);
 
   const siderTooltipProps = getSiderTooltipProps(tooltipEnabled);
   return (

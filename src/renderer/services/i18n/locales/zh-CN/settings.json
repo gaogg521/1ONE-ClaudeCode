@@ -281,6 +281,8 @@
   "saveUploadToWorkspace": "上传文件保存到工作区",
   "commandQueueEnabled": "启用命令队列",
   "commandQueueEnabledDesc": "启用后，当当前回合仍在运行时，新消息会先进入队列，而不是立即发送。",
+  "showUsageStats": "显示使用统计",
+  "showUsageStatsDesc": "在设置侧边栏显示「使用统计」标签页（默认隐藏）。",
   "startOnBoot": "开机启动",
   "startOnBootDesc": "登录 macOS 或 Windows 后自动启动 1ONE。",
   "startOnBootUnsupported": "仅在打包后的 macOS 和 Windows 客户端中可用。",

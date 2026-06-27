@@ -136,6 +136,8 @@ export interface IConfigStorageRefer {
   'system.keepAwake'?: boolean;
   // Whether conversation command queue is enabled
   'system.commandQueueEnabled'?: boolean;
+  // Show Usage Statistics tab in settings sider (default hidden)
+  'system.showUsageStats'?: boolean;
   // Telegram assistant default model / Telegram 助手默认模型
   'assistant.telegram.defaultModel'?: {
     id: string;

@@ -9,6 +9,7 @@ import type { IStartOnBootStatus } from '@/common/adapter/ipcBridge';
 import { ConfigStorage } from '@/common/config/storage';
 import LanguageSwitcher from '@/renderer/components/settings/LanguageSwitcher';
 import { COMMAND_QUEUE_ENABLED_SWR_KEY } from '@/renderer/hooks/system/useCommandQueueEnabled';
+import { SHOW_USAGE_STATS_SWR_KEY } from '@/renderer/hooks/system/useShowUsageStats';
 import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { Alert, Button, Collapse, Form, InputNumber, Message, Modal, Switch, Tooltip } from '@arco-design/web-react';
@@ -50,6 +51,7 @@ const SystemModalContent: React.FC = () => {
   const [promptTimeout, setPromptTimeout] = useState<number>(300);
   const [saveUploadToWorkspace, setSaveUploadToWorkspace] = useState(false);
   const [commandQueueEnabled, setCommandQueueEnabled] = useState(false);
+  const [showUsageStats, setShowUsageStats] = useState(false);
 
   useEffect(() => {
     if (!isDesktop) {
@@ -106,6 +108,12 @@ const SystemModalContent: React.FC = () => {
     ipcBridge.systemSettings.getCommandQueueEnabled
       .invoke()
       .then((enabled) => setCommandQueueEnabled(enabled))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    ConfigStorage.get('system.showUsageStats')
+      .then((val) => setShowUsageStats(Boolean(val)))
       .catch(() => {});
   }, []);
 
@@ -180,6 +188,15 @@ const SystemModalContent: React.FC = () => {
     });
   }, []);
 
+  const handleShowUsageStatsChange = useCallback((checked: boolean) => {
+    setShowUsageStats(checked);
+    void mutateSWR(SHOW_USAGE_STATS_SWR_KEY, checked, { revalidate: false });
+    ConfigStorage.set('system.showUsageStats', checked).catch(() => {
+      setShowUsageStats(!checked);
+      void mutateSWR(SHOW_USAGE_STATS_SWR_KEY, !checked, { revalidate: false });
+    });
+  }, []);
+
   // Get system directory info
   const { data: systemInfo } = useSWR('system.dir.info', () => ipcBridge.application.systemInfo.invoke());
 
@@ -234,6 +251,12 @@ const SystemModalContent: React.FC = () => {
       label: t('settings.commandQueueEnabled'),
       description: t('settings.commandQueueEnabledDesc'),
       component: <Switch checked={commandQueueEnabled} onChange={handleCommandQueueEnabledChange} />,
+    },
+    {
+      key: 'showUsageStats',
+      label: t('settings.showUsageStats'),
+      description: t('settings.showUsageStatsDesc'),
+      component: <Switch checked={showUsageStats} onChange={handleShowUsageStatsChange} />,
     },
   ];
 

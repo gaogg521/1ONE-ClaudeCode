@@ -281,6 +281,8 @@
   "saveUploadToWorkspace": "Save Uploads to Workspace",
   "commandQueueEnabled": "Enable Command Queue",
   "commandQueueEnabledDesc": "When enabled, messages sent while the current turn is busy will be added to the queue instead of being sent immediately.",
+  "showUsageStats": "Show Usage Statistics",
+  "showUsageStatsDesc": "Show the Usage Statistics tab in the settings sidebar (hidden by default).",
   "startOnBoot": "Start on Boot",
   "startOnBootDesc": "Launch 1ONE automatically when you sign in to macOS or Windows.",
   "startOnBootUnsupported": "Available only in packaged macOS and Windows apps.",
