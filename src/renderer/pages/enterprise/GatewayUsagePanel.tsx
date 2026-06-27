@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Input, Spin, Statistic, Table, Tag, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
+import { gatewayApi } from '@/common/adapter/ipcBridge';
 
 type ModelSpendRow = {
   model: string;
@@ -36,32 +37,36 @@ const GatewayUsagePanel: React.FC = () => {
   const fetchData = useCallback(async (url: string, key: string) => {
     setLoading(true);
     setError(null);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
       const end = new Date();
       const start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
       const base = url.replace(/\/+$/, '');
-      const res = await fetch(
-        `${base}/global/spend/models?start_date=${formatDate(start)}&end_date=${formatDate(end)}`,
-        { headers: { Authorization: `Bearer ${key}` }, signal: controller.signal }
-      );
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(`HTTP ${res.status}${text ? ': ' + text.slice(0, 200) : ''}`);
+      const fullUrl = `${base}/global/spend/models?start_date=${formatDate(start)}&end_date=${formatDate(end)}`;
+      // 走主进程 IPC 发 HTTP 请求，绕过渲染层 CORS / SSO Cookie 限制
+      const result = await gatewayApi.fetch.invoke({ url: fullUrl, apiKey: key });
+      const { status, body, contentType } = result;
+      const isHtml = body.trimStart().startsWith('<');
+      if (status < 200 || status >= 300 || !contentType.includes('application/json')) {
+        if (isHtml) {
+          throw new Error(
+            `HTTP ${status}：服务器返回了 HTML 页面而非 JSON。可能原因：` +
+              `① 网关地址应填 API 根路径（如 http://host:4000），而非 Web UI 地址；` +
+              `② 网关前面有 SSO/反代拦截，当前 API Key 无法绕过`
+          );
+        }
+        throw new Error(`HTTP ${status}：${body.slice(0, 300)}`);
       }
-      const json = await res.json();
-      const data: ModelSpendRow[] = Array.isArray(json) ? json : (json.data ?? []);
+      const json = JSON.parse(body) as unknown;
+      const data: ModelSpendRow[] = Array.isArray(json) ? json : ((json as { data?: ModelSpendRow[] }).data ?? []);
       setRows(data.sort((a, b) => b.total_tokens - a.total_tokens));
       setUpdatedAt(new Date());
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setError(e instanceof Error && e.name === 'AbortError' ? t('admin.usage.gatewayTimeout', { defaultValue: '请求超时，请检查网关地址是否可访问' }) : msg);
+      setError(msg);
     } finally {
-      clearTimeout(timeoutId);
       setLoading(false);
     }
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     if (savedUrl && savedKey && !editing) {

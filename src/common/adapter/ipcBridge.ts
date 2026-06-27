@@ -252,6 +252,12 @@ export const exportApi = {
     { html: string; defaultName?: string }
   >('export.html-to-pdf'), // 将 HTML 内容渲染并导出为 PDF
 };
+export const gatewayApi = {
+  fetch: bridge.buildProvider<
+    { status: number; body: string; contentType: string },
+    { url: string; apiKey: string }
+  >('gateway.fetch'), // 从主进程发起 HTTP 请求（绕过渲染层 CORS/Cookie 限制）
+};
 export const fs = {
   getFilesByDir: bridge.buildProvider<Array<IDirOrFile>, { dir: string; root: string }>('get-file-by-dir'), // 获取指定文件夹下所有文件夹和文件列表
   getImageBase64: bridge.buildProvider<string, { path: string }>('get-image-base64'), // 获取图片base64

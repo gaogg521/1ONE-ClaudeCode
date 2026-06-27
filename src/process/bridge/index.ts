@@ -22,6 +22,7 @@ import { initCronBridge } from './cronBridge';
 import { initDatabaseBridge } from './databaseBridge';
 import { initDialogBridge } from './dialogBridge';
 import { initExportBridge } from './exportBridge';
+import { initGatewayBridge } from './gatewayBridge';
 import { initDocumentBridge } from './documentBridge';
 import { initFileWatchBridge } from './fileWatchBridge';
 import { initFsBridge } from './fsBridge';
@@ -66,6 +67,7 @@ export interface BridgeDependencies {
 export function initAllBridges(deps: BridgeDependencies): void {
   initDialogBridge();
   initExportBridge();
+  initGatewayBridge();
   initShellBridge();
   initHooksBridge();
   initMemoryBridge(deps.conversationRepo);
@@ -131,6 +133,7 @@ export {
   initDatabaseBridge,
   initDialogBridge,
   initExportBridge,
+  initGatewayBridge,
   initDocumentBridge,
   initExtensionsBridge,
   initFsBridge,
