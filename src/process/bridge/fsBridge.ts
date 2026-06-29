@@ -427,6 +427,24 @@ async function discoverSkillsInFolder(folderPath: string): Promise<SkillMetadata
   return discovered.toSorted((a, b) => a.name.localeCompare(b.name));
 }
 
+async function invalidateSkillCaches(): Promise<void> {
+  // Skill files changed — drop the in-memory content cache and the AcpSkillManager
+  // singleton so the next conversation rediscovers from disk. Without this, already
+  // built conversations (and new ones until app restart) keep using stale content.
+  try {
+    const { clearSkillsCache } = await import('@process/utils/initStorage');
+    clearSkillsCache();
+  } catch (e) {
+    console.warn('[fsBridge] clearSkillsCache failed:', e);
+  }
+  try {
+    const { AcpSkillManager } = await import('@process/task/AcpSkillManager');
+    AcpSkillManager.resetInstance();
+  } catch (e) {
+    console.warn('[fsBridge] AcpSkillManager.resetInstance failed:', e);
+  }
+}
+
 async function importSkillDirectory(
   skillPath: string,
   options: {
@@ -459,6 +477,7 @@ async function importSkillDirectory(
     }
 
     await fs.symlink(skillPath, targetDir, 'junction');
+    await invalidateSkillCaches();
     return {
       success: true,
       data: { skillName },
@@ -488,6 +507,7 @@ async function importSkillDirectory(
   }
 
   await copyDirectory(skillPath, targetDir);
+  await invalidateSkillCaches();
   return {
     success: true,
     data: { skillName },
@@ -1634,6 +1654,7 @@ export function initFsBridge(): void {
         await fs.rm(resolvedSkillDir, { recursive: true, force: true });
       }
 
+      await invalidateSkillCaches();
       console.log(`[fsBridge] Deleted skill "${skillName}" from ${resolvedSkillDir}`);
       return { success: true, msg: `Skill "${skillName}" deleted` };
     } catch (error) {
@@ -1698,9 +1719,7 @@ export function initFsBridge(): void {
       const content = await readBundledSkillsMarketMd();
       await fs.writeFile(path.join(skillDir, 'SKILL.md'), content, 'utf-8');
 
-      // Reset AcpSkillManager singleton so it re-discovers builtin skills
-      const { AcpSkillManager } = await import('@process/task/AcpSkillManager');
-      AcpSkillManager.resetInstance();
+      await invalidateSkillCaches();
 
       return { success: true, msg: 'Skills Market skill enabled' };
     } catch (error) {
@@ -1719,9 +1738,7 @@ export function initFsBridge(): void {
       const skillDir = path.join(getAutoSkillsDir(), 'one-skills');
       await fs.rm(skillDir, { recursive: true, force: true });
 
-      // Reset AcpSkillManager singleton so it re-discovers builtin skills
-      const { AcpSkillManager } = await import('@process/task/AcpSkillManager');
-      AcpSkillManager.resetInstance();
+      await invalidateSkillCaches();
 
       return { success: true, msg: 'Skills Market skill disabled' };
     } catch (error) {

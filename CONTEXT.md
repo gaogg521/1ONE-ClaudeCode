@@ -762,3 +762,89 @@ Token 排行新增 模型名（从 conversations.model JSON 中 parseModelLabel 
 - 使用统计页面进入不再卡死（用户实测通过）
 - `npm run restart` 成功启动，无编译错误
 - 待验证：PDF 导出按钮实际生成 PDF；网关面板填写后拉取数据
+
+---
+
+# 追加记录 — 2026-06-29（HTML→PDF 修复 + officecli 技能同步 + aionrs 技能注入 + 技能缓存失效）
+
+## 背景
+
+用户报告两类问题：1) 会话框生成的 HTML 文件导出 PDF 格式错乱；2) 全局设置「技能中心」里表格助手、财务建模助手等技能有 BUG。排查中发现 aionrs（用户主力会话 agent）的技能完全不生效，以及技能缓存永不失效两个深层问题。一并修复。
+
+## 一、HTML→PDF 格式错乱
+
+**文件**：`src/process/bridge/exportBridge.ts`
+
+**根因**：
+- `printToPDF` 没禁用页眉页脚 → Chromium 默认在 PDF 顶部/底部加 data: URL（极长且丑）、日期、页码
+- `loadURL` 返回后立刻打印，没等异步资源（web 字体、CDN CSS、图片）加载完 → 字体没加载就用 fallback 渲染，布局错乱
+- 大 HTML 用 `encodeURIComponent` 编码 data URL，有长度/编码隐患
+- HTML 片段缺 DOCTYPE 时进怪异模式
+
+**修复**：
+- `displayHeaderFooter: false` + `margins: { marginType: 'none' }`（边距交给 HTML 里的 `@page { margin: 12mm }` 控制）
+- `preferCSSPageSize: true` 尊重 HTML 里的 `@page` 规则
+- base64 data URL 替代 encodeURIComponent
+- 新增 `normalizeHtmlForPdf`：缺 DOCTYPE/html 标签时补全，注入 CJK 友好的默认字体
+- `loadURL` 后等 `document.fonts.ready`（最多 1.5s）+ 2s 硬超时，再 printToPDF
+
+## 二、officecli 在 Windows 上 command not found
+
+**文件**：`src/process/utils/shellEnv.ts`
+
+**根因**：`getWindowsExtraToolPaths()` 列表里没有 officecli 安装目录 `%LOCALAPPDATA%\OfficeCli`。Electron 从快捷方式启动时子进程 PATH 不含该目录 → agent 跑 `officecli` 报 command not found。SKILL.md 里的 bash 检查命令（`if ! command -v officecli`）在 Windows PowerShell 上也跑不了。
+
+**修复**：在 `getWindowsExtraToolPaths()` 加上 `path.join(localAppData, 'OfficeCli')`。所有走 `getEnhancedEnv()` 的子进程（gemini/aionrs/acp worker 等）都能找到 officecli。
+
+## 三、officecli 技能内容严重过时 + 同步最新版
+
+**根因**：1ONE 仓库里的 officecli 技能是 v1.0.23/v1.0.24，但本机 officecli 已是 v1.0.125，差 100+ 版本。officecli 自己会刷新 Codex/Cursor/OpenClaw 宿主的技能，但不知道 1ONE 的技能目录（`src/process/resources/skills/officecli-*`），所以 1ONE 的技能不会自动同步。技能教的命令语法跟实际 officecli 已不匹配，是 PPT/Word 产物坏的主要嫌疑。另有坏链接：`../xlsx/SKILL.md`（应 `../officecli-xlsx/SKILL.md`）、`../docx/creating.md`（应 `../officecli-docx/creating.md`）。
+
+**修复**：
+- 删除 8 个过时技能目录（officecli-xlsx/pptx/docx/pitch-deck/academic-paper/data-dashboard/financial-model 旧多文件结构 + 旧 morph-ppt）
+- 删除 3 个 `_deprecated-*` 目录（更老的废弃技能，零代码引用）
+- 从 `~/.claude/skills/`（officecli v1.0.125 自动安装的最新版）复制 10 个最新技能到仓库：officecli-xlsx/pptx/docx/pitch-deck/academic-paper/data-dashboard/financial-model/word-form + morph-ppt（含 reference 子目录）+ morph-ppt-3d
+- 新版技能改用 `officecli help <element>` 自描述命令，不再硬编码所有语法，不会因 officecli 升级而过时
+- 安装命令改成跨平台：`irm https://d.officecli.ai/install.ps1 | iex`（Windows PowerShell）
+
+## 四、aionrs 助手技能完全不生效（严重 BUG）
+
+**文件**：`src/process/task/AionrsManager.ts`
+
+**根因**：aionrs 是默认主力 agent（kimi/qwen/deepseek/doubao 等 OpenAI 协议模型），但 `AionrsManager.sendMessage` 完全不读 `extra.enabledSkills`，也不调任何技能注入函数。`AionrsAgent`/`OneAgent` 的 `buildSystemPrompt` 只注入 `presetRules`。对照：Gemini 走原生 SkillManager（symlink + worker 内 `loadSkillsContent` 预注入 userMemory）；ACP/NanoBot/OpenClaw 走 `applyAgentToolkitFirstMessage`（首条消息注入技能索引）。aionrs 两条路都不走。用户在技能中心给 aionrs 助手启用任何技能，会话中技能内容从不注入。
+
+**修复**（用户选定"首条消息注入全文"方案，仿 gemini 预注入）：
+- `AionrsManagerData` 加 `enabledSkills?: string[]`（`c.extra.enabledSkills` 早已透传进 data，只是类型没声明）
+- 新增实例字段 `pendingSkillsInjection: string | null`
+- 构造函数里 fire-and-forget 调 `loadSkillsInjection(enabledSkills)` 预加载技能全文（异步，不阻塞 worker 启动）
+- `sendMessage` 开头一次性消费：把技能全文包成 `[Pre-loaded Skills]\n...\n[User Request]\n` 前缀，**同时写到 `input` 和 `agentPrompt`**（避开"worker 发 agentPrompt 不发 input"的坑），注入后置 null
+- 后续消息不重注入（跟 gemini 预注入 userMemory 一致，避免 token 膨胀）
+
+**效果**：aionrs 助手首条用户消息会把所有启用技能的 SKILL.md 全文注入到 prompt 前缀，模型从第一条起就持有完整技能内容，不依赖 `activate_skill` 工具调用（绕开 kimi-k2-6 空参数问题）。
+
+## 五、技能缓存永不失效（BUG 2）
+
+**文件**：`src/process/bridge/fsBridge.ts`
+
+**根因**：
+- `loadSkillsContent` 的 `skillsContentCache` 是模块级 Map，`clearSkillsCache` 定义了但**全仓无人调用**
+- `AcpSkillManager.resetInstance` 只在 enable/disable SkillsMarket 两处调用
+- `importSkill` / `importSkillFromUrl` / `importSkillWithSymlink` / `deleteSkill` 都不清缓存
+- 用户导入/删除/更新技能后，已建会话和新建会话仍用旧内容（`skillsContentCache` 命中旧值，`AcpSkillManager` 单例 `initialized=true` 跳过重新扫描），必须重启 app 才生效
+
+**修复**：
+- 新增 `invalidateSkillCaches()` helper：同时调 `clearSkillsCache()` + `AcpSkillManager.resetInstance()`
+- `importSkillDirectory`（三个 import IPC handler 的共用函数）真正写入成功后调 `invalidateSkillCaches()`（already exists 路径不清，因为文件系统未变）
+- `deleteSkill` 成功后调 `invalidateSkillCaches()`
+- 顺带把 enable/disable SkillsMarket 两处也换成统一 helper（之前只 reset AcpSkillManager，漏了 clearSkillsCache）
+
+## 六、已发现未修（待定夺）
+
+**BUG 3（轻）**：`src/process/utils/initStorage.ts:1031` 的 `needsSkillsMigration` 条件 `(!existing.enabledSkills || existing.enabledSkills.length === 0)` 把"用户主动清空（`[]`）"和"从未配置（`undefined`）"等同处理。新装未触发过 migration 时，用户清空内置助手技能后重启，可能被重新补回内置默认。需产品决策：清空是否应持久化。
+
+## 七、验证状态
+
+- `tsc --noEmit` exit 0
+- `vitest run`：9 文件失败 / 10 测试失败 / 3648 通过——与干净 main 基线完全一致，零回归（既存失败均为 enterprise/oauth/devops 相关，与本次改动无关）
+- 运行时需 `npm run restart` 桌面端实测：HTML 导出 PDF、officecli 技能产物、aionrs 助手技能注入生效、技能导入/删除后即时生效
+- 按交付约定，影响运行行为，需出新的 Windows 安装包（`npm run dist:win`）才生效

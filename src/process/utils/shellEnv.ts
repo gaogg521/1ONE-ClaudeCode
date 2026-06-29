@@ -388,6 +388,11 @@ function getWindowsExtraToolPaths(): string[] {
     'C:\\cygwin\\bin',
     // bun global packages
     getBunGlobalBinDir(),
+    // OfficeCli — installed by install.ps1 to %LOCALAPPDATA%\OfficeCli.
+    // Skills like officecli-xlsx / officecli-pptx / officecli-docx invoke
+    // `officecli` as a bare command; without this entry the binary is
+    // unreachable when Electron is launched from a shortcut (no shell PATH).
+    path.join(localAppData, 'OfficeCli'),
   ];
 
   return candidates.filter((p) => existsSync(p) && !currentPath.includes(p));

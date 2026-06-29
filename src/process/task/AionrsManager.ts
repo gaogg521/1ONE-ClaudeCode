@@ -78,6 +78,8 @@ type AionrsManagerData = {
   resume?: string;
   /** App-managed diagnostic-log dir, injected by the manager (kept out of the workspace). */
   logDir?: string;
+  /** Enabled skills for this conversation (preset assistant config). Injected into the first message. */
+  enabledSkills?: string[];
 };
 
 export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
@@ -91,6 +93,8 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   private pendingModelIdentityNotice: string | null = null;
   private lastModelIdSeen: string | null = null;
   private activeTurnId: string | null = null;
+  /** Skills content is injected once into the first user turn, then cleared. */
+  private pendingSkillsInjection: string | null = null;
 
   private inferProductLine(): string {
     const modelId = (this.model.useModel || '').toLowerCase();
@@ -134,6 +138,26 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
 
     // Start the worker bootstrap
     void this.start().catch(() => {});
+
+    // Pre-load enabled skills content so the first user turn can inject it.
+    // aionrs has no native SkillManager and no activate_skill tool — without this
+    // injection, skills configured for an aionrs assistant never reach the model.
+    const enabledSkills = data.enabledSkills;
+    if (enabledSkills && enabledSkills.length > 0) {
+      void this.loadSkillsInjection(enabledSkills);
+    }
+  }
+
+  private async loadSkillsInjection(enabledSkills: string[]): Promise<void> {
+    try {
+      const { loadSkillsContent } = await import('@process/utils/initStorage');
+      const content = await loadSkillsContent(enabledSkills);
+      if (content) {
+        this.pendingSkillsInjection = content;
+      }
+    } catch (e) {
+      console.warn('[AionrsManager] Failed to load skills content:', e);
+    }
   }
 
   /**
@@ -371,6 +395,17 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
 
   async sendMessage(data: { input: string; agentPrompt?: string; msg_id: string; files?: string[] }) {
     const originalInput = data.input;
+
+    // One-shot skills injection: aionrs has no native skill discovery, so we splice
+    // the full SKILL.md content into the first user turn. Must land on BOTH input
+    // and agentPrompt — the worker sends `agentPrompt ?? input`, so writing only
+    // input gets dropped whenever an agentPrompt is present (the normal case).
+    if (this.pendingSkillsInjection) {
+      const skillsBlock = `[Pre-loaded Skills - You MUST follow these instructions]\n${this.pendingSkillsInjection}\n\n[User Request]\n`;
+      const base = data.agentPrompt ?? (data.input || '');
+      data = { ...data, input: skillsBlock + base, agentPrompt: skillsBlock + base };
+      this.pendingSkillsInjection = null;
+    }
 
     // Detect model switches even when the worker is NOT rebuilt (some flows can update model routing without restart).
     // If we notice a change, queue a one-time identity reminder for the next prompt.
