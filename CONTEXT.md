@@ -1096,4 +1096,90 @@ app 日志（`%APPDATA%\1OneClaudeCode-Dev\logs\2026-06-29.log`）反复出现�
 - 运行时需 `npm run restart`：重启后 `ensureAionrsBuiltinMcp` 会用完整 binary 路径调 `--config-path`，成功写入 `one-web-tools` + `one-export-pdf`（带端口）到 config.toml。aionrs 会话里说"保存为 PDF"应能调到 `export_to_pdf` 工具。
 - 按交付约定，影响运行行为，需出新的 Windows 安装包才在正式版生效
 
+---
+
+# 追加记录 — 2026-06-29 晚（preset 助手路由：按模型协议走 aionrs，修卡死）
+
+## 背景
+
+用户选"财务建模助手"等预设助手发送消息后，app 完全卡死、进程死掉。诊断证据（`%APPDATA%\1OneClaudeCode-Dev\logs\2026-06-29.log` 16:36:14）：
+
+```
+[renderer:handleSend start] { isPreset: true, effectiveAgentType: 'gemini', selectedAgent: 'custom' }
+[renderer:presetRules resolved] { hasRules: true }
+[renderer:enabledSkills resolved] { enabledSkills: ['officecli-financial-model'] }
+← 之后主进程心跳停，整个 app 卡死
+```
+
+## 根因
+
+所有 21 个预设助手 `presetAgentType: 'gemini'`（`assistantPresets.ts`），`getEffectiveAgentType`（`useAgentAvailability.ts`）直接返回它，**不看当前模型**。用户用 OpenAI 协议模型（deepseek/kimi/qwen/doubao）开 preset 助手时，被硬编码路由到 gemini 分支（`useGuidSend.ts:153`），用 `gemini-with-google-auth` placeholderModel 创建 gemini 会话。用户没配 Google OAuth → gemini agent 启动卡死 → `conversation.create.invoke` Promise 永远 pending → `sendingRef`/`loading` 不复位 → 主进程也被拖死（心跳停）。
+
+附加问题：`getAvailableFallbackAgent` fallback 顺序第一个是 gemini，aionrs 不可用时会 fallback 到 gemini 再次卡。
+
+## 正解：改路由，不删引擎、不改 preset 配置
+
+aionrs 已具备承载 preset 助手的全部能力（6-29 刚做完）：
+- presetRules 注入：`AionrsAgent.start()` 用 `init_history` 命令发 `[Assistant System Rules]\n${presetRules}`（`src/process/agent/aionrs/index.ts:334`）
+- enabledSkills 注入：`AionrsManager.sendMessage` 从 DB 现场读 enabledSkills（commit fb6f7b6）
+- worker 透传：`new AionrsAgent({ ...data })`（`src/process/worker/aionrs.ts:30`）
+
+Gemini 引擎保留，仅在当前模型是 Google Gemini/Vertex 时承载 preset。
+
+## 为什么不直接改 presetAgentType 为 'aionrs'
+
+`PresetAgentType` 类型（`src/common/types/acpTypes.ts:21`）是 `'gemini' | 'claude' | 'codex' | 'codebuddy' | 'opencode' | 'qwen' | 'kiro'`——**没有 'aionrs'**。直接改会类型报错 + 要改 `resolvePresetAgentType`/`buildAgentConversationParams` 等多处 + 改 21 个配置项。更小的改动：保留 `presetAgentType: 'gemini'` 作原始值，在 `getEffectiveAgentType` 一处按模型协议覆盖。
+
+## 修复
+
+### 1. `getEffectiveAgentType` 按模型协议路由（核心）
+
+**文件**：`src/renderer/pages/guid/hooks/useAgentAvailability.ts`
+
+- 加 `currentModel?: TProviderWithModel` 入参
+- `originalType === 'gemini'` 时按 `currentModel.platform` 覆盖：`'gemini' | 'gemini-vertex-ai'` → 保持 gemini；其他（custom/new-api/anthropic/bedrock 等 OpenAI 协议）→ 覆盖成 `'aionrs'`
+- `isMainAgentAvailable('aionrs')` 直接返回 true（aionrs 是内置打包引擎，始终可用）
+- `getAvailableFallbackAgent` fallback 顺序改成 aionrs 优先、gemini 最后：`['aionrs', 'gemini', 'claude', 'qwen', 'codex', 'codebuddy', 'opencode']`
+
+### 2. currentModel 透传链
+
+**文件**：`src/renderer/pages/guid/hooks/useGuidAgentSelection.ts` + `src/renderer/pages/guid/GuidPage.tsx`
+
+`useGuidAgentSelection` 加 `currentModel` 参数，透传给 `useAgentAvailability`。GuidPage 把 `modelSelection.currentModel` 传进去。
+
+### 3. useGuidSend aionrs 分支接收 preset
+
+**文件**：`src/renderer/pages/guid/hooks/useGuidSend.ts`
+
+aionrs 分支入口判断从 `selectedAgent === 'aionrs'` 改成 `selectedAgent === 'aionrs' || (isPreset && finalEffectiveAgentType === 'aionrs')`，仿 gemini 分支 preset 模式（line 153）。preset 助手 `selectedAgent` 是 'custom'，靠 `finalEffectiveAgentType === 'aionrs'` 进分支。
+
+aionrs 分支 realExtra 已含 `presetRules`（line 334）和 `enabledSkills`（line 335），内部无需改。
+
+### 4. gemini 分支自然不再拦截
+
+`useGuidSend.ts:153` gemini 分支条件 `(isPreset && finalEffectiveAgentType === 'gemini')`——改完后只有 Google 模型才会 `finalEffectiveAgentType === 'gemini'`，OpenAI 协议会是 'aionrs' 进 aionrs 分支。条件不用改。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/renderer/pages/guid/hooks/useAgentAvailability.ts` | getEffectiveAgentType 按模型协议路由 + isMainAgentAvailable(aionrs)=true + fallback 顺序调整 |
+| `src/renderer/pages/guid/hooks/useGuidAgentSelection.ts` | 加 currentModel 参数透传 |
+| `src/renderer/pages/guid/GuidPage.tsx` | 传 currentModel 给 useGuidAgentSelection |
+| `src/renderer/pages/guid/hooks/useGuidSend.ts` | aionrs 分支入口接收 preset |
+
+## 不改
+
+- **不删 Gemini 引擎**——`GeminiAgentManager` / `src/process/agent/gemini/` 全保留，仅 Google 模型时承载 preset
+- **不改 `assistantPresets.ts`**——21 个 preset 的 `presetAgentType: 'gemini'` 保留作原始配置
+- **不改 `PresetAgentType` 类型**——不加 'aionrs'，避免连锁改 buildAgentConversationParams
+- **诊断日志暂留**——`[guid:send]`/`[renderer:*]`/`[heartbeat]` 验证路由修复后跑通再单独 commit 清理
+
+## 验证状态
+
+- `tsc --noEmit` exit 0
+- 运行时需 `npm run restart`：选 deepseek（OpenAI 协议）+ 财务建模助手，确认 `[renderer:handleSend start]` 的 `effectiveAgentType` 变 'aionrs'、进 aionrs 分支、不卡死、技能+规则注入生效
+- 回归：Google Gemini 模型 + preset 助手仍走 gemini 分支；非 preset 的 aionrs agent 不受影响
+- 按交付约定，影响运行行为，需出新的 Windows 安装包才在正式版生效
+
 

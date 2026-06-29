@@ -6,7 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import { DEFAULT_CODEX_MODELS } from '@/common/types/codex/codexModels';
-import type { IProvider } from '@/common/config/storage';
+import type { IProvider, TProviderWithModel } from '@/common/config/storage';
 import { ConfigStorage } from '@/common/config/storage';
 import type { AcpSessionConfigOption } from '@/common/types/acpTypes';
 import type { AcpBackend, AcpBackendConfig, AcpModelInfo, AvailableAgent, EffectiveAgentInfo } from '../types';
@@ -61,6 +61,8 @@ type UseGuidAgentSelectionOptions = {
   modelList: IProvider[];
   isGoogleAuth: boolean;
   localeKey: string;
+  /** Current selected model — passed through to route preset assistants by protocol. */
+  currentModel?: TProviderWithModel | undefined;
 };
 
 /**
@@ -70,6 +72,7 @@ export const useGuidAgentSelection = ({
   modelList,
   isGoogleAuth,
   localeKey,
+  currentModel,
 }: UseGuidAgentSelectionOptions): GuidAgentSelectionResult => {
   const [selectedAgentKey, _setSelectedAgentKey] = useState<string>('claude');
   const [availableAgents, setAvailableAgents] = useState<AvailableAgent[]>();
@@ -144,6 +147,7 @@ export const useGuidAgentSelection = ({
     isGoogleAuth,
     availableAgents,
     resolvePresetAgentType,
+    currentModel,
   });
 
   /**

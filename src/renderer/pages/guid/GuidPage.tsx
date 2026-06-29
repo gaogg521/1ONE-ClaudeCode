@@ -76,6 +76,7 @@ const GuidPage: React.FC = () => {
     modelList: modelSelection.modelList,
     isGoogleAuth: modelSelection.isGoogleAuth,
     localeKey,
+    currentModel: modelSelection.currentModel,
   });
 
   const guidInput = useGuidInput({

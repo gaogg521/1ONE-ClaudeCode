@@ -331,9 +331,10 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       return;
     }
 
-    // Aionrs path
-    if (selectedAgent === 'aionrs') {
-      diag('entered aionrs branch');
+    // Aionrs path — also entered when a preset assistant is routed to aionrs
+    // by getEffectiveAgentType (OpenAI-protocol models avoid the gemini hang).
+    if (selectedAgent === 'aionrs' || (isPreset && finalEffectiveAgentType === 'aionrs')) {
+      diag('entered aionrs branch', { isPreset, finalEffectiveAgentType });
       const aionrsAgentInfo = agentInfo || findAgentByKey(selectedAgentKey);
       const realExtra = {
         defaultFiles: files,

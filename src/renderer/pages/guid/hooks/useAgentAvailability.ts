@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { IProvider } from '@/common/config/storage';
+import type { IProvider, TProviderWithModel } from '@/common/config/storage';
 import type { AcpBackend, AvailableAgent, EffectiveAgentInfo, PresetAgentType } from '../types';
 import { useCallback } from 'react';
 
@@ -13,6 +13,9 @@ type UseAgentAvailabilityOptions = {
   isGoogleAuth: boolean;
   availableAgents: AvailableAgent[] | undefined;
   resolvePresetAgentType: (agentInfo: { backend: AcpBackend; customAgentId?: string } | undefined) => string;
+  /** Current selected model — used to route preset assistants by protocol.
+   *  Google Gemini/Vertex → gemini; OpenAI-compatible (custom/new-api/anthropic/bedrock) → aionrs. */
+  currentModel?: TProviderWithModel | undefined;
 };
 
 type UseAgentAvailabilityResult = {
@@ -30,11 +33,16 @@ export const useAgentAvailability = ({
   isGoogleAuth,
   availableAgents,
   resolvePresetAgentType,
+  currentModel,
 }: UseAgentAvailabilityOptions): UseAgentAvailabilityResult => {
   const isMainAgentAvailable = useCallback(
     (agentType: string): boolean => {
       if (agentType === 'gemini') {
         return isGoogleAuth || (modelList != null && modelList.length > 0);
+      }
+      if (agentType === 'aionrs') {
+        // aionrs is the built-in bundled engine — always available (binary ships with the app).
+        return true;
       }
       return availableAgents?.some((agent) => agent.backend === agentType) ?? false;
     },
@@ -42,10 +50,11 @@ export const useAgentAvailability = ({
   );
 
   const getAvailableFallbackAgent = useCallback((): string | null => {
-    // Prefer Gemini first when it is available (e.g. Google Auth), so the onboarding
-    // experience is consistent even if other ACP agents exist on the system.
+    // aionrs first (bundled, always available), gemini last (needs Google OAuth,
+    // routing OpenAI-protocol users there is what caused the original hang).
     const fallbackOrder: PresetAgentType[] = ['gemini', 'claude', 'qwen', 'codex', 'codebuddy', 'opencode'];
-    for (const agentType of fallbackOrder) {
+    const ordered = ['aionrs', ...fallbackOrder];
+    for (const agentType of ordered) {
       if (isMainAgentAvailable(agentType)) {
         return agentType;
       }
@@ -56,10 +65,22 @@ export const useAgentAvailability = ({
   const getEffectiveAgentType = useCallback(
     (agentInfo: { backend: AcpBackend; customAgentId?: string } | undefined): EffectiveAgentInfo => {
       const originalType = resolvePresetAgentType(agentInfo);
-      const isAvailable = isMainAgentAvailable(originalType);
-      return { agentType: originalType, isFallback: false, originalType, isAvailable };
+      // Route preset assistants by the current model's protocol instead of the
+      // hardcoded presetAgentType. OpenAI-protocol models (deepseek/kimi/qwen/
+      // doubao via custom/new-api/anthropic/bedrock) go to aionrs — the stable
+      // bundled engine. Only Google Gemini/Vertex models stay on gemini (which
+      // needs Google OAuth). This prevents the gemini-branch hang when users on
+      // OpenAI-protocol models open preset assistants.
+      let effectiveType = originalType;
+      if (originalType === 'gemini') {
+        const platform = currentModel?.platform;
+        const isGoogleModel = platform === 'gemini' || platform === 'gemini-vertex-ai';
+        effectiveType = isGoogleModel ? 'gemini' : 'aionrs';
+      }
+      const isAvailable = isMainAgentAvailable(effectiveType);
+      return { agentType: effectiveType, isFallback: effectiveType !== originalType, originalType, isAvailable };
     },
-    [resolvePresetAgentType, isMainAgentAvailable]
+    [resolvePresetAgentType, isMainAgentAvailable, currentModel]
   );
 
   return {
