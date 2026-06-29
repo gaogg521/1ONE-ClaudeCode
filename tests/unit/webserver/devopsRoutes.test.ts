@@ -252,7 +252,8 @@ describe('devopsRoutes', () => {
       await handler(req, res, () => {});
 
       expect(mockDriver.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT type, status FROM requirements WHERE id = ? AND tenant_id = ?')
+        // Security fix (6-25): requirements PATCH now reads creator_id for ownership check.
+        expect.stringContaining('SELECT type, status, creator_id FROM requirements WHERE id = ? AND tenant_id = ?')
       );
       expect(mockRun).toHaveBeenCalled();
       expect(res.json).toHaveBeenCalledWith({ success: true });
@@ -323,12 +324,10 @@ describe('devopsRoutes', () => {
 
       await handler(req, res, () => {});
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://example.com/doc',
-        expect.objectContaining({
-          headers: { 'User-Agent': '1ONE-RAG/1.0' },
-        })
-      );
+      // assertSafeFetchUrl returns a URL object (validated + normalized).
+      expect(global.fetch).toHaveBeenCalledWith(expect.any(URL), {
+        headers: { 'User-Agent': '1ONE-RAG/1.0' },
+      });
       expect(res.json).toHaveBeenCalledWith({
         success: true,
         data: expect.objectContaining({

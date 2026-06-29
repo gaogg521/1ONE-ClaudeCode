@@ -44,6 +44,7 @@ describe('enterprise paths', () => {
   });
 
   it('filters nav items by current role', () => {
+    // Security fix (6-25): usage + security routes require admin, not member.
     expect(getVisibleEnterpriseNavItems('member', false).map((item) => item.key)).toEqual([
       'home',
       'runtimes',
@@ -55,8 +56,6 @@ describe('enterprise paths', () => {
       'cpack',
       'ccode',
       'cmeas',
-      'usage',
-      'security',
     ]);
 
     expect(getVisibleEnterpriseNavItems('org_admin', false).map((item) => item.key)).toContain(

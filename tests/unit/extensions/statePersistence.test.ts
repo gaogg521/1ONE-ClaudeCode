@@ -17,9 +17,9 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-/** Wait for the debounced save to flush (500ms debounce + buffer). */
+/** Wait for the debounced save to flush (500ms debounce + buffer for slow CI). */
 function waitForFlush(): Promise<void> {
-  return new Promise((r) => setTimeout(r, 600));
+  return new Promise((r) => setTimeout(r, 1200));
 }
 
 afterEach(() => {

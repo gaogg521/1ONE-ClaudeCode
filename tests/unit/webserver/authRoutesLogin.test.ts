@@ -330,7 +330,9 @@ describe('registerAuthRoutes login endpoint', () => {
     expect((res as unknown as { json: ReturnType<typeof vi.fn> }).json).toHaveBeenCalledWith(
       expect.objectContaining({
         user: expect.objectContaining({
-          role: 'system_admin',
+          // Security fix (6-25): legacy 'admin' role normalizes to 'org_admin',
+          // not 'system_admin' (avoids silent privilege escalation).
+          role: 'org_admin',
           tenant_id: 'default',
         }),
       })

@@ -100,7 +100,9 @@ describe('enterpriseJoinService', () => {
         .mockReturnValueOnce({ name: 'Acme Corp' });
 
       const preview = await previewEnterpriseInvite('ABCD-1234');
-      expect(preview).toEqual({ tenantId: 'tenant_acme', tenantName: 'Acme Corp' });
+      // Security fix (6-25): preview must NOT leak tenantId/tenantName — only
+      // confirm the code is valid. Tenant info is revealed only after joining.
+      expect(preview).toEqual({ tenantId: '', tenantName: '', valid: true });
     });
 
     it('throws when invite is not found', async () => {

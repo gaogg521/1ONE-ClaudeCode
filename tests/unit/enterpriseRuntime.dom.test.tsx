@@ -120,8 +120,7 @@ describe('EnterpriseRuntimeProvider', () => {
       'cpack',
       'ccode',
       'cmeas',
-      'usage',
-      'security',
+      // Security fix (6-25): usage + security routes now require admin role.
     ]);
   });
 

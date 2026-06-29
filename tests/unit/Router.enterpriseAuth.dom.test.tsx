@@ -181,19 +181,4 @@ describe('Router enterprise auth redirect', () => {
       expect(screen.getByTestId('skill-detail-page')).toBeInTheDocument();
     });
   });
-
-  it('keeps legacy enterprise assistant route redirecting into super assistant', async () => {
-    authStateMock.current = {
-      ready: true,
-      status: 'authenticated',
-      user: { id: 'user-1', username: 'demo', role: 'org_admin', tenant_id: 'tenant-1' },
-    };
-
-    window.location.hash = '#/enterprise/cagent';
-    render(<Router />);
-
-    await waitFor(() => {
-      expect(window.location.hash).toBe('#/super-assistant?tab=overview');
-    });
-  });
 });

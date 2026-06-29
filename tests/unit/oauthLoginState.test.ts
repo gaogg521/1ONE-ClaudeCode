@@ -19,10 +19,16 @@ describe('oauthCallbackUri', () => {
     ).toBe('https://custom.example/callback');
   });
 
-  it('falls back to request origin plus callback path', () => {
-    expect(resolveOAuthCallbackUri('', '/api/auth/wecom/callback', 'https://host/')).toBe(
-      'https://host/api/auth/wecom/callback'
+  it('falls back to request origin plus callback path for localhost', () => {
+    // Security fix (6-25): fallback only allows localhost/127.0.0.1/::1 origin.
+    expect(resolveOAuthCallbackUri('', '/api/auth/wecom/callback', 'http://localhost:3000/')).toBe(
+      'http://localhost:3000/api/auth/wecom/callback'
     );
+  });
+
+  it('returns empty for non-localhost origin without configured redirect', () => {
+    // Security fix (6-25): non-localhost Host without explicit redirectUri → empty.
+    expect(resolveOAuthCallbackUri('', '/api/auth/wecom/callback', 'https://host/')).toBe('');
   });
 });
 

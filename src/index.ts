@@ -626,6 +626,16 @@ const handleAppReady = async (): Promise<void> => {
       try {
         const { ensureBuiltinMcpServers } = await import('./process/utils/initStorage');
         await ensureBuiltinMcpServers();
+        // Also re-sync aionrs global config — ensureAionrsBuiltinMcp first runs
+        // before the TCP server starts, so the export-pdf port was empty there too.
+        try {
+          const { ensureAionrsBuiltinMcp } = await import(
+            './process/services/agentToolkit/syncAionrsBuiltinMcp'
+          );
+          await ensureAionrsBuiltinMcp();
+        } catch (e) {
+          console.warn('[1ONE] aionrs builtin MCP re-sync failed:', e);
+        }
       } catch (error) {
         console.warn('[1ONE] Failed to re-sync builtin MCP servers after export-pdf port allocated:', error);
       }

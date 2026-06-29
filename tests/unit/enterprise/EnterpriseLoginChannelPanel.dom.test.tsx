@@ -152,7 +152,7 @@ describe('EnterpriseLoginChannelPanel', () => {
     });
 
     expect(screen.getByText('本地账户')).toBeInTheDocument();
-    expect(screen.getByText('LDAP')).toBeInTheDocument();
+    expect(screen.getByText('LDAP/域控')).toBeInTheDocument();
     expect(screen.getByText('钉钉')).toBeInTheDocument();
     expect(screen.getByText('企业微信')).toBeInTheDocument();
     expect(screen.queryByText('未配置')).not.toBeInTheDocument();
