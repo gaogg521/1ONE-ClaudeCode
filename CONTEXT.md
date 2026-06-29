@@ -1008,3 +1008,58 @@ Token 排行新增 模型名（从 conversations.model JSON 中 parseModelLabel 
 | `src/index.ts` | app ready 启动 TCP 服务器 + re-sync |
 | `scripts/build-mcp-servers.js` | 加 exportToPdfServer 打包入口 |
 
+---
+
+# 追加记录 — 2026-06-29 深夜（aionrs 助手技能注入 prewarm 竞争 + 助手/工具审查修复）
+
+## 背景
+
+用户选 aionrs + "财务建模助手"发送内容后无回应、返回对话框卡死。排查后顺手审查了全部预设助手和内置 MCP 工具，发现多个同类问题。
+
+## 一、aionrs 预设助手技能注入 prewarm 竞争（严重）
+
+**文件**：`src/process/task/AionrsManager.ts`
+
+**根因**：aionrs 预热池（`AionrsPrewarmPool`）用占位会话构造 `AionrsManager`，占位会话 extra 只含 `workspace/customWorkspace/sessionMode`（`conversationBridge.ts:438`），**不含 `enabledSkills`**。`AionrsManager` 构造函数读 `data.enabledSkills` 预加载技能——预热时为 undefined，`loadSkillsInjection` 没被调用，`pendingSkillsInjection` 保持 null。用户点发送 → `finalizeFromPrewarm` 把真实 extra（含 enabledSkills）写回 DB，但 manager 的 `this.data` 是构造时的快照，不会刷新。`sendMessage` 检查 `pendingSkillsInjection` 为 null → 跳过技能注入 → 模型收不到技能内容 → 不回应 → UI 卡。
+
+**修复**：`sendMessage` 首次发送时，若技能还没注入，**从 DB 现场读** `extra.enabledSkills`（而非信任构造时的 `this.data` 快照），再加载技能内容注入。新增 `skillsAlreadyInjected` 标志防重复注入。
+
+## 二、openclaw-setup 助手技能名拼写错误（严重）
+
+**文件**：`src/common/config/presets/assistantPresets.ts:257`
+
+`defaultEnabledSkills` 写的是 `'one-webui-setup'`，实际技能目录是 `1one-webui-setup`（数字 1 开头）。`loadSkillsContent` 按目录名匹配，找不到就静默跳过——该技能永远不会注入到 openclaw-setup 助手。已改为 `'1one-webui-setup'`。
+
+## 三、ACP agent 未注入 one-export-pdf MCP（中等）
+
+**文件**：`src/process/agent/acp/mcpSessionConfig.ts` + `src/process/agent/acp/index.ts`
+
+**根因**：`loadBuiltinSessionMcpServers` 只为 ACP 注入 `one-web-tools`，缺 `one-export-pdf`。所有 ACP agent（Claude/Codex/Qwen/CodeBuddy 等）无法用内置 PDF 导出工具，会自己装 Puppeteer 造轮子。
+
+**修复**：
+- `mcpSessionConfig.ts` 新增 `buildOneExportPdfAcpSessionMcpServer(scriptPath, port)`，port 为 0 时返回 null（TCP 服务器没就绪就跳过，re-sync 后补）。
+- `acp/index.ts:1690` web-tools 注入点旁加 export-pdf 注入，端口动态读 `getExportPdfMcpPort()`，try/catch 兜底。
+- 不破坏现有 aionrs PDF 链路（aionrs 走 config.toml，ACP 走 session 级，两条独立路径）。
+
+## 四、审查未修（架构限制 / 产品决策）
+
+- **OpenClaw / NanoBot 无内置 MCP 注入**：这两个 agent 通过 CLI（`nanobot agent` / openclaw gateway）spawn 子进程，不走 MCP 协议，没有 tools 注入机制。注入了也无效，**不是 bug 是架构限制**。
+- **aionrs config.toml MCP 注入是启动时一次性**：用户会话中动态 enable MCP 不会同步到 aionrs。已有 app ready + 端口就绪后 re-sync 机制（`index.ts:628`），剩下"会话中动态变更"不同步属于已知限制，改动面大且与 PDF 无关，暂不动。
+- **enabledByDefault 白名单漏 10 个预设**（`initStorage.ts:598-607`）：19 个预设只有 9 个默认启用。漏掉的 officecli 系列（pitch-deck/dashboard/financial-model/academic-paper/morph-ppt）+ game-3d/ui-ux-pro-max/planning-with-files/human-3-coach/social-job-publisher 新用户默认看不到。**属产品决策**（哪些助手默认可见），待用户拍板。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/task/AionrsManager.ts` | sendMessage 从 DB 现场读 enabledSkills + skillsAlreadyInjected 防重复 |
+| `src/common/config/presets/assistantPresets.ts` | openclaw-setup 技能名 one-webui-setup → 1one-webui-setup |
+| `src/process/agent/acp/mcpSessionConfig.ts` | 新增 buildOneExportPdfAcpSessionMcpServer |
+| `src/process/agent/acp/index.ts` | ACP session 注入 one-export-pdf MCP |
+
+## 验证状态
+
+- `tsc --noEmit` exit 0
+- 运行时需 `npm run restart` 桌面端实测：aionrs + 财务建模助手不再卡死、技能注入生效；ACP agent 能调 `export_to_pdf`；openclaw-setup 助手技能注入生效
+- 按交付约定，影响运行行为，需出新的 Windows 安装包才生效
+
+

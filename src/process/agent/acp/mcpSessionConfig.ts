@@ -6,7 +6,7 @@
 
 import type { IMcpServer } from '@/common/config/storage';
 import type { AcpResponse } from '@/common/types/acpTypes';
-import { BUILTIN_WEB_TOOLS_NAME } from '@/process/resources/builtinMcp/constants';
+import { BUILTIN_WEB_TOOLS_NAME, BUILTIN_EXPORT_PDF_NAME } from '@/process/resources/builtinMcp/constants';
 
 export interface AcpSessionMcpNameValue {
   name: string;
@@ -181,6 +181,26 @@ export function buildOneWebToolsAcpSessionMcpServer(scriptPath: string): AcpSess
     command: 'node',
     args: [scriptPath],
     env: [],
+  };
+}
+
+/**
+ * Always-on built-in PDF export MCP. Forwards export_to_pdf tool calls to the
+ * 1ONE main-process TCP server. The port is allocated at runtime by
+ * exportPdfMcpServer; pass it via env. When port is 0 (TCP server not ready yet),
+ * returns null so the caller skips injection — re-sync after app ready fills it.
+ */
+export function buildOneExportPdfAcpSessionMcpServer(
+  scriptPath: string,
+  port: number
+): AcpSessionMcpServerStdio | null {
+  if (!port) return null;
+  return {
+    type: 'stdio',
+    name: BUILTIN_EXPORT_PDF_NAME,
+    command: 'node',
+    args: [scriptPath],
+    env: [{ name: 'EXPORT_PDF_MCP_PORT', value: String(port) }],
   };
 }
 

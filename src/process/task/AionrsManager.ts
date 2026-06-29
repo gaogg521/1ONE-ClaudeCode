@@ -95,6 +95,9 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   private activeTurnId: string | null = null;
   /** Skills content is injected once into the first user turn, then cleared. */
   private pendingSkillsInjection: string | null = null;
+  /** Whether skills have already been injected into a prior turn. Prevents re-injection
+   *  when loadSkillsInjection runs late or enabledSkills arrives via finalizeFromPrewarm. */
+  private skillsAlreadyInjected = false;
 
   private inferProductLine(): string {
     const modelId = (this.model.useModel || '').toLowerCase();
@@ -400,11 +403,32 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     // the full SKILL.md content into the first user turn. Must land on BOTH input
     // and agentPrompt — the worker sends `agentPrompt ?? input`, so writing only
     // input gets dropped whenever an agentPrompt is present (the normal case).
+    //
+    // Prewarm race: the prewarm pool creates the AionrsManager from a placeholder
+    // conversation whose extra does NOT carry enabledSkills — they arrive later via
+    // finalizeFromPrewarm. The manager's `data` is a constructor snapshot and is NOT
+    // refreshed when the DB row is finalized, so read enabledSkills fresh from the DB
+    // on the first turn instead of trusting this.data.enabledSkills.
+    if (!this.skillsAlreadyInjected && this.pendingSkillsInjection === null) {
+      try {
+        const db = await getDatabase();
+        const conv = db.getConversation(this.conversation_id);
+        const extra = (conv as { data?: { extra?: Record<string, unknown> } })?.data?.extra;
+        const liveSkills = Array.isArray(extra?.enabledSkills) ? (extra!.enabledSkills as string[]) : undefined;
+        const skills = liveSkills ?? this.data.data.enabledSkills;
+        if (skills && skills.length > 0) {
+          await this.loadSkillsInjection(skills);
+        }
+      } catch {
+        // best-effort — fall through, no injection this turn
+      }
+    }
     if (this.pendingSkillsInjection) {
       const skillsBlock = `[Pre-loaded Skills - You MUST follow these instructions]\n${this.pendingSkillsInjection}\n\n[User Request]\n`;
       const base = data.agentPrompt ?? (data.input || '');
       data = { ...data, input: skillsBlock + base, agentPrompt: skillsBlock + base };
       this.pendingSkillsInjection = null;
+      this.skillsAlreadyInjected = true;
     }
 
     // Detect model switches even when the worker is NOT rebuilt (some flows can update model routing without restart).

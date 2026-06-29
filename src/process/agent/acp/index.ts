@@ -45,6 +45,7 @@ import {
   buildBuiltinAcpSessionMcpServers,
   buildEnabledAcpSessionMcpServers,
   buildOneWebToolsAcpSessionMcpServer,
+  buildOneExportPdfAcpSessionMcpServer,
   buildTeamMcpServer,
   parseAcpMcpCapabilities,
   type AcpSessionMcpServer,
@@ -1694,6 +1695,26 @@ export class AcpAgent {
       if (!servers.some((s) => s.name === webToolsServer.name)) {
         servers.push(webToolsServer);
         mainLog(`[ACP ${this.extra.backend}]`, 'Injecting built-in web tools MCP (one-web-tools)');
+      }
+
+      // PDF export (HTML/Office → PDF via main-process converter). Lets ACP agents
+      // call export_to_pdf instead of installing Puppeteer. Port is allocated at
+      // runtime by exportPdfMcpServer; skip injection if not ready yet (re-sync
+      // after app ready will pick it up on the next session/new).
+      let exportPdfPort = 0;
+      try {
+        const { getExportPdfMcpPort } = await import('@process/services/exportPdfMcpServer');
+        exportPdfPort = getExportPdfMcpPort();
+      } catch {
+        // TCP server module not loaded — skip this round.
+      }
+      const exportPdfServer = buildOneExportPdfAcpSessionMcpServer(
+        getBuiltinMcpScriptPath('builtin-mcp-export-pdf'),
+        exportPdfPort
+      );
+      if (exportPdfServer && !servers.some((s) => s.name === exportPdfServer.name)) {
+        servers.push(exportPdfServer);
+        mainLog(`[ACP ${this.extra.backend}]`, 'Injecting built-in PDF export MCP (one-export-pdf)');
       }
 
       if (servers.length > 0) {

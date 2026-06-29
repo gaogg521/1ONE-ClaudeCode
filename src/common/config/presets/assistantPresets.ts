@@ -254,7 +254,7 @@ export const ASSISTANT_PRESETS: AssistantPreset[] = [
       'en-US': 'openclaw-setup.md',
       'zh-CN': 'openclaw-setup.zh-CN.md',
     },
-    defaultEnabledSkills: ['openclaw-setup', 'one-webui-setup'],
+    defaultEnabledSkills: ['openclaw-setup', '1one-webui-setup'],
     nameI18n: {
       'en-US': 'OpenClaw Setup Expert',
       'zh-CN': 'OpenClaw 部署专家',
