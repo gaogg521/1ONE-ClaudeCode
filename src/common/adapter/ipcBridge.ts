@@ -251,6 +251,10 @@ export const exportApi = {
     { success: boolean; filePath?: string; error?: string },
     { html: string; defaultName?: string }
   >('export.html-to-pdf'), // 将 HTML 内容渲染并导出为 PDF
+  officeToPdf: bridge.buildProvider<
+    { success: boolean; filePath?: string; error?: string },
+    { filePath: string; defaultName?: string }
+  >('export.office-to-pdf'), // 将 Office 文件（.docx/.xlsx/.pptx）导出为 PDF
 };
 export const gatewayApi = {
   fetch: bridge.buildProvider<

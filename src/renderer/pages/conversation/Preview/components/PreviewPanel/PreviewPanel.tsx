@@ -392,6 +392,45 @@ const PreviewPanel: React.FC = () => {
     }
   }, [content, metadata?.fileName, messageApi, t]);
 
+  // 导出 Office 文件为 PDF / Export Office file (.docx/.xlsx/.pptx) as PDF
+  const handleExportOfficePdf = useCallback(async () => {
+    if (!metadata?.filePath) {
+      try {
+        messageApi.error(t('preview.office.exportPdfFailed'));
+      } catch {
+        // Context holder may be unmounted
+      }
+      return;
+    }
+    const baseName = (metadata?.fileName ?? 'document').replace(/\.(docx|xlsx|pptx|doc|xls|ppt)$/i, '');
+    const defaultName = `${baseName}.pdf`;
+    try {
+      const result = await ipcBridge.exportApi.officeToPdf.invoke({
+        filePath: metadata.filePath,
+        defaultName,
+      });
+      if (result?.success) {
+        try {
+          messageApi.success(t('preview.office.exportPdfSuccess'));
+        } catch {
+          // Context holder may be unmounted
+        }
+      } else if (result?.error) {
+        try {
+          messageApi.error(`${t('preview.office.exportPdfFailed')}: ${result.error}`);
+        } catch {
+          // Context holder may be unmounted
+        }
+      }
+    } catch {
+      try {
+        messageApi.error(t('preview.office.exportPdfFailed'));
+      } catch {
+        // Context holder may be unmounted
+      }
+    }
+  }, [metadata?.filePath, metadata?.fileName, messageApi, t]);
+
   // 在系统默认应用中打开文件 / Open file in system default application
   const handleOpenInSystem = useCallback(async () => {
     if (!metadata?.filePath) {
@@ -751,6 +790,11 @@ const PreviewPanel: React.FC = () => {
             inspectMode={inspectMode}
             onInspectModeToggle={() => setInspectMode(!inspectMode)}
             onExportPdf={isHTML ? handleExportPdf : undefined}
+            onExportOfficePdf={
+              (contentType === 'word' || contentType === 'excel' || contentType === 'ppt') && metadata?.filePath
+                ? handleExportOfficePdf
+                : undefined
+            }
             leftExtra={toolbarExtras?.left}
             rightExtra={toolbarExtras?.right}
           />

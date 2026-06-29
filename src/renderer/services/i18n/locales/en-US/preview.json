@@ -119,6 +119,11 @@
     "exportPdfSuccess": "PDF saved successfully",
     "exportPdfFailed": "Failed to export PDF"
   },
+  "office": {
+    "exportPdf": "Export as PDF",
+    "exportPdfSuccess": "PDF saved successfully",
+    "exportPdfFailed": "Failed to export PDF"
+  },
   "ppt": {
     "loading": "Starting PPT preview...",
     "installing": "Installing preview component...",

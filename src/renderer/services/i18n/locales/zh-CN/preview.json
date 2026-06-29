@@ -119,6 +119,11 @@
     "exportPdfSuccess": "PDF 已保存",
     "exportPdfFailed": "导出 PDF 失败"
   },
+  "office": {
+    "exportPdf": "导出 PDF",
+    "exportPdfSuccess": "PDF 已保存",
+    "exportPdfFailed": "导出 PDF 失败"
+  },
   "ppt": {
     "loading": "正在启动 PPT 预览...",
     "installing": "正在安装预览组件...",

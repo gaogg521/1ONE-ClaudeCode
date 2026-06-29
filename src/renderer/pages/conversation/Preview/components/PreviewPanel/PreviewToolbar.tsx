@@ -161,6 +161,12 @@ interface PreviewToolbarProps {
   onExportPdf?: () => void;
 
   /**
+   * 导出 Office 文件为 PDF（仅 word/excel/ppt 类型使用）
+   * Export Office file as PDF (only for word/excel/ppt types)
+   */
+  onExportOfficePdf?: () => void;
+
+  /**
    * 左侧额外渲染内容
    * Extra content rendered on the left section
    */
@@ -206,6 +212,7 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
   inspectMode,
   onInspectModeToggle,
   onExportPdf,
+  onExportOfficePdf,
   leftExtra,
   rightExtra,
 }) => {
@@ -524,6 +531,31 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                 <polyline points='9 9 10 9 11 9' />
               </svg>
               <span>{t('preview.html.exportPdf')}</span>
+            </div>
+          )}
+
+          {onExportOfficePdf && (
+            <div
+              className={toolbarBtn}
+              onClick={onExportOfficePdf}
+              title={t('preview.office.exportPdf')}
+            >
+              <svg
+                width={toolbarIconSize}
+                height={toolbarIconSize}
+                viewBox='0 0 24 24'
+                fill='none'
+                stroke='currentColor'
+                strokeWidth='2'
+                className='text-t-secondary'
+              >
+                <path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' />
+                <polyline points='14 2 14 8 20 8' />
+                <line x1='9' y1='13' x2='15' y2='13' />
+                <line x1='9' y1='17' x2='15' y2='17' />
+                <polyline points='9 9 10 9 11 9' />
+              </svg>
+              <span>{t('preview.office.exportPdf')}</span>
             </div>
           )}
         </div>
