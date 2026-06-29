@@ -1064,4 +1064,36 @@ Token 排行新增 模型名（从 conversations.model JSON 中 parseModelLabel 
 - 运行时需 `npm run restart` 桌面端实测：aionrs + 财务建模助手不再卡死、技能注入生效；ACP agent 能调 `export_to_pdf`；openclaw-setup 助手技能注入生效
 - 按交付约定，影响运行行为，需出新的 Windows 安装包才生效
 
+---
+
+# 追加记录 — 2026-06-29 深夜补（aionrs config.toml 注入失败根因：裸命令找不到 binary）
+
+## 背景
+
+用户在 aionrs 会话里让它"讲故事并保存为 PDF"，agent 返回 `ToolSearch No deferred tools matching "pdf" found` + `Skill 'pdf' not found`，没有 `export_to_pdf` 工具。查 aionrs 全局 `config.toml`（`%APPDATA%\aionrs\config.toml`）只有 `chrome-devtools` 和 `one-image-generation`，**缺 `one-web-tools` 和 `one-export-pdf`**。
+
+## 根因
+
+app 日志（`%APPDATA%\1OneClaudeCode-Dev\logs\2026-06-29.log`）反复出现：
+```
+[aionrs] Failed to inject built-in MCP servers: Command failed: aionrs --config-path
+```
+
+`OneCmdAionrsMcpAgent.getAionrsConfigPath`（`OneCmdAionrsMcpAgent.ts:45`）用裸命令 `execSync('aionrs --config-path')`，但 aionrs binary 是 1ONE 内置打包的（`resources/bundled-aionrs/<plat>-<arch>/aionrs.exe`），**不在系统 PATH 上**。裸命令找不到 → execSync 抛错 → `ensureAionrsBuiltinMcp` 的 try/catch 静默吞掉 → config.toml 永远不会被写入 `one-web-tools` / `one-export-pdf`。
+
+讽刺的是 `resolveAionrsBinary()`（`binaryResolver.ts`）早就实现了正确的 binary 解析（bundled → dev → PATH），但 `AionrsMcpAgent` 没用它，各走各的。
+
+## 修复
+
+**文件**：`src/process/services/mcpServices/agents/OneCmdAionrsMcpAgent.ts`
+
+`getAionrsConfigPath` 的 binary 解析顺序改成：显式 cliPath 参数 → `resolveAionrsBinary()` → 裸 `aionrs`（最后兜底）。命令加引号 `"${cmd}" --config-path` 防路径含空格。复用现成的 `resolveAionrsBinary()`，不重复造轮子。
+
+## 验证
+
+- `tsc --noEmit` exit 0
+- 手动验证：`"./resources/bundled-aionrs/win32-x64/aionrs.exe" --config-path` 正确返回 `%APPDATA%\aionrs\config.toml`
+- 运行时需 `npm run restart`：重启后 `ensureAionrsBuiltinMcp` 会用完整 binary 路径调 `--config-path`，成功写入 `one-web-tools` + `one-export-pdf`（带端口）到 config.toml。aionrs 会话里说"保存为 PDF"应能调到 `export_to_pdf` 工具。
+- 按交付约定，影响运行行为，需出新的 Windows 安装包才在正式版生效
+
 

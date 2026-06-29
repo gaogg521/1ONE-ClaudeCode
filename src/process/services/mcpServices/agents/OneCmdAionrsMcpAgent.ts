@@ -9,6 +9,7 @@ import { promises as fs } from 'fs';
 import { dirname } from 'path';
 import { parse, stringify } from 'smol-toml';
 import { getEnhancedEnv } from '@process/utils/shellEnv';
+import { resolveAionrsBinary } from '@process/agent/aionrs/binaryResolver';
 import type { McpOperationResult } from '../McpProtocol';
 import { AbstractMcpAgent } from '../McpProtocol';
 import type { IMcpServer, IMcpServerTransport } from '@/common/config/storage';
@@ -41,12 +42,19 @@ let cachedConfigPath: string | null = null;
 /**
  * Get the aionrs global config path via `aionrs --config-path`.
  * The result is cached because the path does not change at runtime.
+ *
+ * Resolution order for the binary: explicit cliPath arg → bundled/dev binary
+ * via resolveAionrsBinary() → bare `aionrs` on PATH (last resort). The bare
+ * fallback almost never works because the bundled binary is not on PATH, which
+ * previously caused ensureAionrsBuiltinMcp to silently fail with "Command
+ * failed: aionrs --config-path" and left one-web-tools/one-export-pdf missing
+ * from config.toml.
  */
 function getAionrsConfigPath(cliPath?: string): string {
   if (cachedConfigPath) return cachedConfigPath;
 
-  const cmd = cliPath || 'aionrs';
-  const result = execSync(`${cmd} --config-path`, {
+  const cmd = cliPath || resolveAionrsBinary() || 'aionrs';
+  const result = execSync(`"${cmd}" --config-path`, {
     encoding: 'utf-8',
     timeout: 3000,
     env: getEnhancedEnv(),
