@@ -1041,11 +1041,13 @@ Token 排行新增 模型名（从 conversations.model JSON 中 parseModelLabel 
 - `acp/index.ts:1690` web-tools 注入点旁加 export-pdf 注入，端口动态读 `getExportPdfMcpPort()`，try/catch 兜底。
 - 不破坏现有 aionrs PDF 链路（aionrs 走 config.toml，ACP 走 session 级，两条独立路径）。
 
-## 四、审查未修（架构限制 / 产品决策）
+## 四、审查确认的非 BUG 项（勿当 BUG 重复修）
 
-- **OpenClaw / NanoBot 无内置 MCP 注入**：这两个 agent 通过 CLI（`nanobot agent` / openclaw gateway）spawn 子进程，不走 MCP 协议，没有 tools 注入机制。注入了也无效，**不是 bug 是架构限制**。
-- **aionrs config.toml MCP 注入是启动时一次性**：用户会话中动态 enable MCP 不会同步到 aionrs。已有 app ready + 端口就绪后 re-sync 机制（`index.ts:628`），剩下"会话中动态变更"不同步属于已知限制，改动面大且与 PDF 无关，暂不动。
-- **enabledByDefault 白名单漏 10 个预设**（`initStorage.ts:598-607`）：19 个预设只有 9 个默认启用。漏掉的 officecli 系列（pitch-deck/dashboard/financial-model/academic-paper/morph-ppt）+ game-3d/ui-ux-pro-max/planning-with-files/human-3-coach/social-job-publisher 新用户默认看不到。**属产品决策**（哪些助手默认可见），待用户拍板。
+以下三项在 2026-06-29 深夜审查中确认**不是 BUG**，是架构限制或产品决策，后续会话不要当成待修问题处理。如需改动需产品决策，不能擅自当 bug 修：
+
+- **OpenClaw / NanoBot 无内置 MCP 注入**：这两个 agent 通过 CLI（`nanobot agent` / openclaw gateway）spawn 子进程，不走 MCP 协议，没有 tools 注入机制。注入了也无效——这是架构限制，不是 bug。要改得先让这两个 CLI 支持 MCP，属功能开发。
+- **aionrs config.toml MCP 注入是启动时一次性**：用户会话中动态 enable/disable MCP 不会实时同步到 aionrs（ACP 是 session 级天然动态）。已有 app ready + 端口就绪后 re-sync 机制（`index.ts:628`）。剩余的"会话中动态变更"不同步是已知限制，改动面大且与 PDF 无关，非 bug。
+- **enabledByDefault 白名单只含 9 个预设**（`initStorage.ts:598-607`）：19 个预设只有 9 个默认启用，其余 10 个（officecli 系列 pitch-deck/dashboard/financial-model/academic-paper/morph-ppt + game-3d/ui-ux-pro-max/planning-with-files/human-3-coach/social-job-publisher）新用户默认看不到。这是产品决策（哪些助手默认可见），不是配置 bug。要加哪些进去需产品拍板。
 
 ## 涉及文件
 
