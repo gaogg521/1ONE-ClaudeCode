@@ -163,6 +163,7 @@ export function initConversationBridge(
   });
 
   ipcBridge.conversation.create.provider(async (params): Promise<TChatConversation> => {
+    console.log('[conversationBridge] create invoked', { type: params?.type, name: params?.name });
     if (!VALID_CONVERSATION_TYPES.has(params?.type as TChatConversation['type'])) {
       console.warn('[conversationBridge] Rejecting create request with invalid conversation type:', params?.type);
       return undefined as unknown as TChatConversation;
@@ -616,6 +617,7 @@ export function initConversationBridge(
   // 通用 sendMessage 实现 - 统一调用 IAgentManager.sendMessage
   // Generic sendMessage - dispatches via IAgentManager.sendMessage interface
   ipcBridge.conversation.sendMessage.provider(async (params) => {
+    console.log('[conversationBridge] sendMessage invoked', { convId: params?.conversation_id, msgId: params?.msg_id });
     if (!params) {
       return { success: false, msg: 'Missing request parameters' };
     }

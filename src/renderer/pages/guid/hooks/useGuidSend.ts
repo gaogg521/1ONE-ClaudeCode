@@ -123,9 +123,12 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     const isPreset = isPresetAgent;
 
     const { agentType: effectiveAgentType } = getEffectiveAgentType(agentInfo);
+    console.log('[guid:send] handleSend start', { isPreset, effectiveAgentType, selectedAgent, agentInfoBackend: agentInfo?.backend });
 
     const { rules: presetRules } = isPreset ? await resolvePresetRulesAndSkills(agentInfo) : {};
+    console.log('[guid:send] presetRules resolved', { hasRules: !!presetRules });
     const enabledSkills = isPreset ? resolveEnabledSkills(agentInfo) : undefined;
+    console.log('[guid:send] enabledSkills resolved', { enabledSkills });
 
     let finalEffectiveAgentType = effectiveAgentType;
     if (isPreset && !isMainAgentAvailable(effectiveAgentType)) {
@@ -326,6 +329,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
 
     // Aionrs path
     if (selectedAgent === 'aionrs') {
+      console.log('[guid:send] entered aionrs branch');
       const aionrsAgentInfo = agentInfo || findAgentByKey(selectedAgentKey);
       const realExtra = {
         defaultFiles: files,
@@ -349,8 +353,9 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         const claimed = prewarmKey
           ? await ipcBridge.conversation.prewarmClaim
               .invoke({ key: prewarmKey })
-              .catch((): { conversation_id: string } | null => null)
+              .catch((e): { conversation_id: string } | null => { console.log('[guid:send] prewarmClaim error', e); return null; })
           : null;
+        console.log('[guid:send] prewarmClaim result', { claimed: claimed?.conversation_id, prewarmKey });
 
         let conversation: TChatConversation | undefined;
         if (claimed?.conversation_id) {
@@ -376,13 +381,14 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           if (!currentModel) {
             throw new Error(t('guid.noModelSelected', { defaultValue: 'No model selected. Please select a model first.' }));
           }
+          console.log('[guid:send] fallback create.invoke', { type: 'aionrs' });
           conversation = await ipcBridge.conversation.create.invoke({
             type: 'aionrs',
             name: input,
             model: currentModel,
             extra: realExtra,
           });
-          console.log(`[aionrs:prewarm] fallback create done +${Math.round(performance.now() - t0)}ms`);
+          console.log('[guid:send] fallback create done', { convId: conversation?.id });
         }
 
         if (!conversation || !conversation.id) {
@@ -544,11 +550,17 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
   ]);
 
   const sendMessageHandler = useCallback(() => {
-    if (loading || sendingRef.current) return;
+    console.log('[guid:send] sendMessageHandler clicked', { loading, sendingRef: sendingRef.current });
+    if (loading || sendingRef.current) {
+      console.log('[guid:send] blocked by guard', { loading, sendingRef: sendingRef.current });
+      return;
+    }
     sendingRef.current = true;
     setLoading(true);
+    console.log('[guid:send] calling handleSend');
     handleSend()
       .then(() => {
+        console.log('[guid:send] handleSend done');
         setInput('');
         setMentionOpen(false);
         setMentionQuery(null);
