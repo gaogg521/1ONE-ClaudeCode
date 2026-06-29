@@ -556,6 +556,13 @@ const handleAppReady = async (): Promise<void> => {
   const mark = (label: string) => console.log(`[1ONE:ready] ${label} +${Math.round(performance.now() - t0)}ms`);
   mark('start');
 
+  // Diagnostic heartbeat: confirms main-process event loop is alive.
+  // If logs stop, the main process is blocked/dead.
+  const heartbeat = setInterval(() => {
+    console.log(`[heartbeat] main alive @${Math.round(performance.now() - t0)}ms`);
+  }, 5000);
+  if (typeof heartbeat.unref === 'function') heartbeat.unref();
+
   if (!app.isPackaged) {
     try {
       await session.defaultSession.clearCache();

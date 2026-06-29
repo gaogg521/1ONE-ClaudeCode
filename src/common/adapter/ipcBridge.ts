@@ -76,6 +76,7 @@ export const conversation = {
     boolean,
     { conversation_id: string; name: string; extra?: Record<string, unknown> }
   >('conversation.prewarm.finalize'),
+  diagLog: bridge.buildProvider<boolean, { tag: string; data?: unknown }>('diag.log'),
   stop: bridge.buildProvider<IBridgeResponse<{}>, { conversation_id: string }>('chat.stop.stream'), // 停止会话
   sendMessage: bridge.buildProvider<IBridgeResponse<{ input?: string; files?: string[] }>, ISendMessageParams>(
     'chat.send.message'

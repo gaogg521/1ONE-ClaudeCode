@@ -162,6 +162,11 @@ export function initConversationBridge(
     }
   });
 
+  ipcBridge.conversation.diagLog.provider(async ({ tag, data }) => {
+    console.log(`[renderer:${tag}]`, data ?? '');
+    return true;
+  });
+
   ipcBridge.conversation.create.provider(async (params): Promise<TChatConversation> => {
     console.log('[conversationBridge] create invoked', { type: params?.type, name: params?.name });
     if (!VALID_CONVERSATION_TYPES.has(params?.type as TChatConversation['type'])) {
@@ -464,14 +469,18 @@ export function initConversationBridge(
   });
 
   ipcBridge.conversation.prewarmClaim.provider(async ({ key }) => {
+    console.log('[prewarm] claim invoked', { key, hasPool: !!aionrsPrewarmPool });
     if (!aionrsPrewarmPool) return null;
-    return aionrsPrewarmPool.claim(key);
+    const result = aionrsPrewarmPool.claim(key);
+    console.log('[prewarm] claim result', { matched: !!result?.conversation_id });
+    return result;
   });
 
   // Promote a prewarmed placeholder conversation to a real one by writing
   // back the user's real name + extra. mergeExtra=true preserves anything the
   // running AionrsManager already persisted (e.g. lastModelId, aionrsSessionId).
   ipcBridge.conversation.finalizeFromPrewarm.provider(async ({ conversation_id, name, extra }) => {
+    console.log('[prewarm] finalize invoked', { conversation_id });
     try {
       const updates: Partial<TChatConversation> = { name };
       if (extra) {

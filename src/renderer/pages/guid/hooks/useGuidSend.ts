@@ -123,12 +123,16 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     const isPreset = isPresetAgent;
 
     const { agentType: effectiveAgentType } = getEffectiveAgentType(agentInfo);
-    console.log('[guid:send] handleSend start', { isPreset, effectiveAgentType, selectedAgent, agentInfoBackend: agentInfo?.backend });
+    const diag = (tag: string, data?: unknown) => {
+      console.log('[guid:send]', tag, data ?? '');
+      void ipcBridge.conversation.diagLog.invoke({ tag, data }).catch(() => {});
+    };
+    diag('handleSend start', { isPreset, effectiveAgentType, selectedAgent, agentInfoBackend: agentInfo?.backend });
 
     const { rules: presetRules } = isPreset ? await resolvePresetRulesAndSkills(agentInfo) : {};
-    console.log('[guid:send] presetRules resolved', { hasRules: !!presetRules });
+    diag('presetRules resolved', { hasRules: !!presetRules });
     const enabledSkills = isPreset ? resolveEnabledSkills(agentInfo) : undefined;
-    console.log('[guid:send] enabledSkills resolved', { enabledSkills });
+    diag('enabledSkills resolved', { enabledSkills });
 
     let finalEffectiveAgentType = effectiveAgentType;
     if (isPreset && !isMainAgentAvailable(effectiveAgentType)) {
@@ -329,7 +333,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
 
     // Aionrs path
     if (selectedAgent === 'aionrs') {
-      console.log('[guid:send] entered aionrs branch');
+      diag('entered aionrs branch');
       const aionrsAgentInfo = agentInfo || findAgentByKey(selectedAgentKey);
       const realExtra = {
         defaultFiles: files,
@@ -353,9 +357,9 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         const claimed = prewarmKey
           ? await ipcBridge.conversation.prewarmClaim
               .invoke({ key: prewarmKey })
-              .catch((e): { conversation_id: string } | null => { console.log('[guid:send] prewarmClaim error', e); return null; })
+              .catch((e): { conversation_id: string } | null => { diag('prewarmClaim error', e); return null; })
           : null;
-        console.log('[guid:send] prewarmClaim result', { claimed: claimed?.conversation_id, prewarmKey });
+        diag('prewarmClaim result', { claimed: claimed?.conversation_id, prewarmKey });
 
         let conversation: TChatConversation | undefined;
         if (claimed?.conversation_id) {
@@ -381,14 +385,14 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           if (!currentModel) {
             throw new Error(t('guid.noModelSelected', { defaultValue: 'No model selected. Please select a model first.' }));
           }
-          console.log('[guid:send] fallback create.invoke', { type: 'aionrs' });
+          diag('fallback create.invoke', { type: 'aionrs' });
           conversation = await ipcBridge.conversation.create.invoke({
             type: 'aionrs',
             name: input,
             model: currentModel,
             extra: realExtra,
           });
-          console.log('[guid:send] fallback create done', { convId: conversation?.id });
+          diag('fallback create done', { convId: conversation?.id });
         }
 
         if (!conversation || !conversation.id) {
@@ -550,17 +554,21 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
   ]);
 
   const sendMessageHandler = useCallback(() => {
-    console.log('[guid:send] sendMessageHandler clicked', { loading, sendingRef: sendingRef.current });
+    const diag = (tag: string, data?: unknown) => {
+      console.log('[guid:send]', tag, data ?? '');
+      void ipcBridge.conversation.diagLog.invoke({ tag, data }).catch(() => {});
+    };
+    diag('clicked', { loading, sendingRef: sendingRef.current });
     if (loading || sendingRef.current) {
-      console.log('[guid:send] blocked by guard', { loading, sendingRef: sendingRef.current });
+      diag('blocked by guard', { loading, sendingRef: sendingRef.current });
       return;
     }
     sendingRef.current = true;
     setLoading(true);
-    console.log('[guid:send] calling handleSend');
+    diag('calling handleSend');
     handleSend()
       .then(() => {
-        console.log('[guid:send] handleSend done');
+        diag('handleSend done');
         setInput('');
         setMentionOpen(false);
         setMentionQuery(null);
