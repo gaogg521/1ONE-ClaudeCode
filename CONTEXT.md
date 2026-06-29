@@ -1182,4 +1182,62 @@ aionrs 分支 realExtra 已含 `presetRules`（line 334）和 `enabledSkills`（
 - 回归：Google Gemini 模型 + preset 助手仍走 gemini 分支；非 preset 的 aionrs agent 不受影响
 - 按交付约定，影响运行行为，需出新的 Windows 安装包才在正式版生效
 
+---
+
+# 追加记录 — 2026-06-29 深夜（preset 路由收尾：模型选择器联动 + 卡死真因=诊断 console.log + 移除全部临时诊断）
+
+承接 `0ab4741`（GLM 把 preset 助手按协议路由到 aionrs）。实测发现两个遗留问题，定位修复后移除全部临时诊断。
+
+## 一、模型选择器没联动（"模型选不了"）
+
+**文件**：`GuidPage.tsx`、`useAgentAvailability.ts`
+
+**根因**：`0ab4741` 让 preset 的 `effectiveAgentType` 从 gemini 改成 aionrs，但 `GuidPage.isGeminiMode`（决定模型选择器走 provider 模式还是 ACP 模式）的条件 B 仍写死 `agentType === 'gemini'`，没把"路由到 aionrs 的 preset"算进去 → 落到 `GuidModelSelector` 的 fallback 分支（显示"默认模型/首次连接后显示列表"），用户选不了 deepseek。
+
+**修复**：
+- `isGeminiMode` 条件 B 加 `|| agentType === 'aionrs'`（425 行注释本就写明 gemini/aionrs 都用 provider 选择器，是明显遗漏）
+- `getEffectiveAgentType` 的 Google 模型判断补 `'gemini-with-google-auth'`（否则 Google 账号登录的 Gemini 用户被误路由到不支持 OAuth 的 aionrs）
+
+## 二、卡死真因 = 诊断 console.log 自己引入（重要教训）
+
+**现象**：模型选择器修好后，发消息仍卡死（主进程心跳停、create handler 没进）。
+
+**定位**：双层同步落盘探针（绕过 logger 异步缓冲）——
+- IPC 入口探针（`main.ts`）：`parsed name=subscribe-create-conversation` 后无 `emitted` → 卡在 `emitter.emit` 同步执行 handler
+- create handler 探针：`ENTER (before console.log)` 有、`after console.log` 无 → **卡死就在那行 `console.log`**
+
+**根因**：`f8af392` 临时加的诊断 `console.log('[conversationBridge] create invoked', ...)` 被 `@office-ai/platform` patch 成会触发 `emit('officeai-logger')` 广播；在 `emit('subscribe-create-conversation')` 的同步调用栈深处再触发广播（`win.webContents.send` + websocket），把主进程 event loop 冻死。删掉即解（payload 仅 1KB，已排除大小因素）。
+
+**教训**：排查卡死时加的诊断 console.log 反而成了卡死源——观察行为改变了被观察对象。诊断要用同步 `appendFileSync` 落盘，**绝不在 emit 深栈用被 patch 的 console.log**。
+
+## 三、移除全部临时诊断
+
+清掉 `f8af392` + `922b4c1` + 本轮排查加的所有诊断：`main.ts` IPC 入口探针（恢复原 handle）、`index.ts` 5s 主进程心跳、`ipcBridge.ts` `diag.log` 通道、`conversationBridge.ts` createTrace/diagLog provider/create+sendMessage 的 console.log/prewarm claim+finalize 日志、`useGuidSend.ts` guid:send diag 函数+全部调用+渲染层转发。保留 `[aionrs:prewarm]` 性能日志（预热命中率，非本次诊断）。
+
+## 四、问题二："做不出内容" = 模型能力，非 1ONE bug
+
+**现象**：用 `deepseek-v4-flash-openai` 开财务建模助手，ExecCommand 反复超时、空表。
+
+**定位**：技能注入链路**完全正常**——`officecli-financial-model/SKILL.md`（29KB，officecli 35 次）正确注入到 session（session 文件含 officecli 31 次 + `Pre-loaded` 标记）。但 aionrs 输出里 officecli **0 次**，模型 thinking 是"试试 npm 装包"、跑 python 检测 → **deepseek-v4-flash 收到技能却不遵循，自己瞎试 python/npm**。
+
+**结论**：flash 是快速版、推理弱、不遵循复杂技能。**换更强模型（deepseek 正常版 / kimi-k2 / qwen 等）即解**——实测换强模型后完整做出 SaaS 3 年财务模型（多 sheet + 图表 + 公式校验 + 自修 4 处公式）。非注入链路 bug，无需改代码。
+
+## 涉及文件（本轮真正改动）
+
+| 文件 | 改动 |
+|------|------|
+| `GuidPage.tsx` | isGeminiMode 条件加 aionrs |
+| `useAgentAvailability.ts` | getEffectiveAgentType 补 gemini-with-google-auth |
+| `useGuidSend.ts` | 移除 diag 诊断 |
+| `conversationBridge.ts` | 移除 createTrace/diagLog/console.log 诊断 |
+| `main.ts` | 移除 IPC 入口探针（净改动 0） |
+| `index.ts` | 移除主进程心跳 |
+| `ipcBridge.ts` | 移除 diag.log 通道 |
+
+## 验证状态
+
+- `tsc --noEmit` exit 0；诊断代码 grep 全清
+- 运行时实测：财务建模助手 + 强模型不卡、能选模型、做出完整财务模型
+- 按交付约定，影响运行行为，需出新 Windows 安装包
+
 

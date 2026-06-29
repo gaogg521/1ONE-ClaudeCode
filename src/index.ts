@@ -335,9 +335,7 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   const rendererUrl = rendererUrlRaw ? resolveDevRendererUrl(rendererUrlRaw) : undefined;
   const fallbackFile = path.join(__dirname, '../renderer/index.html');
   const preferBuiltRendererInDev =
-    !app.isPackaged &&
-    process.env.ONE_DEV_LOAD_BUILT_RENDERER === '1' &&
-    fs.existsSync(fallbackFile);
+    !app.isPackaged && process.env.ONE_DEV_LOAD_BUILT_RENDERER === '1' && fs.existsSync(fallbackFile);
 
   const loadPackagedOrBuiltFile = (label: string): void => {
     console.log(`[1ONE] ${label}: ${fallbackFile}`);
@@ -556,13 +554,6 @@ const handleAppReady = async (): Promise<void> => {
   const mark = (label: string) => console.log(`[1ONE:ready] ${label} +${Math.round(performance.now() - t0)}ms`);
   mark('start');
 
-  // Diagnostic heartbeat: confirms main-process event loop is alive.
-  // If logs stop, the main process is blocked/dead.
-  const heartbeat = setInterval(() => {
-    console.log(`[heartbeat] main alive @${Math.round(performance.now() - t0)}ms`);
-  }, 5000);
-  if (typeof heartbeat.unref === 'function') heartbeat.unref();
-
   if (!app.isPackaged) {
     try {
       await session.defaultSession.clearCache();
@@ -636,9 +627,7 @@ const handleAppReady = async (): Promise<void> => {
         // Also re-sync aionrs global config — ensureAionrsBuiltinMcp first runs
         // before the TCP server starts, so the export-pdf port was empty there too.
         try {
-          const { ensureAionrsBuiltinMcp } = await import(
-            './process/services/agentToolkit/syncAionrsBuiltinMcp'
-          );
+          const { ensureAionrsBuiltinMcp } = await import('./process/services/agentToolkit/syncAionrsBuiltinMcp');
           await ensureAionrsBuiltinMcp();
         } catch (e) {
           console.warn('[1ONE] aionrs builtin MCP re-sync failed:', e);

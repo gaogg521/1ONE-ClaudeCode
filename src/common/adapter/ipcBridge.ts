@@ -76,7 +76,6 @@ export const conversation = {
     boolean,
     { conversation_id: string; name: string; extra?: Record<string, unknown> }
   >('conversation.prewarm.finalize'),
-  diagLog: bridge.buildProvider<boolean, { tag: string; data?: unknown }>('diag.log'),
   stop: bridge.buildProvider<IBridgeResponse<{}>, { conversation_id: string }>('chat.stop.stream'), // 停止会话
   sendMessage: bridge.buildProvider<IBridgeResponse<{ input?: string; files?: string[] }>, ISendMessageParams>(
     'chat.send.message'
@@ -258,10 +257,9 @@ export const exportApi = {
   >('export.office-to-pdf'), // 将 Office 文件（.docx/.xlsx/.pptx）导出为 PDF
 };
 export const gatewayApi = {
-  fetch: bridge.buildProvider<
-    { status: number; body: string; contentType: string },
-    { url: string; apiKey: string }
-  >('gateway.fetch'), // 从主进程发起 HTTP 请求（绕过渲染层 CORS/Cookie 限制）
+  fetch: bridge.buildProvider<{ status: number; body: string; contentType: string }, { url: string; apiKey: string }>(
+    'gateway.fetch'
+  ), // 从主进程发起 HTTP 请求（绕过渲染层 CORS/Cookie 限制）
 };
 export const fs = {
   getFilesByDir: bridge.buildProvider<Array<IDirOrFile>, { dir: string; root: string }>('get-file-by-dir'), // 获取指定文件夹下所有文件夹和文件列表
@@ -853,7 +851,9 @@ export const adminUsers = {
     { id: string; username: string; role: 'user' | 'admin' },
     { username: string; password: string; role: 'user' | 'admin' }
   >('admin.users.create'),
-  setRole: bridge.buildProvider<boolean, { id: string; role: 'user' | 'admin' | 'system_admin' }>('admin.users.set-role'),
+  setRole: bridge.buildProvider<boolean, { id: string; role: 'user' | 'admin' | 'system_admin' }>(
+    'admin.users.set-role'
+  ),
   sendResetPasswordCode: bridge.buildProvider<{ maskedEmail: string }, void>('admin.users.send-reset-password-code'),
   resetPassword: bridge.buildProvider<boolean, { id: string; password: string; emailCode: string }>(
     'admin.users.reset-password'
@@ -906,9 +906,7 @@ export const webui = {
   getEnterpriseContext: bridge.buildProvider<IBridgeResponse<IWebUIEnterpriseContext>, void>(
     'webui.get-enterprise-context'
   ),
-  claimSystemAdmin: bridge.buildProvider<IBridgeResponse<{ role: string }>, void>(
-    'webui.claim-system-admin'
-  ),
+  claimSystemAdmin: bridge.buildProvider<IBridgeResponse<{ role: string }>, void>('webui.claim-system-admin'),
   getAgentTokenUsage: bridge.buildProvider<
     IBridgeResponse<{
       days: number;
@@ -928,9 +926,7 @@ export const webui = {
     }>,
     { days?: number }
   >('webui.get-agent-token-usage'),
-  demoteToClient: bridge.buildProvider<IBridgeResponse<{ archivePath: string }>, void>(
-    'webui.demote-to-client'
-  ),
+  demoteToClient: bridge.buildProvider<IBridgeResponse<{ archivePath: string }>, void>('webui.demote-to-client'),
   previewEnterpriseInvite: bridge.buildProvider<
     IBridgeResponse<{ tenantId: string; tenantName: string; valid: boolean }>,
     { code: string }

@@ -162,13 +162,7 @@ export function initConversationBridge(
     }
   });
 
-  ipcBridge.conversation.diagLog.provider(async ({ tag, data }) => {
-    console.log(`[renderer:${tag}]`, data ?? '');
-    return true;
-  });
-
   ipcBridge.conversation.create.provider(async (params): Promise<TChatConversation> => {
-    console.log('[conversationBridge] create invoked', { type: params?.type, name: params?.name });
     if (!VALID_CONVERSATION_TYPES.has(params?.type as TChatConversation['type'])) {
       console.warn('[conversationBridge] Rejecting create request with invalid conversation type:', params?.type);
       return undefined as unknown as TChatConversation;
@@ -469,18 +463,14 @@ export function initConversationBridge(
   });
 
   ipcBridge.conversation.prewarmClaim.provider(async ({ key }) => {
-    console.log('[prewarm] claim invoked', { key, hasPool: !!aionrsPrewarmPool });
     if (!aionrsPrewarmPool) return null;
-    const result = aionrsPrewarmPool.claim(key);
-    console.log('[prewarm] claim result', { matched: !!result?.conversation_id });
-    return result;
+    return aionrsPrewarmPool.claim(key);
   });
 
   // Promote a prewarmed placeholder conversation to a real one by writing
   // back the user's real name + extra. mergeExtra=true preserves anything the
   // running AionrsManager already persisted (e.g. lastModelId, aionrsSessionId).
   ipcBridge.conversation.finalizeFromPrewarm.provider(async ({ conversation_id, name, extra }) => {
-    console.log('[prewarm] finalize invoked', { conversation_id });
     try {
       const updates: Partial<TChatConversation> = { name };
       if (extra) {
@@ -626,7 +616,6 @@ export function initConversationBridge(
   // 通用 sendMessage 实现 - 统一调用 IAgentManager.sendMessage
   // Generic sendMessage - dispatches via IAgentManager.sendMessage interface
   ipcBridge.conversation.sendMessage.provider(async (params) => {
-    console.log('[conversationBridge] sendMessage invoked', { convId: params?.conversation_id, msgId: params?.msg_id });
     if (!params) {
       return { success: false, msg: 'Missing request parameters' };
     }

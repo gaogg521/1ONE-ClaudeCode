@@ -74,7 +74,8 @@ export const useAgentAvailability = ({
       let effectiveType = originalType;
       if (originalType === 'gemini') {
         const platform = currentModel?.platform;
-        const isGoogleModel = platform === 'gemini' || platform === 'gemini-vertex-ai';
+        const isGoogleModel =
+          platform === 'gemini' || platform === 'gemini-vertex-ai' || platform === 'gemini-with-google-auth';
         effectiveType = isGoogleModel ? 'gemini' : 'aionrs';
       }
       const isAvailable = isMainAgentAvailable(effectiveType);

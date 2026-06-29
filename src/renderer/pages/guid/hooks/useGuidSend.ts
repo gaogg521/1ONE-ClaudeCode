@@ -123,16 +123,9 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     const isPreset = isPresetAgent;
 
     const { agentType: effectiveAgentType } = getEffectiveAgentType(agentInfo);
-    const diag = (tag: string, data?: unknown) => {
-      console.log('[guid:send]', tag, data ?? '');
-      void ipcBridge.conversation.diagLog.invoke({ tag, data }).catch(() => {});
-    };
-    diag('handleSend start', { isPreset, effectiveAgentType, selectedAgent, agentInfoBackend: agentInfo?.backend });
 
     const { rules: presetRules } = isPreset ? await resolvePresetRulesAndSkills(agentInfo) : {};
-    diag('presetRules resolved', { hasRules: !!presetRules });
     const enabledSkills = isPreset ? resolveEnabledSkills(agentInfo) : undefined;
-    diag('enabledSkills resolved', { enabledSkills });
 
     let finalEffectiveAgentType = effectiveAgentType;
     if (isPreset && !isMainAgentAvailable(effectiveAgentType)) {
@@ -334,7 +327,6 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     // Aionrs path — also entered when a preset assistant is routed to aionrs
     // by getEffectiveAgentType (OpenAI-protocol models avoid the gemini hang).
     if (selectedAgent === 'aionrs' || (isPreset && finalEffectiveAgentType === 'aionrs')) {
-      diag('entered aionrs branch', { isPreset, finalEffectiveAgentType });
       const aionrsAgentInfo = agentInfo || findAgentByKey(selectedAgentKey);
       const realExtra = {
         defaultFiles: files,
@@ -351,16 +343,13 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         // produced by useAionrsPrewarm exactly, or we miss.
         // Guard: currentModel may be undefined if no model is selected yet.
         const prewarmKey =
-          currentModel?.id && currentModel?.useModel
-            ? buildPrewarmKey(currentModel, finalWorkspace)
-            : null;
+          currentModel?.id && currentModel?.useModel ? buildPrewarmKey(currentModel, finalWorkspace) : null;
         const t0 = performance.now();
         const claimed = prewarmKey
           ? await ipcBridge.conversation.prewarmClaim
               .invoke({ key: prewarmKey })
-              .catch((e): { conversation_id: string } | null => { diag('prewarmClaim error', e); return null; })
+              .catch((): { conversation_id: string } | null => null)
           : null;
-        diag('prewarmClaim result', { claimed: claimed?.conversation_id, prewarmKey });
 
         let conversation: TChatConversation | undefined;
         if (claimed?.conversation_id) {
@@ -377,23 +366,25 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
               .catch((): TChatConversation | undefined => undefined);
           }
         } else {
-          console.log(`[aionrs:prewarm] claim MISS +${Math.round(performance.now() - t0)}ms — fallback to create+warmup`);
+          console.log(
+            `[aionrs:prewarm] claim MISS +${Math.round(performance.now() - t0)}ms — fallback to create+warmup`
+          );
         }
 
         // Fallback: no prewarmed worker or finalize failed — go through the
         // original create + warmup path.
         if (!conversation) {
           if (!currentModel) {
-            throw new Error(t('guid.noModelSelected', { defaultValue: 'No model selected. Please select a model first.' }));
+            throw new Error(
+              t('guid.noModelSelected', { defaultValue: 'No model selected. Please select a model first.' })
+            );
           }
-          diag('fallback create.invoke', { type: 'aionrs' });
           conversation = await ipcBridge.conversation.create.invoke({
             type: 'aionrs',
             name: input,
             model: currentModel,
             extra: realExtra,
           });
-          diag('fallback create done', { convId: conversation?.id });
         }
 
         if (!conversation || !conversation.id) {
@@ -555,21 +546,13 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
   ]);
 
   const sendMessageHandler = useCallback(() => {
-    const diag = (tag: string, data?: unknown) => {
-      console.log('[guid:send]', tag, data ?? '');
-      void ipcBridge.conversation.diagLog.invoke({ tag, data }).catch(() => {});
-    };
-    diag('clicked', { loading, sendingRef: sendingRef.current });
     if (loading || sendingRef.current) {
-      diag('blocked by guard', { loading, sendingRef: sendingRef.current });
       return;
     }
     sendingRef.current = true;
     setLoading(true);
-    diag('calling handleSend');
     handleSend()
       .then(() => {
-        diag('handleSend done');
         setInput('');
         setMentionOpen(false);
         setMentionQuery(null);

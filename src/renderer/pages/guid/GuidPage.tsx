@@ -426,7 +426,8 @@ const GuidPage: React.FC = () => {
   const isGeminiMode =
     (PROVIDER_BASED_AGENTS.has(agentSelection.selectedAgent) && !agentSelection.isPresetAgent) ||
     (agentSelection.isPresetAgent &&
-      agentSelection.currentEffectiveAgentInfo.agentType === 'gemini' &&
+      (agentSelection.currentEffectiveAgentInfo.agentType === 'gemini' ||
+        agentSelection.currentEffectiveAgentInfo.agentType === 'aionrs') &&
       agentSelection.currentEffectiveAgentInfo.isAvailable);
 
   // Build the mention dropdown node
