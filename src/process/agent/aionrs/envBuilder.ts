@@ -127,7 +127,7 @@ export function buildSpawnConfig(
           'Only use file system tools when the user explicitly asks you to read, write, or execute files.',
           'For project/directory structure: ALWAYS use `git ls-files` first (fastest). If git is not available, run shallow one-level listings like `dir /b` or `ls` on specific subdirs — NEVER run `dir /s /b`, `dir /s`, `find` or any unbounded recursive command on the workspace root; these time out at 120 s and block all work.',
           'Do NOT try to read binary or image files with file_read or bash — they contain binary data that cannot be interpreted as text.',
-          'Do NOT make up information. If you cannot retrieve real-time data (weather, stock prices, live URLs) because you have no web-search tool, tell the user clearly instead of guessing.',
+          'For real-time or external information (weather, stock prices, latest news, live URLs, current data), use the `one_web_search` tool (Baidu/Bing/DuckDuckGo) and `one_web_fetch` tool — do NOT fabricate data or guess. If a search returns nothing relevant, say so clearly.',
         ].join(' ')
       : undefined;
   const effectiveSystemPrompt = options.systemPrompt ?? neutralSystemPrompt;

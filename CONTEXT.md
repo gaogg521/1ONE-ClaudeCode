@@ -848,3 +848,163 @@ Token 排行新增 模型名（从 conversations.model JSON 中 parseModelLabel 
 - `vitest run`：9 文件失败 / 10 测试失败 / 3648 通过——与干净 main 基线完全一致，零回归（既存失败均为 enterprise/oauth/devops 相关，与本次改动无关）
 - 运行时需 `npm run restart` 桌面端实测：HTML 导出 PDF、officecli 技能产物、aionrs 助手技能注入生效、技能导入/删除后即时生效
 - 按交付约定，影响运行行为，需出新的 Windows 安装包（`npm run dist:win`）才生效
+
+---
+
+# 追加记录 — 2026-06-29 下午（aionrs 注入 web 搜索 MCP）
+
+## 背景
+
+用户发现 aionrs 会话里"搜东西"质量差，只是去百度等搜索引擎。根因诊断：
+
+- aionrs 是独立 Rust 二进制，工具仅来自它自己的全局 `config.toml`（`aionrs --config-path` 路径）。
+- aionrs 系统提示词（`envBuilder.ts:130`）明写 "you have no web-search tool, tell the user clearly instead of guessing"。
+- 内置 `one-web-tools` MCP（提供 `one_web_search` 百度/Bing/DDG + `one_web_fetch`）**只注入给 ACP**（`acp/index.ts:1691` 启动时强制注入）和 Gemini，**aionrs 没被注入**。
+- 自动同步路径 `syncAgentToolkitMcpToCliAgents`（`syncCliMcp.ts`）有两个门槛把 aionrs 挡在外面：① 前置条件 `toolkit.enabled && toolkit.codegraphEnabled`；② agents 列表来自 `acpDetector.getDetectedAgents()`，而 `acpTypes.ts:117` 明确把 `aionrs` 排除在 `POTENTIAL_ACP_CLIS` 之外。
+
+所以用户看到的"搜百度"是模型用 bash `curl` 抓百度 HTML 或直接编链接，不是真正的工具调用。
+
+## 方案选择
+
+讨论了四条路：
+1. **把内置 `one-web-tools` 注入 aionrs**（本轮采用）——零外部依赖、零用户配置，复用 ACP 同款脚本。
+2. 接 Tavily/Brave 等搜索 API MCP——需用户 key，有技术/金钱门槛，暂缓。
+3. 深度研究类编排——非独立方案，是 1 或 2 之上的多轮编排，aionrs 拿到工具后模型自己会做。
+4. provider grounding 透传（Gemini/OpenAI/Perplexity）——碎片化严重，每 provider 字段不同且网关不一定透传，单独评估。
+
+用户决策：先做 1。
+
+## 修复
+
+### 1. 新增 `ensureAionrsBuiltinMcp()`
+
+**新文件**：`src/process/services/agentToolkit/syncAionrsBuiltinMcp.ts`
+
+复用 `AionrsMcpAgent.installMcpServers()`（`OneCmdAionrsMcpAgent.ts`，已封装"读 config.toml → 按 name 覆盖 → 写回"，幂等）把 `one-web-tools`（`command: 'node'` + `getBuiltinMcpScriptPath('builtin-mcp-web-tools')`，跟 ACP 同一个脚本）写进 aionrs 全局 `config.toml`。失败只 `console.warn`，不阻塞启动。
+
+### 2. 在 `initStorageDeferred` 调用
+
+**文件**：`src/process/utils/initStorage.ts` `initStorageDeferred`
+
+在 `ensureBuiltinMcpServers()` 之后 `void ensureAionrsBuiltinMcp()`。选这里而非 `agentToolkit/bootstrap.ts`（plan 原方案）的理由：bootstrap 有 `config.enabled`（agentToolkit 总开关）门槛，而 aionrs web 搜索是基础能力，不应受 agentToolkit 开关控制；放 initStorageDeferred 跟 `ensureBuiltinMcpServers` 并列语义更清晰，主进程早期执行、不阻塞 worker 会话启动。
+
+### 3. 修改 aionrs 系统提示词
+
+**文件**：`src/process/agent/aionrs/envBuilder.ts` `neutralSystemPrompt`（非 anthropic provider 走这条）
+
+删掉 "you have no web-search tool"，改成告知模型有 `one_web_search` / `one_web_fetch`，遇到实时信息/外部数据主动调用、不要瞎编。
+
+**限制**：anthropic provider 走 aionrs 二进制自带的默认提示词（`neutralSystemPrompt` 只对非 anthropic 生效），这部分改不到。先聚焦非 anthropic（custom/new-api/gemini 等大多数用户）。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/services/agentToolkit/syncAionrsBuiltinMcp.ts` | 新增 `ensureAionrsBuiltinMcp()` |
+| `src/process/utils/initStorage.ts` | `initStorageDeferred` 调 `ensureAionrsBuiltinMcp()` |
+| `src/process/agent/aionrs/envBuilder.ts` | 系统提示词改为引导使用 `one_web_search`/`one_web_fetch` |
+
+## 验证状态
+
+- `tsc --noEmit` exit 0
+- `oxlint` 0 error（1990 warnings 为仓库既有，与本次无关）
+- 运行时需 `npm run restart` 桌面端实测：aionrs 会话（非 anthropic provider）问实时信息，确认模型调用 `one_web_search` 工具而非 bash curl 百度；检查 aionrs 全局 config.toml 里 `[mcp.servers.one-web-tools]` 存在
+- 按交付约定，影响运行行为，需出新的 Windows 安装包才生效
+
+---
+
+# 追加记录 — 2026-06-29 晚（HTML→PDF 动态等待 + Office→PDF 导出 + aionrs export_to_pdf MCP 工具）
+
+## 背景
+
+用户报告 dashboard.html 导出 PDF 后图表乱；并指出 aionrs agent 收到"转 PDF"指令时不知道 1ONE 已内置导出能力，自己装 Puppeteer 造轮子。本轮三步修复：1) HTML→PDF 动态等待；2) Office 文件→PDF 跨平台导出；3) 给 aionrs 加 export_to_pdf MCP 工具让 agent 优先调内置能力。
+
+## 一、HTML→PDF 动态内容截断修复
+
+**文件**：`src/process/bridge/exportBridge.ts`
+
+**根因**：dashboard.html 是纯 JS 动态渲染（Chart.js 从 CDN 加载 ~1.2s，DOMContentLoaded 在 1.66s 触发后 init()→refreshData()→buildCharts() 才画 5 个 canvas）。之前等待策略是 `document.fonts.ready`（最多 1.5s）+ 2s 硬超时，但页面没 web 字体，fonts.ready 在 DOMContentLoaded 之前就 resolve，2s 硬超时触发时图表还没画完 → PDF 截到半成品。
+
+**修复**：重写等待逻辑，4 步在页面内执行：
+1. 等 `document.fonts.ready`（最多 1.5s）
+2. 等 network idle（PerformanceObserver 监听 resource 请求，500ms 无新请求算空闲，最多 4s）—— 保证 CDN 脚本下完
+3. **轮询 canvas 像素**：每 100ms 检查所有 `<canvas>` 是否有实际绘制内容（alpha > 10 的像素 > 50 个），最多 4s —— 保证 Chart.js 画完
+4. 300ms settle delay 等 late layout/paint
+
+硬超时放宽到 8s 兜底。用 chrome-devtools 在 dashboard.html 上实跑验证：5 个 canvas 全部画完（drawnPixels 191814/45517/62216/36582/38482），KPI `¥1589万`、表格 12 行都填充。
+
+## 二、Office 文件→PDF 跨平台导出
+
+**文件**：`src/process/bridge/exportBridge.ts` + `src/common/adapter/ipcBridge.ts` + `PreviewPanel.tsx` + `PreviewToolbar.tsx` + `preview.json`
+
+**背景**：1ONE 之前只有 HTML→PDF。officecli v1.0.125 的 `view <file> pdf` 子命令存在但需 exporter 插件，插件未发布（实测报 `No exporter plugin found`）。但本机有 MS Office（Word.Application COM 验证可用），mac/Linux 用户可能装 LibreOffice。
+
+**方案**：主进程直接调 COM（Windows）/ soffice（mac/Linux），没装时 fallback 到 officecli `view <file> html` → printToPDF。
+
+**实现**：
+- IPC：`exportApi.htmlToPdf` 旁加 `exportApi.officeToPdf`（`{ filePath, defaultName }` → `{ success, filePath?, error? }`）
+- `exportBridge.ts` 抽出 `renderHtmlToPdfBuffer` 共用函数；加 `officeToPdf` provider 三路分流：
+  - Windows：MS Office COM（Word/Excel `ExportAsFixedFormat`、PowerPoint `SaveAs` format 32），PowerShell 子进程跑，120s 超时
+  - mac/Linux：`soffice --headless --convert-to pdf --outdir`
+  - 都没装或失败：`officecli view <file> html` → printToPDF
+- `detectNativeOfficeConverter` 缓存检测结果（Windows 探 Word.Application COM，mac/Linux 找 soffice 路径）
+- UI：PreviewPanel 对 word/excel/ppt 类型显示"导出 PDF"按钮（复用 HTML 类型的 PDF 图标）
+- i18n：`preview.office.exportPdf` 三键（zh-CN/en-US）
+
+**验证**：Excel COM 实测 3.3s 生成 4767 字节真 PDF（`%PDF-` 头）；officecli view html fallback 输出 9749 字节 HTML 正常。
+
+## 三、aionrs export_to_pdf MCP 工具（让 agent 优先调内置能力）
+
+**文件**：新增 `exportToPdfServer.ts` + `exportPdfMcpServer.ts`；改 `constants.ts` / `initStorage.ts` / `src/index.ts` / `build-mcp-servers.js` / `exportBridge.ts`
+
+**根因**：aionrs 走 binary（非 OneAgent），工具只能通过 MCP server 扩展。`OneToolExecutor` 是 OneAgent 的死代码，主力不走这条。用户说"转 PDF"时 aionrs 不知道 1ONE 内置导出能力，自己装 Puppeteer。
+
+**方案**：新建 1ONE 内置 stdio MCP server，暴露 `export_to_pdf` 工具。aionrs binary 通过 MCP 协议调用 → MCP server 进程通过 TCP 桥转发到主进程 → 主进程调已有 exportApi 逻辑。复用 TeamMcpServer 的 TCP 桥模式（4 字节 BE 长度头 + JSON body）。
+
+**新增文件**：
+- `src/process/resources/builtinMcp/exportToPdfServer.ts`：stdio MCP server，暴露 `export_to_pdf` 工具（参数 source/source_type/output_path），通过 TCP 转发到主进程（端口从 `EXPORT_PDF_MCP_PORT` env 读）。工具描述明确写"ALWAYS prefer this tool over installing Puppeteer"
+- `src/process/services/exportPdfMcpServer.ts`：主进程 TCP 服务器，监听 19820 起（冲突递增最多 10 次），收到请求调 exportBridge 的共用函数（renderHtmlToPdfBuffer / convertViaWindowsCom / convertViaSoffice / convertViaOfficecliHtml）
+
+**改动**：
+- `exportBridge.ts`：5 个共用函数（renderHtmlToPdfBuffer / convertViaWindowsCom / convertViaSoffice / convertViaOfficecliHtml / detectNativeOfficeConverter）从闭包改为 export
+- `builtinMcp/constants.ts`：加 `BUILTIN_EXPORT_PDF_ID/NAME` + `isBuiltinExportPdfName/Transport` 辅助函数
+- `initStorage.ts`：`ensureBuiltinMcpServers` 加 `one-export-pdf` 条目；动态 import `getExportPdfMcpPort` 注入端口（首次跑端口为 0，app ready 后 re-sync 修正）；`ensureBuiltinMcpServers` 改为 export
+- `src/index.ts`：app ready 启动 TCP 服务器（fire-and-forget），端口分配后 re-sync mcp.config 让 env 拿到真实端口
+- `scripts/build-mcp-servers.js`：加 `exportToPdfServer.ts` 打包入口，产出 `builtin-mcp-export-pdf.js`
+
+**端口传递**：MCP server 的 command/args/env 在 `ensureBuiltinMcpServers` 构造时固定，但 TCP 端口运行时才分配。解法：ensureBuiltinMcpServers 首次跑时端口为 0（env 空），app ready 启动 TCP 服务器拿到真实端口后 re-sync mcp.config，env 修正，aionrs 重启时拿到正确端口。
+
+## 四、officecli 技能同步 + 助手整理（同日早些完成）
+
+- 删 8 个过时 officecli 技能（v1.0.23/v1.0.24）+ 3 个 `_deprecated-*` 目录，从 `~/.claude/skills/` 同步 10 个最新技能（v1.0.125）：officecli-xlsx/pptx/docx/pitch-deck/academic-paper/data-dashboard/financial-model/word-form + morph-ppt（含 reference）+ morph-ppt-3d
+- 挂回 academic-paper-creator + morph-ppt-creator 两个助手到 `assistantPresets.ts`，删 topic-researcher + 2 个 _deprecated 助手目录
+- `shellEnv.ts` Windows PATH 加 `%LOCALAPPDATA%\OfficeCli`，修复 Electron 快捷方式启动时 agent 找不到 officecli
+
+## 验证状态
+
+- `tsc --noEmit` exit 0
+- `vitest run`：11 文件失败 / 3647 通过——两次跑的失败集与基线完全一致，零回归（既存失败均为 enterprise/oauth/devops/statePersistence flaky 相关）
+- 运行时需 `npm run restart` 桌面端实测：
+  1. dashboard.html 导出 PDF 图表完整
+  2. Word/Excel/PPT 文件预览工具栏点"导出 PDF"生成矢量 PDF
+  3. aionrs 会话里说"把 dashboard.html 转 PDF"，确认 agent 调 `export_to_pdf` 工具而非装 Puppeteer
+  4. `.aionrs.toml` 里有 `[mcp.servers.one-export-pdf]`
+- 按交付约定，影响运行行为，需出新的 Windows 安装包（`npm run dist:win`）才生效
+
+## 涉及文件汇总（本轮）
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/bridge/exportBridge.ts` | HTML→PDF 动态等待 + Office→PDF 三路分流 + 5 函数 export |
+| `src/common/adapter/ipcBridge.ts` | 加 `exportApi.officeToPdf` 通道 |
+| `src/renderer/pages/conversation/Preview/components/PreviewPanel/PreviewPanel.tsx` | 加 handleExportOfficePdf |
+| `src/renderer/pages/conversation/Preview/components/PreviewPanel/PreviewToolbar.tsx` | 加 word/excel/ppt 导出按钮 |
+| `src/renderer/services/i18n/locales/zh-CN/preview.json` | 加 office.exportPdf 三键 |
+| `src/renderer/services/i18n/locales/en-US/preview.json` | 加 office.exportPdf 三键 |
+| `src/process/resources/builtinMcp/exportToPdfServer.ts` | **新文件** stdio MCP server |
+| `src/process/services/exportPdfMcpServer.ts` | **新文件** 主进程 TCP 服务器 |
+| `src/process/resources/builtinMcp/constants.ts` | 加 BUILTIN_EXPORT_PDF 常量 + 辅助函数 |
+| `src/process/utils/initStorage.ts` | ensureBuiltinMcpServers 加 one-export-pdf 条目 |
+| `src/index.ts` | app ready 启动 TCP 服务器 + re-sync |
+| `scripts/build-mcp-servers.js` | 加 exportToPdfServer 打包入口 |
+
