@@ -25,6 +25,10 @@ const MCP_BUILDS = [
     entry: 'src/process/resources/builtinMcp/webToolsServer.ts',
     outfile: 'out/main/builtin-mcp-web-tools.js',
   },
+  {
+    entry: 'src/process/resources/builtinMcp/exportToPdfServer.ts',
+    outfile: 'out/main/builtin-mcp-export-pdf.js',
+  },
 ];
 
 async function main() {

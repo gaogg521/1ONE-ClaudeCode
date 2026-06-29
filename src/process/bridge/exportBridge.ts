@@ -56,7 +56,7 @@ ${html}
  * Includes dynamic-content wait (fonts, network idle, canvas drawn) so JS-heavy
  * pages (Chart.js, etc.) finish rendering before we snapshot.
  */
-async function renderHtmlToPdfBuffer(html: string): Promise<Buffer> {
+export async function renderHtmlToPdfBuffer(html: string): Promise<Buffer> {
   const normalizedHtml = normalizeHtmlForPdf(html);
   // base64 avoids encodeURIComponent length/encoding pitfalls for large HTML
   const dataUrl = `data:text/html;charset=utf-8;base64,${Buffer.from(normalizedHtml, 'utf-8').toString('base64')}`;
@@ -174,7 +174,7 @@ let officeAvailabilityCache: { checked: boolean; hasNative: boolean; sofficePath
  * Windows: MS Office COM (Word.Application). mac/Linux: soffice (LibreOffice).
  * Result cached for the process lifetime — probing every export would be slow.
  */
-async function detectNativeOfficeConverter(): Promise<{ hasNative: boolean; sofficePath?: string }> {
+export async function detectNativeOfficeConverter(): Promise<{ hasNative: boolean; sofficePath?: string }> {
   if (officeAvailabilityCache.checked) {
     return officeAvailabilityCache;
   }
@@ -207,7 +207,7 @@ async function detectNativeOfficeConverter(): Promise<{ hasNative: boolean; soff
  * Windows: convert via MS Office COM (PowerShell child process).
  * Word/Excel use ExportAsFixedFormat; PowerPoint uses SaveAs with format 32 (ppSaveAsPDF).
  */
-async function convertViaWindowsCom(srcPath: string, pdfPath: string): Promise<void> {
+export async function convertViaWindowsCom(srcPath: string, pdfPath: string): Promise<void> {
   const ext = path.extname(srcPath).toLowerCase();
   const psScript = (() => {
     if (ext === '.docx' || ext === '.doc') {
@@ -232,7 +232,7 @@ async function convertViaWindowsCom(srcPath: string, pdfPath: string): Promise<v
 /**
  * mac/Linux: convert via LibreOffice headless.
  */
-async function convertViaSoffice(srcPath: string, pdfPath: string, sofficePath: string): Promise<void> {
+export async function convertViaSoffice(srcPath: string, pdfPath: string, sofficePath: string): Promise<void> {
   // soffice outputs to <outdir>/<basename>.pdf — rename to target after.
   const outDir = path.dirname(pdfPath);
   const expectedOut = path.join(outDir, path.basename(srcPath, path.extname(srcPath)) + '.pdf');
@@ -250,7 +250,7 @@ async function convertViaSoffice(srcPath: string, pdfPath: string, sofficePath: 
  * Fallback: officecli view <file> html → Chromium printToPDF.
  * Lower fidelity (HTML pagination, not Office's), but works without Office installed.
  */
-async function convertViaOfficecliHtml(srcPath: string, pdfPath: string): Promise<void> {
+export async function convertViaOfficecliHtml(srcPath: string, pdfPath: string): Promise<void> {
   const { stdout } = await execFileAsync('officecli', ['view', srcPath, 'html'], {
     timeout: 60000,
     env: getEnhancedEnv(),

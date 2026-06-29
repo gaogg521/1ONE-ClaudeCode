@@ -613,6 +613,27 @@ const handleAppReady = async (): Promise<void> => {
     return;
   }
 
+  // Start the export-to-pdf MCP TCP server (backs the aionrs `export_to_pdf` tool).
+  // Fire-and-forget: port allocation failure shouldn't block app startup; the tool
+  // will just return an error if the server isn't running.
+  void import('./process/services/exportPdfMcpServer')
+    .then(({ startExportPdfMcpServer }) => startExportPdfMcpServer())
+    .then(async (port) => {
+      mark(`exportPdfMcpServer:${port}`);
+      // Re-sync mcp.config so the port lands in the export-pdf server's env.
+      // First run of ensureBuiltinMcpServers happens before this server starts,
+      // so the env was empty — fix it now.
+      try {
+        const { ensureBuiltinMcpServers } = await import('./process/utils/initStorage');
+        await ensureBuiltinMcpServers();
+      } catch (error) {
+        console.warn('[1ONE] Failed to re-sync builtin MCP servers after export-pdf port allocated:', error);
+      }
+    })
+    .catch((error) => {
+      console.warn('[1ONE] exportPdfMcpServer failed to start:', error);
+    });
+
   try {
     initializeZoomFactor(await ProcessConfig.get('ui.zoomFactor'));
     mark('initializeZoomFactor');

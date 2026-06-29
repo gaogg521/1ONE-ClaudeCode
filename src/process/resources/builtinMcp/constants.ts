@@ -18,6 +18,9 @@ export const BUILTIN_WEB_TOOLS_ID = 'builtin-web-tools';
 export const BUILTIN_WEB_TOOLS_NAME = 'one-web-tools';
 export const BUILTIN_WEB_TOOLS_LEGACY_NAMES = ['1ONE Web Tools', BUILTIN_WEB_TOOLS_ID] as const;
 
+export const BUILTIN_EXPORT_PDF_ID = 'builtin-export-pdf';
+export const BUILTIN_EXPORT_PDF_NAME = 'one-export-pdf';
+
 export function isBuiltinImageGenName(name?: string | null): boolean {
   if (!name) return false;
   return (
@@ -74,4 +77,22 @@ export function isBuiltinCodegraphTransport(transport?: {
   }
   const args = transport.args || [];
   return args.some((arg) => typeof arg === 'string' && arg.includes(BUILTIN_CODEGRAPH_PACKAGE));
+}
+
+export function isBuiltinExportPdfName(name?: string | null): boolean {
+  if (!name) return false;
+  return name === BUILTIN_EXPORT_PDF_NAME || name === BUILTIN_EXPORT_PDF_ID;
+}
+
+export function isBuiltinExportPdfTransport(transport?: {
+  type?: string;
+  command?: string;
+  args?: string[] | null;
+}): boolean {
+  if (!transport || transport.type !== 'stdio' || transport.command !== 'node') {
+    return false;
+  }
+  return (transport.args || []).some(
+    (arg) => typeof arg === 'string' && arg.includes('builtin-mcp-export-pdf.js')
+  );
 }

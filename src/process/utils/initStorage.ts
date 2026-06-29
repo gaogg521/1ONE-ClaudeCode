@@ -39,6 +39,8 @@ import {
   BUILTIN_IMAGE_GEN_NAME,
   BUILTIN_WEB_TOOLS_ID,
   BUILTIN_WEB_TOOLS_NAME,
+  BUILTIN_EXPORT_PDF_ID,
+  BUILTIN_EXPORT_PDF_NAME,
 } from '../resources/builtinMcp/constants';
 import { buildCodegraphMcpServer } from '@process/services/agentToolkit/codegraph';
 import { getAgentToolkitConfig } from '@process/services/agentToolkit/config';
@@ -687,7 +689,7 @@ const getBuiltinMcpScriptPath = (scriptName: string): string => {
  * - Updates command path if app location changed
  * - Migrates old tools.imageGenerationModel.switch to MCP server enabled state
  */
-const ensureBuiltinMcpServers = async (): Promise<void> => {
+export const ensureBuiltinMcpServers = async (): Promise<void> => {
   try {
     const mcpServers: IMcpServer[] = (await configFile.get('mcp.config').catch((): IMcpServer[] => [])) || [];
     const now = Date.now();
@@ -850,6 +852,78 @@ const ensureBuiltinMcpServers = async (): Promise<void> => {
         createdAt: now,
         updatedAt: now,
         originalJson: webToolsOriginalJson,
+      });
+      changed = true;
+    }
+
+    const exportPdfScriptPath = getBuiltinMcpScriptPath('builtin-mcp-export-pdf');
+    // Dynamic import to avoid pulling main-process-only deps at module load time.
+    let exportPdfPort = 0;
+    try {
+      const { getExportPdfMcpPort } = await import('@process/services/exportPdfMcpServer');
+      exportPdfPort = getExportPdfMcpPort();
+    } catch {
+      // TCP server not started yet — env will be empty; re-sync after app ready fixes it.
+    }
+    const exportPdfEnv: Record<string, string> = exportPdfPort
+      ? { EXPORT_PDF_MCP_PORT: String(exportPdfPort) }
+      : {};
+    const exportPdfIdx = mcpServers.findIndex((s) => s.builtin === true && s.id === BUILTIN_EXPORT_PDF_ID);
+    const exportPdfOriginalJson = JSON.stringify(
+      {
+        [BUILTIN_EXPORT_PDF_NAME]: {
+          command: 'node',
+          args: [exportPdfScriptPath],
+          env: exportPdfEnv,
+        },
+      },
+      null,
+      2
+    );
+    if (exportPdfIdx >= 0) {
+      const existing = mcpServers[exportPdfIdx];
+      const existingArgs = existing.transport.type === 'stdio' ? (existing.transport.args || []).join(' ') : '';
+      const existingEnv = existing.transport.type === 'stdio' ? (existing.transport.env || {}) : {};
+      const needsUpdate =
+        existingArgs !== exportPdfScriptPath ||
+        existing.enabled !== true ||
+        JSON.stringify(existingEnv) !== JSON.stringify(exportPdfEnv);
+      if (needsUpdate) {
+        mcpServers[exportPdfIdx] = {
+          ...existing,
+          name: BUILTIN_EXPORT_PDF_NAME,
+          description:
+            'Built-in PDF export tool. Converts HTML/Office files to PDF via the 1ONE main-process converter. Use this instead of installing Puppeteer or other PDF libraries.',
+          enabled: true,
+          transport: {
+            type: 'stdio',
+            command: 'node',
+            args: [exportPdfScriptPath],
+            env: exportPdfEnv,
+          },
+          updatedAt: now,
+          originalJson: exportPdfOriginalJson,
+        };
+        changed = true;
+      }
+    } else {
+      mcpServers.push({
+        id: BUILTIN_EXPORT_PDF_ID,
+        name: BUILTIN_EXPORT_PDF_NAME,
+        description:
+          'Built-in PDF export tool. Converts HTML/Office files to PDF via the 1ONE main-process converter. Use this instead of installing Puppeteer or other PDF libraries.',
+        enabled: true,
+        builtin: true,
+        status: 'connected',
+        transport: {
+          type: 'stdio',
+          command: 'node',
+          args: [exportPdfScriptPath],
+          env: exportPdfEnv,
+        },
+        createdAt: now,
+        updatedAt: now,
+        originalJson: exportPdfOriginalJson,
       });
       changed = true;
     }
@@ -1194,6 +1268,17 @@ export const initStorageDeferred = async (): Promise<void> => {
   const { ensureBuiltinMcpBundles } = await import('@process/utils/ensureBuiltinMcpBundles');
   void ensureBuiltinMcpBundles();
   mark('4.2 builtinMcpServers (bundles async)');
+
+  // aionrs is excluded from the ACP MCP sync path; inject one-web-tools into its
+  // global config.toml so it has a real web-search tool instead of curl-ing Baidu.
+  try {
+    const { ensureAionrsBuiltinMcp } = await import(
+      '@process/services/agentToolkit/syncAionrsBuiltinMcp'
+    );
+    void ensureAionrsBuiltinMcp();
+  } catch (error) {
+    console.warn('[1ONE:init] ensureAionrsBuiltinMcp failed:', error);
+  }
 
   try {
     const existingToolkit = await configFile.get('tools.agentToolkit').catch((): undefined => undefined);
