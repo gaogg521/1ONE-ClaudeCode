@@ -596,4 +596,70 @@ export const ASSISTANT_PRESETS: AssistantPreset[] = [
       'zh-CN': ['开始一个勇敢战士的史诗奇幻冒险', '创建一个有背景故事和个性的详细角色', '在科幻设定中开始一个互动故事'],
     },
   },
+  {
+    id: 'academic-paper-creator',
+    avatar: '📄',
+    presetAgentType: 'gemini',
+    resourceDir: 'src/process/resources/assistant/academic-paper',
+    ruleFiles: {
+      'en-US': 'academic-paper.md',
+      'zh-CN': 'academic-paper.zh-CN.md',
+    },
+    defaultEnabledSkills: ['officecli-academic-paper', 'officecli-docx'],
+    nameI18n: {
+      'en-US': 'Academic Paper Creator',
+      'zh-CN': '学术论文助手',
+    },
+    descriptionI18n: {
+      'en-US':
+        'Build formally structured academic papers in Word: native TOC, LaTeX-to-OMML equations, citation styles (APA/Chicago/IEEE/MLA), footnotes/endnotes, multi-column journal layout, and bibliography. Output is a publication-ready .docx.',
+      'zh-CN':
+        '构建正式结构的学术论文 Word 文档：原生目录、LaTeX 转 OMML 公式、引用格式（APA/Chicago/IEEE/MLA）、脚注/尾注、多栏期刊排版、参考文献。输出出版级 .docx。',
+    },
+    promptsI18n: {
+      'en-US': [
+        'Write an IEEE two-column journal paper on transformer attention mechanisms with numbered equations and bibliography',
+        'Create an APA-style thesis chapter with TOC, footnotes, and cross-references',
+        'Build a multi-column physics paper with LaTeX equations and figure/table captions',
+      ],
+      'zh-CN': [
+        '写一篇 IEEE 双栏期刊论文，主题是 Transformer 注意力机制，带编号公式和参考文献',
+        '创建 APA 格式论文章节，含目录、脚注和交叉引用',
+        '构建多栏物理论文，含 LaTeX 公式和图表标题',
+      ],
+    },
+  },
+  {
+    id: 'morph-ppt-creator',
+    avatar: '🎬',
+    presetAgentType: 'gemini',
+    resourceDir: 'src/process/resources/assistant/morph-ppt',
+    ruleFiles: {
+      'en-US': 'morph-ppt.md',
+      'zh-CN': 'morph-ppt.zh-CN.md',
+    },
+    defaultEnabledSkills: ['morph-ppt', 'officecli-pptx'],
+    nameI18n: {
+      'en-US': 'Morph PPT Creator',
+      'zh-CN': 'Morph 动画 PPT 助手',
+    },
+    descriptionI18n: {
+      'en-US':
+        'Create PowerPoint decks with smooth Morph transitions — cross-slide shape continuity, Keynote-style continuous motion, shapes that grow/move/rotate as slides advance. Built on top of the pptx skill.',
+      'zh-CN':
+        '制作带平滑 Morph 切换动画的 PPT——跨页形状连续、Keynote 风格连续运动、形状随翻页缩放/移动/旋转。基于 pptx 技能构建。',
+    },
+    promptsI18n: {
+      'en-US': [
+        'Create a 10-slide product launch deck with morph transitions showing the phone rotating across slides',
+        'Build a 6-slide timeline deck where each milestone morphs into the next',
+        'Make an 8-slide investor deck with smooth shape morphing between key metrics',
+      ],
+      'zh-CN': [
+        '做一份 10 页产品发布 PPT，用 morph 过渡展示手机在幻灯片间旋转',
+        '做一份 6 页时间线 PPT，每个里程碑 morph 到下一个',
+        '做一份 8 页投资路演 PPT，关键指标间用平滑形状变形过渡',
+      ],
+    },
+  },
 ];
