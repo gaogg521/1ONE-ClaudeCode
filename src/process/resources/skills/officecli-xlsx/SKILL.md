@@ -7,12 +7,14 @@ description: "Use this skill any time a .xlsx file is involved -- as input, outp
 
 ## Setup
 
-If `officecli` is missing:
+**When running inside 1ONE Code**: `officecli` is bundled with the app — it is always available. Do **NOT** attempt to install or reinstall it. Run `officecli --version` to confirm; if that fails, report the error to the user instead of running an install script.
+
+**Standalone (outside 1ONE Code)**: if `officecli` is missing:
 
 - **macOS / Linux**: `curl -fsSL https://d.officecli.ai/install.sh | bash`
 - **Windows (PowerShell)**: `irm https://d.officecli.ai/install.ps1 | iex`
 
-Verify with `officecli --version` (open a new terminal if PATH hasn't picked up). If install fails, download a binary from https://github.com/iOfficeAI/OfficeCLI/releases.
+After standalone install, open a new terminal so PATH picks up the new binary.
 
 ## ⚠️ Help-First Rule
 

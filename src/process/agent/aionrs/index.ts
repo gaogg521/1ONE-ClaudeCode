@@ -13,6 +13,7 @@ import { resolveAionrsBinary } from './binaryResolver';
 import { buildSpawnConfig } from './envBuilder';
 import type { AionrsEvent, AionrsCommand } from './protocol';
 import { getEnhancedEnv, withNpxCommandOnPath } from '@process/utils/shellEnv';
+import { resolveOfficecliDir } from '@process/utils/officecliResolver';
 
 const AIONRS_PROJECT_CONFIG = '.aionrs.toml';
 
@@ -197,7 +198,14 @@ export class AionrsAgent {
     // Windows when Electron is launched from an IDE.
     // Ensure `npx` is on PATH: aionrs spawns MCP with bare `npx` (not absolute); Windows IDE launches
     // often miss Node's directory even when getEnhancedEnv() merged common paths.
-    const childEnv = withNpxCommandOnPath(getEnhancedEnv());
+    let childEnv = withNpxCommandOnPath(getEnhancedEnv());
+    // Inject bundled officecli directory into PATH so the agent's bash tool
+    // can invoke `officecli` commands without requiring a system-wide install.
+    const officecliDir = resolveOfficecliDir();
+    if (officecliDir) {
+      const sep = process.platform === 'win32' ? ';' : ':';
+      childEnv = { ...childEnv, PATH: `${officecliDir}${sep}${childEnv.PATH || ''}` };
+    }
     // Diagnostic dump of the exact spawn shape — args + project config — so any future
     // 90 s stall report can be matched to the binary's actual input without re-asking.
     // Worker stdout is dropped by Electron utilityProcess.fork default; write to a known file.

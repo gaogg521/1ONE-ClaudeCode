@@ -17,29 +17,8 @@ import { getPlatformServices } from '@/common/platform';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
-import path from 'node:path';
 import { getEnhancedEnv } from '@process/utils/shellEnv';
-
-/**
- * Resolve the absolute path to the officecli executable.
- * Bypasses PATH lookup to avoid failures when Electron is launched from a shortcut
- * and the shell PATH does not propagate to the spawned child process.
- */
-function findOfficecliExe(): string {
-  if (process.platform === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA;
-    if (localAppData) {
-      const candidate = path.join(localAppData, 'OfficeCli', 'officecli.exe');
-      if (fs.existsSync(candidate)) return candidate;
-    }
-  } else {
-    const homeDir = process.env.HOME || '';
-    for (const p of [path.join(homeDir, '.local', 'bin', 'officecli'), '/usr/local/bin/officecli']) {
-      if (p && fs.existsSync(p)) return p;
-    }
-  }
-  return 'officecli';
-}
+import { resolveOfficecliBinary } from '@process/utils/officecliResolver';
 
 interface WatchSession {
   process: ChildProcess;
@@ -125,7 +104,7 @@ function checkForUpdate(): void {
   } catch {}
 
   try {
-    const localVersion = execFileSync(findOfficecliExe(), ['--version'], {
+    const localVersion = execFileSync(resolveOfficecliBinary(), ['--version'], {
       encoding: 'utf8',
       stdio: 'pipe',
       timeout: 10000,
@@ -206,7 +185,7 @@ async function startWatch(filePath: string, retry = false): Promise<string> {
 
   ipcBridge.pptPreview.status.emit({ state: 'starting' });
 
-  const child = spawn(findOfficecliExe(), ['watch', filePath, '--port', String(port)], {
+  const child = spawn(resolveOfficecliBinary(), ['watch', filePath, '--port', String(port)], {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: getEnhancedEnv(),
   });
