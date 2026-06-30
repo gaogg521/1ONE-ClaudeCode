@@ -7,9 +7,39 @@
 import { webui } from '@/common/adapter/ipcBridge';
 import type { EnterpriseInvitePreview, EnterpriseJoinResult, EnterpriseSetupResult } from '@/common/types/enterpriseJoin';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import { fetchWebuiApi, fetchWebuiApiJson, getWebuiApiBaseUrl } from '@/renderer/utils/webuiApiBase';
+import {
+  fetchWebuiApi,
+  fetchWebuiApiJson,
+  getClientEnterpriseServerOrigin,
+  getWebuiApiBaseUrl,
+  readWebuiApiErrorMessage,
+} from '@/renderer/utils/webuiApiBase';
 import { rememberEnterpriseApiOrigin } from '@/renderer/utils/rememberEnterpriseApiOrigin';
 import { hasValidCsrfToken, withCsrfToken } from '@process/webserver/middleware/csrfClient';
+
+/** Fetch JSON from an absolute URL on the remote enterprise server. */
+export async function fetchRemoteEnterpriseJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, init);
+  const body = (await res.json().catch((): null => null)) as Record<string, unknown> | null;
+  if (!res.ok) {
+    const msg = readWebuiApiErrorMessage(body, res);
+    const err = Object.assign(new Error(msg), {
+      code: typeof body?.code === 'string' ? body.code : undefined,
+    });
+    throw err;
+  }
+  if (body && 'success' in body && body.success === false) {
+    const msg = readWebuiApiErrorMessage(body, res);
+    const err = Object.assign(new Error(msg), {
+      code: typeof body?.code === 'string' ? body.code : undefined,
+    });
+    throw err;
+  }
+  if (body && 'success' in body && body.success === true && 'data' in body) {
+    return body.data as T;
+  }
+  return body as T;
+}
 
 /** Prime CSRF from a safe GET when the session token was not captured yet. */
 async function ensureWebuiCsrfToken(): Promise<void> {
@@ -19,6 +49,14 @@ async function ensureWebuiCsrfToken(): Promise<void> {
 
 export async function previewEnterpriseInvite(code: string): Promise<EnterpriseInvitePreview> {
   if (isElectronDesktop()) {
+    // Client mode: preview against the remote enterprise server instead of the local DB.
+    const remoteOrigin = await getClientEnterpriseServerOrigin();
+    if (remoteOrigin) {
+      const data = await fetchRemoteEnterpriseJson<EnterpriseInvitePreview>(
+        `${remoteOrigin}/api/auth/enterprise-invite/preview?code=${encodeURIComponent(code)}`
+      );
+      return { ...data, valid: data.valid ?? true };
+    }
     const result = await webui.previewEnterpriseInvite.invoke({ code });
     if (!result.success || !result.data) {
       throw new Error(result.msg || 'Preview failed');
@@ -32,6 +70,21 @@ export async function previewEnterpriseInvite(code: string): Promise<EnterpriseI
 
 export async function joinEnterpriseWithCode(code: string): Promise<EnterpriseJoinResult> {
   if (isElectronDesktop()) {
+    // Client mode: join against the remote enterprise server.
+    const remoteOrigin = await getClientEnterpriseServerOrigin();
+    if (remoteOrigin) {
+      const joined = await fetchRemoteEnterpriseJson<EnterpriseJoinResult>(
+        `${remoteOrigin}/api/auth/enterprise-join`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+          credentials: 'include',
+        }
+      );
+      await rememberEnterpriseApiOrigin(remoteOrigin);
+      return joined;
+    }
     const result = await webui.joinEnterprise.invoke({ code });
     if (!result.success || !result.data) {
       throw new Error(result.msg || 'Join failed');

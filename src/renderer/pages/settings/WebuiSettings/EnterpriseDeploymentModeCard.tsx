@@ -20,6 +20,17 @@ import {
   WEBUI_ENTERPRISE_SERVER_URL_KEY,
   type WebuiDeploymentRole,
 } from '@/common/config/webuiEnterpriseConfig';
+import { fetchRemoteEnterpriseJson } from '@/renderer/utils/enterpriseJoinApi';
+import { getClientEnterpriseServerOrigin } from '@/renderer/utils/webuiApiBase';
+
+function hasExplicitPort(raw: string): boolean {
+  try {
+    const withScheme = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+    return new URL(withScheme).port !== '';
+  } catch {
+    return false;
+  }
+}
 
 async function readDeploymentConfig(): Promise<{ role: WebuiDeploymentRole; url: string }> {
   if (isElectronDesktop()) {
@@ -44,6 +55,10 @@ async function writeDeploymentConfig(role: WebuiDeploymentRole, url: string): Pr
   }
 }
 
+async function clearDeploymentConfig(): Promise<void> {
+  await writeDeploymentConfig('server', '');
+}
+
 /**
  * Enterprise deployment role switch. Keeps one server per LAN: everyone defaults to
  * 'server' (single-machine, unchanged), and a user can flip this machine to 'client'
@@ -55,10 +70,17 @@ const EnterpriseDeploymentModeCard: React.FC = () => {
   const [url, setUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const { hasInstanceEnterprise, refreshEnterpriseContext } = useWebuiEnterpriseMode();
+
+  // Feature 2: remote enterprise name (client mode)
+  const [remoteTenantName, setRemoteTenantName] = useState<string | null>(null);
+  // Feature 4: exit modal state
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [exitCode, setExitCode] = useState('');
+  const [exiting, setExiting] = useState(false);
+
   const heartbeat = useEnterpriseServerHeartbeat(
     role === 'client' ? normalizeEnterpriseServerUrl(url) : null
   );
-
   useEffect(() => {
     void readDeploymentConfig().then((c) => {
       setRole(c.role);
@@ -66,10 +88,24 @@ const EnterpriseDeploymentModeCard: React.FC = () => {
     });
   }, []);
 
+  // Feature 2: sync remote enterprise name with heartbeat status
+  useEffect(() => {
+    if (role !== 'client' || heartbeat !== 'online') {
+      setRemoteTenantName(null);
+      return;
+    }
+    const origin = normalizeEnterpriseServerUrl(url);
+    if (!origin) return;
+    void fetchRemoteEnterpriseJson<{ tenantName: string | null }>(
+      `${origin}/api/auth/enterprise-info`
+    )
+      .then((data) => setRemoteTenantName(data.tenantName ?? null))
+      .catch(() => setRemoteTenantName(null));
+  }, [heartbeat, role, url]);
+
   const doSave = async () => {
     setSaving(true);
     try {
-      // Demoting a server back to client dissolves the locally hosted enterprise + downgrades role.
       if (role === 'client' && isElectronDesktop() && hasInstanceEnterprise) {
         const res = await webui.demoteToClient.invoke();
         if (!res?.success) {
@@ -110,6 +146,37 @@ const EnterpriseDeploymentModeCard: React.FC = () => {
     void doSave();
   };
 
+  // Feature 4: exit enterprise
+  const handleExitEnterprise = async () => {
+    if (!exitCode.trim()) {
+      Message.warning(t('settings.webui.exitCodeRequired', { defaultValue: '请输入退出密码' }));
+      return;
+    }
+    setExiting(true);
+    try {
+      const remoteOrigin = await getClientEnterpriseServerOrigin();
+      if (!remoteOrigin) {
+        Message.error(t('settings.webui.exitNoServer', { defaultValue: '未配置企业服务器地址' }));
+        return;
+      }
+      await fetchRemoteEnterpriseJson(`${remoteOrigin}/api/auth/enterprise-leave`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exitCode: exitCode.trim() }),
+        credentials: 'include',
+      });
+      await clearDeploymentConfig();
+      setShowExitModal(false);
+      Message.success(t('settings.webui.exitSuccess', { defaultValue: '已退出企业，配置已清除' }));
+      await refreshEnterpriseContext();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '退出失败';
+      Message.error(msg);
+    } finally {
+      setExiting(false);
+    }
+  };
+
   return (
     <div className='mb-16px p-16px rd-12px border border-border-2 bg-2'>
       <div className='text-14px font-600 text-t-primary mb-4px'>
@@ -143,11 +210,23 @@ const EnterpriseDeploymentModeCard: React.FC = () => {
             value={url}
             onChange={setUrl}
             placeholder={t('settings.webui.deployServerUrlPlaceholder', {
-              defaultValue: '例如 192.168.1.10:25809',
+              defaultValue: '例如 192.168.1.10:25808',
             })}
           />
+          <div className='text-11px text-t-tertiary mt-4px'>
+            {t('settings.webui.deployServerUrlHint', {
+              defaultValue: '请填写含端口的完整地址（服务端端口可在服务器 WebUI 设置中查看）',
+            })}
+          </div>
+          {normalizeEnterpriseServerUrl(url) && !hasExplicitPort(url) ? (
+            <div className='mt-4px text-11px' style={{ color: 'var(--color-warning-6, #ff7d00)' }}>
+              {t('settings.webui.deployServerUrlNoPort', {
+                defaultValue: '未检测到端口号，服务器地址通常需要指定端口，如 192.168.1.10:25808',
+              })}
+            </div>
+          ) : null}
           {normalizeEnterpriseServerUrl(url) ? (
-            <div className='mt-6px'>
+            <div className='mt-6px flex items-center gap-8px flex-wrap'>
               <Tag
                 size='small'
                 color={heartbeat === 'online' ? 'green' : heartbeat === 'offline' ? 'red' : 'gray'}
@@ -158,6 +237,30 @@ const EnterpriseDeploymentModeCard: React.FC = () => {
                     ? t('settings.webui.deployServerOffline', { defaultValue: '服务器离线（检查地址或服务器是否启动）' })
                     : t('settings.webui.deployServerChecking', { defaultValue: '检测中…' })}
               </Tag>
+              {/* Feature 2: show enterprise name when online */}
+              {heartbeat === 'online' && remoteTenantName ? (
+                <span className='text-11px text-t-secondary'>
+                  {t('settings.webui.deployClientEnterprise', {
+                    defaultValue: '已连接企业：{{name}}',
+                    name: remoteTenantName,
+                  })}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          {/* Feature 4: exit enterprise button (only when server is online) */}
+          {heartbeat === 'online' ? (
+            <div className='mt-8px'>
+              <Button
+                size='small'
+                status='danger'
+                onClick={() => {
+                  setExitCode('');
+                  setShowExitModal(true);
+                }}
+              >
+                {t('settings.webui.exitEnterpriseBtn', { defaultValue: '退出企业' })}
+              </Button>
             </div>
           ) : null}
         </div>
@@ -173,6 +276,36 @@ const EnterpriseDeploymentModeCard: React.FC = () => {
       <Button type='primary' loading={saving} onClick={() => void handleSave()}>
         {t('settings.webui.deploySave', { defaultValue: '保存' })}
       </Button>
+
+      {/* Feature 4: exit modal */}
+      <Modal
+        title={t('settings.webui.exitModalTitle', { defaultValue: '退出企业' })}
+        visible={showExitModal}
+        onCancel={() => setShowExitModal(false)}
+        footer={[
+          <Button key='cancel' onClick={() => setShowExitModal(false)}>
+            {t('common.cancel', { defaultValue: '取消' })}
+          </Button>,
+          <Button key='confirm' type='primary' status='danger' loading={exiting} onClick={() => void handleExitEnterprise()}>
+            {t('settings.webui.exitConfirmBtn', { defaultValue: '确认退出' })}
+          </Button>,
+        ]}
+      >
+        <div className='mb-8px text-13px text-t-secondary'>
+          {t('settings.webui.exitModalDesc', {
+            defaultValue: '退出后将清除本机的企业配置，需要联系管理员重新发放邀请码才能再次加入。',
+          })}
+        </div>
+        <div className='text-12px text-t-secondary mb-4px'>
+          {t('settings.webui.exitCodeLabel', { defaultValue: '退出密码（由企业管理员在控制台设置）' })}
+        </div>
+        <Input.Password
+          value={exitCode}
+          onChange={setExitCode}
+          placeholder={t('settings.webui.exitCodePlaceholder', { defaultValue: '请输入退出密码' })}
+          onPressEnter={() => void handleExitEnterprise()}
+        />
+      </Modal>
     </div>
   );
 };

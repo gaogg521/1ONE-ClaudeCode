@@ -22,7 +22,9 @@ import { resolveEnterpriseContext } from '../auth/enterpriseContext';
 import { getInstanceGovernance } from '../auth/instanceGovernance';
 import {
   EnterpriseJoinError,
+  getEnterprisePublicInfo,
   joinEnterpriseWithInvite,
+  leaveEnterprise,
   previewEnterpriseInvite,
 } from '../auth/enterpriseJoinService';
 import {
@@ -860,6 +862,20 @@ export function registerAuthRoutes(app: Express): void {
   );
 
   /**
+   * Public enterprise info — returns hosted enterprise name (if any).
+   * GET /api/auth/enterprise-info
+   */
+  app.get('/api/auth/enterprise-info', apiRateLimiter, async (_req: Request, res: Response) => {
+    try {
+      const info = await getEnterprisePublicInfo();
+      res.json({ success: true, data: info });
+    } catch (err) {
+      console.error('[AuthRoute] enterprise-info error:', err);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  });
+
+  /**
    * Join an enterprise with invite code.
    * POST /api/auth/enterprise-join
    */
@@ -880,6 +896,36 @@ export function registerAuthRoutes(app: Express): void {
           return;
         }
         console.error('[AuthRoute] enterprise join error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
+
+  /**
+   * Leave an enterprise by providing the server-assigned exit code.
+   * POST /api/auth/enterprise-leave
+   */
+  app.post(
+    '/api/auth/enterprise-leave',
+    apiRateLimiter,
+    AuthMiddleware.authenticateToken,
+    authenticatedActionLimiter,
+    async (req: Request, res: Response) => {
+      try {
+        const exitCode = String((req.body as { exitCode?: unknown })?.exitCode ?? '');
+        if (!exitCode) {
+          res.status(400).json({ success: false, message: '退出码不能为空' });
+          return;
+        }
+        await leaveEnterprise(req.user!.id, exitCode);
+        res.json({ success: true });
+      } catch (err) {
+        if (err instanceof EnterpriseJoinError) {
+          const status = err.code === 'FORBIDDEN' ? 403 : 400;
+          res.status(status).json({ success: false, code: err.code, message: err.message });
+          return;
+        }
+        console.error('[AuthRoute] enterprise-leave error:', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }

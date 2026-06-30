@@ -23,7 +23,10 @@ import {
   WEBUI_MANAGEMENT_MODE_KEY,
   WEBUI_USER_CHOSE_STANDALONE_KEY,
   WEBUI_DEPLOYMENT_ROLE_KEY,
+  WEBUI_ENTERPRISE_SERVER_URL_KEY,
   normalizeWebuiManagementMode,
+  normalizeWebuiDeploymentRole,
+  normalizeEnterpriseServerUrl,
   readBrowserWebuiManagementMode,
   writeBrowserWebuiManagementMode,
 } from '@/common/config/webuiEnterpriseConfig';
@@ -123,6 +126,7 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   const [enterpriseContext, setEnterpriseContext] = useState<EnterpriseContextSnapshot | null>(null);
   const [webuiApiBase, setWebuiApiBase] = useState<string | null>(null);
   const [editionSwitcherEnabled, setEditionSwitcherEnabled] = useState(false);
+  const [isClientModeConnected, setIsClientModeConnected] = useState(false);
 
   const loadEditionSwitcherFlag = useCallback(async () => {
     try {
@@ -148,6 +152,12 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
     }
     const stored = await ConfigStorage.get(WEBUI_MANAGEMENT_MODE_KEY).catch((): undefined => undefined);
     setManagementModeState(normalizeWebuiManagementMode(stored));
+    const role = await ConfigStorage.get(WEBUI_DEPLOYMENT_ROLE_KEY).catch((): undefined => undefined);
+    const serverUrl = await ConfigStorage.get(WEBUI_ENTERPRISE_SERVER_URL_KEY).catch((): undefined => undefined);
+    setIsClientModeConnected(
+      normalizeWebuiDeploymentRole(role) === 'client' &&
+        !!normalizeEnterpriseServerUrl(typeof serverUrl === 'string' ? serverUrl : null)
+    );
   }, [isDesktop]);
 
   const fetchBrowserEnterpriseContext = useCallback(async (): Promise<EnterpriseContextSnapshot | null> => {
@@ -480,7 +490,8 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
 
   const canCreateEnterprise = enterpriseContext?.canCreateEnterprise === true;
   const hasSystemAdmin = enterpriseContext?.hasSystemAdmin === true;
-  const canClaimSystemAdmin = enterpriseContext?.canClaimSystemAdmin === true;
+  // Client mode: this machine is a node on a remote enterprise server, so local admin claim is irrelevant.
+  const canClaimSystemAdmin = enterpriseContext?.canClaimSystemAdmin === true && !isClientModeConnected;
 
   const claimSystemAdminRole = useCallback(async () => {
     // Desktop has no browser WebUI bearer token, so the HTTP claim endpoint 401s.

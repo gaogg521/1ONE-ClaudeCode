@@ -28,9 +28,12 @@ export type EnterpriseJoinErrorCode =
   | 'INVITE_REVOKED'
   | 'INVITE_EXHAUSTED'
   | 'ALREADY_IN_ENTERPRISE'
+  | 'NOT_IN_ENTERPRISE'
   | 'TENANT_NOT_FOUND'
   | 'FORBIDDEN'
-  | 'NAME_REQUIRED';
+  | 'NAME_REQUIRED'
+  | 'NO_EXIT_PASSWORD_SET'
+  | 'WRONG_EXIT_CODE';
 
 export class EnterpriseJoinError extends Error {
   readonly code: EnterpriseJoinErrorCode;
@@ -237,4 +240,83 @@ export async function revokeEnterpriseInvite(tenantId: string, inviteId: string)
   if (result.changes === 0) {
     throw new EnterpriseJoinError('INVALID_CODE', 'Invite not found');
   }
+}
+
+/** Public: return the name of the enterprise hosted on this server, if any. */
+export async function getEnterprisePublicInfo(): Promise<{ tenantName: string | null }> {
+  const driver = await getSqliteDriver();
+  const row = driver
+    .prepare(`SELECT name FROM tenants WHERE id != 'default' ORDER BY created_at ASC LIMIT 1`)
+    .get() as { name: string } | undefined;
+  return { tenantName: row?.name ?? null };
+}
+
+/** Admin: return whether an exit password has been set for the tenant. */
+export async function getEnterpriseExitPasswordStatus(tenantId: string): Promise<{ isSet: boolean }> {
+  const driver = await getSqliteDriver();
+  const row = driver
+    .prepare(`SELECT exit_password_hash FROM tenants WHERE id = ?`)
+    .get(tenantId) as { exit_password_hash: string | null } | undefined;
+  return { isSet: !!row?.exit_password_hash };
+}
+
+/** Admin: set or replace the exit password for the tenant. */
+export async function setEnterpriseExitPassword(tenantId: string, password: string): Promise<void> {
+  const hash = await AuthService.hashPassword(password);
+  const driver = await getSqliteDriver();
+  driver
+    .prepare(`UPDATE tenants SET exit_password_hash = ?, updated_at = ? WHERE id = ?`)
+    .run(hash, Date.now(), tenantId);
+}
+
+/** Admin: remove the exit password, disabling client self-exit. */
+export async function clearEnterpriseExitPassword(tenantId: string): Promise<void> {
+  const driver = await getSqliteDriver();
+  driver
+    .prepare(`UPDATE tenants SET exit_password_hash = NULL, updated_at = ? WHERE id = ?`)
+    .run(Date.now(), tenantId);
+}
+
+/** Auth: get count of members in the enterprise (users with this tenant_id). */
+export async function getEnterpriseMemberCount(tenantId: string): Promise<{ count: number }> {
+  const driver = await getSqliteDriver();
+  const row = driver
+    .prepare(`SELECT COUNT(*) as cnt FROM users WHERE tenant_id = ?`)
+    .get(tenantId) as { cnt: number };
+  return { count: Number(row?.cnt ?? 0) };
+}
+
+/**
+ * Client: leave the enterprise by verifying the server-set exit password.
+ * Resets the user's tenant_id back to 'default'.
+ */
+export async function leaveEnterprise(userId: string, exitCode: string): Promise<void> {
+  const user = await UserRepository.findById(userId);
+  if (!user) {
+    throw new EnterpriseJoinError('FORBIDDEN', 'User not found');
+  }
+  if (!isEnterpriseTenantId(user.tenant_id)) {
+    throw new EnterpriseJoinError('NOT_IN_ENTERPRISE', 'Not currently in an enterprise');
+  }
+
+  const driver = await getSqliteDriver();
+  const tenant = driver
+    .prepare(`SELECT exit_password_hash FROM tenants WHERE id = ?`)
+    .get(user.tenant_id) as { exit_password_hash: string | null } | undefined;
+  if (!tenant?.exit_password_hash) {
+    throw new EnterpriseJoinError(
+      'NO_EXIT_PASSWORD_SET',
+      'The enterprise has not configured an exit password. Contact your administrator.'
+    );
+  }
+
+  const valid = await AuthService.verifyPassword(exitCode, tenant.exit_password_hash);
+  if (!valid) {
+    throw new EnterpriseJoinError('WRONG_EXIT_CODE', 'Incorrect exit code');
+  }
+
+  driver
+    .prepare(`UPDATE users SET tenant_id = 'default', updated_at = ? WHERE id = ?`)
+    .run(Date.now(), userId);
+  await AuthService.invalidateAllTokens();
 }

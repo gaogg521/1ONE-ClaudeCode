@@ -29,10 +29,14 @@ import { getTeamPeerUserIds } from './resourceScope';
 import { aggregateAgentTokenUsageForTenant } from '@process/services/usage/agentTokenUsage';
 import {
   EnterpriseJoinError,
+  clearEnterpriseExitPassword,
   createEnterpriseInvite,
   createEnterpriseTenant,
+  getEnterpriseMemberCount,
+  getEnterpriseExitPasswordStatus,
   listEnterpriseInvites,
   revokeEnterpriseInvite,
+  setEnterpriseExitPassword,
 } from '../auth/enterpriseJoinService';
 import {
   assertEnterpriseSsoEnableAllowed,
@@ -1265,6 +1269,99 @@ export function registerAdminRoutes(app: Express): void {
           return;
         }
         console.error('[AdminRoute] revoke enterprise invite error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
+
+  // GET /api/admin/enterprise/member-count — connected client count
+  app.get(
+    '/api/admin/enterprise/member-count',
+    apiRateLimiter,
+    auth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const tenantId = req.user?.tenant_id ?? 'default';
+        if (!isEnterpriseTenantId(tenantId)) {
+          res.json({ success: true, data: { count: 0 } });
+          return;
+        }
+        const data = await getEnterpriseMemberCount(tenantId);
+        res.json({ success: true, data });
+      } catch (err) {
+        console.error('[AdminRoute] member-count error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
+
+  // GET /api/admin/enterprise/exit-password/status
+  app.get(
+    '/api/admin/enterprise/exit-password/status',
+    apiRateLimiter,
+    auth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const tenantId = req.user?.tenant_id ?? 'default';
+        if (!isEnterpriseTenantId(tenantId)) {
+          res.status(400).json({ success: false, message: 'Join or create an enterprise first' });
+          return;
+        }
+        const data = await getEnterpriseExitPasswordStatus(tenantId);
+        res.json({ success: true, data });
+      } catch (err) {
+        console.error('[AdminRoute] exit-password status error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
+
+  // PUT /api/admin/enterprise/exit-password
+  app.put(
+    '/api/admin/enterprise/exit-password',
+    apiRateLimiter,
+    auth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const tenantId = req.user?.tenant_id ?? 'default';
+        if (!isEnterpriseTenantId(tenantId)) {
+          res.status(400).json({ success: false, message: 'Join or create an enterprise first' });
+          return;
+        }
+        const password = String((req.body as { password?: unknown })?.password ?? '').trim();
+        if (!password) {
+          res.status(400).json({ success: false, message: '退出密码不能为空' });
+          return;
+        }
+        await setEnterpriseExitPassword(tenantId, password);
+        res.json({ success: true });
+      } catch (err) {
+        console.error('[AdminRoute] set exit-password error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    }
+  );
+
+  // DELETE /api/admin/enterprise/exit-password
+  app.delete(
+    '/api/admin/enterprise/exit-password',
+    apiRateLimiter,
+    auth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const tenantId = req.user?.tenant_id ?? 'default';
+        if (!isEnterpriseTenantId(tenantId)) {
+          res.status(400).json({ success: false, message: 'Join or create an enterprise first' });
+          return;
+        }
+        await clearEnterpriseExitPassword(tenantId);
+        res.json({ success: true });
+      } catch (err) {
+        console.error('[AdminRoute] clear exit-password error:', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }

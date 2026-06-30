@@ -1981,6 +1981,26 @@ const migration_v51: IMigration = {
 };
 
 /**
+ * Migration v51 -> v52: Add exit_password_hash to tenants (client exit password gate)
+ */
+const migration_v52: IMigration = {
+  version: 52,
+  name: 'Add exit_password_hash to tenants',
+  up: (db) => {
+    const cols = new Set(
+      (db.pragma('table_info(tenants)') as Array<{ name: string }>).map((c) => c.name)
+    );
+    if (!cols.has('exit_password_hash')) {
+      db.exec('ALTER TABLE tenants ADD COLUMN exit_password_hash TEXT');
+    }
+    console.log('[Migration v52] Added exit_password_hash to tenants');
+  },
+  down: (_db) => {
+    console.log('[Migration v52] Rolled back: column retained (SQLite cannot drop columns)');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -2016,6 +2036,7 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v49,
   migration_v50,
   migration_v51,
+  migration_v52,
 ];
 
 /**
