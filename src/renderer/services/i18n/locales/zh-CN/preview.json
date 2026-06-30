@@ -63,7 +63,8 @@
     "missingFilePath": "未提供文件路径",
     "openWithoutPath": "无法打开：未提供文件路径",
     "conversionFailed": "转换失败",
-    "emptySnapshot": "快照内容为空"
+    "emptySnapshot": "快照内容为空",
+    "retry": "重试"
   },
   "word": {
     "title": "Word 文档",
@@ -74,7 +75,8 @@
       "loading": "正在加载 Word 文档...",
       "installing": "正在安装 officecli...",
       "startFailed": "启动 Word 预览失败",
-      "installHint": "需要 officecli，将自动安装。"
+      "installHint": "需要 officecli，将自动安装。",
+      "loadFailed": "预览加载失败"
     }
   },
   "excel": {
@@ -91,7 +93,8 @@
       "loading": "正在加载 Excel 文件...",
       "installing": "正在安装 officecli...",
       "startFailed": "启动 Excel 预览失败",
-      "installHint": "需要 officecli，将自动安装。"
+      "installHint": "需要 officecli，将自动安装。",
+      "loadFailed": "预览加载失败"
     }
   },
   "pdf": {
@@ -128,6 +131,7 @@
     "loading": "正在启动 PPT 预览...",
     "installing": "正在安装预览组件...",
     "startFailed": "启动 PPT 预览失败",
-    "installHint": "请确保已安装 officecli：npm run postinstall"
+    "installHint": "请确保已安装 officecli：npm run postinstall",
+    "loadFailed": "预览加载失败"
   }
 }

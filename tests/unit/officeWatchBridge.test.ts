@@ -21,6 +21,7 @@ const {
   realpathSyncMock,
   fakePort,
   portConnectSucceeds,
+  httpHealthCheckSucceeds,
 } = vi.hoisted(() => ({
   wordStartHandler: { fn: undefined as ((...args: any[]) => any) | undefined },
   wordStopHandler: { fn: undefined as ((...args: any[]) => any) | undefined },
@@ -35,6 +36,8 @@ const {
   // Controls whether net.connect resolves (port ready) or rejects (port not ready).
   // Set to false in tests that expect the process to fail before the port opens.
   portConnectSucceeds: { value: true },
+  // Controls whether the HTTP health check succeeds after TCP is ready.
+  httpHealthCheckSucceeds: { value: true },
 }));
 
 vi.mock('electron', () => ({
@@ -79,6 +82,28 @@ vi.mock('../../src/common', () => ({
 vi.mock('node:child_process', () => ({
   spawn: (...args: any[]) => spawnMock(...args),
   execSync: (...args: any[]) => execSyncMock(...args),
+}));
+
+vi.mock('node:http', () => ({
+  default: {
+    get: (_url: string, callback: (res: any) => void) => {
+      const req = new EventEmitter();
+      Object.assign(req, {
+        setTimeout: vi.fn(),
+        destroy: vi.fn(),
+        on: (event: string, handler: (...args: any[]) => void) => {
+          if (event === 'error' && !httpHealthCheckSucceeds.value) {
+            queueMicrotask(() => handler(new Error('ECONNREFUSED')));
+          }
+          return req;
+        },
+      });
+      if (httpHealthCheckSucceeds.value) {
+        queueMicrotask(() => callback({ destroy: vi.fn() }));
+      }
+      return req;
+    },
+  },
 }));
 
 vi.mock('node:fs', () => ({
@@ -156,6 +181,7 @@ beforeEach(async () => {
   realpathSyncMock.mockImplementation((p: string) => p);
   fakePort.value = 55555;
   portConnectSucceeds.value = true;
+  httpHealthCheckSucceeds.value = true;
 
   const mod = await import('../../src/process/bridge/officeWatchBridge');
   initOfficeWatchBridge = mod.initOfficeWatchBridge;

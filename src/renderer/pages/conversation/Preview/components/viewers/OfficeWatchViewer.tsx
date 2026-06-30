@@ -7,8 +7,8 @@
 import { ipcBridge } from '@/common';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import { Spin } from '@arco-design/web-react';
-import React, { useEffect, useRef, useState } from 'react';
+import { Button, Spin } from '@arco-design/web-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type DocType = 'ppt' | 'word' | 'excel';
@@ -38,18 +38,21 @@ const I18N_KEYS = {
     installing: 'preview.ppt.installing',
     startFailed: 'preview.ppt.startFailed',
     installHint: 'preview.ppt.installHint',
+    loadFailed: 'preview.ppt.loadFailed',
   },
   word: {
     loading: 'preview.word.watch.loading',
     installing: 'preview.word.watch.installing',
     startFailed: 'preview.word.watch.startFailed',
     installHint: 'preview.word.watch.installHint',
+    loadFailed: 'preview.word.watch.loadFailed',
   },
   excel: {
     loading: 'preview.excel.watch.loading',
     installing: 'preview.excel.watch.installing',
     startFailed: 'preview.excel.watch.startFailed',
     installHint: 'preview.excel.watch.installHint',
+    loadFailed: 'preview.excel.watch.loadFailed',
   },
 } as const;
 
@@ -77,7 +80,20 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, filePath
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'starting' | 'installing'>('starting');
   const [error, setError] = useState<string | null>(null);
+  const [webviewError, setWebviewError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const filePathRef = useRef(filePath);
+
+  const handleWebviewFailLoad = useCallback((_errorCode: number, _errorDescription: string) => {
+    setWebviewError(true);
+  }, []);
+
+  const handleRetry = useCallback(() => {
+    setWebviewError(false);
+    setWatchUrl(null);
+    setLoading(true);
+    setRetryCount((c) => c + 1);
+  }, []);
 
   useEffect(() => {
     filePathRef.current = filePath;
@@ -136,7 +152,7 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, filePath
         bridge.stop.invoke({ filePath: filePathRef.current }).catch(() => {});
       }
     };
-  }, [docType, filePath]);
+  }, [docType, filePath, retryCount]);
 
   if (loading) {
     return (
@@ -164,10 +180,23 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, filePath
 
   if (!watchUrl) return null;
 
+  if (webviewError) {
+    return (
+      <div className='h-full w-full flex items-center justify-center bg-bg-1'>
+        <div className='flex flex-col items-center gap-12px text-center max-w-400px'>
+          <div className='text-14px text-t-secondary'>{t(keys.loadFailed)}</div>
+          <Button size='small' onClick={handleRetry}>
+            {t('preview.errors.retry')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // Electron: use <webview> via WebviewHost for full Electron integration.
   // Web server mode: use <iframe> since <webview> is Electron-only.
   if (isElectronDesktop()) {
-    return <WebviewHost url={watchUrl} className='bg-bg-1' />;
+    return <WebviewHost url={watchUrl} className='bg-bg-1' onDidFailLoad={handleWebviewFailLoad} />;
   }
   return <iframe src={watchUrl} className='w-full h-full border-0 bg-bg-1' title={IFRAME_TITLE[docType]} />;
 };

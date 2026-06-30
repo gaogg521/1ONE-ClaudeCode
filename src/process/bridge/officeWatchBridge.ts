@@ -15,6 +15,7 @@
 import { ipcBridge } from '@/common';
 import { spawn, execSync, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import net from 'node:net';
 import { getEnhancedEnv } from '@process/utils/shellEnv';
 
@@ -128,6 +129,25 @@ function installOfficecli(emitStatus: StatusEmitter): boolean {
 }
 
 /**
+ * Verify the watch HTTP server is truly serving (not just TCP-listening).
+ * officecli may briefly accept TCP connections while still initialising,
+ * causing the webview to get ERR_ABORTED if we hand over the URL too early.
+ */
+function verifyHttpReady(port: number, timeoutMs = 4000): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const req = http.get(`http://localhost:${port}/`, (res) => {
+      res.destroy();
+      resolve();
+    });
+    req.setTimeout(timeoutMs, () => {
+      req.destroy();
+      reject(new Error('HTTP health check timed out'));
+    });
+    req.on('error', reject);
+  });
+}
+
+/**
  * Start an officecli watch process and wait for the server URL.
  * Reuses an existing healthy session if one is already running.
  * Auto-installs officecli on first use if not found.
@@ -201,9 +221,18 @@ async function startWatch(
     // reliable regardless of output buffering.
     const url = `http://localhost:${port}`;
     waitForPort(port, 150, 100)
-      .then(() => {
+      .then(async () => {
         if (session.aborted) {
           settle(new Error('Watch session was aborted'));
+          return;
+        }
+        // TCP listening doesn't guarantee HTTP is ready — verify with a real GET
+        // before handing the URL to the renderer to avoid ERR_ABORTED in webview.
+        try {
+          await verifyHttpReady(port);
+        } catch {
+          settle(new Error('officecli watch server failed HTTP health check'));
+          killSession(filePath, sessions);
           return;
         }
         if (!settled) {
@@ -213,8 +242,10 @@ async function startWatch(
         }
       })
       .catch(() => {
-        settle(new Error('officecli watch server did not become ready'));
-        killSession(filePath, sessions);
+        if (!settled) {
+          settle(new Error('officecli watch server did not become ready'));
+          killSession(filePath, sessions);
+        }
       });
 
     child.stderr?.on('data', (data: Buffer) => {
