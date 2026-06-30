@@ -6,14 +6,13 @@
 
 import { acpDetector } from '@process/agent/acp/AcpDetector';
 import { AcpConnection } from '@process/agent/acp/AcpConnection';
-import { buildAcpModelInfo, summarizeAcpModelInfo } from '@process/agent/acp/modelInfo';
+import { buildAcpModelInfo } from '@process/agent/acp/modelInfo';
 import { resolveAionrsBinary } from '@process/agent/aionrs/binaryResolver';
 import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
 import AcpAgentManager from '@process/task/AcpAgentManager';
 import { GeminiAgentManager } from '@process/task/GeminiAgentManager';
 import { AionrsManager } from '@process/task/AionrsManager';
 import { mcpService } from '@/process/services/mcpServices/McpService';
-import { mainLog, mainWarn } from '@/process/utils/mainLogger';
 import { ipcBridge } from '@/common';
 import { ProcessConfig } from '@process/utils/initStorage';
 import * as os from 'os';
@@ -76,7 +75,6 @@ export function initAcpConversationBridge(workerTaskManager: IWorkerTaskManager)
 
       return { success: true, data: enriched };
     } catch (error) {
-      mainWarn('[getAvailableAgents]', 'Error:', error instanceof Error ? error.message : String(error));
       return {
         success: false,
         msg: error instanceof Error ? error.message : 'Unknown error',
@@ -246,20 +244,10 @@ export function initAcpConversationBridge(workerTaskManager: IWorkerTaskManager)
       await connection.newSession(tempDir);
 
       const modelInfo = buildAcpModelInfo(connection.getConfigOptions(), connection.getModels());
-      if (backend === 'codex') {
-        const initializeResult = connection.getInitializeResponse() as unknown as Record<string, unknown> | null;
-        mainLog('[ACP codex]', 'probeModelInfo completed', {
-          initializeAgentInfo: initializeResult?.agentInfo || null,
-          modelInfo: summarizeAcpModelInfo(modelInfo),
-        });
-      }
 
       return { success: true, data: { modelInfo } };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      if (backend === 'codex') {
-        mainWarn('[ACP codex]', 'probeModelInfo failed', errorMsg);
-      }
       return { success: false, msg: errorMsg };
     } finally {
       try {

@@ -95,7 +95,6 @@ export function initModelBridge(): void {
     // 如果是 Vertex AI 平台，直接返回 Vertex AI 支持的模型列表
     // For Vertex AI platform, return the supported model list directly
     if (platform?.includes('vertex-ai')) {
-      console.log('Using Vertex AI model list');
       const vertexAIModels = ['gemini-2.5-pro', 'gemini-2.5-flash'];
       return { success: true, data: { mode: vertexAIModels } };
     }
@@ -104,7 +103,6 @@ export function initModelBridge(): void {
     // MiniMax does not provide /v1/models endpoint (verified 2026-02), return hardcoded list
     // For MiniMax platform, return the supported model list directly
     if (base_url && isMiniMaxAPI(base_url)) {
-      console.log('Using MiniMax model list (text models only)');
       const minimaxModels = [
         // Text/Chat Models - For conversational AI use
         'MiniMax-M2.7',
@@ -185,10 +183,7 @@ export function initModelBridge(): void {
         const modelList = data.data.map((model: { id: string }) => model.id);
 
         return { success: true, data: { mode: modelList } };
-      } catch (e: unknown) {
-        // Fall back to default model list on API failure
-        const errorMessage = e instanceof Error ? e.message : String(e);
-        console.warn('Failed to fetch Anthropic models via API, falling back to default list:', errorMessage);
+      } catch {
         const defaultAnthropicModels = [
           'claude-sonnet-4-20250514',
           'claude-opus-4-20250514',
@@ -351,10 +346,7 @@ export function initModelBridge(): void {
 
         return { success: true, data: { mode: modelList } };
       } catch (e: any) {
-        // 对于 Gemini 平台，API 调用失败时回退到默认模型列表
-        // For Gemini platform, fall back to default model list on API failure
         if (platform?.includes('gemini')) {
-          console.warn('Failed to fetch Gemini models via API, falling back to default list:', e.message);
           const defaultGeminiModels = ['gemini-2.5-pro', 'gemini-2.5-flash'];
           return { success: true, data: { mode: defaultGeminiModels } };
         }
@@ -557,8 +549,7 @@ export function initModelBridge(): void {
           });
 
           return [...userProviders, ...mergedExtensionProviders];
-        } catch (error) {
-          console.warn('[ModelBridge] Failed to merge extension model providers:', error);
+        } catch {
           return normalizedProviders;
         }
       })

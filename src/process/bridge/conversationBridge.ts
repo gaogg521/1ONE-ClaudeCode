@@ -36,8 +36,8 @@ import { resolvePersonalAgentPreset } from '@process/digitalEmployee/resolvePers
 const refreshTrayMenuSafely = async (): Promise<void> => {
   try {
     await refreshTrayMenu();
-  } catch (error) {
-    console.warn('[conversationBridge] Failed to refresh tray menu:', error);
+  } catch {
+    // Tray menu refresh is best-effort
   }
 };
 
@@ -164,7 +164,6 @@ export function initConversationBridge(
 
   ipcBridge.conversation.create.provider(async (params): Promise<TChatConversation> => {
     if (!VALID_CONVERSATION_TYPES.has(params?.type as TChatConversation['type'])) {
-      console.warn('[conversationBridge] Rejecting create request with invalid conversation type:', params?.type);
       return undefined as unknown as TChatConversation;
     }
     try {
@@ -204,7 +203,6 @@ export function initConversationBridge(
       await refreshTrayMenuSafely();
       return conversation;
     } catch (error) {
-      console.error('[conversationBridge] Failed to create conversation:', error);
       throw error;
     }
   });
@@ -264,8 +262,7 @@ export function initConversationBridge(
 
       // Filter by workspace
       return allConversations.filter((item) => item.extra?.workspace === currentConversation.extra.workspace);
-    } catch (error) {
-      console.error('[conversationBridge] Failed to get associate conversations:', error);
+    } catch {
       return [];
     }
   });
@@ -282,17 +279,14 @@ export function initConversationBridge(
           sourceConversationId,
           migrateCron,
         });
-        workerTaskManager.getOrBuildTask(result.id).catch((err) => {
-          console.warn('[conversationBridge] Failed to pre-warm task after migration:', err);
-        });
+        workerTaskManager.getOrBuildTask(result.id).catch(() => {});
         emitConversationListChanged(result, 'created');
         if (sourceConversationId) {
           emitConversationListChanged({ id: sourceConversationId, source: conversation.source }, 'deleted');
         }
         await refreshTrayMenuSafely();
         return result;
-      } catch (error) {
-        console.error('[conversationBridge] Failed to create conversation with conversation:', error);
+      } catch {
         return Promise.resolve(conversation);
       }
     }
@@ -317,8 +311,7 @@ export function initConversationBridge(
           if (channelManager.isInitialized()) {
             await channelManager.cleanupConversation(id);
           }
-        } catch (cleanupError) {
-          console.warn('[conversationBridge] Failed to cleanup channel resources:', cleanupError);
+        } catch {
           // Continue with deletion even if cleanup fails
         }
       }
@@ -330,8 +323,7 @@ export function initConversationBridge(
       }
       await refreshTrayMenuSafely();
       return true;
-    } catch (error) {
-      console.error('[conversationBridge] Failed to remove conversation:', error);
+    } catch {
       return false;
     }
   });
@@ -385,8 +377,7 @@ export function initConversationBridge(
         }
 
         return true;
-      } catch (error) {
-        console.error('[conversationBridge] Failed to update conversation:', error);
+      } catch {
         return false;
       }
     }
@@ -430,7 +421,6 @@ export function initConversationBridge(
       // Create a placeholder aionrs conversation. We deliberately do NOT call
       // emitConversationListChanged: the placeholder should not surface in the
       // sidebar while the user is still on the Guid page.
-      const t0 = Date.now();
       const conversation = await conversationService.createConversation({
         type: 'aionrs',
         name: PLACEHOLDER_CONVERSATION_NAME,
@@ -442,11 +432,9 @@ export function initConversationBridge(
         },
         source: '1one',
       } as CreateConversationParams);
-      console.log(`[aionrs:prewarm:main] DB create +${Date.now() - t0}ms id=${conversation.id}`);
 
       // Trigger worker fork + AionrsManager construction (which auto-spawns the binary).
       const manager = await workerTaskManager.getOrBuildTask(conversation.id);
-      console.log(`[aionrs:prewarm:main] worker ready +${Date.now() - t0}ms`);
 
       aionrsPrewarmPool.register({
         key: params.key,
@@ -456,8 +444,7 @@ export function initConversationBridge(
       });
 
       return { conversation_id: conversation.id };
-    } catch (error) {
-      console.warn('[conversationBridge] prewarm.create failed:', error);
+    } catch {
       return null;
     }
   });
@@ -481,8 +468,7 @@ export function initConversationBridge(
       if (existing) emitConversationListChanged(existing, 'created');
       await refreshTrayMenuSafely();
       return true;
-    } catch (error) {
-      console.warn('[conversationBridge] finalizeFromPrewarm failed:', error);
+    } catch {
       return false;
     }
   });
@@ -520,8 +506,7 @@ export function initConversationBridge(
       }
 
       return undefined;
-    } catch (error) {
-      console.error('[conversationBridge] Failed to get conversation:', error);
+    } catch {
       return undefined;
     }
   });
@@ -555,7 +540,6 @@ export function initConversationBridge(
       if (error instanceof Error && (error.message.includes('aborted') || error.message.includes('ENOENT'))) {
         return [];
       }
-      console.error('[conversationBridge] getWorkspace error:', error);
       return [];
     }
   });
@@ -602,10 +586,6 @@ export function initConversationBridge(
         data: result,
       };
     } catch (error) {
-      console.error('[conversationBridge] /btw request failed', {
-        conversationId: conversation_id,
-        error: error instanceof Error ? error.message : String(error),
-      });
       return {
         success: false,
         msg: error instanceof Error ? error.message : String(error),

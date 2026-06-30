@@ -51,8 +51,7 @@ async function resolveWorkspaceFiles(task: IAgentManager, files: string[] | unde
         return compressImagesInPlace(workspaceFiles);
       }
       return workspaceFiles;
-    } catch (error) {
-      console.error('[conversationSendService] failed to copy files to workspace:', error);
+    } catch {
       return [];
     }
   }
@@ -99,9 +98,7 @@ function scheduleWorkspaceFileCleanup(task: IAgentManager, workspaceFiles: strin
           }
           const resolvedFile = path.resolve(filePath);
           if (resolvedFile.startsWith(resolvedWorkspace + path.sep)) {
-            fs.promises.unlink(filePath).catch((cleanupError) => {
-              console.warn('[conversationSendService] Failed to cleanup file:', filePath, cleanupError);
-            });
+            void fs.promises.unlink(filePath).catch(() => {});
           }
         }
       };
@@ -149,7 +146,6 @@ export async function sendConversationMessage(
   try {
     task = await workerTaskManager.getOrBuildTask(conversation_id);
   } catch (err) {
-    console.error(`[conversationSendService] failed to get/build task: ${conversation_id}`, err);
     return {
       success: false,
       msg: err instanceof Error ? err.message : 'conversation not found',
