@@ -11,14 +11,12 @@ When the xlsx base rules cover it, the text here says `→ see xlsx v2 §X`. Rea
 
 ## Setup
 
-**When running inside 1ONE Code**: `officecli` is bundled with the app — it is always available. Do **NOT** attempt to install or reinstall it. Run `officecli --version` to confirm; if that fails, report the error to the user instead of running an install script.
-
-**Standalone (outside 1ONE Code)**: if `officecli` is missing:
+If `officecli` is missing:
 
 - **macOS / Linux**: `curl -fsSL https://d.officecli.ai/install.sh | bash`
 - **Windows (PowerShell)**: `irm https://d.officecli.ai/install.ps1 | iex`
 
-After standalone install, open a new terminal so PATH picks up the new binary.
+Verify with `officecli --version` (open a new terminal if PATH hasn't picked up). If install fails, download a binary from https://github.com/iOfficeAI/OfficeCLI/releases.
 
 ## Help-First Rule
 
