@@ -395,6 +395,17 @@ export function getWindowsExtraToolPaths(): string[] {
     path.join(localAppData, 'OfficeCli'),
   ];
 
+  // Bundled officecli — packed with the installer under extraResources.
+  // Only add the directory to PATH; do NOT existsSync the 32 MB exe directly
+  // (Windows Defender may scan it synchronously and block the main process).
+  const runtimeKey = `${process.platform}-${process.arch}`;
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  if (resourcesPath) {
+    candidates.push(path.join(resourcesPath, 'bundled-officecli', runtimeKey));
+  } else if (process.env.NODE_ENV === 'development') {
+    candidates.push(path.join(process.cwd(), 'resources', 'bundled-officecli', runtimeKey));
+  }
+
   return candidates.filter((p) => existsSync(p) && !currentPath.includes(p));
 }
 

@@ -22,19 +22,39 @@ import { getEnhancedEnv } from '@process/utils/shellEnv';
 
 /**
  * Resolve the absolute path to the officecli executable.
- * Bypasses PATH lookup to avoid failures when Electron is launched from a shortcut
- * and the shell PATH does not propagate to the spawned child process.
+ *
+ * Priority: bundled (installer) → local install → PATH fallback.
+ * For the bundled path, we check manifest.json (tiny) instead of the 32 MB
+ * exe to avoid triggering a synchronous Windows Defender scan that would
+ * block the main process and cause an "Electron not responding" freeze.
  */
 function findOfficecliExe(): string {
+  const binaryName = process.platform === 'win32' ? 'officecli.exe' : 'officecli';
+  const runtimeKey = `${process.platform}-${process.arch}`;
+
+  const checkBundledDir = (dir: string): string | null => {
+    if (fs.existsSync(path.join(dir, 'manifest.json'))) return path.join(dir, binaryName);
+    return null;
+  };
+
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  if (resourcesPath) {
+    const r = checkBundledDir(path.join(resourcesPath, 'bundled-officecli', runtimeKey));
+    if (r) return r;
+  } else if (process.env.NODE_ENV === 'development') {
+    const r = checkBundledDir(path.join(process.cwd(), 'resources', 'bundled-officecli', runtimeKey));
+    if (r) return r;
+  }
+
   if (process.platform === 'win32') {
     const localAppData = process.env.LOCALAPPDATA;
     if (localAppData) {
-      const candidate = path.join(localAppData, 'OfficeCli', 'officecli.exe');
+      const candidate = path.join(localAppData, 'OfficeCli', binaryName);
       if (fs.existsSync(candidate)) return candidate;
     }
   } else {
     const homeDir = process.env.HOME || '';
-    for (const p of [path.join(homeDir, '.local', 'bin', 'officecli'), '/usr/local/bin/officecli']) {
+    for (const p of [path.join(homeDir, '.local', 'bin', binaryName), `/usr/local/bin/${binaryName}`]) {
       if (p && fs.existsSync(p)) return p;
     }
   }

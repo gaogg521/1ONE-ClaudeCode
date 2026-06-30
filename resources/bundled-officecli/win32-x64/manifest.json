@@ -1,0 +1,7 @@
+{
+  "platform": "win32",
+  "arch": "x64",
+  "version": "1.0.125",
+  "binary": "officecli.exe",
+  "source": "bundled"
+}
