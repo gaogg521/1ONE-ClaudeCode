@@ -1240,4 +1240,57 @@ aionrs 分支 realExtra 已含 `presetRules`（line 334）和 `enabledSkills`（
 - 运行时实测：财务建模助手 + 强模型不卡、能选模型、做出完整财务模型
 - 按交付约定，影响运行行为，需出新 Windows 安装包
 
+---
+
+# 追加记录 — 2026-06-30（全面清除 IPC handler 内 console/mainLog — 修复发送框卡死 + 全局设置冻结）
+
+承接 commit `4b9453c`。两个持续 bug 的根因同属同一模式：IPC handler 调用栈内的 `console.*` 触发主进程死锁。
+
+## 背景：为什么 console.log 会冻死主进程
+
+`@office-ai/platform` 的 bridge adapter 在 `ipcMain.handle(ADAPTER_BRIDGE_EVENT_KEY)` 内同步执行 `emitter.emit(name, data)`（EventEmitter3，完全同步）。这个 `emit` 会递归调用所有已注册的 provider handler。
+
+`console.log/warn/error` 被 `@office-ai/platform` patch 后会触发 `emit('officeai-logger')` 广播——而 `bridge.adapter.emit()` 内部执行 `win.webContents.send(...)` + `broadcastToAll(...)` (WebSocket)。这两者都是向外部进程发消息，在同步调用栈内调用会阻塞 Electron 主进程 event loop 直到发送完成，形成死锁：
+
+```
+ipcMain.handle → emitter.emit(handler) → console.log
+  → emit('officeai-logger') → win.webContents.send  ← 主进程在此冻死
+```
+
+`mainLog/mainWarn/mainError`（`mainLogger.ts`）并不安全——内部先调 `console.*`（触发 patch），再调 `ipcBridge.application.logStream.emit()`（再触发一次 bridge.emit），等同于双重触发。
+
+## Bug 1：全局设置（/settings）点击后 UI 冻结
+
+**路径**：`/settings` → `/settings/agent` → `AgentSettings` → `LocalAgents` mount → `getAvailableAgents.invoke()` → main process IPC handler
+
+**根因**：
+- `acpConversationBridge.ts` 的 `getAvailableAgents` catch 块有 `mainWarn`
+- `modelBridge.ts` 的 `fetchModelList` 同步分支（Vertex AI / MiniMax）有 `console.log`；Anthropic/Gemini catch 块有 `console.warn`
+- 任何一次 `getAvailableAgents` 或 `fetchModelList` IPC 调用触发上述路径即冻死
+
+## Bug 2：aionrs 发送框永久 loading: true
+
+**路径**：prewarm 结束 → navigate → `AionrsSendBox` mount → `processInitialMessage` → `executeCommand` → `runtimeView.markSendStarted()`（`canSendMessage=false`）→ `sendMessage.invoke()` → main process handler → `conversationSendService.sendConversationMessage`
+
+**根因**：`conversationSendService.ts` 的 `resolveWorkspaceFiles` catch 和 `getOrBuildTask` catch 有 `console.error`；handler 冻死 → IPC 永不返回 → `markSendAccepted()` 永不调用 → sendbox 永久锁定
+
+## 修复（commit 4b9453c）
+
+移除 4 个文件共约 20 处 console/mainLog 调用：
+
+| 文件 | 处数 | 说明 |
+|------|------|------|
+| `conversationBridge.ts` | 14 | 含 prewarm 计时 console.log（t0 变量一并删除） |
+| `modelBridge.ts` | 5 | fetchModelList 同步分支 + catch |
+| `acpConversationBridge.ts` | mainLog + mainWarn | 清理后删除 mainLogger/summarizeAcpModelInfo 无用导入 |
+| `conversationSendService.ts` | 3 | sendMessage / cleanup 路径 |
+
+策略：全部直接删除（catch 块不需要日志，错误已通过返回值传给 renderer；无法替换为 mainLog，因为 mainLog 同样不安全）。
+
+## 规则（累积）
+
+- **绝不在 emit 深栈用 console.*（包括 mainLog/mainWarn/mainError）**
+- **mainLogger.ts 不是安全替代**——它既调 console.* 又再调 bridge.emit，双重触发
+- **诊断用 `appendFileSync`**，不用 console
+- 任何 `ipcBridge.*.provider(async handler => { ... })` 内部——handler 整个调用树中不得出现 console 调用
 
