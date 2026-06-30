@@ -72,11 +72,13 @@ import electronSquirrelStartup from 'electron-squirrel-startup';
 const isE2ETestMode = process.env.ONE_E2E_TEST === '1';
 const skipSingleInstanceLock = isE2ETestMode || process.env.ONE_MULTI_INSTANCE === '1';
 const deepLinkFromArgv = process.argv.find((arg) => arg.startsWith(`${PROTOCOL_SCHEME}://`));
-const gotTheLock = skipSingleInstanceLock ? true : app.requestSingleInstanceLock({ deepLinkUrl: deepLinkFromArgv });
+// Guard: electron-vite v5 (Vite 6 Environment API) may evaluate this entry in Node.js SSR
+// context before spawning Electron, where `app` is undefined. Skip in that scenario.
+const gotTheLock = !app || skipSingleInstanceLock ? true : app.requestSingleInstanceLock({ deepLinkUrl: deepLinkFromArgv });
 if (!gotTheLock) {
   console.warn('[1ONE] Another instance is already running; current process will exit.');
   app.quit();
-} else {
+} else if (app) {
   app.on('second-instance', (_event, argv, _workingDirectory, additionalData) => {
     // Prefer additionalData (reliable on all platforms), fallback to argv scan
     const deepLinkUrl =
@@ -129,7 +131,7 @@ if (process.platform === 'win32') {
 logEnvironmentDiagnostics();
 
 // Handle Squirrel startup events (Windows installer)
-if (electronSquirrelStartup) {
+if (electronSquirrelStartup && app) {
   app.quit();
 }
 
@@ -137,7 +139,7 @@ if (electronSquirrelStartup) {
 // Register aion-asset:// as a privileged scheme BEFORE app.whenReady().
 // This protocol serves local extension assets (icons, covers) bypassing
 // the browser security policy that blocks file:// URLs from http://localhost.
-protocol.registerSchemesAsPrivileged([
+protocol?.registerSchemesAsPrivileged([
   {
     scheme: AION_ASSET_PROTOCOL,
     privileges: {
@@ -159,7 +161,7 @@ process.on('unhandledRejection', (_reason, _promise) => {
   // Sentry captures this automatically
 });
 
-const hasSwitch = (flag: string) => process.argv.includes(`--${flag}`) || app.commandLine.hasSwitch(flag);
+const hasSwitch = (flag: string) => process.argv.includes(`--${flag}`) || (app?.commandLine?.hasSwitch(flag) ?? false);
 const getSwitchValue = (flag: string): string | undefined => {
   const withEqualsPrefix = `--${flag}=`;
   const equalsArg = process.argv.find((arg) => arg.startsWith(withEqualsPrefix));
@@ -175,7 +177,7 @@ const getSwitchValue = (flag: string): string | undefined => {
     }
   }
 
-  const cliValue = app.commandLine.getSwitchValue(flag);
+  const cliValue = app?.commandLine?.getSwitchValue(flag);
   return cliValue || undefined;
 };
 const hasCommand = (cmd: string) => process.argv.includes(cmd);

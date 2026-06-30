@@ -17,7 +17,9 @@ import { getDevAppName } from '@/common/platform';
 // Note: getPlatformServices() auto-registration also applies this as a safety net
 // in case Rollup loads initStorage's chunk before this module runs.
 // 开发模式下设置独立 app 名称，userData 目录将与正式版隔离，允许同时运行
-if (!app.isPackaged) {
+// Guard: electron-vite v5 may evaluate this module in Node.js SSR context (Vite Environment API)
+// before spawning Electron, where require('electron') returns a path string and app is undefined.
+if (app && !app.isPackaged) {
   const devAppName = getDevAppName();
   app.setName(devAppName);
   // In Electron 28+, setName alone no longer updates userData path on macOS.
@@ -39,7 +41,7 @@ const isResetPassword = process.argv.includes('--resetpass');
 
 // Only configure flags for WebUI and --resetpass modes
 // 仅为 WebUI 和重置密码模式配置参数
-if (isWebUI || isResetPassword) {
+if (app && (isWebUI || isResetPassword)) {
   // In WebUI/reset-password mode on Linux, force headless Ozone backend.
   // This mode should never depend on X11/Wayland availability.
   // 在 Linux 的 WebUI/重置密码模式下，强制使用 headless Ozone 后端，
@@ -276,7 +278,8 @@ export function unregisterInstance(): void {
 function loadCdpConfig(): CdpConfig {
   try {
     // Try to get userData path - this works even before app.ready
-    const userDataPath = app.getPath('userData');
+    const userDataPath = app?.getPath('userData');
+    if (!userDataPath) return {};
     const configPath = path.join(userDataPath, CDP_CONFIG_FILE);
 
     if (!fs.existsSync(configPath)) {
@@ -366,34 +369,36 @@ export let cdpPort: number | null = null;
 /** Whether CDP was enabled at startup (requires restart to change). */
 export let cdpStartupEnabled: boolean = false;
 
-// Load config and initialize CDP at startup
-const cdpConfig = loadCdpConfig();
-cdpStartupEnabled = shouldEnableCdp(cdpConfig);
+// Load config and initialize CDP at startup (guarded: skip if not in Electron runtime)
+if (app) {
+  const cdpConfig = loadCdpConfig();
+  cdpStartupEnabled = shouldEnableCdp(cdpConfig);
 
-if (cdpStartupEnabled) {
-  const preferredPort = getPreferredPort(cdpConfig);
-  const port = findAvailablePort(preferredPort);
-  app.commandLine.appendSwitch('remote-debugging-port', String(port));
-  cdpPort = port;
-  registerInstance(port);
+  if (cdpStartupEnabled) {
+    const preferredPort = getPreferredPort(cdpConfig);
+    const port = findAvailablePort(preferredPort);
+    app.commandLine.appendSwitch('remote-debugging-port', String(port));
+    cdpPort = port;
+    registerInstance(port);
 
-  // Log CDP initialization
-  console.log('[CDP] Chrome DevTools Protocol enabled');
-  console.log(`[CDP] Remote debugging port: ${port}`);
-  console.log(`[CDP] DevTools URL: http://127.0.0.1:${port}`);
-  console.log('[CDP] MCP chrome-devtools connection: --browser-url=http://127.0.0.1:' + port);
+    // Log CDP initialization
+    console.log('[CDP] Chrome DevTools Protocol enabled');
+    console.log(`[CDP] Remote debugging port: ${port}`);
+    console.log(`[CDP] DevTools URL: http://127.0.0.1:${port}`);
+    console.log('[CDP] MCP chrome-devtools connection: --browser-url=http://127.0.0.1:' + port);
 
-  // Clean up registry on exit - handle multiple exit signals
-  const cleanup = () => unregisterInstance();
-  process.on('exit', cleanup);
-  process.on('SIGINT', cleanup);
-  process.on('SIGTERM', cleanup);
-  // Handle Windows specific signals
-  if (process.platform === 'win32') {
-    process.on('SIGBREAK', cleanup);
+    // Clean up registry on exit - handle multiple exit signals
+    const cleanup = () => unregisterInstance();
+    process.on('exit', cleanup);
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+    // Handle Windows specific signals
+    if (process.platform === 'win32') {
+      process.on('SIGBREAK', cleanup);
+    }
+  } else {
+    console.log('[CDP] Chrome DevTools Protocol disabled');
   }
-} else {
-  console.log('[CDP] Chrome DevTools Protocol disabled');
 }
 
 /**
