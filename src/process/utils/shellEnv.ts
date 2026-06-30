@@ -344,7 +344,7 @@ export function mergePaths(path1?: string, path2?: string): string {
  *
  * 扫描 Windows 常见工具安装目录，返回当前 PATH 中缺少的路径。
  */
-function getWindowsExtraToolPaths(): string[] {
+export function getWindowsExtraToolPaths(): string[] {
   if (process.platform !== 'win32') return [];
 
   const homeDir = os.homedir();

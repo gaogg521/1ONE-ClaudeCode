@@ -108,6 +108,7 @@ function checkForUpdate(): void {
       encoding: 'utf8',
       stdio: 'pipe',
       timeout: 10000,
+      env: getEnhancedEnv(),
     }).trim();
     const latestUrl = 'https://github.com/iOfficeAI/OfficeCli/releases/latest';
     const effective = execSync(`curl -fsSL -o /dev/null -w "%{url_effective}" ${latestUrl}`, {

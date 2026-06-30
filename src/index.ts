@@ -26,7 +26,7 @@ import { ipcBridge } from './common';
 import { AION_ASSET_PROTOCOL } from '@process/extensions';
 import { initializeBackgroundServices, initializeProcess, initializeStorageDeferred } from './process';
 import { ProcessConfig } from './process/utils/initStorage';
-import { loadShellEnvironmentAsync, logEnvironmentDiagnostics, mergePaths } from './process/utils/shellEnv';
+import { loadShellEnvironmentAsync, logEnvironmentDiagnostics, mergePaths, getWindowsExtraToolPaths } from './process/utils/shellEnv';
 import { initializeAcpDetector, registerWindowMaximizeListeners, disposeAllTeamSessions } from '@process/bridge';
 import { wasLaunchedAtLogin } from '@process/bridge/applicationBridge';
 import { onCloseToTrayChanged, onLanguageChanged } from './process/bridge/systemSettingsBridge';
@@ -111,6 +111,16 @@ if (process.platform === 'darwin' || process.platform === 'linux') {
     } catch {
       // Ignore errors when reading nvm directory
     }
+  }
+}
+
+// On Windows, augment process.env.PATH with well-known tool directories (OfficeCli,
+// npm globals, Git, etc.) so in-process shell executions (Gemini agent bash tool,
+// execSync calls) can find these binaries without requiring a separate enhanced env.
+if (process.platform === 'win32') {
+  const extraPaths = getWindowsExtraToolPaths();
+  if (extraPaths.length > 0) {
+    process.env.PATH = mergePaths(process.env.PATH, extraPaths.join(path.delimiter));
   }
 }
 
