@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Input, Message, Modal, Radio, Tag, Typography } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { useEnterpriseServerHeartbeat } from '@/renderer/hooks/enterprise/useEnterpriseServerHeartbeat';
@@ -78,9 +78,21 @@ const EnterpriseDeploymentModeCard: React.FC = () => {
   const [exitCode, setExitCode] = useState('');
   const [exiting, setExiting] = useState(false);
 
-  const heartbeat = useEnterpriseServerHeartbeat(
+  const { status: heartbeat, events: connectionEvents } = useEnterpriseServerHeartbeat(
     role === 'client' ? normalizeEnterpriseServerUrl(url) : null
   );
+
+  // Disconnect alert: show when server transitions online → offline
+  const [showDisconnectAlert, setShowDisconnectAlert] = useState(false);
+  const [showConnectionLog, setShowConnectionLog] = useState(false);
+  const prevHeartbeatRef = useRef<typeof heartbeat>('idle');
+  useEffect(() => {
+    if (prevHeartbeatRef.current === 'online' && heartbeat === 'offline') {
+      setShowDisconnectAlert(true);
+    }
+    prevHeartbeatRef.current = heartbeat;
+  }, [heartbeat]);
+
   useEffect(() => {
     void readDeploymentConfig().then((c) => {
       setRole(c.role);
@@ -273,9 +285,89 @@ const EnterpriseDeploymentModeCard: React.FC = () => {
           })}
         />
       )}
+      {/* Disconnect alert */}
+      {showDisconnectAlert ? (
+        <Alert
+          type='error'
+          className='mb-12px'
+          content={
+            <div className='flex items-center justify-between gap-8px'>
+              <span>
+                {t('settings.webui.deployServerDisconnected', {
+                  defaultValue: '服务端已断开连接，请检查服务器是否在线。',
+                })}
+              </span>
+              <div className='flex gap-8px flex-shrink-0'>
+                <Button
+                  size='mini'
+                  type='outline'
+                  onClick={() => {
+                    setShowConnectionLog(true);
+                    setShowDisconnectAlert(false);
+                  }}
+                >
+                  {t('settings.webui.viewConnectionLog', { defaultValue: '查看连接日志' })}
+                </Button>
+                <Button size='mini' onClick={() => setShowDisconnectAlert(false)}>
+                  {t('common.confirm', { defaultValue: '确认' })}
+                </Button>
+              </div>
+            </div>
+          }
+        />
+      ) : null}
+
       <Button type='primary' loading={saving} onClick={() => void handleSave()}>
         {t('settings.webui.deploySave', { defaultValue: '保存' })}
       </Button>
+
+      {/* Connection log button (visible when in client mode) */}
+      {role === 'client' && connectionEvents.length > 0 ? (
+        <Button
+          size='small'
+          type='text'
+          className='ml-8px'
+          onClick={() => setShowConnectionLog(true)}
+        >
+          {t('settings.webui.viewConnectionLog', { defaultValue: '查看连接日志' })}
+        </Button>
+      ) : null}
+
+      {/* Connection log modal */}
+      <Modal
+        title={t('settings.webui.connectionLogTitle', { defaultValue: '服务器连接日志' })}
+        visible={showConnectionLog}
+        onCancel={() => setShowConnectionLog(false)}
+        footer={
+          <Button onClick={() => setShowConnectionLog(false)}>
+            {t('common.close', { defaultValue: '关闭' })}
+          </Button>
+        }
+      >
+        {connectionEvents.length === 0 ? (
+          <Typography.Paragraph type='secondary'>
+            {t('settings.webui.connectionLogEmpty', { defaultValue: '暂无连接记录' })}
+          </Typography.Paragraph>
+        ) : (
+          <div>
+            {connectionEvents.map((ev, i) => (
+              <div key={i} className='flex items-center gap-8px py-4px border-b border-border-2'>
+                <Tag
+                  size='small'
+                  color={ev.type === 'connected' ? 'green' : 'red'}
+                >
+                  {ev.type === 'connected'
+                    ? t('settings.webui.connectionLogConnected', { defaultValue: '已连接' })
+                    : t('settings.webui.connectionLogDisconnected', { defaultValue: '已断开' })}
+                </Tag>
+                <span className='text-12px text-t-secondary'>
+                  {new Date(ev.time).toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
 
       {/* Feature 4: exit modal */}
       <Modal

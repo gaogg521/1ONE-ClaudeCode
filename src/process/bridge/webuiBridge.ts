@@ -106,6 +106,13 @@ export function initWebuiBridge(): void {
     }, 'Demote to client');
   });
 
+  webui.openRemoteOAuthWindow.provider(async ({ url }) => {
+    return WebuiService.handleAsync(async () => {
+      const data = await WebuiService.openRemoteOAuthWindow(url);
+      return { success: true, data };
+    }, 'Open remote OAuth window');
+  });
+
   webui.previewEnterpriseInvite.provider(async ({ code }) => {
     return WebuiService.handleAsync(async () => {
       const data = await WebuiService.previewEnterpriseInvite(code);

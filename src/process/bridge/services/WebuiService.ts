@@ -17,7 +17,7 @@ import {
   getLatestBrowserWebuiSession,
   type BrowserSessionSnapshot,
 } from '@process/webserver/auth/browserSessionBridge';
-import { session } from 'electron';
+import { BrowserWindow, session } from 'electron';
 
 /**
  * WebUI 服务层 - 封装所有 WebUI 相关的业务逻辑
@@ -454,6 +454,53 @@ export class WebuiService {
       return { token: synced.token };
     }
     throw new Error('No browser WebUI session available for desktop sync');
+  }
+
+  /**
+   * Open an Electron BrowserWindow for OAuth on a remote enterprise server.
+   * The popup shares session.defaultSession with the renderer so OAuth cookies
+   * are automatically available to renderer fetch calls after the window closes.
+   */
+  static openRemoteOAuthWindow(url: string): Promise<{ completed: boolean }> {
+    return new Promise((resolve) => {
+      const popup = new BrowserWindow({
+        width: 900,
+        height: 650,
+        title: '企业登录',
+        webPreferences: {
+          contextIsolation: true,
+          nodeIntegration: false,
+          // No partition → uses session.defaultSession, shared with renderer.
+        },
+      });
+
+      const tryClose = (navUrl: string) => {
+        try {
+          const dest = new URL(navUrl);
+          const src = new URL(url);
+          // OAuth done when we land back on the enterprise server's web UI
+          if (
+            dest.origin === src.origin &&
+            (dest.hash.includes('/enterprise') ||
+              dest.hash.includes('/join') ||
+              dest.pathname === '/' ||
+              dest.pathname === '')
+          ) {
+            if (!popup.isDestroyed()) popup.close();
+          }
+        } catch {
+          // ignore bad URLs
+        }
+      };
+
+      popup.webContents.on('did-navigate', (_, navUrl) => tryClose(navUrl));
+      popup.webContents.on('will-redirect', (_, navUrl) => tryClose(navUrl));
+      popup.on('closed', () => resolve({ completed: true }));
+
+      void popup.loadURL(url).catch(() => {
+        if (!popup.isDestroyed()) popup.close();
+      });
+    });
   }
 
   /**

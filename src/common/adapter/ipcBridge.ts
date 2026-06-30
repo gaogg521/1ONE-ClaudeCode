@@ -992,6 +992,10 @@ export const webui = {
   verifyQRToken: bridge.buildProvider<IBridgeResponse<{ sessionToken: string; username: string }>, { qrToken: string }>(
     'webui.verify-qr-token'
   ),
+  /** Open an OAuth popup BrowserWindow for client mode (remote enterprise server). Resolves when window closes. */
+  openRemoteOAuthWindow: bridge.buildProvider<IBridgeResponse<{ completed: boolean }>, { url: string }>(
+    'webui.open-remote-oauth-window'
+  ),
   // 状态变更事件 / Status changed event
   statusChanged: bridge.buildEmitter<{
     running: boolean;

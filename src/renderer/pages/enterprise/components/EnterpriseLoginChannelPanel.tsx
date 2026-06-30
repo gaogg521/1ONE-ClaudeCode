@@ -18,6 +18,10 @@ import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpris
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { formatOAuthAuthorizeError, startOAuthAuthorize } from '@/renderer/utils/oauthAuthorize';
 import { getWebuiDesktopSession } from '@/renderer/utils/webuiDesktopSession';
+import { getClientEnterpriseServerOrigin } from '@/renderer/utils/webuiApiBase';
+import { fetchRemoteEnterpriseJson } from '@/renderer/utils/enterpriseJoinApi';
+import { rememberEnterpriseApiOrigin } from '@/renderer/utils/rememberEnterpriseApiOrigin';
+import { webui } from '@/common/adapter/ipcBridge';
 import styles from './EnterpriseLoginChannelPanel.module.css';
 
 type LoginChannel = 'local' | 'ldap' | 'feishu' | 'dingtalk' | 'wecom';
@@ -92,7 +96,15 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
   const isDesktop = isElectronDesktop();
   const { status, user, login, loginWithLdap, logout, refresh } = useAuth();
   const { hasJoinedEnterprise } = useWebuiEnterpriseMode();
-  const providers = useLoginUiProviders();
+
+  // Client mode: remote enterprise server origin (null when not in client mode)
+  const [clientRemoteOrigin, setClientRemoteOrigin] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isDesktop) return;
+    void getClientEnterpriseServerOrigin().then(setClientRemoteOrigin);
+  }, [isDesktop]);
+
+  const providers = useLoginUiProviders(isDesktop ? clientRemoteOrigin : null);
 
   const [passwordChannel, setPasswordChannel] = useState<PasswordChannel | null>(null);
   const [username, setUsername] = useState('');
@@ -228,6 +240,46 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
 
   const startOAuth = useCallback(
     async (provider: OAuthChannel) => {
+      // Client mode: use remote enterprise server's OAuth endpoint via BrowserWindow popup
+      // (cookies from the popup are shared with the renderer via session.defaultSession)
+      if (isDesktop && clientRemoteOrigin) {
+        const params = new URLSearchParams({ mode: provider === 'feishu' ? 'oauth' : 'oauth' });
+        params.set('redirect', oauthRedirect);
+        const remoteUrl = `${clientRemoteOrigin}/api/auth/${provider}/authorize?${params.toString()}`;
+        try {
+          await webui.openRemoteOAuthWindow.invoke({ url: remoteUrl });
+        } catch (err) {
+          Message.error(err instanceof Error ? err.message : '打开登录窗口失败');
+          return;
+        }
+        // After popup closes, cookies for remoteOrigin are in Electron's session.
+        // Poll the remote server to pick up the session.
+        const startedAt = Date.now();
+        const maxMs = 10_000;
+        const poll = async (): Promise<void> => {
+          try {
+            const userData = await fetchRemoteEnterpriseJson<{ id?: string; username?: string }>(
+              `${clientRemoteOrigin}/api/auth/user`,
+              { credentials: 'include' }
+            );
+            if (userData?.id) {
+              await rememberEnterpriseApiOrigin(clientRemoteOrigin);
+              await refresh();
+              window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+              return;
+            }
+          } catch {
+            // not authenticated yet
+          }
+          if (Date.now() - startedAt < maxMs) {
+            await new Promise((res) => setTimeout(res, 1000));
+            await poll();
+          }
+        };
+        void poll();
+        return;
+      }
+
       const path =
         provider === 'feishu' ? buildFeishuAuthorizePath('oauth') : buildOAuthAuthorizePath(provider);
       const result = await startOAuthAuthorize(path);
@@ -239,7 +291,7 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
         pollDesktopOAuthSession();
       }
     },
-    [buildFeishuAuthorizePath, buildOAuthAuthorizePath, isDesktop, pollDesktopOAuthSession, t]
+    [buildFeishuAuthorizePath, buildOAuthAuthorizePath, clientRemoteOrigin, isDesktop, oauthRedirect, pollDesktopOAuthSession, refresh, t]
   );
 
   const handlePasswordLogin = useCallback(

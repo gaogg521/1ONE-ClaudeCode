@@ -42,7 +42,7 @@ const EMPTY_FLAGS: LoginUiProviderFlags = {
   editionSwitcherEnabled: false,
 };
 
-export function useLoginUiProviders(): LoginUiProvidersState {
+export function useLoginUiProviders(remoteOrigin?: string | null): LoginUiProvidersState {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<LoginUiProvidersState['error']>('none');
   const [mode, setMode] = useState<LoginUiMode>('standalone');
@@ -59,7 +59,9 @@ export function useLoginUiProviders(): LoginUiProvidersState {
     const load = async () => {
       setLoading(true);
       try {
-        const res = await fetchWebuiApi('/api/auth/login-ui');
+        const res = remoteOrigin
+          ? await fetch(`${remoteOrigin}/api/auth/login-ui`, { credentials: 'include' })
+          : await fetchWebuiApi('/api/auth/login-ui');
         const body = (await res.json()) as {
           success?: boolean;
           code?: string;
@@ -120,7 +122,7 @@ export function useLoginUiProviders(): LoginUiProvidersState {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, [reloadToken, remoteOrigin]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
