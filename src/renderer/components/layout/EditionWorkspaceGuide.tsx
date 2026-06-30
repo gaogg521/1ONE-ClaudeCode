@@ -64,7 +64,7 @@ const EditionWorkspaceGuide: React.FC = () => {
 
   const switchToEnterpriseEdition = useCallback(() => {
     void setManagementMode('enterprise').then(() => {
-      void navigate('/sessions');
+      void navigate('/guid');
     });
   }, [navigate, setManagementMode]);
 

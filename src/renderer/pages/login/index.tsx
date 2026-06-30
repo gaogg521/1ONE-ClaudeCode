@@ -64,7 +64,7 @@ const LoginPage: React.FC = () => {
 
   const handleBack = useCallback(() => {
     const target =
-      loginReturnTo && loginReturnTo !== '/login' && !loginReturnTo.startsWith('/login?') ? loginReturnTo : '/sessions';
+      loginReturnTo && loginReturnTo !== '/login' && !loginReturnTo.startsWith('/login?') ? loginReturnTo : '/guid';
     void navigate(target, { replace: true });
   }, [loginReturnTo, navigate]);
 

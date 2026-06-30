@@ -11,7 +11,7 @@ export type LoginIntent = 'standalone-webui' | 'enterprise-member' | 'webui-admi
 
 function sanitizeLoginReturnTo(returnTo: string): string {
   const safeReturn =
-    returnTo && returnTo.startsWith('/') && !returnTo.startsWith('/login') ? returnTo : '/sessions';
+    returnTo && returnTo.startsWith('/') && !returnTo.startsWith('/login') ? returnTo : '/guid';
   return safeReturn;
 }
 
@@ -64,10 +64,10 @@ export function resolveLoginIntentFromSearch(search: string): LoginIntent {
 
 export function readCurrentHashPath(): string {
   if (typeof window === 'undefined') {
-    return '/sessions';
+    return '/guid';
   }
   const hash = window.location.hash.replace(/^#/, '');
-  const path = hash.split('?')[0] || '/sessions';
+  const path = hash.split('?')[0] || '/guid';
   return path.startsWith('/') ? path : `/${path}`;
 }
 

@@ -15,7 +15,7 @@ import {
 
 export const ENTERPRISE_JOIN_PATH = '/enterprise/join';
 export const ENTERPRISE_ADMIN_HOME_PATH = ENTERPRISE_HOME_PATH;
-export const ENTERPRISE_WORKSPACE_PATH = '/sessions';
+export const ENTERPRISE_WORKSPACE_PATH = '/guid';
 
 export function isEnterpriseAdminRole(role: string | undefined): boolean {
   return role === 'system_admin' || role === 'org_admin' || role === 'admin';
@@ -130,7 +130,7 @@ export function resolveOAuthPostLoginRedirectPath(
     return ENTERPRISE_WORKSPACE_PATH;
   }
   if (target.startsWith('/settings') || target.startsWith('/login')) {
-    return hasEnterpriseTenant(tenantId) ? ENTERPRISE_WORKSPACE_PATH : '/sessions';
+    return ENTERPRISE_WORKSPACE_PATH;
   }
   // Legacy OAuth redirects targeted /enterprise/auth — send admins to console home.
   if (target === ENTERPRISE_AUTH_PATH && isEnterpriseAdminRole(role)) {

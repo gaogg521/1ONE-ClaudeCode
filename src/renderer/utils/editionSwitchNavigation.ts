@@ -22,9 +22,9 @@ export function navigateAfterEditionSwitch(input: {
   const targetPath =
     input.next === 'enterprise' && !input.hasJoinedEnterprise
       ? input.isDesktopOperator && input.hasInstanceEnterprise
-        ? '/sessions'
+        ? '/guid'
         : '/enterprise/join'
-      : '/sessions';
+      : '/guid';
   if (input.currentPath === targetPath) {
     input.onAlreadyAtTarget?.(targetPath);
   }

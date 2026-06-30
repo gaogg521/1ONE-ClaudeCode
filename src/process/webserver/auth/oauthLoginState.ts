@@ -12,7 +12,7 @@ export type OAuthLoginStateEntry = {
 };
 
 export const OAUTH_LOGIN_STATE_TTL_MS = 10 * 60 * 1000;
-export const DEFAULT_POST_LOGIN_TARGET = '/sessions';
+export const DEFAULT_POST_LOGIN_TARGET = '/guid';
 
 const stores = new Map<string, Map<string, OAuthLoginStateEntry>>();
 
