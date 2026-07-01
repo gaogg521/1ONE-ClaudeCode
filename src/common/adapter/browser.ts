@@ -56,7 +56,14 @@ if (win.electronAPI) {
   let connectionGeneration = 0;
 
   const messageQueue: QueuedMessage[] = [];
-  const canOpenWebSocket = () => hasWebuiSessionCookie();
+  // Always attempt the WebSocket connection. Previously this was gated on
+  // hasWebuiSessionCookie(), but the session cookie is HttpOnly so
+  // document.cookie cannot read it — the check always returned false in the
+  // browser, so the socket never opened and every ipcBridge.*.invoke() call
+  // hung (agent list, conversations, settings — all empty). The server-side
+  // WebSocket handler validates the token from the cookie header on connect
+  // and closes unauthorized connections, so letting the browser try is safe.
+  const canOpenWebSocket = () => true;
 
   // 1.发送队列中积压的消息，确保在重新建立连接后不会丢事件
   const flushQueue = () => {

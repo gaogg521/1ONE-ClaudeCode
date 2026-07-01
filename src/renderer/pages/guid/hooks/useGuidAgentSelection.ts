@@ -201,7 +201,7 @@ export const useGuidAgentSelection = ({
         // WebUI browser: use HTTP to bypass WebSocket bridge (bridge request-response is unreliable in WebUI)
         const isWebUI = !(window as { electronAPI?: unknown }).electronAPI;
         if (isWebUI) {
-          const response = await fetch('/api/agents/available');
+          const response = await fetch('/api/agents/available', { credentials: 'include' });
           if (!response.ok) return [];
           const result = (await response.json()) as { success: boolean; data: AvailableAgent[] };
           if (result.success) {

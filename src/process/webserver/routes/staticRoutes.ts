@@ -288,11 +288,17 @@ export function registerStaticRoutes(expressApp: Express): void {
 
   if (!isProduction && hasViteDevServer && !forceStatic && !forceVite) {
     if (resolved) {
+      // Dev hybrid: serve built static assets from out/renderer FIRST (so JS/CSS/
+      // manifest.webmanifest never 502 through the Vite proxy), then let the Vite
+      // proxy handle the remaining requests (HMR WebSocket, source modules that
+      // only exist in Vite). Previously the Vite proxy was registered first and
+      // intercepted every GET request, causing 502 for assets that only exist in
+      // the build output (manifest.webmanifest) and unstable page loads.
       console.log(
-        `[WebUI] Dev hybrid: localhost → Vite :${VITE_DEV_PORT}, LAN/remote Host → ${resolved.staticRoot} (API stays on WebUI)`
+        `[WebUI] Dev hybrid: static ${resolved.staticRoot} first, Vite :${VITE_DEV_PORT} fallback for localhost`
       );
-      registerViteDevProxy(expressApp, true);
       registerProductionStaticRoutes(expressApp, resolved.staticRoot, resolved.indexHtml);
+      registerViteDevProxy(expressApp, true);
       return;
     }
 
