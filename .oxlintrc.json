@@ -50,6 +50,12 @@
         "no-floating-promises": "off",
         "no-await-thenable": "off"
       }
+    },
+    {
+      "files": ["src/process/**/*.ts", "src/index.ts", "src/preload.ts", "src/server.ts"],
+      "rules": {
+        "no-console": "warn"
+      }
     }
   ],
   "ignorePatterns": [

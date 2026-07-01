@@ -112,7 +112,22 @@ function createViteDevProxy(): (req: Request, res: Response) => void {
     });
 
     proxyReq.on('error', (err) => {
-      console.error(`[ViteProxy] Error proxying ${req.method} ${req.url}: ${err.message}`);
+      // console.error here triggers @office-ai/platform's console patch →
+      // bridge.adapter.emit → win.webContents.send. When the Vite dev server is
+      // unreachable and the browser loads dozens of static assets, every failed
+      // proxy request fires this callback and freezes the main process.
+      // Write to file instead (best-effort, never throw from middleware).
+      try {
+        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { join } = require('node:path');
+        const { getPlatformServices } = require('@/common/platform');
+        const logsDir = getPlatformServices().paths.getLogsDir();
+        try { mkdirSync(logsDir, { recursive: true }); } catch {}
+        appendFileSync(join(logsDir, 'webui-vite-proxy.log'),
+          `[${new Date().toISOString()}] ${req.method} ${req.url} - ${err.message}\n`, 'utf-8');
+      } catch {
+        // best-effort
+      }
       if (!res.headersSent) {
         res.status(502).send(`[WebUI] Vite dev server (${VITE_DEV_HOST}:${VITE_DEV_PORT}) unavailable: ${err.message}`);
       }

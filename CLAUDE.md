@@ -114,6 +114,27 @@ Settings pages use `ConfigStorage.get/set('key')` directly from the renderer. Th
 - Path aliases: `@` → `src/`, `@process` → `src/process/`, `@renderer` → `src/renderer/`, `@worker` → `src/process/worker/`
 - Node.js v22.21.1 is used (supports `require()` of synchronous ESM modules)
 
+### 主进程 console 禁令（Critical）
+
+**禁止在 `src/process/`、`src/index.ts`、`src/preload.ts`、`src/server.ts` 里用 `console.log/warn/error`。**
+
+`@office-ai/platform` patch 了 `console.*`,让它在主进程触发 `bridge.adapter.emit('officeai-logger')` → `win.webContents.send` × N 窗口 + `broadcastToAll` WebSocket 广播。在同步调用栈里(IPC handler、Express 中间件、任何 `bridge.adapter.emit` 调用栈)用 `console.*`,会阻塞主进程 event loop。
+
+**高发场景**:
+- IPC handler 里每个 `invoke` 触发的 console
+- Express 中间件里每个 HTTP 请求触发的 console(`requestLoggingMiddleware`、Vite 代理错误、errorHandler)
+- aionrs worker fork 链路上的 console
+
+**后果**:浏览器打开 WebUI 加载几十个静态资源 / 客户端模式轮询 / aionrs MISS 路径 → 每次触发 console → 几十次同步 `win.webContents.send` → 主进程冻死(Windows "未响应")。
+
+**替代方案**:用 `appendFileSync` 写文件日志(同步、安全、不经 bridge)。示例见 `AuthMiddleware.requestLoggingMiddleware`(写 `logs/webui-requests.log`)。
+
+**Lint 规则**:`.oxlintrc.json` 已对 `src/process/` 等目录开 `no-console: warn`。新增 console 调用会触发 lint warning,请改用文件日志。
+
+**渲染进程(`src/renderer/`)的 console.log 是安全的** — 走浏览器原生 console,不触发主进程 bridge patch。但建议也少用,避免噪音。
+
+**历史教训**:这个问题曾导致 4 轮卡死排查(`4b9453c`、`e332557`、`2c98728`、ViteProxy error),每次都以为清干净了,结果还有漏网的。加 lint 规则后从源头拦截。
+
 # CLAUDE.md
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
