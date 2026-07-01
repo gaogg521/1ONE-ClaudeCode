@@ -15,13 +15,10 @@ import ChannelWecomLogo from '@/renderer/assets/channel-logos/wecom.svg';
 import { isDesktopOperatorUser, useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useLoginUiProviders } from '@/renderer/hooks/auth/useLoginUiProviders';
 import { useWebuiEnterpriseMode } from '@/renderer/hooks/webui/useWebuiEnterpriseMode';
-import { isElectronDesktop } from '@/renderer/utils/platform';
+import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
 import { formatOAuthAuthorizeError, startOAuthAuthorize } from '@/renderer/utils/oauthAuthorize';
 import { getWebuiDesktopSession } from '@/renderer/utils/webuiDesktopSession';
 import { getClientEnterpriseServerOrigin } from '@/renderer/utils/webuiApiBase';
-import { fetchRemoteEnterpriseJson } from '@/renderer/utils/enterpriseJoinApi';
-import { rememberEnterpriseApiOrigin } from '@/renderer/utils/rememberEnterpriseApiOrigin';
-import { webui } from '@/common/adapter/ipcBridge';
 import styles from './EnterpriseLoginChannelPanel.module.css';
 
 type LoginChannel = 'local' | 'ldap' | 'feishu' | 'dingtalk' | 'wecom';
@@ -240,43 +237,32 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
 
   const startOAuth = useCallback(
     async (provider: OAuthChannel) => {
-      // Client mode: use remote enterprise server's OAuth endpoint via BrowserWindow popup
-      // (cookies from the popup are shared with the renderer via session.defaultSession)
+      // Client mode: hand SSO off to the system browser. The enterprise server
+      // owns the OAuth flow (redirect_uri, cookies, token) and passes the token
+      // back to this desktop app via the `1one://sso-callback` deep link after
+      // callback completes. This avoids redirect_uri mismatches (the server's
+      // cfg.redirectUri is always used, never the client's origin) and the
+      // cross-instance cookie/token sync that previously caused login loops.
       if (isDesktop && clientRemoteOrigin) {
-        const params = new URLSearchParams({ mode: provider === 'feishu' ? 'oauth' : 'oauth' });
+        const params = new URLSearchParams({ mode: 'oauth', desktop: '1' });
         params.set('redirect', oauthRedirect);
         const remoteUrl = `${clientRemoteOrigin}/api/auth/${provider}/authorize?${params.toString()}`;
         try {
-          await webui.openRemoteOAuthWindow.invoke({ url: remoteUrl });
+          await openExternalUrl(remoteUrl);
         } catch (err) {
-          Message.error(err instanceof Error ? err.message : '打开登录窗口失败');
+          Message.error(err instanceof Error ? err.message : '打开浏览器失败');
           return;
         }
-        // After popup closes, cookies for remoteOrigin are in Electron's session.
-        // Poll the remote server to pick up the session.
-        const startedAt = Date.now();
-        const maxMs = 10_000;
-        const poll = async (): Promise<void> => {
-          try {
-            const userData = await fetchRemoteEnterpriseJson<{ id?: string; username?: string }>(
-              `${clientRemoteOrigin}/api/auth/user`,
-              { credentials: 'include' }
-            );
-            if (userData?.id) {
-              await rememberEnterpriseApiOrigin(clientRemoteOrigin);
-              await refresh();
-              window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
-              return;
-            }
-          } catch {
-            // not authenticated yet
-          }
-          if (Date.now() - startedAt < maxMs) {
-            await new Promise((res) => setTimeout(res, 1000));
-            await poll();
-          }
-        };
-        void poll();
+        // Deep link callback (1one://sso-callback) drives the rest: useDeepLink
+        // receives the token, seeds the desktop session, refreshes auth context,
+        // and navigates to the workspace. Show a loading hint here so the user
+        // knows to switch to the browser.
+        Message.loading({
+          content: t('login.sso.redirectToBrowser', {
+            defaultValue: '已在浏览器中打开登录页，完成登录后将自动返回应用',
+          }),
+          duration: 8000,
+        });
         return;
       }
 
@@ -291,7 +277,7 @@ const EnterpriseLoginChannelPanel: React.FC<EnterpriseLoginChannelPanelProps> = 
         pollDesktopOAuthSession();
       }
     },
-    [buildFeishuAuthorizePath, buildOAuthAuthorizePath, clientRemoteOrigin, isDesktop, oauthRedirect, pollDesktopOAuthSession, refresh, t]
+    [buildFeishuAuthorizePath, buildOAuthAuthorizePath, clientRemoteOrigin, isDesktop, oauthRedirect, pollDesktopOAuthSession, t]
   );
 
   const handlePasswordLogin = useCallback(

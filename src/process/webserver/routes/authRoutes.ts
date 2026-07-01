@@ -294,7 +294,8 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       const redirectTarget = normalizePostLoginTarget(req.query.redirect);
-      const state = issueOAuthLoginState('feishu', redirectTarget);
+      const desktop = String(req.query.desktop ?? '') === '1' || String(req.query.desktop ?? '') === 'true';
+      const state = issueOAuthLoginState('feishu', redirectTarget, { desktop });
       const goto = buildFeishuAuthorizeUrl({ appId, redirectUri, state });
 
       if (mode === 'qr') {
@@ -375,6 +376,8 @@ export function registerAuthRoutes(app: Express): void {
       await finalizeOAuthBrowserLogin(req, res, {
         user,
         redirectTarget: stateEntry.redirectTarget,
+        desktop: stateEntry.desktop === true,
+        remoteOrigin: readRequestOrigin(req),
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -436,7 +439,8 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       const redirectTarget = normalizePostLoginTarget(req.query.redirect);
-      const state = issueOAuthLoginState('dingtalk', redirectTarget);
+      const desktop = String(req.query.desktop ?? '') === '1' || String(req.query.desktop ?? '') === 'true';
+      const state = issueOAuthLoginState('dingtalk', redirectTarget, { desktop });
       const goto = buildDingTalkAuthorizeUrl({ appKey, redirectUri, state });
       sendOAuthAuthorizeRedirect(res, req, goto);
     } catch (error) {
@@ -495,6 +499,8 @@ export function registerAuthRoutes(app: Express): void {
       await finalizeOAuthBrowserLogin(req, res, {
         user,
         redirectTarget: stateEntry.redirectTarget,
+        desktop: stateEntry.desktop === true,
+        remoteOrigin: readRequestOrigin(req),
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -557,7 +563,8 @@ export function registerAuthRoutes(app: Express): void {
       }
 
       const redirectTarget = normalizePostLoginTarget(req.query.redirect);
-      const state = issueOAuthLoginState('wecom', redirectTarget);
+      const desktop = String(req.query.desktop ?? '') === '1' || String(req.query.desktop ?? '') === 'true';
+      const state = issueOAuthLoginState('wecom', redirectTarget, { desktop });
       const goto = buildWeComAuthorizeUrl({ corpId, agentId, redirectUri, state });
       sendOAuthAuthorizeRedirect(res, req, goto);
     } catch (error) {
@@ -608,6 +615,8 @@ export function registerAuthRoutes(app: Express): void {
       await finalizeOAuthBrowserLogin(req, res, {
         user,
         redirectTarget: stateEntry.redirectTarget,
+        desktop: stateEntry.desktop === true,
+        remoteOrigin: readRequestOrigin(req),
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);

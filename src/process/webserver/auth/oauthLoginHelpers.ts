@@ -14,6 +14,7 @@ import { AUTH_CONFIG, getCookieOptions } from '@process/webserver/config/constan
 import { resolveOAuthPostLoginRedirectPath } from '@/common/auth/enterpriseRoles';
 import { registerBrowserWebuiLoginSession } from '@process/webserver/auth/registerBrowserWebuiLoginSession';
 import { refreshUserAfterEnterpriseAutoJoin } from '@process/webserver/auth/enterpriseAutoJoin';
+import { PROTOCOL_SCHEME } from '@process/utils/deepLink';
 
 function normalizeWebRole(role: string | undefined): 'member' | 'org_admin' | 'system_admin' {
   if (!role) return 'member';
@@ -48,12 +49,42 @@ export async function finalizeOAuthBrowserLogin(
     user: AuthUser;
     redirectTarget: string;
     roleOverride?: string;
+    /**
+     * When true, redirect to `1one://sso-callback?...` (deep link) instead of
+     * Set-Cookie + `/#target`. Used by client-mode desktop SSO where OAuth runs
+     * in the system browser and the token must be passed back to the desktop
+     * app via the OS-registered protocol handler. `remoteOrigin` is the
+     * enterprise server origin the desktop client should remember for
+     * subsequent API calls.
+     */
+    desktop?: boolean;
+    remoteOrigin?: string;
   }
 ): Promise<void> {
   const joinedUser = await refreshUserAfterEnterpriseAutoJoin(input.user);
   const authUser = buildAuthResponseUser(joinedUser, input.roleOverride);
   const sessionToken = await AuthService.generateToken(authUser);
   await UserRepository.updateLastLogin(joinedUser.id);
+
+  if (input.desktop) {
+    // Client-mode desktop SSO: OAuth ran in the system browser. Pass the token
+    // back to the desktop app via the OS-registered `1one://` protocol handler.
+    // No Set-Cookie — the browser cookie jar is not shared with the desktop
+    // renderer, and cross-origin cookie restrictions would block it anyway.
+    const params = new URLSearchParams({
+      token: sessionToken,
+      userId: authUser.id,
+      username: authUser.username,
+      role: authUser.role,
+      tenant_id: authUser.tenant_id,
+    });
+    if (input.remoteOrigin) {
+      params.set('origin', input.remoteOrigin);
+    }
+    res.redirect(`${PROTOCOL_SCHEME}://sso-callback?${params.toString()}`);
+    return;
+  }
+
   res.cookie(AUTH_CONFIG.COOKIE.NAME, sessionToken, {
     ...getCookieOptions(),
     maxAge: AUTH_CONFIG.TOKEN.COOKIE_MAX_AGE,

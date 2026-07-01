@@ -38,7 +38,22 @@ export function initDatabaseBridge(repo: IConversationRepository): void {
       const result = await repo.getMessages(conversation_id, page, pageSize);
       return result.data;
     } catch (error) {
-      console.error('[DatabaseBridge] Error getting conversation messages:', error);
+      // console.error here triggers @office-ai/platform's console patch → bridge.adapter.emit
+      // → win.webContents.send × N + broadcastToAll. This IPC handler is invoked every 2.5s
+      // by the renderer's message-sync poll (useAionrsMessage AIONRS_MESSAGE_SYNC_POLL_MS),
+      // so a persistent error (e.g. client-mode token verify failing on remote-issued JWT)
+      // freezes the main process. Write to file instead.
+      try {
+        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { join } = require('node:path');
+        const { getPlatformServices } = require('@/common/platform');
+        const logsDir = getPlatformServices().paths.getLogsDir();
+        try { mkdirSync(logsDir, { recursive: true }); } catch {}
+        appendFileSync(join(logsDir, 'database-bridge.log'),
+          `[${new Date().toISOString()}] getConversationMessages error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+      } catch {
+        // best-effort
+      }
       return [];
     }
   });
@@ -143,7 +158,18 @@ export function initDatabaseBridge(repo: IConversationRepository): void {
       const result = await repo.searchMessages(keyword, page, pageSize);
       return result;
     } catch (error) {
-      console.error('[DatabaseBridge] Error searching conversation messages:', error);
+      // IPC handler — never use console.* (triggers bridge.adapter.emit, freezes main process on repeated calls). Write to file.
+      try {
+        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { join } = require('node:path');
+        const { getPlatformServices } = require('@/common/platform');
+        const logsDir = getPlatformServices().paths.getLogsDir();
+        try { mkdirSync(logsDir, { recursive: true }); } catch {}
+        appendFileSync(join(logsDir, 'database-bridge.log'),
+          `[${new Date().toISOString()}] searchMessages error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+      } catch {
+        // best-effort
+      }
       return {
         items: [],
         total: 0,

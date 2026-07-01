@@ -7,6 +7,9 @@
 import { useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ipcBridge } from '@/common';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { applySsoCallbackSession } from '@/renderer/utils/webuiDesktopSession';
+import { rememberEnterpriseApiOrigin } from '@/renderer/utils/rememberEnterpriseApiOrigin';
 
 /**
  * Deep link event payload from main process
@@ -44,9 +47,10 @@ export const consumePendingDeepLink = (): DeepLinkAddProviderDetail | null => {
  */
 export const useDeepLink = () => {
   const navigate = useNavigate();
+  const { refresh } = useAuth();
 
   const handler = useCallback(
-    (payload: DeepLinkPayload) => {
+    async (payload: DeepLinkPayload) => {
       // Support both formats: "add-provider" and "provider/add" (one-api style)
       if (payload.action === 'add-provider' || payload.action === 'provider/add') {
         pendingDeepLinkData = {
@@ -58,9 +62,37 @@ export const useDeepLink = () => {
 
         // Navigate to model settings page; ModelModalContent will pick up the pending data
         void navigate('/settings/model');
+        return;
+      }
+
+      // Client-mode desktop SSO callback: enterprise server redirected the
+      // system browser here after OAuth completed. Seed the local session from
+      // the token passed via deep link, then refresh auth + navigate to workspace.
+      if (payload.action === 'sso-callback') {
+        const session = applySsoCallbackSession(payload.params);
+        if (!session) {
+          return;
+        }
+        const origin = payload.params.origin?.trim();
+        if (origin) {
+          try {
+            await rememberEnterpriseApiOrigin(origin);
+          } catch {
+            // best-effort — session is already set, origin remember failure is recoverable
+          }
+        }
+        try {
+          await refresh();
+        } catch {
+          // refresh failure is recoverable — session is already in sessionStorage
+        }
+        window.dispatchEvent(new CustomEvent('one-enterprise-context-refresh'));
+        const target = payload.params.redirect?.trim() || '/guid';
+        navigate(target);
+        return;
       }
     },
-    [navigate]
+    [navigate, refresh]
   );
 
   useEffect(() => {

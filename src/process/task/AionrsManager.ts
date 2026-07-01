@@ -159,7 +159,18 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
         this.pendingSkillsInjection = content;
       }
     } catch (e) {
-      console.warn('[AionrsManager] Failed to load skills content:', e);
+      // Main-process console.* triggers bridge.adapter.emit (frozen event loop on repeated calls). Write to file.
+      try {
+        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { join } = require('node:path');
+        const { getPlatformServices } = require('@/common/platform');
+        const logsDir = getPlatformServices().paths.getLogsDir();
+        try { mkdirSync(logsDir, { recursive: true }); } catch {}
+        appendFileSync(join(logsDir, 'aionrs-manager.log'),
+          `[${new Date().toISOString()}] Failed to load skills content: ${e instanceof Error ? e.message : String(e)}\n`, 'utf-8');
+      } catch {
+        // best-effort
+      }
     }
   }
 
@@ -560,7 +571,18 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
             );
             imageDescriptionBlock = result.imageDescriptionBlock;
           } catch (error) {
-            console.warn('[AionrsManager] Image vision description failed:', error);
+            // Main-process console.* triggers bridge.adapter.emit — write to file instead.
+            try {
+              const { appendFileSync, mkdirSync } = require('node:fs');
+              const { join } = require('node:path');
+              const { getPlatformServices } = require('@/common/platform');
+              const logsDir = getPlatformServices().paths.getLogsDir();
+              try { mkdirSync(logsDir, { recursive: true }); } catch {}
+              appendFileSync(join(logsDir, 'aionrs-manager.log'),
+                `[${new Date().toISOString()}] Image vision description failed: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+            } catch {
+              // best-effort
+            }
             imageDescriptionBlock = `\n\n[Images attached but vision description unavailable: ${imageFiles.map((f) => f.replace(/\\/g, '/').split('/').pop()).join(', ')}]\n`;
           }
         } else {

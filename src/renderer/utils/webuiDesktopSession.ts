@@ -66,3 +66,27 @@ export function getDesktopAdminBearerToken(): string | null {
   }
   return session.token;
 }
+
+/**
+ * Apply a desktop SSO callback session from a `1one://sso-callback` deep link.
+ *
+ * The enterprise server's OAuth callback redirects the system browser to
+ * `1one://sso-callback?token=...&userId=...&username=...&role=...&tenant_id=...&origin=...`.
+ * The desktop app's deep-link handler calls this with the parsed params to seed
+ * the local session, then refreshes auth context + navigates to the workspace.
+ *
+ * Returns the applied session, or null if required fields are missing.
+ */
+export function applySsoCallbackSession(params: Record<string, string>): WebuiDesktopSession | null {
+  const token = params.token?.trim();
+  const userId = params.userId?.trim();
+  const username = params.username?.trim() || '';
+  const role = params.role?.trim() || 'member';
+  const tenant_id = params.tenant_id?.trim() || 'default';
+  if (!token || !userId) {
+    return null;
+  }
+  const session: WebuiDesktopSession = { userId, username, role, tenant_id, token };
+  setWebuiDesktopSession(session);
+  return session;
+}

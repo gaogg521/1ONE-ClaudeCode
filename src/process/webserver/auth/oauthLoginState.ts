@@ -9,6 +9,13 @@
 export type OAuthLoginStateEntry = {
   expiresAt: number;
   redirectTarget: string;
+  /**
+   * When true, the callback should redirect to `1one://sso-callback?...` (deep link)
+   * instead of Set-Cookie + `/#target`. Used by client-mode desktop SSO where OAuth
+   * runs in the system browser (not an Electron BrowserWindow) and the token must
+   * be passed back to the desktop app via the OS-registered protocol handler.
+   */
+  desktop?: boolean;
 };
 
 export const OAUTH_LOGIN_STATE_TTL_MS = 10 * 60 * 1000;
@@ -35,12 +42,17 @@ export function cleanupOAuthLoginState(provider: string): void {
   }
 }
 
-export function issueOAuthLoginState(provider: string, redirectTarget: string): string {
+export function issueOAuthLoginState(
+  provider: string,
+  redirectTarget: string,
+  opts?: { desktop?: boolean }
+): string {
   cleanupOAuthLoginState(provider);
   const state = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
   getProviderStore(provider).set(state, {
     expiresAt: Date.now() + OAUTH_LOGIN_STATE_TTL_MS,
     redirectTarget,
+    desktop: opts?.desktop === true ? true : undefined,
   });
   return state;
 }
