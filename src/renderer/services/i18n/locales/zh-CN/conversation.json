@@ -70,6 +70,8 @@
     "pinnedSection": "置顶",
     "favoritesSection": "收藏夹",
     "sectionTitle": "历史会话",
+    "showAll": "显示全部",
+    "showRecent8": "最近8条",
     "deleteSuccess": "删除成功",
     "deleteFailed": "删除失败"
   },

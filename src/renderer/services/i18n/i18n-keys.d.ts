@@ -1097,6 +1097,8 @@ export type I18nKey =
   | 'conversation.history.selectAll'
   | 'conversation.history.selectedCount'
   | 'conversation.history.sessionsSiderHint'
+  | 'conversation.history.showAll'
+  | 'conversation.history.showRecent8'
   | 'conversation.history.unfavorite'
   | 'conversation.history.unpin'
   | 'conversation.historySearch.description'

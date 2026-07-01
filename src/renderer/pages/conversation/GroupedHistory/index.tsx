@@ -9,7 +9,7 @@ import DirectorySelectionModal from '@/renderer/components/settings/DirectorySel
 import { useCronJobsMap } from '@/renderer/pages/cron';
 import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Button, Empty, Input, Modal } from '@arco-design/web-react';
+import { Button, Empty, Input, Modal, Switch } from '@arco-design/web-react';
 import { FolderOpen } from '@icon-park/react';
 import classNames from 'classnames';
 import { Down, Right } from '@icon-park/react';
@@ -46,7 +46,9 @@ const HistorySectionHeader: React.FC<{
   collapsed: boolean;
   onSessionClick?: () => void;
   onConversationSelect?: () => void;
-}> = ({ collapsed, onSessionClick, onConversationSelect }) => {
+  showAll?: boolean;
+  onShowAllChange?: (value: boolean) => void;
+}> = ({ collapsed, onSessionClick, onConversationSelect, showAll, onShowAllChange }) => {
   const { t } = useTranslation();
 
   if (collapsed) {
@@ -64,8 +66,23 @@ const HistorySectionHeader: React.FC<{
 
   return (
     <div className='sticky top-0 z-20 bg-fill-2 px-12px pt-8px pb-6px mb-4px'>
-      <div className='text-13px text-t-secondary font-bold leading-20px mb-6px'>
-        {t('conversation.history.sectionTitle', { defaultValue: '历史会话' })}
+      <div className='flex items-center justify-between mb-6px'>
+        <span className='text-13px text-t-secondary font-bold leading-20px'>
+          {t('conversation.history.sectionTitle', { defaultValue: '历史会话' })}
+        </span>
+        {showAll !== undefined && onShowAllChange && (
+          <div className='flex items-center gap-6px'>
+            <span className='text-11px text-t-secondary select-none'>
+              {showAll ? t('conversation.history.showAll') : t('conversation.history.showRecent8')}
+            </span>
+            <Switch
+              size='small'
+              checked={showAll}
+              onChange={onShowAllChange}
+              aria-label={t('conversation.history.showAll')}
+            />
+          </div>
+        )}
       </div>
       <ConversationSearchPopover
         onSessionClick={onSessionClick}
@@ -90,6 +107,20 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
   const navigate = useNavigate();
   const { getJobStatus, markAsRead, setActiveConversation } = useCronJobsMap();
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set());
+  const [showAllRecents, setShowAllRecents] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('1one:sidebar:showAllRecents') === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('1one:sidebar:showAllRecents', showAllRecents ? '1' : '0');
+    } catch {
+      // ignore
+    }
+  }, [showAllRecents]);
   const toggleSection = useCallback((key: string) => {
     setCollapsedSections((prev) => {
       const next = new Set(prev);
@@ -405,6 +436,8 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
         collapsed={collapsed}
         onSessionClick={onSessionClick}
         onConversationSelect={onConversationSelect}
+        showAll={showAllRecents}
+        onShowAllChange={setShowAllRecents}
       />
 
       {batchMode && !collapsed && (
@@ -528,41 +561,41 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
             {!collapsedSections.has(section.timeline) &&
               (() => {
                 const isRecents = section.timeline === t('conversation.history.recents');
-                const visibleItems = isRecents ? section.items.slice(0, 8) : section.items;
-                const hasMore = isRecents && section.items.length > 8;
+                const visibleItems = isRecents && !showAllRecents ? section.items.slice(0, 8) : section.items;
+                const hasMore = isRecents && !showAllRecents && section.items.length > 8;
 
                 return (
                   <>
                     {visibleItems.map((item) => {
-                if (item.type === 'workspace' && item.workspaceGroup) {
-                  const group = item.workspaceGroup;
-                  return (
-                    <div key={group.workspace} className={classNames('min-w-0', { 'px-8px': !collapsed })}>
-                      <WorkspaceCollapse
-                        expanded={expandedWorkspaces.includes(group.workspace)}
-                        onToggle={() => handleToggleWorkspace(group.workspace)}
-                        siderCollapsed={collapsed}
-                        header={
-                          <div className='flex items-center gap-8px text-14px min-w-0'>
-                            <span className='font-medium truncate flex-1 text-t-primary min-w-0'>
-                              {group.displayName}
-                            </span>
+                      if (item.type === 'workspace' && item.workspaceGroup) {
+                        const group = item.workspaceGroup;
+                        return (
+                          <div key={group.workspace} className={classNames('min-w-0', { 'px-8px': !collapsed })}>
+                            <WorkspaceCollapse
+                              expanded={expandedWorkspaces.includes(group.workspace)}
+                              onToggle={() => handleToggleWorkspace(group.workspace)}
+                              siderCollapsed={collapsed}
+                              header={
+                                <div className='flex items-center gap-8px text-14px min-w-0'>
+                                  <span className='font-medium truncate flex-1 text-t-primary min-w-0'>
+                                    {group.displayName}
+                                  </span>
+                                </div>
+                              }
+                            >
+                              <div className={classNames('flex flex-col gap-2px min-w-0', { 'mt-4px': !collapsed })}>
+                                {group.conversations.map((conversation) => renderConversation(conversation))}
+                              </div>
+                            </WorkspaceCollapse>
                           </div>
-                        }
-                      >
-                        <div className={classNames('flex flex-col gap-2px min-w-0', { 'mt-4px': !collapsed })}>
-                          {group.conversations.map((conversation) => renderConversation(conversation))}
-                        </div>
-                      </WorkspaceCollapse>
-                    </div>
-                  );
-                }
+                        );
+                      }
 
-                if (item.type === 'conversation' && item.conversation) {
-                  return renderConversation(item.conversation);
-                }
+                      if (item.type === 'conversation' && item.conversation) {
+                        return renderConversation(item.conversation);
+                      }
 
-                return null;
+                      return null;
                     })}
                     {hasMore ? (
                       <ViewAllRow

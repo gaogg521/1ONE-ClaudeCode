@@ -69,6 +69,8 @@
     "pinnedSection": "Pinned",
     "favoritesSection": "Favorites",
     "sectionTitle": "History",
+    "showAll": "Show all",
+    "showRecent8": "Recent 8",
     "deleteSuccess": "Deleted successfully",
     "deleteFailed": "Delete failed"
   },
