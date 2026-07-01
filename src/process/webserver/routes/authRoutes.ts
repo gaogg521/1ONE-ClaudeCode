@@ -71,6 +71,7 @@ import {
 } from '../auth/oauthLoginHelpers';
 import { refreshUserAfterEnterpriseAutoJoin } from '../auth/enterpriseAutoJoin';
 import { resolveOrProvisionLdapUser, resolveOrProvisionSsoUser } from '../auth/ssoJitProvisioning';
+import { logRouteError, logRouteWarn } from '../webuiLog';
 
 const FEISHU_QR_SDK_URL =
   'https://lf-package-cn.feishucdn.com/obj/feishu-static/lark/passport/qrcode/LarkSSOSDKWebQRCode-1.0.3.js';
@@ -202,7 +203,7 @@ export function registerAuthRoutes(app: Express): void {
       const providers = await AuthProviderRepository.listProviders();
       res.json({ success: true, data: providers });
     } catch (error) {
-      console.error('[AuthRoute] providers error:', error);
+      logRouteError('[AuthRoute] providers error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -245,7 +246,7 @@ export function registerAuthRoutes(app: Express): void {
         },
       });
     } catch (error) {
-      console.error('[AuthRoute] login-ui error:', error);
+      logRouteError('[AuthRoute] login-ui error:', error);
       if (isDatabaseUnavailableError(error)) {
         res.status(503).json(DB_UNAVAILABLE_RESPONSE);
         return;
@@ -303,7 +304,7 @@ export function registerAuthRoutes(app: Express): void {
 
       sendOAuthAuthorizeRedirect(res, req, goto);
     } catch (error) {
-      console.error('[AuthRoute] feishu authorize error:', error);
+      logRouteError('[AuthRoute] feishu authorize error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -360,7 +361,7 @@ export function registerAuthRoutes(app: Express): void {
           orgUnitPath = await fetchFeishuOrgUnitPath({ appId, appSecret, openId });
         }
       } catch (syncError) {
-        console.warn('[AuthRoute] feishu org profile sync failed:', syncError);
+        logRouteWarn('[AuthRoute] feishu org profile sync failed:', syncError);
       }
 
       const displayName = String(userInfo.name ?? userInfo.en_name ?? '').trim();
@@ -394,7 +395,7 @@ export function registerAuthRoutes(app: Express): void {
         res.status(400).send(`Feishu login failed: ${detail || 'upstream request failed'}`);
         return;
       }
-      console.error('[AuthRoute] feishu callback error:', error);
+      logRouteError('[AuthRoute] feishu callback error:', error);
       res.status(500).send('Internal server error');
     }
   });
@@ -439,7 +440,7 @@ export function registerAuthRoutes(app: Express): void {
       const goto = buildDingTalkAuthorizeUrl({ appKey, redirectUri, state });
       sendOAuthAuthorizeRedirect(res, req, goto);
     } catch (error) {
-      console.error('[AuthRoute] dingtalk authorize error:', error);
+      logRouteError('[AuthRoute] dingtalk authorize error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -514,7 +515,7 @@ export function registerAuthRoutes(app: Express): void {
         res.status(504).send('DingTalk login timeout. Please retry.');
         return;
       }
-      console.error('[AuthRoute] dingtalk callback error:', error);
+      logRouteError('[AuthRoute] dingtalk callback error:', error);
       res.status(500).send('Internal server error');
     }
   });
@@ -560,7 +561,7 @@ export function registerAuthRoutes(app: Express): void {
       const goto = buildWeComAuthorizeUrl({ corpId, agentId, redirectUri, state });
       sendOAuthAuthorizeRedirect(res, req, goto);
     } catch (error) {
-      console.error('[AuthRoute] wecom authorize error:', error);
+      logRouteError('[AuthRoute] wecom authorize error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -627,7 +628,7 @@ export function registerAuthRoutes(app: Express): void {
         res.status(504).send('WeCom login timeout. Please retry.');
         return;
       }
-      console.error('[AuthRoute] wecom callback error:', error);
+      logRouteError('[AuthRoute] wecom callback error:', error);
       res.status(500).send('Internal server error');
     }
   });
@@ -688,7 +689,7 @@ export function registerAuthRoutes(app: Express): void {
         token,
       });
     } catch (error) {
-      console.error('Login error:', error);
+      logRouteError('Login error:', error);
       if (isDatabaseUnavailableError(error)) {
         res.status(503).json(DB_UNAVAILABLE_RESPONSE);
         return;
@@ -735,7 +736,7 @@ export function registerAuthRoutes(app: Express): void {
         try {
           await UserRepository.setRole(joinedUser.id, 'system_admin');
         } catch (roleError) {
-          console.warn('[AuthRoute] failed to persist LDAP admin role:', roleError);
+          logRouteWarn('[AuthRoute] failed to persist LDAP admin role:', roleError);
         }
       }
       const token = await AuthService.generateToken({
@@ -782,7 +783,7 @@ export function registerAuthRoutes(app: Express): void {
         });
         return;
       }
-      console.error('[AuthRoute] ldap login error:', error);
+      logRouteError('[AuthRoute] ldap login error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -855,7 +856,7 @@ export function registerAuthRoutes(app: Express): void {
           res.status(400).json({ success: false, code: err.code, message: err.message });
           return;
         }
-        console.error('[AuthRoute] enterprise invite preview error:', err);
+        logRouteError('[AuthRoute] enterprise invite preview error:', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }
@@ -870,7 +871,7 @@ export function registerAuthRoutes(app: Express): void {
       const info = await getEnterprisePublicInfo();
       res.json({ success: true, data: info });
     } catch (err) {
-      console.error('[AuthRoute] enterprise-info error:', err);
+      logRouteError('[AuthRoute] enterprise-info error:', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -895,7 +896,7 @@ export function registerAuthRoutes(app: Express): void {
           res.status(status).json({ success: false, code: err.code, message: err.message });
           return;
         }
-        console.error('[AuthRoute] enterprise join error:', err);
+        logRouteError('[AuthRoute] enterprise join error:', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }
@@ -925,7 +926,7 @@ export function registerAuthRoutes(app: Express): void {
           res.status(status).json({ success: false, code: err.code, message: err.message });
           return;
         }
-        console.error('[AuthRoute] enterprise-leave error:', err);
+        logRouteError('[AuthRoute] enterprise-leave error:', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }
@@ -948,7 +949,7 @@ export function registerAuthRoutes(app: Express): void {
         });
       })
       .catch((error) => {
-        console.error('Auth status error:', error);
+        logRouteError('Auth status error:', error);
         res.status(500).json({
           success: false,
           error: 'Internal server error',
@@ -1042,7 +1043,7 @@ export function registerAuthRoutes(app: Express): void {
           message: 'Password changed successfully',
         });
       } catch (error) {
-        console.error('Change password error:', error);
+        logRouteError('Change password error:', error);
         res.status(500).json({
           success: false,
           error: 'Internal server error',
@@ -1082,7 +1083,7 @@ export function registerAuthRoutes(app: Express): void {
           token: newToken,
         });
       } catch (error) {
-        console.error('Token refresh error:', error);
+        logRouteError('Token refresh error:', error);
         res.status(500).json({
           success: false,
           error: 'Internal server error',
@@ -1177,7 +1178,7 @@ export function registerAuthRoutes(app: Express): void {
         token: result.data.sessionToken,
       });
     } catch (error) {
-      console.error('QR login error:', error);
+      logRouteError('QR login error:', error);
       res.status(500).json({
         success: false,
         error: 'Internal server error',

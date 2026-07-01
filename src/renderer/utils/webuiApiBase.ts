@@ -237,6 +237,7 @@ async function ensureCsrfTokenForMutation(
     try {
       const response = await fetch(`${candidate}/api/auth/login-ui`, {
         method: 'GET',
+        signal: AbortSignal.timeout(15_000),
         headers: authHeaders,
         credentials: 'include',
       });
@@ -348,12 +349,20 @@ export async function fetchWebuiApi(path: string, init?: RequestInit): Promise<R
   for (const candidate of bases) {
     const url = path.startsWith('/') ? `${candidate}${path}` : `${candidate}/${path}`;
     try {
-      const response = await fetch(url, {
-        ...init,
-        body,
-        headers,
-        credentials,
-      });
+      // Timeout guard: without this, a half-open TCP connection or a slow
+      // server response hangs fetch forever, freezing the renderer's loading
+      // state (e.g. login page spinning forever on useLoginUiProviders).
+      // 15s is generous for LAN; local requests typically return in <100ms.
+      const fetchWithTimeout = init?.signal
+        ? fetch(url, { ...init, body, headers, credentials })
+        : fetch(url, {
+            ...init,
+            body,
+            headers,
+            credentials,
+            signal: AbortSignal.timeout(15_000),
+          });
+      const response = await fetchWithTimeout;
       if (path === '/api/auth/user') {
         if (response.status === 401 || response.status === 403) {
           markAuthUserRequestFailureBackoff();
