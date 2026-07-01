@@ -8,6 +8,34 @@ import type { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../service/AuthService';
 import { createAuthMiddleware } from './TokenMiddleware';
 import { SECURITY_CONFIG } from '../../config/constants';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { getPlatformServices } from '@/common/platform';
+
+// Request log file — bypasses console entirely.
+// console.log in an Express middleware triggers @office-ai/platform's console
+// patch → bridge.adapter.emit('officeai-logger') → win.webContents.send +
+// broadcastToAll. When a browser opens the WebUI and loads dozens of static
+// assets in parallel, the main process's event loop fills up with synchronous
+// IPC sends and freezes. Writing to a file is synchronous and safe.
+const REQUEST_LOG_FILE = (() => {
+  try {
+    const logsDir = getPlatformServices().paths.getLogsDir();
+    mkdirSync(logsDir, { recursive: true });
+    return join(logsDir, 'webui-requests.log');
+  } catch {
+    return '';
+  }
+})();
+
+function writeRequestLog(line: string): void {
+  if (!REQUEST_LOG_FILE) return;
+  try {
+    appendFileSync(REQUEST_LOG_FILE, line, 'utf-8');
+  } catch {
+    // best-effort — never throw from middleware
+  }
+}
 
 // Express Request type extension is defined in src/types/express.d.ts
 // Express Request 类型扩展定义在 src/types/express.d.ts
@@ -78,18 +106,23 @@ export class AuthMiddleware {
   /**
    * 请求日志中间件
    * Request logging middleware
+   *
+   * Writes to a file (logs/webui-requests.log) instead of console.log —
+   * console.log is patched by @office-ai/platform to emit via bridge.adapter,
+   * which blocks the main process event loop when a browser loads many static
+   * assets in parallel (see commit 4b9453c for the same root cause in IPC handlers).
    */
   public static requestLoggingMiddleware(req: Request, res: Response, next: NextFunction): void {
     const start = Date.now();
     const ip = req.ip || req.connection.remoteAddress || 'unknown';
-
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - ${ip}`);
+    const reqLine = `[${new Date().toISOString()}] ${req.method} ${req.url} - ${ip}\n`;
+    writeRequestLog(reqLine);
 
     // 记录响应时间
     // Log response time
     res.on('finish', () => {
       const duration = Date.now() - start;
-      console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - ${res.statusCode} - ${duration}ms`);
+      writeRequestLog(`[${new Date().toISOString()}] ${req.method} ${req.url} - ${res.statusCode} - ${duration}ms\n`);
     });
 
     next();

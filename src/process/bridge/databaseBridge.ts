@@ -77,8 +77,11 @@ export function initDatabaseBridge(repo: IConversationRepository): void {
       let fileConversations: TChatConversation[] = [];
       try {
         fileConversations = (await ProcessChat.get('chat.history')) || [];
-      } catch (error) {
-        console.warn('[DatabaseBridge] No file-based conversations found:', error);
+      } catch {
+        // No file-based conversations — first run or migration already complete.
+        // Previously console.warn here; removed because console.* in IPC handlers
+        // triggers bridge.adapter.emit which blocks the main process event loop
+        // (see commit 4b9453c for the same root cause).
       }
 
       // Use database conversations as the primary source while backfilling missing ones from file storage
@@ -102,8 +105,10 @@ export function initDatabaseBridge(repo: IConversationRepository): void {
       // Re-sort by modifyTime (or createTime as fallback) to maintain correct order
       allConversations.sort((a, b) => (b.modifyTime || b.createTime || 0) - (a.modifyTime || a.createTime || 0));
       return allConversations;
-    } catch (error) {
-      console.error('[DatabaseBridge] Error getting user conversations:', error);
+    } catch {
+      // Error getting user conversations — return empty array so UI shows Empty state.
+      // Previously console.error here; removed because console.* in IPC handlers
+      // triggers bridge.adapter.emit which blocks the main process event loop.
       return [];
     }
   });
