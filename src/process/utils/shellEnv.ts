@@ -449,8 +449,18 @@ function getPosixExtraToolPaths(): string[] {
  * 获取增强的环境变量，合并 shell 环境变量和 process.env。
  * 对于 PATH，合并两个来源以确保无论应用如何启动都能找到 CLI 工具。
  * 在 Windows 上，还会追加常见工具路径（npm 全局包、nvm、volta、scoop 等）。
+ *
+ * The base env (without customEnv) is cached after the first call. This is critical
+ * for Windows where getWindowsExtraToolPaths() runs 18+ existsSync() checks that can
+ * block the main-process event loop if called repeatedly (e.g. on every ForkTask
+ * creation via the constructor → init() path).
  */
-export function getEnhancedEnv(customEnv?: Record<string, string>): Record<string, string> {
+
+// Cached base enhanced env (PATH scan + shell env merge, no customEnv overlay).
+// Environment does not change during the app's lifetime; cache is safe to hold forever.
+let _baseEnhancedEnvCache: Record<string, string> | undefined;
+
+function _buildBaseEnhancedEnv(): Record<string, string> {
   const shellEnv = loadShellEnvironment();
   const separator = process.platform === 'win32' ? ';' : ':';
 
@@ -494,11 +504,23 @@ export function getEnhancedEnv(customEnv?: Record<string, string>): Record<strin
   return {
     ...process.env,
     ...shellEnv,
-    ...customEnv,
-    // PATH must be set after spreading to ensure merged value is used
-    // When customEnv.PATH exists, merge it with the already merged path (fix: don't override)
-    PATH: customEnv?.PATH ? mergePaths(mergedPath, customEnv.PATH) : mergedPath,
+    PATH: mergedPath,
   } as Record<string, string>;
+}
+
+export function getEnhancedEnv(customEnv?: Record<string, string>): Record<string, string> {
+  if (!_baseEnhancedEnvCache) {
+    _baseEnhancedEnvCache = _buildBaseEnhancedEnv();
+  }
+  if (!customEnv) {
+    return _baseEnhancedEnvCache;
+  }
+  return {
+    ..._baseEnhancedEnvCache,
+    ...customEnv,
+    // When customEnv.PATH exists, merge it with the already computed merged path
+    PATH: customEnv.PATH ? mergePaths(_baseEnhancedEnvCache.PATH, customEnv.PATH) : _baseEnhancedEnvCache.PATH,
+  };
 }
 
 /**

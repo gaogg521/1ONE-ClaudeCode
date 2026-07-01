@@ -17,8 +17,13 @@ function getBinaryName(): string {
  * Search order:
  *  1. Bundled with app (production)
  *  2. System PATH
+ *
+ * Result is cached after the first call to avoid repeated execSync calls
+ * that would block the Node.js event loop on every IPC handler invocation.
  */
-export function resolveAionrsBinary(): string | null {
+let _resolvedBinaryPath: string | null | undefined = undefined;
+
+function _resolveBinaryUncached(): string | null {
   // 1. Bundled binary (production) — same layout as bundled-bun
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
   if (resourcesPath) {
@@ -34,7 +39,7 @@ export function resolveAionrsBinary(): string | null {
     if (existsSync(devBundled)) return devBundled;
   }
 
-  // 2. System PATH
+  // 2. System PATH — execSync blocks the event loop; only runs once due to caching above
   try {
     const cmd = process.platform === 'win32' ? 'where aionrs' : 'which aionrs';
     const result = execSync(cmd, { encoding: 'utf-8', timeout: 5000 }).trim();
@@ -44,6 +49,17 @@ export function resolveAionrsBinary(): string | null {
   }
 
   return null;
+}
+
+export function resolveAionrsBinary(): string | null {
+  if (_resolvedBinaryPath !== undefined) return _resolvedBinaryPath;
+  _resolvedBinaryPath = _resolveBinaryUncached();
+  return _resolvedBinaryPath;
+}
+
+/** Invalidate the cached binary path (e.g. after user installs aionrs). */
+export function resetAionrsBinaryCache(): void {
+  _resolvedBinaryPath = undefined;
 }
 
 export function isAionrsAvailable(): boolean {
