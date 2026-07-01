@@ -9,11 +9,11 @@ import { resolveOAuthPostLoginRedirectPath } from '@/common/auth/enterpriseRoles
 
 describe('resolveOAuthPostLoginRedirectPath', () => {
   it('redirects away from settings after OAuth', () => {
-    expect(resolveOAuthPostLoginRedirectPath('/settings/model', 'member', 'default')).toBe('/sessions');
+    expect(resolveOAuthPostLoginRedirectPath('/settings/model', 'member', 'default')).toBe('/guid');
   });
 
   it('keeps enterprise workspace for joined tenants', () => {
-    expect(resolveOAuthPostLoginRedirectPath('/settings/model', 'member', 'tenant_acme')).toBe('/sessions');
+    expect(resolveOAuthPostLoginRedirectPath('/settings/model', 'member', 'tenant_acme')).toBe('/guid');
     expect(resolveOAuthPostLoginRedirectPath('/issues', 'member', 'tenant_acme')).toBe('/issues');
   });
 
@@ -28,7 +28,7 @@ describe('resolveOAuthPostLoginRedirectPath', () => {
   it('does not loop SSO sign-in back to the join page when no enterprise exists', () => {
     // No enterprise tenant yet: an authenticated SSO user must land in the personal
     // workspace, not be bounced back to /enterprise/join (which re-triggers login → loop).
-    expect(resolveOAuthPostLoginRedirectPath('/enterprise/join', 'member', 'default')).toBe('/sessions');
-    expect(resolveOAuthPostLoginRedirectPath('/enterprise/users', 'member', 'default')).toBe('/sessions');
+    expect(resolveOAuthPostLoginRedirectPath('/enterprise/join', 'member', 'default')).toBe('/guid');
+    expect(resolveOAuthPostLoginRedirectPath('/enterprise/users', 'member', 'default')).toBe('/guid');
   });
 });
