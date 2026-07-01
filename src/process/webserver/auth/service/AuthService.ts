@@ -291,13 +291,42 @@ export class AuthService {
       };
     } catch (error) {
       if (
-        error instanceof jwt.TokenExpiredError ||
-        error instanceof jwt.JsonWebTokenError ||
+        error instanceof jwt.TokenExpiredError ||        error instanceof jwt.JsonWebTokenError ||
         error instanceof jwt.NotBeforeError
       ) {
         return null;
       }
       console.error('Token verification failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Decode a JWT payload WITHOUT signature verification.
+   *
+   * Used by client-mode desktop sync: the remote enterprise server issued a JWT
+   * that this machine cannot verify (cross-instance signing key). We trust the
+   * remote cookie directly and only need the payload fields (userId/role/tenant_id)
+   * to seed the desktop session — the remote `/api/auth/user` endpoint remains the
+   * authoritative source and is queried right after via Bearer fetch.
+   */
+  public static decodeTokenPayload(
+    token: string
+  ): { userId?: string; username?: string; role?: string; tenant_id?: string } | null {
+    try {
+      const decoded = jwt.decode(token) as Record<string, unknown> | null;
+      if (!decoded) {
+        return null;
+      }
+      const userId = decoded.userId;
+      return {
+        userId: userId === undefined ? undefined : String(userId),
+        username: typeof decoded.username === 'string' ? decoded.username : undefined,
+        role: typeof decoded.role === 'string' ? decoded.role : undefined,
+        tenant_id:
+          typeof decoded.tenant_id === 'string' ? decoded.tenant_id : undefined,
+      };
+    } catch {
       return null;
     }
   }

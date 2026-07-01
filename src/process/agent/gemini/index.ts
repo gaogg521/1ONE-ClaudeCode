@@ -587,6 +587,18 @@ export class GeminiAgent {
 
     this.geminiClient = this.config.getGeminiClient();
 
+    // Inject current local date/time into userMemory so the model can answer
+    // date/time/day-of-week questions without running shell commands.
+    {
+      const now = new Date();
+      const dateStr = now.toDateString();
+      const timeStr = now.toTimeString().split(' ')[0];
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const timeSection = `[Current Local DateTime]\nDate: ${dateStr}\nTime: ${timeStr}\nTimezone: ${tz}\nUse this for any date/time/day-of-week question — do NOT run shell commands (date/time) to find out.`;
+      const existing = this.config.getUserMemory();
+      this.config.setUserMemory(existing ? `${timeSection}\n\n${existing}` : timeSection);
+    }
+
     // 在初始化时注入 presetRules 到 userMemory
     // Inject presetRules into userMemory at initialization
     // Rules 定义系统行为规则，在会话开始时就应该生效

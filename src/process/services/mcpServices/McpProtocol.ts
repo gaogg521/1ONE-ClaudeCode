@@ -15,6 +15,7 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { getEnhancedEnv, getNpxCacheDir, resolveNpxPath } from '@/process/utils/shellEnv';
+import { isBuiltinExportPdfTransport } from '@process/resources/builtinMcp/constants';
 
 /**
  * MCP源类型 - 包括所有ACP后端和1ONE ClaudeCode内置
@@ -204,10 +205,31 @@ export abstract class AbstractMcpAgent implements IMcpProtocol {
     try {
       // app imported statically
 
+      // For builtin export-pdf MCP, the TCP port is allocated at runtime by
+      // exportPdfMcpServer and may not yet be in transport.env (first ensureBuiltinMcpServers
+      // run happens before the TCP server starts, writing env={}). Inject the live port so
+      // "Test connection" works even before re-sync lands the port in the DB.
+      let transportEnv = transport.env;
+      if (
+        transportEnv &&
+        !transportEnv.EXPORT_PDF_MCP_PORT &&
+        isBuiltinExportPdfTransport(transport)
+      ) {
+        try {
+          const { getExportPdfMcpPort } = await import('@process/services/exportPdfMcpServer');
+          const livePort = getExportPdfMcpPort();
+          if (livePort) {
+            transportEnv = { ...transportEnv, EXPORT_PDF_MCP_PORT: String(livePort) };
+          }
+        } catch {
+          // TCP server module not loaded yet — fall through with original env.
+        }
+      }
+
       // Use enhanced env (includes shell PATH) instead of bare process.env
       // so CLI tools installed via nvm/fnm/volta are discoverable in packaged mode
       const enhancedEnv = {
-        ...getEnhancedEnv(transport.env),
+        ...getEnhancedEnv(transportEnv),
         TERM: 'dumb',
         NO_COLOR: '1',
       };

@@ -110,7 +110,7 @@ const ExitPasswordCard: React.FC = () => {
 const AdminTeamRuntimes: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { identity } = useEditionFeatures();
+  const { identity, hasJoinedEnterprise } = useEditionFeatures();
   const tenantId = identity.tenantId;
   const asAdmin = isEnterpriseAdminRole(user?.role);
   const channel = isElectronDesktop() ? 'desktop' : 'browser';
@@ -124,6 +124,7 @@ const AdminTeamRuntimes: React.FC = () => {
         channel,
         includeOffline: true,
         asAdmin,
+        authenticated: hasJoinedEnterprise,
       }),
     { refreshInterval: 30_000 }
   );

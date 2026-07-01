@@ -120,10 +120,15 @@ export function buildSpawnConfig(
   // Use a more explicit prompt that discourages unnecessary tool use —
   // some models (e.g. doubao-seed) trigger tool-call bugs when they explore the workspace
   // unprompted, leading to tool_call_id errors.
+  const now = new Date();
+  const currentDate = now.toDateString();
+  const currentTime = now.toTimeString().split(' ')[0];
+  const currentTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const neutralSystemPrompt =
     provider !== 'anthropic'
       ? [
           'You are a helpful AI assistant. Answer questions directly.',
+          `Current local date: ${currentDate}, time: ${currentTime}, timezone: ${currentTimezone}. Use this for any date/time/day-of-week questions — do NOT run shell commands (date/time) to find out.`,
           'Only use file system tools when the user explicitly asks you to read, write, or execute files.',
           'For project/directory structure: ALWAYS use `git ls-files` first (fastest). If git is not available, run shallow one-level listings like `dir /b` or `ls` on specific subdirs — NEVER run `dir /s /b`, `dir /s`, `find` or any unbounded recursive command on the workspace root; these time out at 120 s and block all work.',
           'Do NOT try to read binary or image files with file_read or bash — they contain binary data that cannot be interpreted as text.',

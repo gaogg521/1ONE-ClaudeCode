@@ -28,6 +28,15 @@ export interface FirstMessageConfig {
 export async function buildSystemInstructions(config: FirstMessageConfig): Promise<string | undefined> {
   const instructions: string[] = [];
 
+  // 当前本地日期/时间，让 agent 无需跑 shell 命令即可回答"今天星期几"等问题
+  const now = new Date();
+  const dateStr = now.toDateString();
+  const timeStr = now.toTimeString().split(' ')[0];
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  instructions.push(
+    `[Current Local DateTime]\nDate: ${dateStr}\nTime: ${timeStr}\nTimezone: ${tz}\nUse this for any date/time/day-of-week question — do NOT run shell commands (date/time) to find out.`
+  );
+
   // 添加预设上下文 / Add preset context
   if (config.presetContext) {
     instructions.push(config.presetContext);
@@ -39,10 +48,6 @@ export async function buildSystemInstructions(config: FirstMessageConfig): Promi
     if (skillsContent) {
       instructions.push(skillsContent);
     }
-  }
-
-  if (instructions.length === 0) {
-    return undefined;
   }
 
   return instructions.join('\n\n');
@@ -87,6 +92,15 @@ export async function prepareFirstMessage(content: string, config: FirstMessageC
  */
 export async function prepareFirstMessageWithSkillsIndex(content: string, config: FirstMessageConfig): Promise<string> {
   const instructions: string[] = [];
+
+  // 当前本地日期/时间
+  const now = new Date();
+  const dateStr = now.toDateString();
+  const timeStr = now.toTimeString().split(' ')[0];
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  instructions.push(
+    `[Current Local DateTime]\nDate: ${dateStr}\nTime: ${timeStr}\nTimezone: ${tz}\nUse this for any date/time/day-of-week question — do NOT run shell commands (date/time) to find out.`
+  );
 
   // 1. 添加预设规则 / Add preset rules
   if (config.presetContext) {
@@ -157,6 +171,15 @@ For example:
  */
 export async function buildSystemInstructionsWithSkillsIndex(config: FirstMessageConfig): Promise<string | undefined> {
   const instructions: string[] = [];
+
+  // 当前本地日期/时间
+  const now = new Date();
+  const dateStr = now.toDateString();
+  const timeStr = now.toTimeString().split(' ')[0];
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  instructions.push(
+    `[Current Local DateTime]\nDate: ${dateStr}\nTime: ${timeStr}\nTimezone: ${tz}\nUse this for any date/time/day-of-week question — do NOT run shell commands (date/time) to find out.`
+  );
 
   // 添加预设上下文 / Add preset context
   if (config.presetContext) {

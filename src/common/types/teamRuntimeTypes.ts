@@ -23,6 +23,8 @@ export type TeamRuntimeNode = {
   ipAddresses: string[];
   installedAgents: TeamRuntimeInstalledAgent[];
   status: TeamRuntimeNodeStatus;
+  /** False when the device reported without a signed-in user (pending auth). */
+  authenticated: boolean;
   lastSeenAt: number;
   updatedAt: number;
 };
@@ -35,10 +37,13 @@ export type UpsertTeamRuntimeNodeInput = {
   hostnames: string[];
   ipAddresses: string[];
   installedAgents: TeamRuntimeInstalledAgent[];
+  authenticated?: boolean;
 };
 
 export type ListTeamRuntimeNodesInput = {
   tenantId: string;
   teamIds?: string[];
   includeOffline?: boolean;
+  /** Include pending (not-yet-authenticated) devices — admin view only. */
+  includePending?: boolean;
 };

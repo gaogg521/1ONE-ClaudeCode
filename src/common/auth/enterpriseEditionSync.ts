@@ -26,12 +26,26 @@ export function shouldUseEnterpriseWorkspaceEdition(
 }
 
 /**
- * 桌面端：浏览器 WebUI 会话为唯一权威；无浏览器会话时回退本地 IPC 快照。
+ * 桌面端合并本地 IPC 快照与浏览器 WebUI 会话快照。
+ *
+ * 合并优先级：
+ * 1. 本机已加入企业（ipc.joined）→ 以本机为准。server 模式下本机创建企业后，
+ *    system_default_user.tenant_id 就是企业 id，无论当前 SSO 登录的 user 是否已
+ *    加入企业，本机实例的企业身份不变。避免 SSO user 尚未 ensureUserJoinedDefaultEnterprise
+ *    时 browserCtx.tenantId='default' 覆盖本机企业，导致概览页显示「单机实例」。
+ * 2. 否则浏览器会话非空 → 用 browser（客户端模式远程 SSO 权威）。
+ * 3. 都没有 → 回退 ipc。
  */
 export function mergeDesktopEnterpriseContext(
   ipc: EnterpriseContextSnapshot,
   browser: EnterpriseContextSnapshot | null
 ): EnterpriseContextSnapshot {
+  if (ipc.joined) {
+    return {
+      ...ipc,
+      canCreateEnterprise: ipc.canCreateEnterprise ?? browser?.canCreateEnterprise,
+    };
+  }
   if (browser) {
     return {
       ...browser,

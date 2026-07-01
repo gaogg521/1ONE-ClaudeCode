@@ -108,11 +108,18 @@ const TeamRuntimeFleetPanel: React.FC<TeamRuntimeFleetPanelProps> = ({
       <Button key={node.id} {...nodeButtonProps}>
         <div className='flex items-center justify-between gap-8px'>
           <span className='text-13px font-600 text-t-primary truncate'>{node.displayName}</span>
-          <Tag color={node.status === 'online' ? 'green' : 'gold'} size='small'>
-            {node.status === 'online'
-              ? t('common.superAssistant.runtimeFleet.online', { defaultValue: '在线' })
-              : t('common.superAssistant.runtimeFleet.offline', { defaultValue: '离线' })}
-          </Tag>
+          <div className='flex items-center gap-4px'>
+            {!node.authenticated ? (
+              <Tag color='gray' size='small'>
+                {t('common.superAssistant.runtimeFleet.unauthenticated', { defaultValue: '未认证' })}
+              </Tag>
+            ) : null}
+            <Tag color={node.status === 'online' ? 'green' : 'gold'} size='small'>
+              {node.status === 'online'
+                ? t('common.superAssistant.runtimeFleet.online', { defaultValue: '在线' })
+                : t('common.superAssistant.runtimeFleet.offline', { defaultValue: '离线' })}
+            </Tag>
+          </div>
         </div>
         <div className='mt-4px text-11px text-t-tertiary truncate'>
           {formatAddressList(node.ipAddresses)}
@@ -227,7 +234,9 @@ const TeamRuntimeFleetPanel: React.FC<TeamRuntimeFleetPanelProps> = ({
                     <span className='text-t-tertiary'>
                       {t('common.superAssistant.runtimeFleet.member', { defaultValue: '成员' })}：
                     </span>{' '}
-                    {selectedNode.userId}
+                    {selectedNode.authenticated
+                      ? selectedNode.userId
+                      : t('common.superAssistant.runtimeFleet.unauthenticated', { defaultValue: '未认证' })}
                   </div>
                   <div>
                     <span className='text-t-tertiary'>

@@ -25,6 +25,8 @@ export type EditionFeatures = {
   isEnterpriseEdition: boolean;
   hasInstanceEnterprise: boolean;
   hasJoinedEnterprise: boolean;
+  /** Desktop client mode pointing at a remote enterprise server (serverUrl configured). */
+  isClientModeConnected: boolean;
   tenantLabel: string | null;
   /** 仅企业团队版且已加入企业时显示「团队」等企业协作能力 */
   showTeamsFeature: boolean;
@@ -42,6 +44,7 @@ export function useEditionFeatures(): EditionFeatures {
     hasJoinedEnterprise,
     enterpriseContext,
     showEnterpriseAdminNav,
+    isClientModeConnected,
   } = useWebuiEnterpriseMode();
 
   return useMemo(() => {
@@ -71,6 +74,7 @@ export function useEditionFeatures(): EditionFeatures {
       isEnterpriseEdition,
       hasInstanceEnterprise,
       hasJoinedEnterprise,
+      isClientModeConnected,
       tenantLabel: loading ? null : tenantLabel,
       showTeamsFeature,
       showEnterpriseAdminNav,
@@ -81,6 +85,7 @@ export function useEditionFeatures(): EditionFeatures {
     enterpriseContext?.tenantName,
     hasInstanceEnterprise,
     hasJoinedEnterprise,
+    isClientModeConnected,
     loading,
     managementMode,
     showEnterpriseAdminNav,

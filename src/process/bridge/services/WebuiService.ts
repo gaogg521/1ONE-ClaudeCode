@@ -14,6 +14,13 @@ import { AUTH_CONFIG, SERVER_CONFIG } from '@process/webserver/config/constants'
 import { resolveEnterpriseContext } from '@process/webserver/auth/enterpriseContext';
 import type { EnterpriseContextSnapshot } from '@/common/config/webuiEnterpriseConfig';
 import {
+  WEBUI_DEPLOYMENT_ROLE_KEY,
+  WEBUI_ENTERPRISE_SERVER_URL_KEY,
+  normalizeWebuiDeploymentRole,
+  normalizeEnterpriseServerUrl,
+} from '@/common/config/webuiEnterpriseConfig';
+import { ConfigStorage } from '@/common/config/storage';
+import {
   getLatestBrowserWebuiSession,
   type BrowserSessionSnapshot,
 } from '@process/webserver/auth/browserSessionBridge';
@@ -457,6 +464,23 @@ export class WebuiService {
   }
 
   /**
+   * Client mode: the remote enterprise server origin this machine points at, or null.
+   * Mirrors the renderer-side getClientEnterpriseServerOrigin in webuiApiBase.ts.
+   */
+  static async getClientEnterpriseServerOrigin(): Promise<string | null> {
+    try {
+      const role = await ConfigStorage.get(WEBUI_DEPLOYMENT_ROLE_KEY);
+      const url = await ConfigStorage.get(WEBUI_ENTERPRISE_SERVER_URL_KEY);
+      if (normalizeWebuiDeploymentRole(role) !== 'client') {
+        return null;
+      }
+      return normalizeEnterpriseServerUrl(typeof url === 'string' ? url : null);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Open an Electron BrowserWindow for OAuth on a remote enterprise server.
    * The popup shares session.defaultSession with the renderer so OAuth cookies
    * are automatically available to renderer fetch calls after the window closes.
@@ -512,6 +536,38 @@ export class WebuiService {
       const verified = await AuthService.verifyToken(bridged.token);
       if (verified) {
         return bridged;
+      }
+    }
+
+    // Client mode: the remote enterprise server issued a JWT that this machine
+    // cannot verify (cross-instance signing key). Trust the remote cookie directly —
+    // the client already delegates auth to the server by design. Without this, SSO
+    // login succeeds on the remote but the desktop keeps the local operator session,
+    // bouncing the user back to /enterprise/join.
+    const clientRemoteOrigin = await this.getClientEnterpriseServerOrigin();
+    if (clientRemoteOrigin) {
+      try {
+        const cookies = await session.defaultSession.cookies.get({
+          url: clientRemoteOrigin,
+          name: AUTH_CONFIG.COOKIE.NAME,
+        });
+        const cookieToken = cookies[0]?.value;
+        if (cookieToken) {
+          // Decode JWT payload (no signature verification — server is the authority).
+          const payload = AuthService.decodeTokenPayload(cookieToken);
+          if (payload?.userId) {
+            return {
+              userId: payload.userId,
+              username: payload.username ?? '',
+              role: payload.role ?? 'member',
+              tenant_id: payload.tenant_id ?? 'default',
+              token: cookieToken,
+              updatedAt: Date.now(),
+            };
+          }
+        }
+      } catch {
+        // cookie read failed — fall through to local lookup
       }
     }
 

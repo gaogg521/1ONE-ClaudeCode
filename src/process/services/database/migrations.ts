@@ -2001,6 +2001,46 @@ const migration_v52: IMigration = {
 };
 
 /**
+ * Migration v52 -> v53: team_runtime_nodes — upsert by machineId + authenticated flag
+ *
+ * Decouples "device online" from "user authenticated":
+ *  - UNIQUE(machine_id) so SSO login upgrades the same device row (tenantId/userId updated)
+ *    instead of creating a duplicate
+ *  - authenticated column distinguishes pending devices from signed-in members
+ */
+const migration_v53: IMigration = {
+  version: 53,
+  name: 'team_runtime_nodes: upsert by machineId + authenticated flag',
+  up: (db) => {
+    const cols = new Set(
+      (db.pragma('table_info(team_runtime_nodes)') as Array<{ name: string }>).map((c) => c.name)
+    );
+    if (!cols.has('authenticated')) {
+      db.exec("ALTER TABLE team_runtime_nodes ADD COLUMN authenticated INTEGER NOT NULL DEFAULT 1");
+    }
+    // Best-effort unique index on machine_id. Pre-existing duplicates (same machine under
+    // multiple tenants) would make CREATE UNIQUE INDEX fail; drop those first by keeping the
+    // most recent row per machine_id.
+    db.exec(`DELETE FROM team_runtime_nodes WHERE id NOT IN (
+      SELECT id FROM team_runtime_nodes t1
+      WHERE t1.id = (
+        SELECT t2.id FROM team_runtime_nodes t2
+        WHERE t2.machine_id = t1.machine_id
+        ORDER BY t2.last_seen_at DESC LIMIT 1
+      )
+    )`);
+    db.exec(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_team_runtime_nodes_machine ON team_runtime_nodes(machine_id)'
+    );
+    console.log('[Migration v53] team_runtime_nodes: upsert by machineId + authenticated flag');
+  },
+  down: (db) => {
+    db.exec('DROP INDEX IF EXISTS idx_team_runtime_nodes_machine');
+    console.log('[Migration v53] Rolled back: dropped machine_id unique index (column retained)');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
@@ -2037,6 +2077,7 @@ export const ALL_MIGRATIONS: IMigration[] = [
   migration_v50,
   migration_v51,
   migration_v52,
+  migration_v53,
 ];
 
 /**

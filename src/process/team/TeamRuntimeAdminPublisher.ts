@@ -36,6 +36,14 @@ async function readOrgApiOrigins(): Promise<string[]> {
       }
     }
   }
+  // Client mode: the remote enterprise server is the authority. Include it first
+  // so pending devices (no local session) can still reach the heartbeat endpoint.
+  const clientOrigin = await WebuiService.getClientEnterpriseServerOrigin();
+  if (clientOrigin) {
+    // mergeEnterpriseApiOrigins(stored, candidates) → stored first, candidates after.
+    // We want client origin first, so pass it as "stored" and everything else as candidates.
+    return mergeEnterpriseApiOrigins([clientOrigin], local.length > 0 ? local : stored);
+  }
   return mergeEnterpriseApiOrigins(stored, local);
 }
 
@@ -47,6 +55,7 @@ export async function publishTeamRuntimeToAdminBackend(
     return null;
   }
 
+  // Pending devices may not have a desktop session token; Bearer is optional.
   let bearer: string | undefined;
   try {
     const tokenResult = await WebuiService.getDesktopSessionToken();

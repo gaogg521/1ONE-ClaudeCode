@@ -63,15 +63,29 @@ export async function publishRuntimeToAdminBackend(input: {
   tenantId: string;
   userId: string;
   channel: TeamRuntimeClientChannel;
+  /** When false (client mode, not yet SSO-signed-in), report as pending device. */
+  authenticated?: boolean;
 }): Promise<TeamRuntimeNode | null> {
-  if (!shouldSyncWithEnterpriseApi(input.tenantId)) {
-    return null;
+  const authenticated = input.authenticated !== false;
+  // Pending devices (client mode, no SSO yet) report under 'pending' tenant so the
+  // server-side admin view can surface them. Signed-in members use their real tenant.
+  const effectiveTenantId = authenticated ? input.tenantId : 'pending';
+  const effectiveUserId = authenticated ? input.userId : 'pending';
+
+  if (!shouldSyncWithEnterpriseApi(effectiveTenantId) && !authenticated) {
+    // shouldSyncWithEnterpriseApi rejects 'pending'; but client-mode pending devices
+    // must still sync. Only short-circuit when neither enterprise tenant nor client pending.
+    if (!effectiveTenantId || effectiveTenantId === 'pending') {
+      // continue — client-mode pending device, allow sync
+    } else {
+      return null;
+    }
   }
 
   if (input.channel === 'desktop' && isElectronDesktop()) {
     const node = await ipcBridge.teamRuntime.publishLocal.invoke({
-      tenantId: input.tenantId,
-      userId: input.userId,
+      tenantId: effectiveTenantId,
+      userId: effectiveUserId,
     });
     try {
       await fetchWebuiApiJson<TeamRuntimeNode>(TEAM_RUNTIME_HEARTBEAT_PATH, {
@@ -85,6 +99,7 @@ export async function publishRuntimeToAdminBackend(input: {
           hostnames: node.hostnames,
           ipAddresses: node.ipAddresses,
           installedAgents: node.installedAgents,
+          authenticated,
         }),
       });
     } catch {
@@ -105,13 +120,14 @@ export async function publishRuntimeToAdminBackend(input: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        tenantId: input.tenantId,
-        userId: input.userId,
+        tenantId: effectiveTenantId,
+        userId: effectiveUserId,
         machineId,
         displayName,
         hostnames: [displayName],
         ipAddresses: [],
         installedAgents,
+        authenticated,
       }),
     });
   } catch {
@@ -156,11 +172,13 @@ export async function syncFleetWithAdminBackend(input: {
   teamIds?: string[];
   includeOffline?: boolean;
   asAdmin?: boolean;
+  authenticated?: boolean;
 }): Promise<TeamRuntimeNode[]> {
   await publishRuntimeToAdminBackend({
     tenantId: input.tenantId,
     userId: input.userId,
     channel: input.channel,
+    authenticated: input.authenticated,
   });
 
   let localNodes: TeamRuntimeNode[] = [];

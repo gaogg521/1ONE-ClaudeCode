@@ -28,6 +28,7 @@ type TeamRuntimeRow = {
   hostnames: string;
   ip_addresses: string;
   installed_agents: string;
+  authenticated: number;
   last_seen_at: number;
   updated_at: number;
 };
@@ -54,6 +55,7 @@ function rowToNode(row: TeamRuntimeRow, now: number): TeamRuntimeNode {
     ipAddresses: parseJsonArray<string>(row.ip_addresses, []),
     installedAgents: parseJsonArray<TeamRuntimeInstalledAgent>(row.installed_agents, []),
     status,
+    authenticated: row.authenticated === 1,
     lastSeenAt: row.last_seen_at,
     updatedAt: row.updated_at,
   };
@@ -117,17 +119,24 @@ export class TeamRuntimeRegistry {
   async upsertNode(input: UpsertTeamRuntimeNodeInput): Promise<TeamRuntimeNode> {
     const db = await this.getDriver();
     const now = Date.now();
-    const id = `${input.tenantId}:${input.userId}:${input.machineId}`;
+    const id = input.machineId;
+    const authenticated = input.authenticated === false ? 0 : 1;
+    // Upsert by machine_id (UNIQUE index added in migration v53).
+    // SSO login sends the same machineId with real tenantId/userId/authenticated=1,
+    // upgrading the previously-pending row in place instead of creating a duplicate.
     db.prepare(
       `INSERT INTO team_runtime_nodes (
         id, tenant_id, user_id, machine_id, display_name, hostnames, ip_addresses,
-        installed_agents, last_seen_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
+        installed_agents, authenticated, last_seen_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(machine_id) DO UPDATE SET
+        tenant_id = excluded.tenant_id,
+        user_id = excluded.user_id,
         display_name = excluded.display_name,
         hostnames = excluded.hostnames,
         ip_addresses = excluded.ip_addresses,
         installed_agents = excluded.installed_agents,
+        authenticated = excluded.authenticated,
         last_seen_at = excluded.last_seen_at,
         updated_at = excluded.updated_at`
     ).run(
@@ -139,6 +148,7 @@ export class TeamRuntimeRegistry {
       JSON.stringify(input.hostnames),
       JSON.stringify(input.ipAddresses),
       JSON.stringify(input.installedAgents),
+      authenticated,
       now,
       now
     );
@@ -181,18 +191,24 @@ export class TeamRuntimeRegistry {
       }
     }
 
+    // Admin view includes pending (not-yet-authenticated) devices that pointed at this
+    // server but haven't signed in. Pending nodes have tenant_id='pending' and are
+    // visible to any admin of this instance so they can see who's trying to connect.
+    const tenantFilter = input.includePending
+      ? `WHERE tenant_id = ? OR tenant_id = 'pending'`
+      : `WHERE tenant_id = ?`;
     const rows = userFilter
       ? (db
           .prepare(
             `SELECT * FROM team_runtime_nodes
-             WHERE tenant_id = ? AND user_id IN (${userFilter.map(() => '?').join(', ')})
+             ${tenantFilter} AND user_id IN (${userFilter.map(() => '?').join(', ')})
              ORDER BY last_seen_at DESC`
           )
           .all(input.tenantId, ...userFilter) as TeamRuntimeRow[])
       : (db
           .prepare(
             `SELECT * FROM team_runtime_nodes
-             WHERE tenant_id = ?
+             ${tenantFilter}
              ORDER BY last_seen_at DESC`
           )
           .all(input.tenantId) as TeamRuntimeRow[]);

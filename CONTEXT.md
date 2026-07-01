@@ -1554,3 +1554,129 @@ export function getEnhancedEnv(customEnv?: Record<string, string>): Record<strin
 
 
 
+---
+
+# 追加记录 — 2026-07-01 晚（企业端通讯架构修复：MCP 测试 / SSO 跳回 / 退出密码 500 / 客户端上线解耦 / 概览单机实例）
+
+承接 7-01 中午客户端↔企业端连接修复。用户测试反馈 5 个 bug + 1 个架构迭代，本轮一并修复。
+
+## Bug 1：退出密码 500（migration 版本号没 bump）
+
+**文件**：`src/process/services/database/schema.ts`
+
+**根因**：commit `3acd4e5` 加了 `migration_v52`（`exit_password_hash` 列）但忘了把 `CURRENT_DB_VERSION` 从 51 bump 到 52。DB 初始化逻辑 `if (currentVersion < CURRENT_DB_VERSION)` 永远为 false → migration v52 永不执行 → `tenants` 表无 `exit_password_hash` 列 → `UPDATE tenants SET exit_password_hash = ...` 报 `no such column` → 500。本机 DB 实测 `user_version: 51`，`tenants` 表无该列，与代码完全吻合。
+
+**修复**：`CURRENT_DB_VERSION` 51 → 52。
+
+## Bug 2：MCP 测试连接 "Connection closed"
+
+**文件**：`src/process/services/mcpServices/McpProtocol.ts`
+
+**根因**：内置 `one-export-pdf` MCP 的 `EXPORT_PDF_MCP_PORT` 由主进程 TCP server 运行时分配。`ensureBuiltinMcpServers` 首次跑时 TCP server 没启动 → 数据库 `transport.env = {}`。设置页"测试连接"从数据库读 env 启动子进程 → 缺 `EXPORT_PDF_MCP_PORT` → 脚本 `exit(1)` → `MCP error -32000: Connection closed`。实测：带 env 启动 stdio server ready，不带 env exit(1)。
+
+**修复**：`testStdioConnection` 启动子进程前，识别内置 export-pdf MCP（`isBuiltinExportPdfTransport`），env 缺 port 时动态从 `getExportPdfMcpPort()` 注入。
+
+## Bug 3：客户端飞书 SSO 登录跳回"登录组织账号"
+
+**文件**：`src/process/webserver/auth/service/AuthService.ts`、`src/process/bridge/services/WebuiService.ts`、`src/renderer/utils/webuiApiBase.ts`
+
+**根因**：客户端模式下，远程服务端签发的 JWT 用远程密钥，客户端本机 `AuthService.verifyToken` 验不了 → `syncBrowserWebuiSession` 两路都拿不到 token：
+- `getLatestBrowserWebuiSession()` 内存桥接：客户端模式 SSO 没经本机 webserver，空
+- 遍历本机 cookie jar：只查 `localhost:port`/LAN IP，不查 `clientRemoteOrigin` 的 cookie
+
+桌面端 user 仍是 desktop operator（tenant_id='default'）→ `resolvePostLoginRedirectPath` 把 `/enterprise/join` target 原样返回 → 跳回 EnterpriseOnboarding（"登录组织账号"）。
+
+**修复（方案 A：客户端信任远程 cookie）**：
+- `AuthService.decodeTokenPayload`：新增不验签的 decode 方法
+- `WebuiService.syncBrowserWebuiSession`：客户端模式从 `session.defaultSession.cookies` 取 `clientRemoteOrigin` 的 cookie token，不 verify 直接当 Bearer 返回 + 新增 `getClientEnterpriseServerOrigin` 静态方法
+- `fetchWebuiApi`：客户端模式 + `/api/auth/*` 跳过本机 loopback 走 remote（认证权威统一是远程；仅在 auth 路径才查 client origin，避免普通请求多一次 ConfigStorage 往返）
+
+## Bug 4 + 架构迭代：客户端上线与 SSO 解耦
+
+用户明确：客户端配置了服务器地址加入到企业 = 设备上线，服务端就该看到，认证状态是另一层。原代码把"设备上线"等同于"SSO 登录成功 + 拿到企业 tenant_id"——`useTeamRuntimeAdminSync`/`useTeamRuntimeFleet` gate 是 `hasJoinedEnterprise`，客户端没 SSO 登录就不发心跳，服务端看不到设备。
+
+### 设计（CTO + 产品视角）
+
+解耦"设备上线"和"用户认证"：设备配置了服务器地址就上线，认证状态用 `authenticated` 字段区分。SSO 登录后同 machineId 升级。
+
+### DB（migration v53）
+
+**文件**：`src/process/services/database/migrations.ts` + `schema.ts`（`CURRENT_DB_VERSION` 52→53）
+
+`team_runtime_nodes` 表：
+- 加 `authenticated INTEGER NOT NULL DEFAULT 1` 列
+- 加 `UNIQUE(machine_id)` 索引（去重旧重复行）
+- upsert 改按 `machine_id`（SSO 登录后同机升级 tenantId/userId/authenticated，不再建重复行）
+
+### 类型
+
+**文件**：`src/common/types/teamRuntimeTypes.ts`
+
+- `TeamRuntimeNode` 加 `authenticated: boolean`
+- `UpsertTeamRuntimeNodeInput` 加 `authenticated?`
+- `ListTeamRuntimeNodesInput` 加 `includePending?`
+
+### 服务端
+
+**文件**：`src/process/team/TeamRuntimeRegistry.ts`、`src/process/webserver/routes/teamRuntimeRoutes.ts`、`src/process/bridge/teamRuntimeBridge.ts`、`src/process/team/TeamRuntimeAdminPublisher.ts`
+
+- `TeamRuntimeRegistry.upsertNode`：upsert key 改 `machine_id`，`ON CONFLICT(machine_id) DO UPDATE` 升级 tenantId/userId/authenticated
+- `TeamRuntimeRegistry.listNodes`：admin 视图（`includePending`）含 `tenant_id='pending'` 节点
+- `teamRuntimeRoutes` heartbeat：改 `optionalAuth`（不要求认证），未认证时 tenantId/userId='pending'/authenticated=0；admin 查询 `includePending:true`
+- `teamRuntimeBridge.publishHeartbeat`：放行 'pending' tenant + 传 authenticated
+- `TeamRuntimeAdminPublisher.readOrgApiOrigins`：客户端模式优先 remote origin；Bearer 可选（未认证也能发）
+
+### Renderer
+
+**文件**：`src/renderer/hooks/webui/WebuiEnterpriseModeProvider.tsx`、`useEditionFeatures.ts`、`src/renderer/hooks/enterprise/useTeamRuntimeAdminSync.ts`、`src/renderer/services/teamRuntimeAdminSync.ts`、`src/renderer/pages/superAssistant/hooks/useTeamRuntimeFleet.ts`、`src/renderer/pages/admin/AdminTeamRuntimes.tsx`、`src/renderer/pages/superAssistant/components/TeamRuntimeFleetPanel.tsx`
+
+- `WebuiEnterpriseModeProvider`/`useEditionFeatures` 暴露 `isClientModeConnected`
+- `useTeamRuntimeAdminSync` gate 改 `hasJoinedEnterprise || isClientModeConnected`；传 `authenticated: hasJoinedEnterprise`
+- `publishRuntimeToAdminBackend` 未认证时 tenantId/userId='pending' + 传 authenticated
+- `useTeamRuntimeFleet` gate 同上；管理员自动 `asAdmin=true` 看 pending（侧栏「组织节点」/ `/agent-fleet` 也能看到客户端设备）
+- `TeamRuntimeFleetPanel` 节点列表 + 详情面板加"未认证"标签
+
+## Bug 5：企业控制台概览显示"单机实例"
+
+**文件**：`src/common/auth/enterpriseEditionSync.ts`
+
+**根因**：`mergeDesktopEnterpriseContext` 逻辑是 browser 优先。server 模式下本机 `system_default_user` 创建了企业（ipcCtx.joined=true），但 SSO 登录的新 user 若 `ensureUserJoinedDefaultEnterprise` 未及时生效，browserCtx.tenantId='default' 覆盖 ipcCtx → `resolveEnterpriseTenantDisplayLabel('default', null)` → "单机实例"。
+
+**修复**：合并优先级改为——本机已加入企业（ipc.joined）优先以本机为准（server 模式本机权威）；本机没企业才用 browser（客户端连远程）。
+
+## 验证
+
+- `tsc --noEmit` 通过（除既存 pptPreviewBridge 问题）
+- `oxlint` 0 errors（184 warnings 全是既存 no-console）
+- `vitest`：`webuiApiBase.test.ts` 1 failed / 2 passed，与干净 main 基线一致（既存失败，非本次引入）
+- 运行时需 `npm run restart` 桌面端实测：
+  1. 服务端设退出密码不再 500
+  2. MCP 测试 one-export-pdf 连接成功
+  3. 客户端飞书 SSO 登录不再跳回，进入工作区
+  4. 客户端配置服务器地址后，服务端「管理后台→团队运行时」和侧栏「组织节点」都能看到该设备（未认证标签）；客户端 SSO 登录后同机升级为认证成员
+  5. server 模式创建企业后，概览页显示企业名而非"单机实例"
+- 按交付约定，影响运行行为，需出新的 Windows 安装包才在正式版生效
+
+## 涉及文件汇总（本轮）
+
+| 文件 | 改动 |
+|---|---|
+| `src/process/services/database/schema.ts` | `CURRENT_DB_VERSION` 51→52→53 |
+| `src/process/services/database/migrations.ts` | migration v53（team_runtime_nodes 加 authenticated + UNIQUE(machine_id)） |
+| `src/process/services/mcpServices/McpProtocol.ts` | 测试连接注入 export-pdf port |
+| `src/process/webserver/auth/service/AuthService.ts` | 新增 `decodeTokenPayload`（不验签） |
+| `src/process/bridge/services/WebuiService.ts` | 客户端模式 syncBrowserWebuiSession 从 remote cookie 取 token + `getClientEnterpriseServerOrigin` |
+| `src/renderer/utils/webuiApiBase.ts` | 客户端模式 + `/api/auth/*` 跳过 loopback |
+| `src/common/types/teamRuntimeTypes.ts` | 加 authenticated / includePending |
+| `src/process/team/TeamRuntimeRegistry.ts` | upsert by machineId + admin 查询含 pending |
+| `src/process/webserver/routes/teamRuntimeRoutes.ts` | heartbeat optionalAuth + admin includePending |
+| `src/process/bridge/teamRuntimeBridge.ts` | publishHeartbeat 放行 pending + 传 authenticated |
+| `src/process/team/TeamRuntimeAdminPublisher.ts` | 客户端模式优先 remote origin + Bearer 可选 |
+| `src/renderer/hooks/webui/WebuiEnterpriseModeProvider.tsx` | 暴露 isClientModeConnected |
+| `src/renderer/hooks/webui/useEditionFeatures.ts` | 暴露 isClientModeConnected |
+| `src/renderer/hooks/enterprise/useTeamRuntimeAdminSync.ts` | gate 解耦 + 传 authenticated |
+| `src/renderer/services/teamRuntimeAdminSync.ts` | 未认证时 pending + 传 authenticated |
+| `src/renderer/pages/superAssistant/hooks/useTeamRuntimeFleet.ts` | gate 解耦 + 管理员自动 asAdmin |
+| `src/renderer/pages/admin/AdminTeamRuntimes.tsx` | 传 authenticated |
+| `src/renderer/pages/superAssistant/components/TeamRuntimeFleetPanel.tsx` | 未认证标签 |
+| `src/common/auth/enterpriseEditionSync.ts` | merge 优先级：本机已加入企业优先 ipc |

@@ -81,6 +81,8 @@ export type WebuiEnterpriseModeValue = {
   /** Desktop: navigate in-app; browser WebUI: open system browser. */
   startEnterpriseLogin: (navigate: (path: string) => void, returnTo?: string) => Promise<void>;
   buildEnterpriseLoginPath: (returnTo?: string) => string;
+  /** Desktop client mode pointing at a remote enterprise server (serverUrl configured). */
+  isClientModeConnected: boolean;
   canCreateEnterprise: boolean;
   hasSystemAdmin: boolean;
   canClaimSystemAdmin: boolean;
@@ -550,6 +552,7 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
       editionSwitcherEnabled,
       canUseEnterpriseEditionSwitcher,
       webuiApiBase,
+      isClientModeConnected,
       setManagementMode,
       refreshEnterpriseContext,
       openEnterpriseAdminInBrowser,
@@ -575,6 +578,7 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
       enterpriseContext,
       hasInstanceEnterprise,
       hasJoinedEnterprise,
+      isClientModeConnected,
       joinWithInviteCode,
       loading,
       managementMode,

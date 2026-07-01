@@ -20,7 +20,11 @@ async function publishHeartbeat(): Promise<void> {
   }
   try {
     const node = await getTeamRuntimeRegistry().publishLocalNode(heartbeatContext);
-    if (shouldSyncWithEnterpriseApi(heartbeatContext.tenantId)) {
+    // Pending devices (tenantId='pending') must still sync to the remote server so
+    // admins can see them. shouldSyncWithEnterpriseApi rejects 'pending'; bypass it
+    // for the pending case — the remote heartbeat endpoint accepts unsigned reports.
+    const isPending = heartbeatContext.tenantId === 'pending';
+    if (isPending || shouldSyncWithEnterpriseApi(heartbeatContext.tenantId)) {
       await publishTeamRuntimeToAdminBackend({
         tenantId: node.tenantId,
         userId: node.userId,
@@ -29,6 +33,7 @@ async function publishHeartbeat(): Promise<void> {
         hostnames: node.hostnames,
         ipAddresses: node.ipAddresses,
         installedAgents: node.installedAgents,
+        authenticated: !isPending,
       });
     }
   } catch (error) {

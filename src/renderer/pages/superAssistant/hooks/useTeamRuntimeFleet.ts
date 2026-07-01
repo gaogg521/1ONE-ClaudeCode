@@ -10,7 +10,7 @@ import { ipcBridge } from '@/common';
 import type { TeamRuntimeNode } from '@/common/types/teamRuntimeTypes';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useEditionFeatures } from '@/renderer/hooks/webui/useEditionFeatures';
-import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
+import { DESKTOP_OPERATOR_USER_ID, isEnterpriseAdminRole } from '@/common/auth/enterpriseRoles';
 import { syncFleetWithAdminBackend } from '@/renderer/services/teamRuntimeAdminSync';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 
@@ -23,10 +23,13 @@ type UseTeamRuntimeFleetOptions = {
 
 export function useTeamRuntimeFleet(options: UseTeamRuntimeFleetOptions = {}) {
   const { user } = useAuth();
-  const { identity, hasJoinedEnterprise } = useEditionFeatures();
+  const { identity, hasJoinedEnterprise, isClientModeConnected } = useEditionFeatures();
   const tenantId = identity.tenantId || 'default';
   const userId = user?.id ?? DESKTOP_OPERATOR_USER_ID;
-  const enabled = options.enabled ?? hasJoinedEnterprise;
+  // SSO-signed-in member OR client-mode device that has configured the server URL.
+  const enabled = options.enabled ?? (hasJoinedEnterprise || isClientModeConnected);
+  // Admins (org_admin / system_admin) see pending devices via the admin endpoint.
+  const asAdmin = isEnterpriseAdminRole(user?.role);
   const teamIdsKey = (options.teamIds ?? []).join(',');
 
   const swrKey =
@@ -45,6 +48,8 @@ export function useTeamRuntimeFleet(options: UseTeamRuntimeFleetOptions = {}) {
         channel,
         teamIds: options.teamIds,
         includeOffline: options.includeOffline ?? true,
+        asAdmin,
+        authenticated: hasJoinedEnterprise,
       }),
     { refreshInterval: options.refreshIntervalMs ?? 30_000 }
   );

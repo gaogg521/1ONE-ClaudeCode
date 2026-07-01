@@ -127,8 +127,13 @@ export class OneManager extends EventEmitter implements IAgentManager {
   }
 
   private buildSystemPrompt(): string {
+    const now = new Date();
+    const currentDate = now.toDateString();
+    const currentTime = now.toTimeString().split(' ')[0];
+    const currentTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const parts: string[] = [
       'You are 1ONE, a helpful AI coding assistant.',
+      `Current local date: ${currentDate}, time: ${currentTime}, timezone: ${currentTimezone}. Use this for any date/time/day-of-week questions — do NOT run shell commands to find out.`,
       'You have access to tools for file operations and command execution.',
       'Always use the provided tools when you need to read, write, or edit files.',
       'When executing commands, be careful and explain what you are doing.',

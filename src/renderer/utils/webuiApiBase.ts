@@ -318,12 +318,31 @@ async function fetchWebuiApiViaLoopbackIpc(
 
 export async function fetchWebuiApi(path: string, init?: RequestInit): Promise<Response> {
   if (isElectronDesktop()) {
-    const status = await readDesktopWebuiStatus();
-    if (status?.port) {
+    // Client mode: auth endpoints belong to the remote enterprise server, not the
+    // local WebUI. The local server's verifyToken would reject the remote-issued
+    // JWT (cross-instance signing key) and return 401, bouncing SSO users back to
+    // /enterprise/join even though the popup login succeeded. Skip loopback for
+    // /api/auth/* so the request hits the remote origin with the shared cookie jar.
+    // Only check client origin for auth paths — avoids the ConfigStorage round-trip
+    // for every other request (and the test suite doesn't mock it for non-auth paths).
+    const isAuthPath = path === '/api/auth/user' || path.startsWith('/api/auth/');
+    let skipLoopback = false;
+    if (isAuthPath) {
       try {
-        return await fetchWebuiApiViaLoopbackIpc(status.port, path, init);
+        const clientOrigin = await getClientEnterpriseServerOrigin();
+        skipLoopback = !!clientOrigin;
       } catch {
-        // Fall back to renderer fetch when loopback IPC is unavailable.
+        skipLoopback = false;
+      }
+    }
+    if (!skipLoopback) {
+      const status = await readDesktopWebuiStatus();
+      if (status?.port) {
+        try {
+          return await fetchWebuiApiViaLoopbackIpc(status.port, path, init);
+        } catch {
+          // Fall back to renderer fetch when loopback IPC is unavailable.
+        }
       }
     }
   }
