@@ -200,3 +200,52 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+---
+
+# 2026-07-01 踩坑总结(7 大类,不可再犯)
+
+## 坑 1:主进程 console.* 冻死 event loop
+
+`@office-ai/platform` patch 了 `console.*`,在主进程触发 `bridge.adapter.emit` → `win.webContents.send` + WebSocket 广播。在同步调用栈(IPC handler / Express 中间件)里用 console,阻塞 event loop → Windows "未响应"。
+
+**规则**:`src/process/`、`src/index.ts`、`src/preload.ts`、`src/server.ts` 禁止 `console.*`,用 `appendFileSync` 写文件日志。`.oxlintrc.json` 已开 `no-console: warn`。详见"主进程 console 禁令"小节。
+
+**教训**:4 轮才清干净(IPC handler → requestLoggingMiddleware → ViteProxy/errorHandler → authRoutes catch 块)。每次以为清完了结果还有漏网的。lint 规则从源头拦截。
+
+## 坑 2:HttpOnly cookie 前端读不到
+
+`one-session` cookie 设了 `httpOnly: true`。前端 `document.cookie` 读不到 HttpOnly cookie。`browser.ts` 用 `hasWebuiSessionCookie()` 检查 `document.cookie` 判断登录态 → 已登录也返回 false → WebSocket 不连 → 所有 IPC 全挂(agent/设置/会话全空)。
+
+**规则**:HttpOnly cookie 前端不可见,不能用 `document.cookie` 判断登录态。需要前端判断登录态用 AuthContext 的 `status`,或让 WebSocket 总是尝试连接(服务端验证 token)。
+
+## 坑 3:Dev hybrid Vite 代理拦截静态文件
+
+Dev hybrid 模式 `registerViteDevProxy` 先注册,拦截所有 GET 请求(含 JS bundle)代理到 Vite。Vite 没 build 产物 → 502 → React 没挂载 → 白屏。
+
+**规则**:Express 中间件注册顺序 — 静态文件(`registerProductionStaticRoutes`)必须先于代理(`registerViteDevProxy`),否则静态文件被代理拦截返回 502。
+
+## 坑 4:fetch 无超时导致 loading 永久 true
+
+`fetchWebuiApi` 的 fetch 没 timeout,服务端不响应时永远挂起,登录页转圈圈。
+
+**规则**:所有 fetch 必须有 `AbortSignal.timeout()` 兜底,避免 loading 状态永久不复位。
+
+## 坑 5:诊断卡死不能用 console.log
+
+加 `console.log` 诊断卡死,结果 console.log 本身就是卡死源(触发 bridge.emit),观察行为改变了被观察对象。
+
+**规则**:排查主进程卡死用 `appendFileSync` 落盘探针,绝不用 console。排查渲染进程可以用 console(渲染进程 console 安全)。
+
+## 坑 6:微任务内的同步 IO 阻塞 event loop
+
+`await repo.getConversation` 之后的代码在微任务里,期间 Windows 消息泵被挂起。`getEnhancedEnv()` 跑 18+ 次 `existsSync` 在微任务里同步执行 → 主进程冻结。
+
+**规则**:`await` 之后的同步 IO 要缓存或移到宏任务。大 binary 首次 spawn 要考虑 Windows Defender 首扫阻塞。
+
+## 坑 7:重构后导航入口与页面语义不一致
+
+5-28 重构删了侧栏历史会话列表,侧栏"Sessions"按钮 `path: '/guid'`(输入框),不是 `/sessions`(列表)。用户找不到历史会话入口。
+
+**规则**:重构时导航入口的 `path` 必须和按钮语义一致。"Sessions" → `/sessions`,"新建会话" → `/guid`。
+

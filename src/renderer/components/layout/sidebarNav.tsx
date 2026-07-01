@@ -40,7 +40,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: <CommentOne theme='outline' size={18} />,
     labelKey: 'nav.sessions',
     labelDefault: 'Sessions',
-    path: '/guid',
+    path: '/sessions',
     paths: ['/sessions', '/conversation', '/guid', '/team'],
   },
   {
