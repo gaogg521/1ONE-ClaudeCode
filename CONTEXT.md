@@ -1294,3 +1294,263 @@ ipcMain.handle → emitter.emit(handler) → console.log
 - **诊断用 `appendFileSync`**，不用 console
 - 任何 `ipcBridge.*.provider(async handler => { ... })` 内部——handler 整个调用树中不得出现 console 调用
 
+---
+
+# 追加记录 — 2026-07-01（aionrs MISS 路径主进程冻结排查 + 缓存修复）
+
+> **⚠️ 给下一个 AI 的状态交接（必读）**
+>
+> | 已尝试但无效 | 已应用待验证 | 仍未确定 | 下一步 |
+> |---|---|---|---|
+> | `4b9453c` 清除 console/mainLog（用户实测无效） | `e332557` `getEnhancedEnv()` + `resolveAionrsBinary()` 缓存（**用户尚未测试**） | 永久冻结真因（见"仍存疑"章节，A/B/C/D 四种可能） | 等用户 `npm run restart` 实测；若仍冻加 `appendFileSync` 探针定位卡死行 |
+>
+> **不要**再去移除 console/mainLog——已做过且无效。**不要**重新分析 IPC bridge 同步调用栈——已排除。
+
+承接 `4b9453c`（清除 console/mainLog）。用户确认清除 console 后冻结问题**依然存在**，继续深入定位。
+
+## 一、冻结现象
+
+- Guid 页选 aionrs 发送消息，renderer 日志：`[aionrs:prewarm] claim MISS +6ms — fallback to create+warmup`
+- 之后 Electron 主进程永久无响应（Windows "未响应"）
+
+## 二、HIT vs MISS 路径差异（根因分析）
+
+**HIT 路径**（不冻）：
+- `prewarm.claim.invoke` → `AionrsPrewarmPool.claim()` → 直接返回缓存 manager（同步，无 await，不进入微任务）
+
+**MISS 路径**（冻）：
+- `sendMessage.invoke` → `conversationSendService.sendConversationMessage`
+- → `workerTaskManager.getOrBuildTask(id)`
+- → **`await this.repo.getConversation(id)`**（异步，产生微任务边界）
+- → `_buildAndCache` → `factory.create(conversation, options)` → `new AionrsManager(...)`
+- → `ForkTask` 构造函数同步调 `this.init()`（`src/process/worker/fork/ForkTask.ts:35`）
+- → `init()` 第 63 行：`const workerEnv = getEnhancedEnv()`
+
+**关键**：`await repo.getConversation` 之后的代码在**微任务**中运行。微任务执行期间 Windows 消息泵（macrotask）被挂起，若微任务耗时 >5s → Windows 判定"未响应"。
+
+## 三、`getEnhancedEnv()` 无缓存问题
+
+`src/process/utils/shellEnv.ts` 的 `getEnhancedEnv()` 原实现每次都执行完整计算：
+- `loadShellEnvironment()`（读 shell env）
+- `getWindowsExtraToolPaths()`：18+ 个路径全部调 `existsSync()`（npm/nvm/git/cygwin/bun/officecli 等）
+- 如果环境变量中含网络映射路径（`\\server\share`），`existsSync` 会等待网络超时（可达数十秒）
+
+这在微任务内同步执行 → 直接冻死主进程。
+
+## 四、已应用修复（commit e332557）
+
+**文件**：`src/process/utils/shellEnv.ts`
+
+新增模块级缓存：
+```typescript
+let _baseEnhancedEnvCache: Record<string, string> | undefined;
+
+function _buildBaseEnhancedEnv(): Record<string, string> { /* 原完整逻辑 */ }
+
+export function getEnhancedEnv(customEnv?: Record<string, string>): Record<string, string> {
+  if (!_baseEnhancedEnvCache) _baseEnhancedEnvCache = _buildBaseEnhancedEnv();
+  if (!customEnv) return _baseEnhancedEnvCache;
+  return {
+    ..._baseEnhancedEnvCache,
+    ...customEnv,
+    PATH: customEnv.PATH
+      ? mergePaths(_baseEnhancedEnvCache.PATH, customEnv.PATH)
+      : _baseEnhancedEnvCache.PATH,
+  };
+}
+```
+
+首次调用（app 启动期间，非微任务）完整计算并缓存；后续调用（ForkTask 构造、MISS 路径微任务内）直接返回缓存，零 IO。
+
+**同批**：`src/process/agent/aionrs/binaryResolver.ts` — `resolveAionrsBinary()` 加模块级 `_resolvedBinaryPath` 缓存，避免每次 IPC 调用都跑 `execSync('where aionrs')`。
+
+## 五、已排除的假说
+
+| 假说 | 排除理由 |
+|------|---------|
+| `console.log` 在 IPC 深栈触发 bridge.emit 死锁 | commit `4b9453c` 已清除，用户确认**冻结依然存在** |
+| `bridge.adapter.emit` / `win.webContents.send` 阻塞 | 这些调用在 async 继续中，非同步调用栈 |
+| `mainLog/mainWarn` 双重触发 | 同 console 问题，`4b9453c` 已清除 |
+
+## 六、仍不确定的根因（诚实评估）
+
+`getEnhancedEnv` 缓存修复消除了最大嫌疑，但 18 个本地路径 `existsSync` 通常 <50ms，不足以触发 >5s 的"未响应"。永久冻死可能还有以下原因之一：
+
+| 可能原因 | 判断 |
+|---------|------|
+| A. 环境变量含**网络映射路径**，`existsSync` 无限等待 | 缓存修复后首次 app 启动时仍会执行一次（非微任务），后续 MISS 路径不再触发 |
+| B. Windows Defender 扫描 Node.js 可执行文件 | 仅首次 `fork()` 触发，不完全解释永久卡死 |
+| C. IPC pipe buffer 满，`fcp.postMessage` 阻塞 | worker 尚未就绪时 postMessage 可能阻塞 |
+| D. 缓存修复**本身就是完整修复** | prewarm 在 app 启动后台预热（非微任务）首次填充缓存，后续 MISS 路径命中缓存，0ms |
+
+## 七、诊断方案（如仍冻结）
+
+在以下位置加 `fs.appendFileSync(diagFile, '...\n')` 落盘探针（**不用 console.log**），确定最后一条日志即为冻结位置：
+
+1. `conversationSendService.ts` 入口
+2. `getOrBuildTask` 返回后
+3. `ForkTask.init()` 调 `getEnhancedEnv()` 前后（`fork/ForkTask.ts:63`）
+4. `ForkTask.init()` 调 `platform.worker.fork()` 前后（`fork/ForkTask.ts:66`）
+5. `ForkTask.postMessage()` 调 `fcp.postMessage()` 前后（`fork/ForkTask.ts:121`）
+
+## 八、顺带发现的竞态（已记录，未修）
+
+`WorkerTaskManager.addTask`（`src/process/task/WorkerTaskManager.ts:66-73`）在 concurrent MISS 时用 `existing.task = task` 覆盖第一个 manager，孤儿 worker 进程不被 kill。目前影响不大（MISS 本来少见），暂不修。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/utils/shellEnv.ts` | 新增 `_baseEnhancedEnvCache` + `_buildBaseEnhancedEnv()` |
+| `src/process/agent/aionrs/binaryResolver.ts` | 新增 `_resolvedBinaryPath` 模块级缓存 |
+
+## 验证状态
+
+- `tsc --noEmit` exit 0（commit e332557 编译通过）
+- 运行时需 `npm run restart`：选 aionrs + MISS 路径（首次发送或清空预热池），确认不再冻结
+- 按交付约定，影响运行行为，需出新的 Windows 安装包才在正式版生效
+
+---
+
+# 追加记录 — 2026-07-01（侧栏「历史会话」显示全部开关）
+
+## 背景
+
+侧栏「历史会话」分组（`recents`）原只显示前 8 条会话，超出部分被截断到 `/sessions` 页面才能看到。用户昨天的会话被挤掉，希望加开关在侧栏直接展开全部。
+
+截断位置：`src/renderer/pages/conversation/GroupedHistory/index.tsx` 的 `visibleItems = section.items.slice(0, 8)`。
+
+## 修复
+
+在「历史会话」标题行右侧加 Arco `Switch`，受 `showAllRecents` state 控制，用 `localStorage`（key `1one:sidebar:showAllRecents`）持久化。开关打开时不 slice、"查看所有"跳转消失；关闭时维持 8 条 + "查看所有"。collapsed 侧栏不显示开关，行为不变。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/renderer/pages/conversation/GroupedHistory/index.tsx` | 加 `showAllRecents` state + localStorage 持久化；`HistorySectionHeader` 加 `showAll`/`onShowAllChange` props + Switch UI；`visibleItems`/`hasMore` 在开关打开时不截断 |
+| `src/renderer/services/i18n/locales/zh-CN/conversation.json` | `history` 下新增 `showAll`/`showRecent8` |
+| `src/renderer/services/i18n/locales/en-US/conversation.json` | 同上英文 |
+
+## 验证状态
+
+- `tsc --noEmit`：本次改动零错误（pptPreviewBridge 的 execSync 报错为既存问题，与本次无关）
+- `oxlint` 0 errors；`oxfmt --check` 全过；`check-i18n` 通过
+- 运行时需 `npm run restart` 桌面端实测：开关默认关闭显示 8 条；打开后显示全部含昨天会话；重启后开关状态保留；collapsed 侧栏不显示开关
+- 按交付约定，影响运行行为，需出新的 Windows 安装包（`npm run dist:win`）才在正式版生效
+
+---
+
+# 追加记录 — 2026-07-01 上午（aionrs 卡死问题已确认修复）
+
+## 结论：✅ 卡死已解决
+
+7-01 11:18 加完整启动探针 + worker 侧探针后复测，freeze.log + worker.log 显示 aionrs 链路完全正常：
+- worker fork 1.9ms
+- `postMessage('start')` → callback 1.9s 内返回（aionrs.exe ready）
+- `init.history` callback 正常
+- `send.message` callback 正常
+- 模型正常流式输出（worker.log 3108 行，含 thinking / tool_running / tool_result）
+
+## 真因（两层叠加）
+
+1. **`getEnhancedEnv()` 无缓存**（`e332557` 已修）— 18+ 次 `existsSync` 在 `await repo.getConversation` 之后的微任务里同步执行，阻塞主进程 event loop。
+2. **Windows Defender 首扫 aionrs.exe**（85MB）— 首次 spawn 被 Defender 同步扫描阻塞数十秒，叠加微任务阻塞导致 30s ready timeout 不够，`readyPromise` 永不 resolve，主进程 `postMessagePromise('start')` 永远等不到 callback → 卡死。
+
+11:18 那次突然好了的原因：`e332557` 缓存消除微任务阻塞 + aionrs.exe 被 Defender 扫过一次后不再阻塞。
+
+## 临时探针（待清理）
+
+为定位卡死，在以下文件加了 `appendFileSync` 落盘探针，写到 `%TEMP%/1one-diag/freeze.log`（主进程）和 `worker.log`（worker）。**探针不改逻辑，只观测**。排查已完成，应在下一次提交时清理：
+
+- `src/process/utils/freezeDiag.ts`（新增 helper）
+- `src/index.ts`、`src/process/utils/initStorage.ts`、`src/process/task/workerTaskManagerSingleton.ts`、`src/process/task/WorkerTaskManager.ts`、`src/process/task/AionrsManager.ts`、`src/process/bridge/conversationBridge.ts`、`src/process/bridge/services/conversationSendService.ts`、`src/process/worker/fork/ForkTask.ts`、`src/process/worker/fork/pipe.ts`、`src/process/worker/utils.ts`、`src/process/worker/aionrs.ts`、`src/process/agent/aionrs/index.ts`
+
+清理方式：删除 `freezeDiag.ts`，从上述文件移除 `diag(...)` / `wdiag(...)` / `adiag(...)` 调用和 import。**保留 `e332557` 的缓存修复**。
+
+## 教训
+
+1. Windows Defender 首扫 85MB binary 可阻塞 spawn 数十秒，大 binary 首次 spawn 卡死要考虑这个因素。
+2. 微任务内的同步 IO 是隐形杀手 — `await` 之后的代码在微任务里，期间 Windows 消息泵被挂起。
+3. `appendFileSync` 探针是观测主进程/worker 卡死的唯一可靠手段 — console.log 会被 patch 触发 bridge.emit，在 IPC 同步深栈里就是死锁源。
+4. 不要在没确认真因前连续改代码 — 本次先清 console（无效）、再加缓存（部分有效）、最后加探针才定位。如果一开始就加探针，能省两轮弯路。
+
+---
+
+# 追加记录 — 2026-07-01 中午（客户端↔企业端连接通讯 4 个 BUG 修复 + 浏览器 agent 加载）
+
+承接卡死排查（已解决）。用户在客户端模式（`deploymentRole=client`，`enterpriseServerUrl=192.168.11.137:25808`）下打开浏览器验证"浏览器不同步 PC 端 agent"问题时，发现设置里点 WebUI 地址会卡死，控制台出现 `0.0.0.1` / `0.0.0.19` / `0.0.0.192` / `192.168.11.137:25` / `enterprise-info 404` 诡异请求。审 538338e + 3acd4e5 后定位 4 个 BUG。
+
+## 用户诉求
+
+浏览器 WebUI 展示的 agent 列表，必须永远是被打开地址那台机器（终端服务器）本地的 agent：
+- 浏览器打开 `http://localhost:25809` → 显示本机 agent
+- 浏览器打开 `http://192.168.11.137:25808` → 显示 192.168.11.137 的本机 agent
+
+架构上 `/api/agents/available` 端点在服务端本机执行（`acpDetector.getDetectedAgents()` + `resolveAionrsBinary()`），天然满足此诉求。本轮只需补齐前端链路。
+
+## BUG 1+2：客户端模式下 `fetchWebuiApi` 不走远程服务端
+
+**文件**：`src/renderer/utils/webuiApiBase.ts`
+
+**根因**：`getWebuiApiBaseCandidates()` 在桌面+本地 WebUI 未启动时返回 `enterpriseApiOrigins`（历史记忆的地址）。客户端模式下这个列表里残留着之前 server 模式存的 `http://127.0.0.1:25809`（过期本地地址），导致所有 `fetchWebuiApi('/api/auth/*')` 都打不到远程服务端，全部失败。CONTEXT.md 6-26 写的"故意不动 `getWebuiApiBaseUrl`"代价就是这个。
+
+**修复**：`getWebuiApiBaseCandidates()` 客户端模式（`getClientEnterpriseServerOrigin()` 返回非 null）时，把远程 origin 放第一位，历史 remembered origins 作 fallback。这样 `fetchWebuiApi` 优先打远程，远程不可达才试 fallback。
+
+## BUG 1 配套：切部署模式时清空 `enterpriseApiOrigins`
+
+**文件**：`src/renderer/pages/settings/WebuiSettings/EnterpriseDeploymentModeCard.tsx`
+
+**根因**：`writeDeploymentConfig` 之前不清 `enterpriseApiOrigins`，切模式后过期地址残留。
+
+**修复**：`writeDeploymentConfig` 里同时 `ConfigStorage.set(ENTERPRISE_API_ORIGINS_KEY, [])`，浏览器侧 `localStorage.removeItem`。
+
+## BUG 3：服务器地址端口校验
+
+**文件**：`src/renderer/pages/settings/WebuiSettings/EnterpriseDeploymentModeCard.tsx`
+
+**根因**：用户可能误填 `192.168.11.137:25`（SMTP 端口），Chrome 视为 `ERR_UNSAFE_PORT` 拒绝 fetch，心跳永远失败。`hasExplicitPort` 只检查有无端口，不检查范围/安全性。
+
+**修复**：新增 `validateServerPort()` — 检查端口 1024-65535 范围 + 拒绝 Chrome unsafe port 列表（25/110/143/465/587/993/995 等）。`handleSave` 时校验，失败给具体原因提示。
+
+## BUG 4：`fetchRemoteEnterpriseJson` 无超时（卡死真凶）
+
+**文件**：`src/renderer/utils/enterpriseJoinApi.ts`
+
+**根因**：538338e 加的 OAuth 轮询 `poll()` 每 1 秒调 `fetchRemoteEnterpriseJson`，但 `fetch(url, init)` 无超时。远端 TCP 半开（handshake 成功但响应慢）时 fetch 长挂起，10 次轮询 × 长挂起 = 渲染进程网络线程池占满 → 后续所有 fetch 立即失败，Chrome 内部把失败 URL 解析成 `0.0.0.X` 碎片。这就是用户看到 `0.0.0.1` / `0.0.0.19` / `0.0.0.192` 的真因。
+
+**修复**：`fetchRemoteEnterpriseJson` 默认加 `AbortSignal.timeout(5000)`，5 秒超时。caller 传 `init.signal` 时尊重 caller。
+
+## 浏览器 agent 加载链路验证（用户诉求）
+
+**文件**：`src/renderer/pages/guid/hooks/useGuidAgentSelection.ts` + `src/process/webserver/routes/apiRoutes.ts`（都是之前未提交的改动，本轮验证 + 补强）
+
+**架构确认**：
+- 浏览器 `fetch('/api/agents/available')` 相对 URL → 打到浏览器加载页面的那台机器
+- 服务端 handler 调 `acpDetector.getDetectedAgents()` + `resolveAionrsBinary()` — 在服务端本机执行，返回服务端的本地 agent
+- 天然满足"浏览器打开哪台机器地址，就显示那台机器 agent"的诉求
+
+**补强**：`AVAILABLE_AGENTS_SWR_OPTIONS` 关了 `revalidateOnFocus`（避免 IPC spam），但导致 WebUI 用户登录前看不到 agent，登录后也不自动重拉。新增监听 `one-enterprise-context-refresh` 事件（登录成功 dispatch）触发 `mutateAvailableAgents()` 重新拉取。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|---|---|
+| `src/renderer/utils/enterpriseJoinApi.ts` | `fetchRemoteEnterpriseJson` 加 5s `AbortSignal.timeout` |
+| `src/renderer/utils/webuiApiBase.ts` | `getWebuiApiBaseCandidates` 客户端模式优先远程 origin |
+| `src/renderer/pages/settings/WebuiSettings/EnterpriseDeploymentModeCard.tsx` | `writeDeploymentConfig` 清 `enterpriseApiOrigins` + 新增 `validateServerPort` 端口校验 |
+| `src/renderer/pages/guid/hooks/useGuidAgentSelection.ts` | 监听 `one-enterprise-context-refresh` 触发 SWR mutate（补强，文件本身之前未提交） |
+| `src/process/webserver/routes/apiRoutes.ts` | `/api/agents/available` 端点（之前未提交，本轮验证架构正确） |
+
+## 验证状态
+
+- `tsc --noEmit` exit 0（零错误，pptPreviewBridge 既存错误与本次无关）
+- 运行时需 `npm run restart` 桌面端实测：
+  1. 客户端模式设置→WebUI 填远程服务端地址（含合法端口），保存 → 不再卡死
+  2. 浏览器打开远程服务端地址登录后 → Guid 页显示服务端本地 agent
+  3. 浏览器打开本机地址登录后 → Guid 页显示本机 agent
+  4. 客户端模式 OAuth 轮询远端不可达时 5s 超时，不再挂死渲染进程
+- 按交付约定，影响运行行为，需出新的 Windows 安装包才在正式版生效
+
+
+

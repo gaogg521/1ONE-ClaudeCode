@@ -19,6 +19,9 @@ import { SpeechToTextService } from '@process/bridge/services/SpeechToTextServic
 import { isActivePreviewPort } from '@process/bridge/pptPreviewBridge';
 import { isActiveOfficeWatchPort } from '@process/bridge/officeWatchBridge';
 import { ONE_TIMESTAMP_SEPARATOR } from '@/common/config/constants';
+import { acpDetector } from '@process/agent/acp/AcpDetector';
+import { resolveAionrsBinary } from '@process/agent/aionrs/binaryResolver';
+import { mcpService } from '@process/services/mcpServices/McpService';
 import directoryApi from '../directoryApi';
 import { apiRateLimiter } from '../middleware/security';
 import { registerWeixinLoginRoutes } from './weixinLoginRoutes';
@@ -705,6 +708,39 @@ export function registerApiRoutes(app: Express): void {
   registerNotificationRoutes(app, { rateLimit: apiRateLimiter, auth: validateApiAccess });
   registerProfileRoutes(app, { rateLimit: apiRateLimiter, auth: validateApiAccess });
   registerDevOpsRoutes(app);
+
+  /**
+   * 可用 agent 列表 - Available agents list
+   * GET /api/agents/available
+   * WebUI 模式下 WebSocket 桥接不稳定，通过 HTTP 直接读取
+   */
+  app.get('/api/agents/available', apiRateLimiter, validateApiAccess, async (_req: Request, res: Response) => {
+    try {
+      const disabledDetectedAgents =
+        ((await ProcessConfig.get('acp.disabledDetectedAgents').catch((): string[] => [])) || []) as string[];
+
+      const agents = acpDetector.getDetectedAgents();
+      const enriched = agents
+        .filter((agent) => !disabledDetectedAgents.includes(agent.backend))
+        .map((agent) => ({
+          ...agent,
+          supportedTransports: mcpService.getSupportedTransportsForAgent(agent),
+        }));
+
+      const aionrsPath = resolveAionrsBinary();
+      if (aionrsPath && !disabledDetectedAgents.includes('aionrs')) {
+        const aionrsEntry = { backend: 'aionrs' as const, name: '1ONE CODE', cliPath: aionrsPath };
+        enriched.unshift({
+          ...aionrsEntry,
+          supportedTransports: mcpService.getSupportedTransportsForAgent(aionrsEntry),
+        } as (typeof enriched)[number]);
+      }
+
+      res.json({ success: true, data: enriched });
+    } catch (error) {
+      res.status(500).json({ success: false, msg: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
 
   /**
    * 通用 API 端点 - Generic API endpoint

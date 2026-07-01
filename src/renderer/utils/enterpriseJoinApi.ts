@@ -17,9 +17,15 @@ import {
 import { rememberEnterpriseApiOrigin } from '@/renderer/utils/rememberEnterpriseApiOrigin';
 import { hasValidCsrfToken, withCsrfToken } from '@process/webserver/middleware/csrfClient';
 
-/** Fetch JSON from an absolute URL on the remote enterprise server. */
+/** Fetch JSON from an absolute URL on the remote enterprise server.
+ *  Hard 5s timeout — without it, a half-open TCP connection (server accepts
+ *  handshake but never responds) makes the renderer's network thread pool
+ *  fill up across poll iterations, freezing every subsequent fetch. */
 export async function fetchRemoteEnterpriseJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const res = await fetch(url, {
+    ...init,
+    signal: init?.signal ?? AbortSignal.timeout(5000),
+  });
   const body = (await res.json().catch((): null => null)) as Record<string, unknown> | null;
   if (!res.ok) {
     const msg = readWebuiApiErrorMessage(body, res);

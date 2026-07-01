@@ -20,6 +20,7 @@ import {
   WEBUI_ENTERPRISE_SERVER_URL_KEY,
   type WebuiDeploymentRole,
 } from '@/common/config/webuiEnterpriseConfig';
+import { ENTERPRISE_API_ORIGINS_KEY } from '@/common/config/enterpriseApiOrigins';
 import { fetchRemoteEnterpriseJson } from '@/renderer/utils/enterpriseJoinApi';
 import { getClientEnterpriseServerOrigin } from '@/renderer/utils/webuiApiBase';
 
@@ -29,6 +30,38 @@ function hasExplicitPort(raw: string): boolean {
     return new URL(withScheme).port !== '';
   } catch {
     return false;
+  }
+}
+
+/**
+ * Ports Chrome refuses to fetch (ERR_UNSAFE_PORT) — mostly well-known service
+ * ports that browsers block to prevent cross-protocol attacks. Rejecting these
+ * at save time avoids confusing heartbeat failures where fetch silently aborts.
+ */
+const UNSAFE_PORTS = new Set([
+  1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79,
+  87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137,
+  139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532,
+  540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723,
+  2049, 3659, 4045, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6697,
+]);
+
+function validateServerPort(raw: string): { valid: boolean; reason?: string } {
+  if (!hasExplicitPort(raw)) {
+    return { valid: false, reason: 'no_port' };
+  }
+  try {
+    const withScheme = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+    const port = Number.parseInt(new URL(withScheme).port, 10);
+    if (!Number.isFinite(port) || port < 1024 || port > 65535) {
+      return { valid: false, reason: 'port_out_of_range' };
+    }
+    if (UNSAFE_PORTS.has(port)) {
+      return { valid: false, reason: 'port_unsafe' };
+    }
+    return { valid: true };
+  } catch {
+    return { valid: false, reason: 'invalid_url' };
   }
 }
 
@@ -47,11 +80,17 @@ async function writeDeploymentConfig(role: WebuiDeploymentRole, url: string): Pr
   if (isElectronDesktop()) {
     await ConfigStorage.set(WEBUI_DEPLOYMENT_ROLE_KEY, role);
     await ConfigStorage.set(WEBUI_ENTERPRISE_SERVER_URL_KEY, url);
+    // Clear stale enterpriseApiOrigins whenever deployment config changes.
+    // Otherwise entries remembered from a previous server-mode session (e.g.
+    // http://127.0.0.1:25809) pollute fetchWebuiApi candidates and the client
+    // keeps probing an unreachable local address instead of the remote server.
+    await ConfigStorage.set(ENTERPRISE_API_ORIGINS_KEY, []).catch((): undefined => undefined);
     return;
   }
   if (typeof window !== 'undefined') {
     window.localStorage.setItem(WEBUI_DEPLOYMENT_ROLE_KEY, role);
     window.localStorage.setItem(WEBUI_ENTERPRISE_SERVER_URL_KEY, url);
+    window.localStorage.removeItem(ENTERPRISE_API_ORIGINS_KEY);
   }
 }
 
@@ -142,6 +181,27 @@ const EnterpriseDeploymentModeCard: React.FC = () => {
         })
       );
       return;
+    }
+    if (role === 'client') {
+      const portCheck = validateServerPort(url);
+      if (!portCheck.valid) {
+        const reasonMap: Record<string, string> = {
+          no_port: t('settings.webui.deployServerUrlNoPort', {
+            defaultValue: '未检测到端口号，服务器地址通常需要指定端口，如 192.168.1.10:25808',
+          }),
+          port_out_of_range: t('settings.webui.deployServerPortOutOfRange', {
+            defaultValue: '端口必须在 1024–65535 之间',
+          }),
+          port_unsafe: t('settings.webui.deployServerPortUnsafe', {
+            defaultValue: '该端口被浏览器视为不安全（如 25/110/143 等），请换一个端口',
+          }),
+          invalid_url: t('settings.webui.deployServerUrlInvalid', {
+            defaultValue: '请输入有效的服务器地址，例如 192.168.1.10:25809',
+          }),
+        };
+        Message.warning(reasonMap[portCheck.reason ?? 'invalid_url']);
+        return;
+      }
     }
     if (role === 'client' && hasInstanceEnterprise) {
       Modal.confirm({

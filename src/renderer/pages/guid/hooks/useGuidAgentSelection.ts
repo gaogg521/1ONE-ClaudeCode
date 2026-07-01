@@ -194,17 +194,49 @@ export const useGuidAgentSelection = ({
   const isPresetAgent = Boolean(selectedAgentInfo?.isPreset);
 
   // --- SWR: Fetch available agents ---
-  const { data: availableAgentsData } = useSWR(
+  const { data: availableAgentsData, mutate: mutateAvailableAgents } = useSWR(
     'acp.agents.available',
     async () => {
-      const result = await ipcBridge.acpConversation.getAvailableAgents.invoke();
-      if (result.success) {
-        return result.data.filter((agent) => !(agent.backend === 'gemini' && agent.cliPath));
+      try {
+        // WebUI browser: use HTTP to bypass WebSocket bridge (bridge request-response is unreliable in WebUI)
+        const isWebUI = !(window as { electronAPI?: unknown }).electronAPI;
+        if (isWebUI) {
+          const response = await fetch('/api/agents/available');
+          if (!response.ok) return [];
+          const result = (await response.json()) as { success: boolean; data: AvailableAgent[] };
+          if (result.success) {
+            return result.data.filter((agent) => !(agent.backend === 'gemini' && agent.cliPath));
+          }
+          return [];
+        }
+
+        // Desktop Electron: use bridge (IPC)
+        const timeout = new Promise<{ success: false }>((resolve) =>
+          setTimeout(() => resolve({ success: false }), 8000)
+        );
+        const result = await Promise.race([ipcBridge.acpConversation.getAvailableAgents.invoke(), timeout]);
+        if (result.success) {
+          return result.data.filter((agent) => !(agent.backend === 'gemini' && agent.cliPath));
+        }
+      } catch {
+        // ignore
       }
       return [];
     },
     AVAILABLE_AGENTS_SWR_OPTIONS
   );
+
+  // Re-fetch after login: AVAILABLE_AGENTS_SWR_OPTIONS disables revalidateOnFocus
+  // (to avoid spamming IPC), so we manually trigger on login-success events and
+  // when the auth user becomes available. Without this, a WebUI user who lands on
+  // the Guid page before logging in sees an empty agent list until manual refresh.
+  useEffect(() => {
+    const revalidate = (): void => {
+      void mutateAvailableAgents();
+    };
+    window.addEventListener('one-enterprise-context-refresh', revalidate);
+    return () => window.removeEventListener('one-enterprise-context-refresh', revalidate);
+  }, [mutateAvailableAgents]);
 
   // Fetch remote agents from DB and merge into available agents
   const { data: remoteAgentsData } = useSWR('remote-agents.list', () => ipcBridge.remoteAgent.list.invoke());

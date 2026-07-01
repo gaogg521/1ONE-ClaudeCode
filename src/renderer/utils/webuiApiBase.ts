@@ -72,13 +72,26 @@ async function readDesktopWebuiStatus(): Promise<DesktopWebuiStatus | null> {
 
 /**
  * Ordered API origins for the running desktop WebUI (loopback first, then LAN).
+ *
+ * Client mode override: when this machine is a client (deploymentRole='client'
+ * with a valid enterpriseServerUrl), the remote server origin is placed FIRST
+ * so fetchWebuiApi talks to the remote server, not stale local entries left
+ * over from a previous server-mode session in `enterpriseApiOrigins`.
  */
 export async function getWebuiApiBaseCandidates(): Promise<string[]> {
   if (typeof window === 'undefined' || !isElectronDesktop()) {
     return [];
   }
-  const status = await readDesktopWebuiStatus();
   const stored = await readEnterpriseApiOrigins();
+  const clientOrigin = await getClientEnterpriseServerOrigin();
+  if (clientOrigin) {
+    // Client mode: remote server first, then any remembered origins as fallback.
+    // Stale local entries (e.g. http://127.0.0.1:25809 from a previous server-mode
+    // session) end up AFTER the real remote server, so they only get tried if the
+    // remote is unreachable — never preferred over it.
+    return mergeEnterpriseApiOrigins([clientOrigin], stored);
+  }
+  const status = await readDesktopWebuiStatus();
   if (!status?.port) {
     return stored;
   }
@@ -89,7 +102,8 @@ export async function getWebuiApiBaseCandidates(): Promise<string[]> {
 /**
  * Base URL for WebUI HTTP APIs.
  * - Browser WebUI: current origin
- * - Electron desktop: primary loopback origin when WebUI is running
+ * - Electron desktop (server mode): primary loopback origin when WebUI is running
+ * - Electron desktop (client mode): remote enterprise server origin
  */
 export async function getWebuiApiBaseUrl(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
