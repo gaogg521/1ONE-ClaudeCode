@@ -1680,3 +1680,134 @@ export function getEnhancedEnv(customEnv?: Record<string, string>): Record<strin
 | `src/renderer/pages/admin/AdminTeamRuntimes.tsx` | 传 authenticated |
 | `src/renderer/pages/superAssistant/components/TeamRuntimeFleetPanel.tsx` | 未认证标签 |
 | `src/common/auth/enterpriseEditionSync.ts` | merge 优先级：本机已加入企业优先 ipc |
+
+---
+
+# 2026-07-02 三大修复（1.23.13）
+
+承接 7-01 客户端 SSO 跳回 + one-export-pdf 打包失效 + 开发环境死机。本轮一并修复 + 架构改造。
+
+## Bug 1：内置 MCP asarUnpack 漏配（打包后 one-export-pdf / one-web-tools 失效）
+
+**文件**：`electron-builder.yml`
+
+**根因**：`asarUnpack` 只列了 `out/main/builtin-mcp-image-gen.js`，漏了 `builtin-mcp-web-tools.js` 和 `builtin-mcp-export-pdf.js`。打包后 `getBuiltinMcpScriptPath`（`initStorage.ts:670`）返回 `app.asar.unpacked/out/main/builtin-mcp-export-pdf.js`，但这个文件没被 unpack，仍在 asar 归档里。外部 `node` 进程无法读 asar → spawn ENOENT → MCP 连接失败。开发模式 OK 是因为开发不走 asar，`out/main/builtin-mcp-export-pdf.js` 直接存在。
+
+**修复**：`electron-builder.yml:228` `asarUnpack` 补上另两个脚本。
+
+**教训**：新增内置 MCP 脚本时，必须同步更新 `asarUnpack` 列表 + `scripts/build-mcp-servers.js` 打包入口 + `getBuiltinMcpScriptPath` 路径解析。三者缺一，打包后失效。
+
+## Bug 2：IPC handler console.* 冻死主进程（第 5 轮漏网）
+
+**文件**：`src/process/bridge/databaseBridge.ts`、`src/process/task/AionrsManager.ts`
+
+**根因**：`databaseBridge.getConversationMessages` 的 catch 块 `console.error` → `@office-ai/platform` console patch → `bridge.adapter.emit` → `win.webContents.send` × N + `broadcastToAll`。渲染进程每 2.5s 轮询 `getConversationMessages`（`useAionrsMessage.ts:439` `AIONRS_MESSAGE_SYNC_POLL_MS`），客户端模式 `AuthService.verifyToken` 验远程 JWT 失败时每次 catch 都触发 console → 主进程冻死。
+
+**为什么打包不死机、开发死机**：打包后客户端模式 IPC 路径的 `__authToken` 传递行为和 dev 不同（254c653 改了 `fetchWebuiApi`），dev 渲染进程更积极地带 token 触发 verify 失败。但无论 dev/打包，IPC handler 里的 `console.*` 都是定时炸弹——根因是违反 CLAUDE.md 坑 1 禁令。
+
+**修复**：4 处 `console.error/warn` 改 `appendFileSync` 文件日志（`databaseBridge` 2 处 + `AionrsManager` 2 处）。
+
+**教训**：这是 4b9453c 排查的"第 5 轮漏网"。每次以为清干净了结果还有漏网的。`.oxlintrc.json` 的 `no-console: warn` 规则必须坚持，新增 IPC handler 一律用文件日志。
+
+## 架构改造：客户端 SSO 统一网页认证
+
+**文件**：`oauthLoginState.ts`、`oauthLoginHelpers.ts`、`authRoutes.ts`、`useDeepLink.ts`、`webuiDesktopSession.ts`、`EnterpriseLoginChannelPanel.tsx`
+
+**背景**：客户端模式（桌面端配置远程企业服务器）SSO 之前在 Electron BrowserWindow 里跑 OAuth，有三个痛点：
+1. redirect_uri 不匹配（错误码 20029）——服务端 `resolveOAuthCallbackUri` 在 LAN IP origin 下返回空
+2. 登录后跳回登录页——BrowserWindow cookie 共享 + 远程轮询链路长易断
+3. 架构别扭——客户端模式认证权威是服务端，但 OAuth 在客户端跑，redirect_uri/cookie/token 都要跨实例处理
+
+**改造**：客户端模式 SSO 统一跳网页认证。
+- 客户端点 SSO → `shell.openExternal(remoteOrigin + '/api/auth/feishu/authorize?desktop=1')` → 系统浏览器打开
+- 服务端 authorize 把 `desktop=1` 存到 OAuth state → 飞书 OAuth → 回调服务端
+- 服务端 callback 检测 state.desktop → 生成 token → `res.redirect('1one://sso-callback?token=...&userId=...&origin=...')`（不 Set-Cookie）
+- 系统浏览器跳 deep link → OS 唤起桌面端 → `useDeepLink` 接收 `sso-callback` action → 写 session + rememberEnterpriseApiOrigin + refresh + 导航
+
+**关键设计**：
+- token 通过 deep link URL 传递（OS 级别唤起，相对安全；token 有过期时间）
+- 服务端 `finalizeOAuthBrowserLogin` 加 `desktop` + `remoteOrigin` 入参，desktop 模式不 Set-Cookie（浏览器 cookie 对桌面端无用）
+- `OAuthLoginStateEntry` 加 `desktop?` 字段，`issueOAuthLoginState` 接受 `{ desktop }` opts
+- 三个 provider（feishu/dingtalk/wecom）的 authorize + callback 都传递 desktop 标记
+- `applySsoCallbackSession(params)` helper 封装字段校验 + `setWebuiDesktopSession`
+- `EnterpriseLoginChannelPanel.startOAuth` 客户端模式移除 BrowserWindow + 远程轮询，改 `openExternalUrl` + `Message.loading` 提示
+
+**未改的部分**：
+- `resolveOAuthCallbackUri` 保持不变——服务端 origin 是 LAN IP 时仍返回空，但客户端模式不再依赖服务端自动构造 redirect_uri，服务端管理员必须在 cfg.redirectUri 配服务端的飞书回调 URL（正式部署必须配）
+- `WebuiService.syncBrowserWebuiSession` 客户端模式分支（254c653 加的 remote cookie 读取）保留——deep link 回调后用户重启应用，仍需从 remote cookie 恢复 session
+- 非客户端模式（服务端模式 / 纯浏览器 WebUI）SSO 流程不变
+- `WebuiService.openRemoteOAuthWindow` 保留（向后兼容），但 `EnterpriseLoginChannelPanel` 不再调用
+
+**后续可选增强**：改用一次性 short-lived code（30s 有效），桌面端拿 code 调远程 `/api/auth/exchange-desktop-code` 换 token，避免 URL 带 token。本次不做，保持最小改动。
+
+## 验证
+
+- `tsc --noEmit` 通过（除既存 pptPreviewBridge 问题）
+- `oxlint` 0 errors（28 warnings 全既存）
+- `vitest`：`oauthLoginState` / `deepLink` / `webuiDesktopSession` / `enterpriseRoles.oauthRedirect`（修正期望后）全过
+- 打包后 `app.asar.unpacked/out/main/` 验证有三个 builtin-mcp 脚本
+- 运行时需 `npm run restart` 桌面端实测：
+  1. 客户端模式飞书 SSO：系统浏览器打开 → deep link 回桌面端 → 自动登录
+  2. 设置页测试 `one-export-pdf` / `one-web-tools` MCP 连接成功
+  3. 开发环境发消息不再卡死
+
+## 涉及文件汇总（本轮）
+
+| 文件 | 改动 |
+|---|---|
+| `electron-builder.yml` | asarUnpack 补 builtin-mcp-web-tools.js + builtin-mcp-export-pdf.js |
+| `src/process/bridge/databaseBridge.ts` | 2 处 console.error 改文件日志 |
+| `src/process/task/AionrsManager.ts` | 2 处 console.warn 改文件日志 |
+| `src/process/webserver/auth/oauthLoginState.ts` | OAuthLoginStateEntry 加 desktop 字段 |
+| `src/process/webserver/auth/oauthLoginHelpers.ts` | finalizeOAuthBrowserLogin 加 desktop 分支（1one://sso-callback） |
+| `src/process/webserver/routes/authRoutes.ts` | feishu/dingtalk/wecom 三个 provider 传递 desktop |
+| `src/renderer/utils/webuiDesktopSession.ts` | 新增 applySsoCallbackSession |
+| `src/renderer/hooks/system/useDeepLink.ts` | 加 sso-callback action |
+| `src/renderer/pages/enterprise/components/EnterpriseLoginChannelPanel.tsx` | 客户端模式 startOAuth 改 openExternalUrl |
+| `tests/unit/enterpriseRoles.oauthRedirect.test.ts` | 修正期望 /sessions → /guid（90305cf 改默认落点后未同步） |
+
+---
+
+# 2026-07-02 Issues 创建转圈圈修复（1.23.14）
+
+## 背景
+
+用户报告侧边栏 Issues 功能创建时一直转圈圈。昨天白天正常，晚间开始失败。
+
+## 根因：WebUI IPC handler console.* 冻死主进程（第 6 轮漏网）
+
+Issue 创建链路经过多个 WebUI IPC handler：
+
+```
+CreateIssueModal.handleSubmit()
+  → ensureDesktopWebuiRunning()          ← IPC: webui.getStatus / webui.start
+  → createRequirement()                  ← POST /api/admin/requirements
+    → fetchWebuiApi()
+      → fetchWebuiApiViaLoopbackIpc()    ← IPC: webui.invokeLoopbackRequest
+        → ensureCsrfTokenViaLoopback()   ← IPC: webui.invokeLoopbackRequest
+```
+
+每个 WebUI IPC handler 用 `WebuiService.handleAsync()` 包装。任意一步出错时，catch 块 `console.error` → `@office-ai/platform` console patch → `bridge.adapter.emit('officeai-logger')` → `win.webContents.send` × N + `broadcastToAll` → **主进程 event loop 冻死** → renderer IPC 永不返回 → loading 永远转圈。
+
+commit `d80d2c6` 修了 `databaseBridge.ts` + `AionrsManager.ts`，但漏了这两个文件。
+
+## 修复
+
+| 文件 | 改动 |
+|---|---|
+| `src/process/bridge/services/WebuiService.ts` | `handleAsync` catch 块 `console.error` → `appendFileSync` 文件日志 |
+| `src/process/bridge/webuiBridge.ts` | 5 处 `console.warn`/`console.error`（start/stop/QR/Direct IPC）→ `appendFileSync` 文件日志 |
+| `src/process/webserver/localLoopbackRequest.ts` | `response.text()` 加 15s `Promise.race` 超时 + 移除无效 `session` 参数 |
+
+## 教训
+
+这是 console.* 冻死的第 6 轮漏网。之前 5 轮：
+1. `4b9453c` — conversationBridge / modelBridge / acpConversationBridge / conversationSendService
+2. `2c98728` — requestLoggingMiddleware
+3. `5fe47cb` — authRoutes catch 块
+4. `d80d2c6` — databaseBridge / AionrsManager
+5. （遗漏） ViteProxy / errorHandler
+
+不是所有 console 都要删——`src/index.ts` 启动日志、`src/server.ts` 信号处理等在非 IPC 同步调用栈的是安全的。只有 IPC handler provider 回调内的 console 才会触发冻死。
+
+`.oxlintrc.json` 的 `no-console: warn` 是 warning 不是 error，因为部分 console 是设计如此（启动日志）。审查 console 违规时需区分：IPC 同步栈内的必须清，其他的可以保留。
