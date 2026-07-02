@@ -11,7 +11,10 @@ import {
   buildWebuiApiBaseCandidates,
   type WebuiServerAddressSnapshot,
 } from '@/common/config/webuiApiBaseCandidates';
-import { resolveWebuiAdminPort } from '@/common/config/webuiLoginAccess';
+import {
+  buildWebuiAdminLoginUrlOnDedicatedPort,
+  resolveWebuiAdminPort,
+} from '@/common/config/webuiLoginAccess';
 import {
   ONE_WEBUI_CLIENT_DESKTOP,
   ONE_WEBUI_CLIENT_HEADER,
@@ -155,6 +158,15 @@ export async function getWebuiAdminBrowserOrigin(): Promise<string | null> {
   // Enterprise client mode: open the remote server the user configured, not the local one.
   const clientOrigin = await getClientEnterpriseServerOrigin();
   if (clientOrigin) {
+    // Client origin is the member port (e.g. 25809); admin UI is on member+1.
+    const adminUrl = buildWebuiAdminLoginUrlOnDedicatedPort(clientOrigin);
+    if (adminUrl) {
+      try {
+        return new URL(adminUrl).origin;
+      } catch {
+        // fall through
+      }
+    }
     return clientOrigin;
   }
   if (!isElectronDesktop()) {
