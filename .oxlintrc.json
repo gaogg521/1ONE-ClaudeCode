@@ -56,6 +56,22 @@
       "rules": {
         "no-console": "warn"
       }
+    },
+    {
+      "files": ["src/process/webserver/**/*.ts", "src/process/bridge/**/*.ts"],
+      "rules": {
+        "no-console": "error"
+      }
+    },
+    {
+      "files": [
+        "src/process/webserver/index.ts",
+        "src/process/webserver/setup.ts",
+        "src/process/webserver/middleware/csrfClient.ts"
+      ],
+      "rules": {
+        "no-console": "warn"
+      }
     }
   ],
   "ignorePatterns": [

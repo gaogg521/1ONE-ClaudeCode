@@ -10,6 +10,7 @@ import { ExtensionRegistry } from '@process/extensions';
 import type { IConversationRepository } from '@process/services/database/IConversationRepository';
 import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
 import { ActivitySnapshotBuilder } from './services/ActivitySnapshotBuilder';
+import { logBridgeError, logBridgeWarn } from './bridgeLog';
 
 const ACTIVITY_SNAPSHOT_TTL_MS = 3000;
 
@@ -54,7 +55,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
       const registry = ExtensionRegistry.getInstance();
       return registry.getThemes();
     } catch (error) {
-      console.error('[Extensions] Failed to get themes:', error);
+      logBridgeError('[Extensions] Failed to get themes', error);
       return [];
     }
   });
@@ -75,7 +76,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
         hasLifecycle: !!(ext.manifest as any).lifecycle,
       }));
     } catch (error) {
-      console.error('[Extensions] Failed to get loaded extensions:', error);
+      logBridgeError('[Extensions] Failed to get loaded extensions', error);
       return [];
     }
   });
@@ -86,7 +87,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
       const registry = ExtensionRegistry.getInstance();
       return registry.getAssistants();
     } catch (error) {
-      console.error('[Extensions] Failed to get assistants:', error);
+      logBridgeError('[Extensions] Failed to get assistants', error);
       return [];
     }
   });
@@ -97,7 +98,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
       const registry = ExtensionRegistry.getInstance();
       return registry.getAcpAdapters();
     } catch (error) {
-      console.error('[Extensions] Failed to get ACP adapters:', error);
+      logBridgeError('[Extensions] Failed to get ACP adapters', error);
       return [];
     }
   });
@@ -108,7 +109,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
       const registry = ExtensionRegistry.getInstance();
       return registry.getAgents();
     } catch (error) {
-      console.error('[Extensions] Failed to get agents:', error);
+      logBridgeError('[Extensions] Failed to get agents', error);
       return [];
     }
   });
@@ -119,7 +120,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
       const registry = ExtensionRegistry.getInstance();
       return registry.getMcpServers();
     } catch (error) {
-      console.error('[Extensions] Failed to get MCP servers:', error);
+      logBridgeError('[Extensions] Failed to get MCP servers', error);
       return [];
     }
   });
@@ -130,7 +131,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
       const registry = ExtensionRegistry.getInstance();
       return registry.getSkills();
     } catch (error) {
-      console.error('[Extensions] Failed to get skills:', error);
+      logBridgeError('[Extensions] Failed to get skills', error);
       return [];
     }
   });
@@ -141,7 +142,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
       const registry = ExtensionRegistry.getInstance();
       return registry.getSettingsTabs();
     } catch (error) {
-      console.error('[Extensions] Failed to get settings tabs:', error);
+      logBridgeError('[Extensions] Failed to get settings tabs', error);
       return [];
     }
   });
@@ -162,7 +163,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
         })),
       }));
     } catch (error) {
-      console.error('[Extensions] Failed to get webui contributions:', error);
+      logBridgeError('[Extensions] Failed to get webui contributions', error);
       return [];
     }
   });
@@ -172,7 +173,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
     try {
       return await getActivitySnapshot();
     } catch (error) {
-      console.error('[Extensions] Failed to build agent activity snapshot:', error);
+      logBridgeError('[Extensions] Failed to build agent activity snapshot', error);
       return {
         generatedAt: Date.now(),
         totalConversations: 0,
@@ -188,7 +189,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
       const registry = ExtensionRegistry.getInstance();
       return registry.getExtI18nForLocale(locale);
     } catch (error) {
-      console.error('[Extensions] Failed to get ext i18n for locale:', error);
+      logBridgeError('[Extensions] Failed to get ext i18n for locale', error);
       return {};
     }
   });
@@ -208,7 +209,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
         msg: success ? undefined : `Failed to enable "${name}"`,
       };
     } catch (error) {
-      console.error(`[Extensions] Failed to enable "${name}":`, error);
+      logBridgeError(`[Extensions] Failed to enable "${name}"`, error);
       return {
         success: false,
         msg: error instanceof Error ? error.message : String(error),
@@ -233,7 +234,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
         msg: success ? undefined : `Failed to disable "${name}"`,
       };
     } catch (error) {
-      console.error(`[Extensions] Failed to disable "${name}":`, error);
+      logBridgeError(`[Extensions] Failed to disable "${name}"`, error);
       return {
         success: false,
         msg: error instanceof Error ? error.message : String(error),
@@ -247,7 +248,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
       const registry = ExtensionRegistry.getInstance();
       return registry.getExtensionPermissions(name);
     } catch (error) {
-      console.error(`[Extensions] Failed to get permissions for "${name}":`, error);
+      logBridgeError(`[Extensions] Failed to get permissions for "${name}"`, error);
       return [];
     }
   });
@@ -258,7 +259,7 @@ export function initExtensionsBridge(repo: IConversationRepository, taskManager:
       const registry = ExtensionRegistry.getInstance();
       return registry.getExtensionRiskLevel(name);
     } catch (error) {
-      console.error(`[Extensions] Failed to get risk level for "${name}":`, error);
+      logBridgeError(`[Extensions] Failed to get risk level for "${name}"`, error);
       return 'safe';
     }
   });

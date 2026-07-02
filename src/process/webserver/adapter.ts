@@ -7,6 +7,7 @@
 import type { WebSocketServer } from 'ws';
 import { registerWebSocketBroadcaster, getBridgeEmitter } from '@/common/adapter/registry';
 import { WebSocketManager } from './websocket/WebSocketManager';
+import { logRouteWarn } from './webuiLog';
 
 // 存储取消注册函数，用于服务器停止时清理
 // Store unregister function for cleanup when server stops
@@ -52,7 +53,9 @@ export function initWebAdapter(wss: WebSocketServer): void {
       }
       emitter.emit(name, payload);
     } else {
-      console.warn('[adapter] Bridge emitter not set, message dropped:', name);
+      // Fires per incoming WebSocket message — same repeated-trigger shape as
+      // the round-5 freeze. console.* here would hang the main process.
+      logRouteWarn(`[adapter] Bridge emitter not set, message dropped: ${name}`, null);
     }
   });
 }

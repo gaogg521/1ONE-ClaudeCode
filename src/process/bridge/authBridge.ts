@@ -16,6 +16,7 @@ import { ipcBridge } from '@/common';
 import { promises as fsAsync } from 'node:fs';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
+import { logBridgeError, logBridgeWarn } from './bridgeLog';
 
 /**
  * 在 Windows 上注入 Edge/Chrome 作为 OAuth 浏览器，避免 360 等国产浏览器
@@ -32,10 +33,10 @@ function injectWindowsOAuthBrowser(): (() => void) | null {
   ];
   const browserPath = candidates.find((p) => existsSync(p));
   if (!browserPath) {
-    console.log('[Auth] No Edge/Chrome found, using system default browser for OAuth');
+    logBridgeWarn('[Auth] No Edge/Chrome found, using system default browser for OAuth', null);
     return null;
   }
-  console.log('[Auth] Using browser for OAuth:', browserPath);
+  logBridgeWarn('[Auth] Using browser for OAuth', browserPath);
   (globalThis as Record<string, unknown>)['__1ONE_BROWSER_OPENER'] = async (url: string) => {
     spawn(browserPath, [url], { detached: true, stdio: 'ignore' }).unref();
     return {};
@@ -79,13 +80,13 @@ export function initAuthBridge(): void {
         if (creds.refresh_token) {
           // 有 refresh_token，凭证有效但可能需要在使用时刷新
           // Has refresh_token, credentials are valid but may need refresh when used
-          console.log('[Auth] Credentials exist with refresh_token, returning success');
+          logBridgeWarn('[Auth] Credentials exist with refresh_token, returning success', null);
           return { success: true, data: { account: 'Logged in (refresh needed)' } };
         }
       } catch (fsError) {
         // 忽略文件系统错误，继续返回 false
         // Ignore filesystem errors, continue to return false
-        console.debug('[Auth] Error checking credentials file:', fsError);
+        logBridgeWarn('[Auth] Error checking credentials file', fsError);
       }
 
       return { success: false };
@@ -135,19 +136,19 @@ export function initAuthBridge(): void {
 
           const oauthInfo = await getOauthInfoWithCache(proxy);
           if (oauthInfo && oauthInfo.email) {
-            console.log('[Auth] Login successful, account:', oauthInfo.email);
+            logBridgeWarn('[Auth] Login successful, account', oauthInfo.email);
             return { success: true, data: { account: oauthInfo.email } };
           }
 
           // 凭证获取失败，说明登录流程虽然返回了 client 但凭证未正确保存
           // Credential retrieval failed - login returned client but credentials weren't saved properly
-          console.warn('[Auth] Login completed but no credentials found');
+          logBridgeWarn('[Auth] Login completed but no credentials found', null);
           return {
             success: false,
             msg: 'Login completed but credentials were not saved. Please try again.',
           };
         } catch (error) {
-          console.error('[Auth] Failed to verify credentials after login:', error);
+          logBridgeError('[Auth] Failed to verify credentials after login', error);
           return {
             success: false,
             msg: `Login verification failed: ${error.message || error.toString()}`,
@@ -161,7 +162,7 @@ export function initAuthBridge(): void {
     } catch (error) {
       // 捕获登录过程中的所有异常，避免未处理的错误导致应用弹窗
       // Catch all exceptions during login to prevent unhandled errors from showing error dialogs
-      console.error('[Auth] Login error:', error);
+      logBridgeError('[Auth] Login error', error);
       return { success: false, msg: error.message || error.toString() };
     }
   });

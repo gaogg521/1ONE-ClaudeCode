@@ -1890,3 +1890,97 @@ commit `d80d2c6` 修了 `databaseBridge.ts` + `AionrsManager.ts`，但漏了这�
 | `src/process/webserver/routes/devops/cciRoutes.ts` | 5 处 console.error → logRouteError |
 | `src/process/webserver/routes/kanbanRoutes.ts` | 5 处 console.error → logRouteError |
 | `src/process/webserver/routes/apiRoutes.ts` | 4 处 console.error/warn → logRouteError/logRouteWarn |
+
+---
+
+# 2026-07-02 深夜 Issues 创建卡死 — 第 8 轮（真因：AuthService.verifyToken）
+
+## 背景
+
+用户报告"新建 Issue"点「创建」后仍然一直转圈圈（第 7 轮 `9aecb4a` 打包出 1.23.17 后仍未解决）。要求不再头痛医头，找出真正的原因。
+
+## 根因
+
+`createAuthMiddleware`（`TokenMiddleware.ts:144`）是 `adminRoutes.ts`/`devopsRoutes.ts`/`kanbanRoutes.ts`/`apiRoutes.ts` 等**几乎所有认证路由**共用的 `auth` 中间件，内部调用 `AuthService.verifyToken(token)`。POST `/api/admin/requirements`（创建 Issue）必经此中间件。
+
+`AuthService.ts` 里 `verifyToken`/`verifyWebSocketToken`/`getJwtSecret` 共 4 处 `console.error`/`console.warn`，从第 1 轮排查到第 7 轮从未被碰过——因为历次排查都在"扫报错功能对应的路由/bridge 文件"，没人想到去查 `auth/service/` 目录下的共享 Service。
+
+**关键教训**：第 5 轮（`d80d2c6`）的诊断文字明明写着"客户端模式 `AuthService.verifyToken` 验证失败每次触发 console → 冻死"——诊断对了机制，但补丁只改了*调用方*（`databaseBridge.ts`/`AionrsManager.ts` 自己的 catch 块），从没改过 `AuthService.verifyToken` 内部那行真正的 `console.error`。诊断正确不等于补丁打对了地方。
+
+顺着这条线复查，还发现同一类漏网分布在：
+- `auditLogService.ts` 的 `recordDevopsAudit`（被 `devopsRoutes.ts` requirement 创建路由 `void recordDevopsAudit(...)` 直接调用，Issue 创建必经）
+- `notificationRoutes.ts`、`profileRoutes.ts`（含高频轮询的 `/api/auth/workspace-profile`）、`directoryApi.ts` 的 Express 路由 catch 块
+- `WebSocketManager.ts`（心跳 `setInterval` 里对每个客户端做 token 校验、连接/断开/错误回调）
+- `staticRoutes.ts` 的 `serveApplication`（每次页面加载都会经过，内部也调用 `TokenMiddleware.isTokenValid`）
+- `adapter.ts`（每条 WebSocket 消息，bridge emitter 未就绪分支）
+- `instanceGovernance.ts`（认领系统管理员）
+
+## 修复
+
+全部改用 `logRouteError`/`logRouteWarn`（`appendFileSync` 写 `logs/webui-route-errors.log`），不新增文件、复用既有 `webuiLog.ts` helper。
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/webserver/auth/service/AuthService.ts` | 4 处（verifyToken/verifyWebSocketToken/getJwtSecret ×2）console → logRouteError/logRouteWarn |
+| `src/process/webserver/auth/auditLogService.ts` | recordDevopsAudit/recordGovernanceAudit 2 处 console.warn → logRouteWarn |
+| `src/process/webserver/routes/notificationRoutes.ts` | 4 处 console.error → logRouteError |
+| `src/process/webserver/routes/profileRoutes.ts` | 3 处 console.error → logRouteError |
+| `src/process/webserver/directoryApi.ts` | 3 处 console.error → logRouteError |
+| `src/process/webserver/websocket/WebSocketManager.ts` | 7 处 console.log/error → logRouteWarn/logRouteError |
+| `src/process/webserver/routes/staticRoutes.ts` | 1 处（serveApplication 的 catch）console.error → logRouteError |
+| `src/process/webserver/adapter.ts` | 1 处 console.warn → logRouteWarn |
+| `src/process/webserver/auth/instanceGovernance.ts` | 1 处 console.log → logRouteWarn |
+
+`src/process/webserver/**` 下剩余的 console.* 全部核对过：`index.ts`/`setup.ts`/`staticRoutes.ts` 的 `registerStaticRoutes` 是启动期一次性横幅/路由注册日志（非请求同步栈，安全）；`middleware/csrfClient.ts` 全部 `typeof document === 'undefined'` 守卫，只在渲染进程执行，安全。
+
+## 验证
+
+- `tsc --noEmit` 除既存 `pptPreviewBridge.ts` 4 处错误（与本轮无关）外 0 错误
+- `oxlint src/process/webserver` 0 error；本轮 9 个文件的 `no-console` warning 清零
+- `oxfmt --check` 本轮 9 个文件全过
+- `vitest run` 覆盖 `auditLogService`/`AuthServicePasswordValidation`/`authServiceConstantTimeVerify`/`notificationRoutes`/`WebSocketManager` 5 个测试文件共 15 passed
+- 运行时需桌面端 `npm run restart` 实测：新建 Issue「创建」按钮不再转圈圈；WebUI 登录/心跳/通知轮询不冻主进程
+
+## 待办
+
+- 尚未出包（按用户"打包前必须先确认"约定，等用户要求再 `bump-version` + `npm run dist:win`）
+- ~~建议后续：给 `no-console` 规则加 CI 硬门禁~~ → 已在同一会话内落地，见下一节
+
+---
+
+# 2026-07-02 深夜续 — bridge/** 147 处 console.* 清零 + no-console 硬门禁落地
+
+## 背景
+
+用户对反复出现的 console 冻死 bug 表示"过敏"，追问为什么开发环境总卡、生产环境却没事。解释：**不是生产环境安全，是生产环境很少触发那些 catch 块**（Vite dev proxy 502、dev token 校验分支在生产不存在/少走）。地雷在生产环境同样埋着，只是没被踩中。用户要求把防护落地：先评估范围（`src/process/bridge/**` IPC handler 层从未被 8 轮排查碰过，147 处 console.*，24 个文件），用户选择"现在就把 bridge/** 也修完再一起升级"。
+
+## 执行
+
+1. **新增 `src/process/bridge/bridgeLog.ts`**：与 `webserver/webuiLog.ts` 同构，`logBridgeError`/`logBridgeWarn` 写 `logs/bridge-errors.log`。
+2. **3 个并行子任务**分别清理 `fsBridge.ts`（33 处）、`channelBridge.ts`/`extensionsBridge.ts`/`authBridge.ts`/`taskBridge.ts`（47 处）、剩余 18 个小文件（44 处），共 124 处（实际清点比预估的 147 略少，预估是粗略 grep 计数）。参数归一化规则：目标签名固定 `(label: string, error: unknown)`，1 参补 `null`，3+ 参打包成数组。
+3. **交叉验证**：`tsc --noEmit` 除 pptPreviewBridge.ts 既存 4 处 execSync 错误外 0 新增；`oxlint` no-console 清零（`237 warnings and 1 error` → `91 warnings and 1 error`，那 1 个 error 是 fsBridge.ts 里跟 console 无关的既存 `no-await-in-loop`）。
+4. **测试回归**：全量 `vitest run tests/unit` 469 个文件，7 个文件 21 个用例失败——逐一用 `git stash` 对比基线，全部确认是修改前就存在的失败（`pptPreviewBridge`/`editionSwitchNavigation`/`enterpriseEditionSync`/`enterpriseLoginNavigation`/`enterpriseRoles`/`webuiApiBase`/`guidAgentHooks.dom`），与本轮改动无关。
+5. **真实回归 3 处**（这 3 个之前漏过了，是 spy `console.warn` 断言的测试）：`shellBridge.test.ts`/`shellBridge-new.test.ts`/`shellBridgeStandalone.test.ts` 共 4 个用例改成 spy `bridgeLogMock.logBridgeWarn`（`vi.mock('.../bridgeLog', () => bridgeLogMock)`，`bridgeLogMock` 必须包在 `vi.hoisted()` 里，否则报 "Cannot access before initialization"）。改完 3 文件 50/50 全过。
+6. **`.oxlintrc.json` 硬门禁**：新增两条 override——`src/process/webserver/**` + `src/process/bridge/**` 的 `no-console` 从 `warn` 升级为 `error`；随后单独把 3 个确认安全的启动期日志文件（`webserver/index.ts`、`webserver/setup.ts`、`middleware/csrfClient.ts`——后者只在渲染进程执行，被 `typeof document === 'undefined'` 守卫）降回 `warn`。`staticRoutes.ts` 的 `registerStaticRoutes`（启动期一次性路由注册，与已修复的请求期 `serveApplication` 同文件）用 `/* eslint-disable no-console */...disable/enable` 包裹整个函数体。手动验证：往 `notificationRoutes.ts` 塞一行 `console.log` 立刻报 `Error`，撤销后恢复干净。
+
+## 未覆盖范围（明确告知用户，非本轮工作）
+
+`src/process/**` 整体还有约 1057 处 console.*、160 个文件（worker/extensions/channels/agent 实现等），风险等级不一，本轮只锁定了 8 轮事故的重灾区（webserver + bridge）。这些目录仍是 `no-console: warn`，未硬门禁。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/bridge/bridgeLog.ts` | 新增，`logBridgeError`/`logBridgeWarn` → `logs/bridge-errors.log` |
+| `src/process/bridge/*.ts`（24 个文件） | console.* → logBridgeError/logBridgeWarn，全部加 import |
+| `tests/unit/shellBridge.test.ts` / `shellBridge-new.test.ts` / `shellBridgeStandalone.test.ts` | spy 对象从 `console.warn` 改为 mock 的 `bridgeLogMock.logBridgeWarn` |
+| `.oxlintrc.json` | 新增 2 条 override：webserver/bridge 整体 `no-console: error`，3 个已知安全文件保留 `warn` |
+| `src/process/webserver/routes/staticRoutes.ts` | `registerStaticRoutes` 函数体加 `eslint-disable/enable no-console` 包裹 |
+
+## 验证
+
+- `tsc --noEmit`：仅 pptPreviewBridge.ts 既存 4 处 execSync 错误
+- `oxlint src/process/webserver src/process/bridge`：0 个 console 相关 error（1 个既存 no-await-in-loop error 无关）
+- `vitest run tests/unit`：455 passed（+ 本轮新增 4 个用例通过），失败的 7 文件 21 用例全部核实为基线既存失败
+- 硬门禁生效性人工验证：新增一行 console.log 立刻报 error，符合预期
+- 运行时仍需桌面端 `npm run restart` 实测（webserver 那轮的 Issue 创建卡死修复已验证过流程；bridge/** 这轮是补防线，理论上不改变现有行为，只是把日志出口换掉）

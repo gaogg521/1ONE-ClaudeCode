@@ -12,6 +12,7 @@ import { AcpConnection } from '@process/agent/acp/AcpConnection';
 import type { IConversationService } from '@process/services/IConversationService';
 import { ProcessConfig } from '@process/utils/initStorage';
 import { ACP_BACKENDS_ALL } from '@/common/types/acpTypes';
+import { logBridgeWarn } from '../bridgeLog';
 const ACP_SIDE_QUESTION_TIMEOUT_MS = 30_000;
 const ACP_SIDE_QUESTION_PROMPT_TIMEOUT_SECONDS = 30;
 
@@ -111,7 +112,7 @@ export class ConversationSideQuestionService {
     } finally {
       completion.dispose();
       await connection.disconnect().catch((error: unknown) => {
-        console.warn('[ConversationSideQuestionService] Failed to disconnect ACP /btw runner', {
+        logBridgeWarn('[ConversationSideQuestionService] Failed to disconnect ACP /btw runner', {
           backend: context.backend,
           conversationId,
           error: error instanceof Error ? error.message : String(error),
@@ -209,7 +210,7 @@ export class ConversationSideQuestionService {
         return;
       }
       if (data.update.sessionUpdate === 'tool_call' || data.update.sessionUpdate === 'tool_call_update') {
-        console.warn('[ConversationSideQuestionService] ACP /btw cancelled due to tool activity', {
+        logBridgeWarn('[ConversationSideQuestionService] ACP /btw cancelled due to tool activity', {
           backend,
           conversationId,
           update: data.update.sessionUpdate,
@@ -221,7 +222,7 @@ export class ConversationSideQuestionService {
     };
 
     connection.onPermissionRequest = async (data: AcpPermissionRequest) => {
-      console.warn('[ConversationSideQuestionService] ACP /btw rejected permission request', {
+      logBridgeWarn('[ConversationSideQuestionService] ACP /btw rejected permission request', {
         backend,
         conversationId,
         tool: data.toolCall.title,

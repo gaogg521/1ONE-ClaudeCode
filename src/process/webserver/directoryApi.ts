@@ -9,6 +9,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileOperationLimiter } from './middleware/security';
+import { logRouteError } from './webuiLog';
 
 // Allow browsing within the running workspace, current user's home directory,
 // the filesystem root (/) on Unix-like systems, and all drive letters on Windows
@@ -309,7 +310,7 @@ router.get('/browse', fileOperationLimiter, (req, res) => {
       truncated,
     });
   } catch (error) {
-    console.error('Directory browse error:', error);
+    logRouteError('Directory browse error', error);
     res.status(500).json({ error: 'Failed to read directory' });
   }
 });
@@ -371,7 +372,7 @@ router.post('/validate', fileOperationLimiter, (req, res) => {
       name: path.basename(safeValidatedPath),
     });
   } catch (error) {
-    console.error('Path validation error:', error);
+    logRouteError('Path validation error', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to validate path';
     res
       .status(error instanceof Error && error.message.includes('access denied') ? 403 : 500)
@@ -416,7 +417,7 @@ router.get('/shortcuts', fileOperationLimiter, (_req, res) => {
 
     res.json(shortcuts);
   } catch (error) {
-    console.error('Shortcuts error:', error);
+    logRouteError('Shortcuts error', error);
     res.status(500).json({ error: 'Failed to get shortcuts' });
   }
 });

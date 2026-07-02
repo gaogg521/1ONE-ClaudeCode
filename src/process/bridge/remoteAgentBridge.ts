@@ -10,6 +10,7 @@ import { getDatabase } from '@process/services/database';
 import { generateIdentity } from '@process/agent/openclaw/deviceIdentity';
 import { OpenClawGatewayConnection } from '@process/agent/openclaw/OpenClawGatewayConnection';
 import WebSocket from 'ws';
+import { logBridgeWarn } from './bridgeLog';
 
 /**
  * Normalize and validate a WebSocket URL.
@@ -151,11 +152,11 @@ export function initRemoteAgentBridge(): void {
   });
 
   ipcBridge.remoteAgent.handshake.provider(async ({ id }) => {
-    console.log('[RemoteAgent] handshake start, agentId:', id);
+    logBridgeWarn('[RemoteAgent] handshake start', id);
     const db = await getDatabase();
     const agent = db.getRemoteAgent(id);
     if (!agent) {
-      console.log('[RemoteAgent] handshake abort: agent not found');
+      logBridgeWarn('[RemoteAgent] handshake abort: agent not found', null);
       return { status: 'error' as const, error: 'Remote agent not found' };
     }
 
@@ -163,7 +164,7 @@ export function initRemoteAgentBridge(): void {
       return { status: 'ok' as const };
     }
 
-    console.log('[RemoteAgent] handshake connecting to', agent.url, 'hasDeviceToken:', !!agent.deviceToken);
+    logBridgeWarn('[RemoteAgent] handshake connecting', [agent.url, !!agent.deviceToken]);
     return new Promise<{ status: 'ok' | 'pending_approval' | 'error'; error?: string }>((resolve) => {
       const timeout = setTimeout(() => {
         conn.stop();
@@ -189,7 +190,7 @@ export function initRemoteAgentBridge(): void {
         onHelloOk: () => {
           clearTimeout(timeout);
           conn.stop();
-          console.log('[RemoteAgent] handshake ok, device paired');
+          logBridgeWarn('[RemoteAgent] handshake ok, device paired', null);
           db.updateRemoteAgent(id, { status: 'connected', last_connected_at: Date.now() });
           resolve({ status: 'ok' });
         },
@@ -197,15 +198,15 @@ export function initRemoteAgentBridge(): void {
           clearTimeout(timeout);
           conn.stop();
           const details = (err as Error & { details?: { recommendedNextStep?: string } }).details;
-          console.log('[RemoteAgent] handshake error:', err.message, 'details:', JSON.stringify(details));
+          logBridgeWarn('[RemoteAgent] handshake error', [err.message, details]);
           const isPairingRequired =
             details?.recommendedNextStep === 'wait_then_retry' || /pairing.required/i.test(err.message);
           if (isPairingRequired) {
-            console.log('[RemoteAgent] handshake pending approval, will poll');
+            logBridgeWarn('[RemoteAgent] handshake pending approval, will poll', null);
             db.updateRemoteAgent(id, { status: 'pending' });
             resolve({ status: 'pending_approval' });
           } else {
-            console.log('[RemoteAgent] handshake failed:', err.message);
+            logBridgeWarn('[RemoteAgent] handshake failed', err.message);
             db.updateRemoteAgent(id, { status: 'error' });
             resolve({ status: 'error', error: err.message });
           }

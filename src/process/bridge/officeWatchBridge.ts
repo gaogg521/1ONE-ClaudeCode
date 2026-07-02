@@ -18,6 +18,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
 import { getEnhancedEnv } from '@process/utils/shellEnv';
+import { logBridgeError, logBridgeWarn } from './bridgeLog';
 
 type OfficeDocType = 'word' | 'excel';
 
@@ -123,7 +124,7 @@ function installOfficecli(emitStatus: StatusEmitter): boolean {
     }
     return true;
   } catch (e) {
-    console.error('[officeWatch] Failed to install officecli:', e);
+    logBridgeError('[officeWatch] Failed to install officecli', e);
     return false;
   }
 }
@@ -249,11 +250,11 @@ async function startWatch(
       });
 
     child.stderr?.on('data', (data: Buffer) => {
-      console.error(`[officeWatch] officecli stderr (${docType}):`, data.toString().trim());
+      logBridgeWarn(`[officeWatch] officecli stderr (${docType})`, data.toString().trim());
     });
 
     child.on('error', (err) => {
-      console.error(`[officeWatch] spawn error (${docType}):`, err.message);
+      logBridgeError(`[officeWatch] spawn error (${docType})`, err.message);
       sessions.delete(filePath);
       if ((err as NodeJS.ErrnoException).code === 'ENOENT' && !retry) {
         // officecli not found — try auto-install then retry once
@@ -320,7 +321,7 @@ export function initOfficeWatchBridge(): void {
       const url = await startWatch(filePath, 'word', (payload) => ipcBridge.wordPreview.status.emit(payload));
       return { url };
     } catch (err) {
-      console.error('[officeWatch] word start failed:', err);
+      logBridgeError('[officeWatch] word start failed', err);
       return { url: '', error: err instanceof Error ? err.message : String(err) };
     }
   });
@@ -343,7 +344,7 @@ export function initOfficeWatchBridge(): void {
       const url = await startWatch(filePath, 'excel', (payload) => ipcBridge.excelPreview.status.emit(payload));
       return { url };
     } catch (err) {
-      console.error('[officeWatch] excel start failed:', err);
+      logBridgeError('[officeWatch] excel start failed', err);
       return { url: '', error: err instanceof Error ? err.message : String(err) };
     }
   });

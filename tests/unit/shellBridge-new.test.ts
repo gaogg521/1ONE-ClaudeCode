@@ -35,6 +35,12 @@ vi.mock('fs', () => ({
   },
 }));
 
+// Mock bridgeLog (console.* in IPC handlers freezes the main process; see bridgeLog.ts)
+const { bridgeLogMock } = vi.hoisted(() => ({
+  bridgeLogMock: { logBridgeError: vi.fn(), logBridgeWarn: vi.fn() },
+}));
+vi.mock('../../src/process/bridge/bridgeLog', () => bridgeLogMock);
+
 // Mock @/common ipcBridge - capture the registered functions
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -98,24 +104,23 @@ describe('shellBridge with actual providers', () => {
     });
 
     it('logs warning when shell.openPath returns error', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       vi.mocked(shell.openPath).mockResolvedValue('No application associated with this file type');
 
       await registeredProviders['openFile']('/test/unknown.xyz');
 
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to open path'));
-      warnSpy.mockRestore();
+      expect(bridgeLogMock.logBridgeWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to open path'),
+        expect.anything()
+      );
     });
 
     it('handles shell.openPath rejection gracefully', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const error = new Error('Failed to open');
       vi.mocked(shell.openPath).mockRejectedValue(error);
 
       await registeredProviders['openFile']('/test/file.txt');
 
-      expect(warnSpy).toHaveBeenCalledWith('[shellBridge] Failed to open path:', 'Failed to open');
-      warnSpy.mockRestore();
+      expect(bridgeLogMock.logBridgeWarn).toHaveBeenCalledWith('[shellBridge] Failed to open path', 'Failed to open');
     });
   });
 
@@ -135,22 +140,19 @@ describe('shellBridge with actual providers', () => {
     });
 
     it('rejects invalid URLs without calling shell.openExternal', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       await registeredProviders['openExternal']('not-a-valid-url');
 
       expect(shell.openExternal).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid URL'));
-      warnSpy.mockRestore();
+      expect(bridgeLogMock.logBridgeWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid URL'),
+        expect.anything()
+      );
     });
 
     it('rejects empty string URLs', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       await registeredProviders['openExternal']('');
 
       expect(shell.openExternal).not.toHaveBeenCalled();
-      warnSpy.mockRestore();
     });
   });
 

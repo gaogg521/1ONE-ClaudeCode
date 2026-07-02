@@ -16,6 +16,7 @@ import { ipcBridge } from '@/common';
 import { ProcessConfig } from '@process/utils/initStorage';
 import path from 'path';
 import fs from 'fs';
+import { logBridgeError } from './bridgeLog';
 
 /**
  * Get app icon path for notifications
@@ -59,7 +60,7 @@ export async function showNotification({
   try {
     getPlatformServices().notification.send({ title, body, icon: iconPath });
   } catch (error) {
-    console.error('[Notification] Error creating notification:', error);
+    logBridgeError('[Notification] Error creating notification', error);
   }
 }
 

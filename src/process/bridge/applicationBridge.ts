@@ -14,6 +14,7 @@ import { getCdpStatus, updateCdpConfig } from '@process/utils/configureChromium'
 import { initApplicationBridgeCore } from './applicationBridgeCore';
 import type { IStartOnBootStatus } from '@/common/adapter/ipcBridge';
 import { scheduleApplicationRestart } from '@process/utils/devRestart';
+import { logBridgeError } from './bridgeLog';
 
 let mainWindowRef: BrowserWindow | null = null;
 
@@ -151,7 +152,7 @@ export function initApplicationBridge(workerTaskManager: IWorkerTaskManager): vo
     try {
       await ProcessConfig.set('ui.zoomFactor', updatedFactor);
     } catch (error) {
-      console.error('[ApplicationBridge] Failed to persist zoom factor:', error);
+      logBridgeError('[ApplicationBridge] Failed to persist zoom factor', error);
     }
     return updatedFactor;
   });
@@ -205,5 +206,4 @@ export function initApplicationBridge(workerTaskManager: IWorkerTaskManager): vo
       return { success: false, msg };
     }
   });
-
 }

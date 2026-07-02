@@ -11,6 +11,7 @@ import { UserRepository } from '@process/webserver/auth/repository/UserRepositor
 import { AuthService } from '@process/webserver/auth/service/AuthService';
 import { randomUUID } from 'node:crypto';
 import { WebuiService } from './services/WebuiService';
+import { logBridgeError } from './bridgeLog';
 
 /** system_default_user 由 DB 初始化时 ensureSystemUser() 保证永远存在 */
 const DESKTOP_USER_ID = 'system_default_user';
@@ -28,7 +29,7 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
       await Promise.allSettled(stopPromises);
       return { success: true, count: tasks.length };
     } catch (error) {
-      console.error('Failed to stop all tasks:', error);
+      logBridgeError('Failed to stop all tasks', error);
       return { success: false, count: 0 };
     }
   });
@@ -39,7 +40,7 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
       const tasks = workerTaskManager.listTasks();
       return { success: true, count: tasks.length };
     } catch (error) {
-      console.error('Failed to get running task count:', error);
+      logBridgeError('Failed to get running task count', error);
       return { success: false, count: 0 };
     }
   });
@@ -53,7 +54,7 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
       if (!result.success) throw new Error(result.error);
       return (result.data ?? []) as import('@/common/adapter/ipcBridge').IKanbanTask[];
     } catch (error) {
-      console.error('[KanbanBridge] list failed:', error);
+      logBridgeError('[KanbanBridge] list failed', error);
       return [];
     }
   });
@@ -78,7 +79,7 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
       if (!result.success) throw new Error(result.error);
       return task as import('@/common/adapter/ipcBridge').IKanbanTask;
     } catch (error) {
-      console.error('[KanbanBridge] create failed:', error);
+      logBridgeError('[KanbanBridge] create failed', error);
       throw error;
     }
   });
@@ -91,7 +92,7 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
       if (!result.success) throw new Error(result.error);
       return true;
     } catch (error) {
-      console.error('[KanbanBridge] update failed:', error);
+      logBridgeError('[KanbanBridge] update failed', error);
       return false;
     }
   });
@@ -103,7 +104,7 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
       if (!result.success) throw new Error(result.error);
       return result.data ?? false;
     } catch (error) {
-      console.error('[KanbanBridge] remove failed:', error);
+      logBridgeError('[KanbanBridge] remove failed', error);
       return false;
     }
   });
@@ -113,11 +114,9 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
       const db = await getDatabase();
       const result = db.getAllUsers();
       if (!result.success || !result.data) return [];
-      return result.data
-        .filter((u) => u.id !== DESKTOP_USER_ID)
-        .map((u) => ({ id: u.id, username: u.username }));
+      return result.data.filter((u) => u.id !== DESKTOP_USER_ID).map((u) => ({ id: u.id, username: u.username }));
     } catch (error) {
-      console.error('[KanbanBridge] listUsers failed:', error);
+      logBridgeError('[KanbanBridge] listUsers failed', error);
       return [];
     }
   });
@@ -138,14 +137,13 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
         .map((u) => ({
           id: u.id,
           username: u.username,
-          role:
-            u.role === 'system_admin' || u.role === 'org_admin'
-              ? ('admin' as const)
-              : ('user' as const),
+          role: u.role === 'system_admin' || u.role === 'org_admin' ? ('admin' as const) : ('user' as const),
           created_at: u.created_at,
           last_login: u.last_login,
         }));
-    } catch { return []; }
+    } catch {
+      return [];
+    }
   });
 
   ipcBridge.adminUsers.create.provider(async ({ username, password, role }) => {
@@ -179,4 +177,3 @@ export function initTaskBridge(workerTaskManager: IWorkerTaskManager): void {
     return true;
   });
 }
-

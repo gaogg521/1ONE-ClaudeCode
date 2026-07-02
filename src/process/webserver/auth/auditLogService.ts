@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import type { Request } from 'express';
 import { DEFAULT_TENANT_ID } from '@/common/config/webuiEnterpriseConfig';
 import { getDatabase } from '@process/services/database';
+import { logRouteWarn } from '../webuiLog';
 
 export const GOVERNANCE_AUDIT_ACTIONS = {
   claimSystemAdmin: 'governance.claim_system_admin',
@@ -86,7 +87,7 @@ export async function recordGovernanceAudit(
         now
       );
   } catch (error) {
-    console.warn('[AuditLog] recordGovernanceAudit failed:', error);
+    logRouteWarn('[AuditLog] recordGovernanceAudit failed', error);
   }
 }
 
@@ -94,11 +95,7 @@ export async function recordGovernanceAudit(
  * Record a DevOps resource audit entry. `resource` is a free-form label
  * (e.g. "requirement:<id>", "mcp:<id>:<name>"). Failures are non-blocking.
  */
-export async function recordDevopsAudit(
-  req: Request,
-  action: DevopsAuditAction,
-  resource: string
-): Promise<void> {
+export async function recordDevopsAudit(req: Request, action: DevopsAuditAction, resource: string): Promise<void> {
   try {
     const db = await getDatabase();
     const driver = db.getDriver();
@@ -121,6 +118,8 @@ export async function recordDevopsAudit(
         now
       );
   } catch (error) {
-    console.warn('[AuditLog] recordDevopsAudit failed:', error);
+    // Fire-and-forget from every requirement/mcp/rag write route (`void recordDevopsAudit(...)`),
+    // including Issue creation. console.* here is the "第 7 轮漏网" class of bug — never revert.
+    logRouteWarn('[AuditLog] recordDevopsAudit failed', error);
   }
 }

@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import { AuthService } from '@process/webserver/auth/service/AuthService';
 import { UserRepository } from '@process/webserver/auth/repository/UserRepository';
 import { WebuiService } from './services/WebuiService';
+import { logBridgeError, logBridgeWarn } from './bridgeLog';
 
 // QR Token 存储 (内存中，有效期短) / QR Token store (in-memory, short-lived)
 // 增加 allowLocalOnly 标志，限制本地模式下只能从本地网络使用
@@ -129,7 +130,7 @@ export async function verifyQRTokenDirect(
 
     // P0 安全修复：检查本地网络限制 / P0 Security fix: Check local network restriction
     if (tokenData.allowLocalOnly && clientIP && !isLocalIP(clientIP)) {
-      console.warn(`[WebUI QR] QR token rejected: non-local IP ${clientIP} attempted to use local-only token`);
+      logBridgeWarn('[WebUI QR] QR token rejected: non-local IP attempted to use local-only token', clientIP);
       return {
         success: false,
         msg: 'QR login is only allowed from local network',
@@ -165,7 +166,7 @@ export async function verifyQRTokenDirect(
       },
     };
   } catch (error) {
-    console.error('[WebUI QR] Verify QR token error:', error);
+    logBridgeError('[WebUI QR] Verify QR token error', error);
     return {
       success: false,
       msg: error instanceof Error ? error.message : 'Failed to verify QR token',

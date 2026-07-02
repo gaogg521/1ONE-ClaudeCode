@@ -8,15 +8,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // --- Mocks (vi.hoisted so factories can reference them) ---
 
-const { openFileProvider, showItemInFolderProvider, openExternalProvider, openFolderEnsureProvider, execFileMock, mkdirMock } =
-  vi.hoisted(() => ({
-    openFileProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
-    showItemInFolderProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
-    openExternalProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
-    openFolderEnsureProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
-    execFileMock: vi.fn(),
-    mkdirMock: vi.fn().mockResolvedValue(undefined),
-  }));
+const {
+  openFileProvider,
+  showItemInFolderProvider,
+  openExternalProvider,
+  openFolderEnsureProvider,
+  execFileMock,
+  mkdirMock,
+  bridgeLogMock,
+} = vi.hoisted(() => ({
+  openFileProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+  showItemInFolderProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+  openExternalProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+  openFolderEnsureProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
+  execFileMock: vi.fn(),
+  mkdirMock: vi.fn().mockResolvedValue(undefined),
+  bridgeLogMock: {
+    logBridgeError: vi.fn(),
+    logBridgeWarn: vi.fn(),
+  },
+}));
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -54,6 +65,8 @@ vi.mock('node:fs/promises', () => ({
 vi.mock('node:child_process', () => ({
   execFile: (...args: any[]) => execFileMock(...args),
 }));
+
+vi.mock('../../src/process/bridge/bridgeLog', () => bridgeLogMock);
 
 // --- Tests ---
 
@@ -149,18 +162,17 @@ describe('shellBridgeStandalone', () => {
     });
 
     it('rejects invalid URLs without calling execFile', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       await openExternalProvider.fn!('not-a-valid-url');
       expect(execFileMock).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid URL'));
-      warnSpy.mockRestore();
+      expect(bridgeLogMock.logBridgeWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid URL'),
+        expect.anything()
+      );
     });
 
     it('rejects empty string URLs without calling execFile', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       await openExternalProvider.fn!('');
       expect(execFileMock).not.toHaveBeenCalled();
-      warnSpy.mockRestore();
     });
 
     it('allows valid URLs through to execFile', async () => {

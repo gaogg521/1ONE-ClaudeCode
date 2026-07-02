@@ -7,6 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import { ipcBridge } from '@/common';
+import { logBridgeError } from './bridgeLog';
 
 // 存储所有文件监听器 / Store all file watchers
 const watchers = new Map<string, fs.FSWatcher>();
@@ -37,7 +38,7 @@ export function initFileWatchBridge(): void {
 
       return Promise.resolve({ success: true });
     } catch (error) {
-      console.error('[FileWatch] Failed to start watching:', error);
+      logBridgeError('[FileWatch] Failed to start watching', error);
       return Promise.resolve({ success: false, msg: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
@@ -52,7 +53,7 @@ export function initFileWatchBridge(): void {
       }
       return Promise.resolve({ success: false, msg: 'No watcher found for this file' });
     } catch (error) {
-      console.error('[FileWatch] Failed to stop watching:', error);
+      logBridgeError('[FileWatch] Failed to stop watching', error);
       return Promise.resolve({ success: false, msg: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
@@ -66,7 +67,7 @@ export function initFileWatchBridge(): void {
       watchers.clear();
       return Promise.resolve({ success: true });
     } catch (error) {
-      console.error('[FileWatch] Failed to stop all watches:', error);
+      logBridgeError('[FileWatch] Failed to stop all watches', error);
       return Promise.resolve({ success: false, msg: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
@@ -104,7 +105,7 @@ export function initFileWatchBridge(): void {
       workspaceWatchers.set(workspace, { watcher, emitted });
       return Promise.resolve({ success: true });
     } catch (error) {
-      console.error('[WorkspaceOfficeWatch] Failed to start watching:', error);
+      logBridgeError('[WorkspaceOfficeWatch] Failed to start watching', error);
       return Promise.resolve({ success: false, msg: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
@@ -118,7 +119,7 @@ export function initFileWatchBridge(): void {
       }
       return Promise.resolve({ success: true });
     } catch (error) {
-      console.error('[WorkspaceOfficeWatch] Failed to stop watching:', error);
+      logBridgeError('[WorkspaceOfficeWatch] Failed to stop watching', error);
       return Promise.resolve({ success: false, msg: error instanceof Error ? error.message : 'Unknown error' });
     }
   });

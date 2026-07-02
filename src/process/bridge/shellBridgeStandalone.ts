@@ -15,6 +15,7 @@ import { ipcBridge } from '@/common';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { logBridgeWarn } from './bridgeLog';
 
 function runOpen(args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -45,7 +46,7 @@ export function initShellBridgeStandalone(): void {
     try {
       new URL(url);
     } catch {
-      console.warn(`[shellBridge] Invalid URL passed to openExternal: ${url}`);
+      logBridgeWarn('[shellBridge] Invalid URL passed to openExternal', url);
       return Promise.resolve();
     }
     return runOpen([url]);

@@ -10,6 +10,7 @@ import bcrypt from 'bcryptjs';
 import type { AuthUser } from '../repository/UserRepository';
 import { UserRepository } from '../repository/UserRepository';
 import { AUTH_CONFIG } from '../../config/constants';
+import { logRouteError, logRouteWarn } from '../../webuiLog';
 
 interface TokenPayload {
   userId: string;
@@ -183,11 +184,11 @@ export class AuthService {
       }
 
       // Fallback: 如果 admin 用户不存在(不应该发生)
-      console.warn('[AuthService] System WebUI user not found, using temporary secret');
+      logRouteWarn('[AuthService] System WebUI user not found, using temporary secret', null);
       this.jwtSecret = this.generateSecretKey();
       return this.jwtSecret;
     } catch (error) {
-      console.error('Failed to get/save JWT secret:', error);
+      logRouteError('Failed to get/save JWT secret', error);
       this.jwtSecret = this.generateSecretKey();
       return this.jwtSecret;
     }
@@ -201,7 +202,7 @@ export class AuthService {
     try {
       const systemUser = await UserRepository.getSystemUser();
       if (!systemUser) {
-        console.warn('[AuthService] System WebUI user not found, cannot invalidate tokens');
+        logRouteWarn('[AuthService] System WebUI user not found, cannot invalidate tokens', null);
         return;
       }
 
@@ -209,7 +210,7 @@ export class AuthService {
       await UserRepository.updateJwtSecret(systemUser.id, newSecret);
       this.jwtSecret = newSecret;
     } catch (error) {
-      console.error('Failed to invalidate tokens:', error);
+      logRouteError('Failed to invalidate tokens', error);
     }
   }
 
@@ -291,12 +292,16 @@ export class AuthService {
       };
     } catch (error) {
       if (
-        error instanceof jwt.TokenExpiredError ||        error instanceof jwt.JsonWebTokenError ||
+        error instanceof jwt.TokenExpiredError ||
+        error instanceof jwt.JsonWebTokenError ||
         error instanceof jwt.NotBeforeError
       ) {
         return null;
       }
-      console.error('Token verification failed:', error);
+      // IPC/HTTP hot path — this runs on every authenticated request via
+      // createAuthMiddleware(). console.* here freezes the main process
+      // event loop (see CLAUDE.md "主进程 console 禁令"). Never revert to console.error.
+      logRouteError('Token verification failed', error);
       return null;
     }
   }
@@ -323,8 +328,7 @@ export class AuthService {
         userId: userId === undefined ? undefined : String(userId),
         username: typeof decoded.username === 'string' ? decoded.username : undefined,
         role: typeof decoded.role === 'string' ? decoded.role : undefined,
-        tenant_id:
-          typeof decoded.tenant_id === 'string' ? decoded.tenant_id : undefined,
+        tenant_id: typeof decoded.tenant_id === 'string' ? decoded.tenant_id : undefined,
       };
     } catch {
       return null;
@@ -362,7 +366,9 @@ export class AuthService {
       if (error instanceof jwt.TokenExpiredError) {
         return null;
       }
-      console.error('WebSocket token verification failed:', error);
+      // Called from the WebSocket heartbeat interval for every connected
+      // client — console.* here freezes the main process. Use file logging.
+      logRouteError('WebSocket token verification failed', error);
       return null;
     }
   }

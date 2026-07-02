@@ -7,6 +7,7 @@
 import type { TChatConversation } from '@/common/config/storage';
 import { getDatabase } from '@process/services/database';
 import { ProcessChatMessage } from '@process/utils/initStorage';
+import { logBridgeError, logBridgeWarn } from './bridgeLog';
 
 /**
  * Migrate a conversation from file storage to database
@@ -27,7 +28,7 @@ export async function migrateConversationToDatabase(conversation: TChatConversat
     // Create conversation in database
     const result = db.createConversation(conversation);
     if (!result.success) {
-      console.error('[Migration] Failed to migrate conversation:', result.error);
+      logBridgeError('[Migration] Failed to migrate conversation', result.error);
       return;
     }
 
@@ -39,14 +40,14 @@ export async function migrateConversationToDatabase(conversation: TChatConversat
         for (const message of messages) {
           const insertResult = db.insertMessage(message);
           if (!insertResult.success) {
-            console.error('[Migration] Failed to migrate message:', insertResult.error);
+            logBridgeError('[Migration] Failed to migrate message', insertResult.error);
           }
         }
       }
     } catch (error) {
-      console.warn('[Migration] No messages to migrate:', error);
+      logBridgeWarn('[Migration] No messages to migrate', error);
     }
   } catch (error) {
-    console.error('[Migration] Failed to migrate conversation:', error);
+    logBridgeError('[Migration] Failed to migrate conversation', error);
   }
 }

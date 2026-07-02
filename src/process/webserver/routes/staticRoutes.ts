@@ -14,6 +14,7 @@ import { TokenMiddleware } from '@process/webserver/auth/middleware/TokenMiddlew
 import { AUTH_CONFIG } from '../config/constants';
 import { createRateLimiter } from '../middleware/security';
 import { resolveDevViteHost } from '@/common/config/devRendererUrl';
+import { logRouteError } from '../webuiLog';
 
 /**
  * Vite dev server port — read from ELECTRON_RENDERER_URL when available
@@ -122,9 +123,14 @@ function createViteDevProxy(): (req: Request, res: Response) => void {
         const { join } = require('node:path');
         const { getPlatformServices } = require('@/common/platform');
         const logsDir = getPlatformServices().paths.getLogsDir();
-        try { mkdirSync(logsDir, { recursive: true }); } catch {}
-        appendFileSync(join(logsDir, 'webui-vite-proxy.log'),
-          `[${new Date().toISOString()}] ${req.method} ${req.url} - ${err.message}\n`, 'utf-8');
+        try {
+          mkdirSync(logsDir, { recursive: true });
+        } catch {}
+        appendFileSync(
+          join(logsDir, 'webui-vite-proxy.log'),
+          `[${new Date().toISOString()}] ${req.method} ${req.url} - ${err.message}\n`,
+          'utf-8'
+        );
       } catch {
         // best-effort
       }
@@ -165,7 +171,9 @@ function registerProductionStaticRoutes(expressApp: Express, staticRoot: string,
       res.setHeader('Content-Type', 'text/html');
       res.send(htmlContent);
     } catch (error) {
-      console.error('Error serving index.html:', error);
+      // Runs on every page load (via TokenMiddleware.isTokenValid() above) — console.* here
+      // is the same freeze class as the Vite proxy error below. Never revert to console.error.
+      logRouteError('Error serving index.html', error);
       const missingIndex = error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT';
       if (missingIndex) {
         res
@@ -267,6 +275,10 @@ function registerRemoteStaticFallback(expressApp: Express): void {
  * In development (localhost): proxy to Vite dev server for HMR
  * In development (LAN/remote Host): serve out/renderer/ to avoid Vite HMR reload loops
  */
+// This function only runs once at server startup to decide which static-serving
+// strategy to register — it is not on any per-request/IPC synchronous call stack,
+// so console.* here is safe (see CLAUDE.md "主进程 console 禁令").
+/* eslint-disable no-console */
 export function registerStaticRoutes(expressApp: Express): void {
   const isProduction = process.env.NODE_ENV === 'production';
   const hasViteDevServer =
@@ -319,5 +331,6 @@ export function registerStaticRoutes(expressApp: Express): void {
   console.log(`[WebUI] No renderer build found, proxying UI to Vite at http://localhost:${VITE_DEV_PORT}`);
   registerViteDevProxy(expressApp);
 }
+/* eslint-enable no-console */
 
 export default registerStaticRoutes;

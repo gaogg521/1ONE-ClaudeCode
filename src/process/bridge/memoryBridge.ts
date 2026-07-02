@@ -14,6 +14,7 @@ import os from 'node:os';
 import { shell } from 'electron';
 import { getSystemDir, ProcessConfig } from '@process/utils/initStorage';
 import type { IConversationRepository } from '@process/services/database/IConversationRepository';
+import { logBridgeWarn } from './bridgeLog';
 
 function sanitizePathForClaude(p: string): string {
   // Claude Code stores project memory at ~/.claude/projects/{sanitized}/memory/
@@ -175,7 +176,7 @@ export function initMemoryBridge(conversationRepo: IConversationRepository): voi
     const extraRoots = await resolveClaudeProjectExtraRoots();
     const roots = [projectRoot, ...extraRoots].filter((r, index, self) => self.indexOf(r) === index);
     const dirs = roots.map(getMemoryDir);
-    console.log('[Memory Bridge] memory dirs:', dirs);
+    logBridgeWarn('[Memory Bridge] memory dirs', dirs);
     const fsp = await import('node:fs/promises');
     const entries: MemoryFileEntry[] = [];
     for (const dir of dirs) {

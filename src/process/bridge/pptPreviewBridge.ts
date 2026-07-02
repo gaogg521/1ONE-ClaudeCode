@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { getEnhancedEnv } from '@process/utils/shellEnv';
+import { logBridgeError } from './bridgeLog';
 
 /**
  * Resolve the absolute path to the officecli executable.
@@ -187,7 +188,7 @@ function installOfficecli(): boolean {
     }
     return true;
   } catch (e) {
-    console.error('[pptPreview] Failed to install officecli:', e);
+    logBridgeError('[pptPreview] Failed to install officecli', e);
     return false;
   }
 }
@@ -281,11 +282,11 @@ async function startWatch(filePath: string, retry = false): Promise<string> {
     });
 
     child.stderr?.on('data', (data: Buffer) => {
-      console.error('[pptPreview] officecli stderr:', data.toString().trim());
+      logBridgeError('[pptPreview] officecli stderr', data.toString().trim());
     });
 
     child.on('error', (err) => {
-      console.error('[pptPreview] spawn error:', err.message);
+      logBridgeError('[pptPreview] spawn error', err.message);
       sessions.delete(filePath);
       if ((err as NodeJS.ErrnoException).code === 'ENOENT' && !retry) {
         // officecli not found — try auto-install then retry once.
@@ -348,7 +349,7 @@ export function initPptPreviewBridge(): void {
     const result = await startWatch(filePath)
       .then((url) => ({ url }))
       .catch((err: unknown) => {
-        console.error('[pptPreview] start failed:', err);
+        logBridgeError('[pptPreview] start failed', err);
         return { url: '', error: err instanceof Error ? err.message : String(err) };
       });
     return result;

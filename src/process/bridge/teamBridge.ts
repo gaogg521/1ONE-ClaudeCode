@@ -6,6 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import type { TeamSessionService } from '@process/team/TeamSessionService';
+import { logBridgeError } from './bridgeLog';
 
 /**
  * Wrap an async provider handler so that unhandled rejections are caught and
@@ -21,7 +22,7 @@ function safeProvider<R, P>(fn: (params: P) => Promise<R>) {
       return await fn(params);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error('[teamBridge] provider error:', message);
+      logBridgeError('[teamBridge] provider error', message);
       // Return a sentinel the renderer can detect
       return { __bridgeError: true, message } as unknown as R;
     }
@@ -116,7 +117,7 @@ export function initTeamBridge(teamSessionService: TeamSessionService): void {
         await teamSessionService.getOrStartSession(teamId, tenantId);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.error('[teamBridge] ensureSession failed:', message, error);
+        logBridgeError('[teamBridge] ensureSession failed', [message, error]);
         try {
           const team = await teamSessionService.getTeam(teamId, tenantId);
           for (const agent of team.agents) {
@@ -128,7 +129,7 @@ export function initTeamBridge(teamSessionService: TeamSessionService): void {
             });
           }
         } catch (emitErr) {
-          console.error('[teamBridge] ensureSession failed (also failed to emit status):', emitErr);
+          logBridgeError('[teamBridge] ensureSession failed (also failed to emit status)', emitErr);
         }
         throw error;
       }

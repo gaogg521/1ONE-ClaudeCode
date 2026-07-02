@@ -19,6 +19,7 @@ const {
   execMock,
   spawnMock,
   fsMock,
+  bridgeLogMock,
 } = vi.hoisted(() => ({
   openFileProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
   showItemInFolderProvider: { fn: undefined as ((...args: any[]) => any) | undefined },
@@ -41,6 +42,10 @@ const {
     promises: {
       mkdir: vi.fn().mockResolvedValue(undefined),
     },
+  },
+  bridgeLogMock: {
+    logBridgeError: vi.fn(),
+    logBridgeWarn: vi.fn(),
   },
 }));
 
@@ -96,6 +101,8 @@ vi.mock('fs', () => ({
     mkdir: fsMock.promises.mkdir,
   },
 }));
+
+vi.mock('../../src/process/bridge/bridgeLog', () => bridgeLogMock);
 
 // --- Tests ---
 
@@ -156,22 +163,21 @@ describe('shellBridge', () => {
     });
 
     it('logs warning when shell.openPath returns an error string', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       shellMock.openPath.mockResolvedValue('No application associated with this file type');
       await openFileProvider.fn!('/some/file.xyz');
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to open path'));
-      warnSpy.mockRestore();
+      expect(bridgeLogMock.logBridgeWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to open path'),
+        expect.anything()
+      );
     });
 
     it('does not throw when shell.openPath rejects', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       shellMock.openPath.mockRejectedValue(new Error('Failed to open: 没有应用程序与此操作的指定文件有关联。 (0x483)'));
       await expect(openFileProvider.fn!('/some/file.xyz')).resolves.toBeUndefined();
-      expect(warnSpy).toHaveBeenCalledWith(
+      expect(bridgeLogMock.logBridgeWarn).toHaveBeenCalledWith(
         expect.stringContaining('Failed to open path'),
         expect.stringContaining('没有应用程序')
       );
-      warnSpy.mockRestore();
     });
   });
 
@@ -186,18 +192,17 @@ describe('shellBridge', () => {
     });
 
     it('rejects invalid URLs without calling shell.openExternal', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       await openExternalProvider.fn!('not-a-valid-url');
       expect(shellMock.openExternal).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid URL'));
-      warnSpy.mockRestore();
+      expect(bridgeLogMock.logBridgeWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid URL'),
+        expect.anything()
+      );
     });
 
     it('rejects empty string URLs without calling shell.openExternal', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       await openExternalProvider.fn!('');
       expect(shellMock.openExternal).not.toHaveBeenCalled();
-      warnSpy.mockRestore();
     });
   });
 

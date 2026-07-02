@@ -10,6 +10,7 @@ import type { IncomingMessage } from 'http';
 import { TokenMiddleware } from '@process/webserver/auth/middleware/TokenMiddleware';
 import { WEBSOCKET_CONFIG } from '../config/constants';
 import { SHOW_OPEN_REQUEST_EVENT } from '@/common/adapter/constant';
+import { logRouteError, logRouteWarn } from '../webuiLog';
 
 interface ClientInfo {
   token: string;
@@ -40,7 +41,7 @@ export class WebSocketManager {
    */
   initialize(): void {
     this.startHeartbeat();
-    console.log('[WebSocketManager] Initialized');
+    logRouteWarn('[WebSocketManager] Initialized', null);
   }
 
   /**
@@ -74,7 +75,7 @@ export class WebSocketManager {
         ws.emit('message', raw, false);
       }
 
-      console.log('[WebSocketManager] Client connected');
+      logRouteWarn('[WebSocketManager] Client connected', null);
     });
   }
 
@@ -187,7 +188,7 @@ export class WebSocketManager {
   private setupCloseHandler(ws: WebSocket): void {
     ws.on('close', () => {
       this.clients.delete(ws);
-      console.log('[WebSocketManager] Client disconnected');
+      logRouteWarn('[WebSocketManager] Client disconnected', null);
     });
   }
 
@@ -197,7 +198,7 @@ export class WebSocketManager {
    */
   private setupErrorHandler(ws: WebSocket): void {
     ws.on('error', (error) => {
-      console.error('[WebSocketManager] Client error:', error);
+      logRouteError('[WebSocketManager] Client error', error);
       this.clients.delete(ws);
     });
   }
@@ -233,7 +234,9 @@ export class WebSocketManager {
     for (const [ws, clientInfo] of this.clients) {
       // Check if client timed out
       if (this.isClientTimeout(clientInfo, now)) {
-        console.log('[WebSocketManager] Client heartbeat timeout, closing connection');
+        // Runs inside the heartbeat setInterval, once per stale client — the same
+        // repeated-trigger shape as the round-5 databaseBridge freeze. Keep file-only.
+        logRouteWarn('[WebSocketManager] Client heartbeat timeout, closing connection', null);
         try {
           ws.close(WEBSOCKET_CONFIG.CLOSE_CODES.POLICY_VIOLATION, 'Heartbeat timeout');
         } catch {
@@ -245,7 +248,7 @@ export class WebSocketManager {
 
       // Validate if WebSocket token is still valid
       if (!(await TokenMiddleware.validateWebSocketToken(clientInfo.token))) {
-        console.log('[WebSocketManager] Token expired, closing connection');
+        logRouteWarn('[WebSocketManager] Token expired, closing connection', null);
         try {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(
@@ -325,7 +328,7 @@ export class WebSocketManager {
     }
 
     this.clients.clear();
-    console.log('[WebSocketManager] Destroyed');
+    logRouteWarn('[WebSocketManager] Destroyed', null);
   }
 }
 

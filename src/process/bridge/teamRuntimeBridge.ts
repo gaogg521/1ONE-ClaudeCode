@@ -9,6 +9,7 @@ import type { TeamRuntimeNode, UpsertTeamRuntimeNodeInput } from '@/common/types
 import { publishTeamRuntimeToAdminBackend } from '@process/team/TeamRuntimeAdminPublisher';
 import { getTeamRuntimeRegistry, type TeamRuntimeRegistry } from '@process/team/TeamRuntimeRegistry';
 import { shouldSyncWithEnterpriseApi } from '@/common/config/enterpriseApiOrigins';
+import { logBridgeWarn } from './bridgeLog';
 
 const HEARTBEAT_INTERVAL_MS = 60_000;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -37,10 +38,7 @@ async function publishHeartbeat(): Promise<void> {
       });
     }
   } catch (error) {
-    console.warn(
-      '[teamRuntimeBridge] heartbeat failed:',
-      error instanceof Error ? error.message : String(error)
-    );
+    logBridgeWarn('[teamRuntimeBridge] heartbeat failed', error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -93,8 +91,6 @@ export async function listTeamRuntimeNodesForApi(
   return await getTeamRuntimeRegistry().listNodes(input);
 }
 
-export async function upsertTeamRuntimeNodeForApi(
-  input: UpsertTeamRuntimeNodeInput
-): Promise<TeamRuntimeNode> {
+export async function upsertTeamRuntimeNodeForApi(input: UpsertTeamRuntimeNodeInput): Promise<TeamRuntimeNode> {
   return await getTeamRuntimeRegistry().upsertNode(input);
 }

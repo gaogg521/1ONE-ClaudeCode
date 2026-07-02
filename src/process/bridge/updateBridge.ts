@@ -19,6 +19,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import semver from 'semver';
 import { autoUpdaterService } from '../services/autoUpdaterService';
+import { logBridgeError } from './bridgeLog';
 
 type GitHubReleaseApiAsset = {
   name: string;
@@ -577,7 +578,7 @@ export function initUpdateBridge(): void {
     try {
       autoUpdaterService.quitAndInstall();
     } catch (err: unknown) {
-      console.error('quitAndInstall failed:', err);
+      logBridgeError('quitAndInstall failed', err);
     }
   });
 }

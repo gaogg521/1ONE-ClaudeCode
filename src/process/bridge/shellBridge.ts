@@ -10,6 +10,7 @@ import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
+import { logBridgeError, logBridgeWarn } from './bridgeLog';
 
 const execAsync = promisify(exec);
 
@@ -116,7 +117,7 @@ async function openFolderWithTool(folderPath: string, tool: 'vscode' | 'terminal
           }
         );
         child.on('error', (err) => {
-          console.error('[shellBridge] Failed to spawn PowerShell:', err);
+          logBridgeError('[shellBridge] Failed to spawn PowerShell', err);
         });
         child.unref();
       } else if (platform === 'darwin') {
@@ -209,10 +210,10 @@ export function initShellBridge(): void {
       await fs.promises.mkdir(folderPath, { recursive: true });
       const err = await shell.openPath(folderPath);
       if (err) {
-        console.warn(`[shellBridge] openPath after mkdir failed: ${err}`);
+        logBridgeWarn('[shellBridge] openPath after mkdir failed', err);
       }
     } catch (error) {
-      console.warn(`[shellBridge] openFolderEnsure failed:`, (error as Error).message);
+      logBridgeWarn('[shellBridge] openFolderEnsure failed', (error as Error).message);
     }
   });
 
@@ -220,10 +221,10 @@ export function initShellBridge(): void {
     try {
       const errorMessage = await shell.openPath(path);
       if (errorMessage) {
-        console.warn(`[shellBridge] Failed to open path: ${errorMessage}`);
+        logBridgeWarn('[shellBridge] Failed to open path', errorMessage);
       }
     } catch (error) {
-      console.warn(`[shellBridge] Failed to open path:`, (error as Error).message);
+      logBridgeWarn('[shellBridge] Failed to open path', (error as Error).message);
     }
   });
 
@@ -236,7 +237,7 @@ export function initShellBridge(): void {
     try {
       new URL(url);
     } catch {
-      console.warn(`[shellBridge] Invalid URL passed to openExternal: ${url}`);
+      logBridgeWarn('[shellBridge] Invalid URL passed to openExternal', url);
       return Promise.resolve();
     }
     return shell.openExternal(url);
@@ -268,7 +269,7 @@ export function initShellBridge(): void {
     try {
       await openFolderWithTool(folderPath, tool);
     } catch (error) {
-      console.error(`[shellBridge] Failed to open folder with ${tool}:`, error);
+      logBridgeError(`[shellBridge] Failed to open folder with ${tool}`, error);
       // Fallback to default shell open
       await shell.openPath(folderPath);
     }

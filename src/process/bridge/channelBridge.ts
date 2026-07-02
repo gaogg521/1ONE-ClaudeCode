@@ -18,13 +18,14 @@ import type {
 } from '@process/channels/types';
 import { hasPluginCredentials } from '@process/channels/types';
 import type { IChannelRepository } from '@process/services/database/IChannelRepository';
+import { logBridgeError, logBridgeWarn } from './bridgeLog';
 
 /**
  * Initialize Channel IPC Bridge
  * Handles communication between renderer (Settings UI) and main process (Channel system)
  */
 export function initChannelBridge(channelRepo: IChannelRepository): void {
-  console.log('[ChannelBridge] Initializing...');
+  logBridgeWarn('[ChannelBridge] Initializing...', null);
 
   // ==================== Plugin Management ====================
 
@@ -39,7 +40,7 @@ export function initChannelBridge(channelRepo: IChannelRepository): void {
       try {
         dbPlugins = await channelRepo.getChannelPlugins();
       } catch (dbError) {
-        console.warn('[ChannelBridge] getChannelPlugins failed, proceeding with builtin-only list:', dbError);
+        logBridgeWarn('[ChannelBridge] getChannelPlugins failed, proceeding with builtin-only list', dbError);
       }
 
       // Pre-fetch extension plugin metadata (lazy, cached by registry)
@@ -163,7 +164,7 @@ export function initChannelBridge(channelRepo: IChannelRepository): void {
 
       return { success: true, data: Array.from(statusMap.values()) };
     } catch (error: any) {
-      console.error('[ChannelBridge] getPluginStatus error:', error);
+      logBridgeError('[ChannelBridge] getPluginStatus error', error);
       return { success: false, msg: error.message };
     }
   });
@@ -182,7 +183,7 @@ export function initChannelBridge(channelRepo: IChannelRepository): void {
 
       return { success: true };
     } catch (error: any) {
-      console.error('[ChannelBridge] enablePlugin error:', error);
+      logBridgeError('[ChannelBridge] enablePlugin error', error);
       return { success: false, msg: error.message };
     }
   });
@@ -201,7 +202,7 @@ export function initChannelBridge(channelRepo: IChannelRepository): void {
 
       return { success: true };
     } catch (error: any) {
-      console.error('[ChannelBridge] disablePlugin error:', error);
+      logBridgeError('[ChannelBridge] disablePlugin error', error);
       return { success: false, msg: error.message };
     }
   });
@@ -215,7 +216,7 @@ export function initChannelBridge(channelRepo: IChannelRepository): void {
       const result = await manager.testPlugin(pluginId, token, extraConfig);
       return { success: true, data: result };
     } catch (error: any) {
-      console.error('[ChannelBridge] testPlugin error:', error);
+      logBridgeError('[ChannelBridge] testPlugin error', error);
       return { success: false, data: { success: false, error: error.message } };
     }
   });
@@ -230,7 +231,7 @@ export function initChannelBridge(channelRepo: IChannelRepository): void {
       const data = await channelRepo.getPendingPairingRequests();
       return { success: true, data };
     } catch (error: any) {
-      console.error('[ChannelBridge] getPendingPairings error:', error);
+      logBridgeError('[ChannelBridge] getPendingPairings error', error);
       return { success: false, msg: error.message };
     }
   });
@@ -248,10 +249,10 @@ export function initChannelBridge(channelRepo: IChannelRepository): void {
         return { success: false, msg: result.error };
       }
 
-      console.log(`[ChannelBridge] Approved pairing for code ${code}`);
+      logBridgeWarn(`[ChannelBridge] Approved pairing for code ${code}`, null);
       return { success: true };
     } catch (error: any) {
-      console.error('[ChannelBridge] approvePairing error:', error);
+      logBridgeError('[ChannelBridge] approvePairing error', error);
       return { success: false, msg: error.message };
     }
   });
@@ -269,10 +270,10 @@ export function initChannelBridge(channelRepo: IChannelRepository): void {
         return { success: false, msg: result.error };
       }
 
-      console.log(`[ChannelBridge] Rejected pairing code ${code}`);
+      logBridgeWarn(`[ChannelBridge] Rejected pairing code ${code}`, null);
       return { success: true };
     } catch (error: any) {
-      console.error('[ChannelBridge] rejectPairing error:', error);
+      logBridgeError('[ChannelBridge] rejectPairing error', error);
       return { success: false, msg: error.message };
     }
   });
@@ -287,7 +288,7 @@ export function initChannelBridge(channelRepo: IChannelRepository): void {
       const data = await channelRepo.getChannelUsers();
       return { success: true, data };
     } catch (error: any) {
-      console.error('[ChannelBridge] getAuthorizedUsers error:', error);
+      logBridgeError('[ChannelBridge] getAuthorizedUsers error', error);
       return { success: false, msg: error.message };
     }
   });
@@ -299,10 +300,10 @@ export function initChannelBridge(channelRepo: IChannelRepository): void {
     try {
       // Delete user (cascades to sessions)
       await channelRepo.deleteChannelUser(userId);
-      console.log(`[ChannelBridge] Revoked user ${userId}`);
+      logBridgeWarn(`[ChannelBridge] Revoked user ${userId}`, null);
       return { success: true };
     } catch (error: any) {
-      console.error('[ChannelBridge] revokeUser error:', error);
+      logBridgeError('[ChannelBridge] revokeUser error', error);
       return { success: false, msg: error.message };
     }
   });
@@ -317,7 +318,7 @@ export function initChannelBridge(channelRepo: IChannelRepository): void {
       const data = await channelRepo.getChannelSessions();
       return { success: true, data };
     } catch (error: any) {
-      console.error('[ChannelBridge] getActiveSessions error:', error);
+      logBridgeError('[ChannelBridge] getActiveSessions error', error);
       return { success: false, msg: error.message };
     }
   });
@@ -336,10 +337,10 @@ export function initChannelBridge(channelRepo: IChannelRepository): void {
       }
       return { success: true };
     } catch (error: any) {
-      console.error('[ChannelBridge] syncChannelSettings error:', error);
+      logBridgeError('[ChannelBridge] syncChannelSettings error', error);
       return { success: false, msg: error.message };
     }
   });
 
-  console.log('[ChannelBridge] Initialized');
+  logBridgeWarn('[ChannelBridge] Initialized', null);
 }

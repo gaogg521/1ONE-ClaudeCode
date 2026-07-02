@@ -12,6 +12,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from '@process/services/devops/userNotificationService';
+import { logRouteError } from '../webuiLog';
 
 type RegisterNotificationRoutesOptions = {
   rateLimit: RateLimitRequestHandler;
@@ -34,7 +35,7 @@ export function registerNotificationRoutes(app: Express, opts: RegisterNotificat
       const items = await listUserNotifications({ tenantId, userId, limit, unreadOnly });
       res.json(items);
     } catch (error) {
-      console.error('[NotificationRoute] list error:', error);
+      logRouteError('[NotificationRoute] list error', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -45,7 +46,7 @@ export function registerNotificationRoutes(app: Express, opts: RegisterNotificat
       const count = await getUnreadNotificationCount(tenantId, req.user!.id);
       res.json({ count });
     } catch (error) {
-      console.error('[NotificationRoute] unread count error:', error);
+      logRouteError('[NotificationRoute] unread count error', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -59,7 +60,7 @@ export function registerNotificationRoutes(app: Express, opts: RegisterNotificat
       }
       res.json({ success: true });
     } catch (error) {
-      console.error('[NotificationRoute] mark read error:', error);
+      logRouteError('[NotificationRoute] mark read error', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -70,7 +71,7 @@ export function registerNotificationRoutes(app: Express, opts: RegisterNotificat
       const updated = await markAllNotificationsRead(tenantId, req.user!.id);
       res.json({ success: true, updated });
     } catch (error) {
-      console.error('[NotificationRoute] read all error:', error);
+      logRouteError('[NotificationRoute] read all error', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });

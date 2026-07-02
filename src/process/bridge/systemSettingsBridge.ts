@@ -16,6 +16,7 @@ import { ipcBridge } from '@/common';
 import { getPlatformServices } from '@/common/platform';
 import { ProcessConfig } from '@process/utils/initStorage';
 import { changeLanguage } from '@process/services/i18n';
+import { logBridgeError, logBridgeWarn } from './bridgeLog';
 
 // Keep-awake power blocker state
 let _keepAwakeBlockerId: number | null = null;
@@ -110,7 +111,7 @@ export function initSystemSettingsBridge(): void {
 
     // Update main process i18n (non-blocking – don't let a hang here block the provider)
     changeLanguage(language).catch((error) => {
-      console.error('[SystemSettings] Main process changeLanguage failed:', error);
+      logBridgeError('[SystemSettings] Main process changeLanguage failed', error);
     });
   });
 
@@ -119,11 +120,11 @@ export function initSystemSettingsBridge(): void {
     .then((enabled) => {
       if (enabled) {
         _keepAwakeBlockerId = getPlatformServices().power.preventDisplaySleep();
-        console.log('[SystemSettings] Keep-awake restored on startup');
+        logBridgeWarn('[SystemSettings] Keep-awake restored on startup', null);
       }
     })
     .catch((err) => {
-      console.warn('[SystemSettings] Failed to restore keep-awake:', err);
+      logBridgeWarn('[SystemSettings] Failed to restore keep-awake', err);
     });
 
   // 获取"上传文件保存到工作区"设置 / Get "save uploads to workspace" setting

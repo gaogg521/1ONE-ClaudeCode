@@ -8,6 +8,7 @@
 
 import { isSystemAdminRole } from '@/common/auth/enterpriseRoles';
 import { UserRepository } from '@process/webserver/auth/repository/UserRepository';
+import { logRouteWarn } from '../webuiLog';
 
 export type InstanceGovernanceSnapshot = {
   hasSystemAdmin: boolean;
@@ -18,14 +19,10 @@ export async function countSystemAdmins(): Promise<number> {
   return UserRepository.countByRole('system_admin');
 }
 
-export async function getInstanceGovernance(
-  userRole: string | undefined
-): Promise<InstanceGovernanceSnapshot> {
+export async function getInstanceGovernance(userRole: string | undefined): Promise<InstanceGovernanceSnapshot> {
   const hasSystemAdmin = (await countSystemAdmins()) > 0;
   const canClaimSystemAdmin =
-    !hasSystemAdmin &&
-    !isSystemAdminRole(userRole) &&
-    (userRole === 'org_admin' || userRole === 'admin');
+    !hasSystemAdmin && !isSystemAdminRole(userRole) && (userRole === 'org_admin' || userRole === 'admin');
   return { hasSystemAdmin, canClaimSystemAdmin };
 }
 
@@ -38,7 +35,7 @@ export async function claimSystemAdmin(userId: string, userRole: string | undefi
     );
   }
   await UserRepository.setRole(userId, 'system_admin');
-  console.log(`[Governance] User ${userId} claimed system_admin (bootstrap)`);
+  logRouteWarn(`[Governance] User ${userId} claimed system_admin (bootstrap)`, null);
 }
 
 export async function assertCanRevokeSystemAdmin(userId: string): Promise<void> {

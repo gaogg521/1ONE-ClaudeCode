@@ -52,6 +52,7 @@ import { initHubBridge } from './hubBridge';
 import { initTeamBridge } from './teamBridge';
 import { initTeamRuntimeBridge } from './teamRuntimeBridge';
 import type { TeamSessionService } from '@process/team/TeamSessionService';
+import { logBridgeError } from './bridgeLog';
 
 export interface BridgeDependencies {
   conversationService: IConversationService;
@@ -116,7 +117,7 @@ export async function initializeAcpDetector(): Promise<void> {
   try {
     await acpDetector.initialize();
   } catch (error) {
-    console.error('[ACP] Failed to initialize detector:', error);
+    logBridgeError('[ACP] Failed to initialize detector', error);
   }
 }
 

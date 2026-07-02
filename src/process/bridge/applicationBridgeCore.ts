@@ -14,6 +14,7 @@ import path from 'path';
 import { ipcBridge } from '@/common';
 import { getSystemDir, ProcessEnv, restoreHiddenBuiltinAssistants } from '@process/utils/initStorage';
 import { copyDirectoryRecursively } from '@process/utils';
+import { logBridgeError } from './bridgeLog';
 
 export function initApplicationBridgeCore(): void {
   ipcBridge.application.systemInfo.provider(() => {
@@ -51,7 +52,7 @@ export function initApplicationBridgeCore(): void {
       return { success: true, data };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error('[ApplicationBridgeCore] restoreHiddenBuiltinAssistants failed:', e);
+      logBridgeError('[ApplicationBridgeCore] restoreHiddenBuiltinAssistants failed', e);
       return { success: false, msg };
     }
   });
