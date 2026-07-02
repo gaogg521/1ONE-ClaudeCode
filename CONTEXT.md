@@ -1811,3 +1811,82 @@ commit `d80d2c6` 修了 `databaseBridge.ts` + `AionrsManager.ts`，但漏了这�
 不是所有 console 都要删——`src/index.ts` 启动日志、`src/server.ts` 信号处理等在非 IPC 同步调用栈的是安全的。只有 IPC handler provider 回调内的 console 才会触发冻死。
 
 `.oxlintrc.json` 的 `no-console: warn` 是 warning 不是 error，因为部分 console 是设计如此（启动日志）。审查 console 违规时需区分：IPC 同步栈内的必须清，其他的可以保留。
+
+---
+
+# 2026-07-02 追加记录（登录页 UI + 飞书认证掩码 + 管理后台入口端口 + Issues 第 7 轮 console 清除）
+
+## 背景
+
+用户报告三个问题：(1) 其他开发者从仓库下载代码后登录页 UI 异常；(2) 飞书 AppID/Secret 无法修改；(3) 客户端模式"管理后台"入口指向本地地址而非服务端地址；(4) Issues 创建卡死修复（`51edb0d`）实际未生效。本轮一并修复，出包 1.23.15 → 1.23.17。
+
+## Bug 1：登录页跨平台字体 + 桌面端卡片垂直居中
+
+**文件**：`src/renderer/pages/login/LoginPage.css`
+
+**问题 1a（跨平台字体）**：`.login-page` 无显式 `font-family`，macOS 默认 PingFang SC、Windows 默认 Microsoft YaHei、Linux 可能没有合适中文字体 → 中文渲染不一致（字形/字重/行高都有差异）。
+
+**修复**：`.login-page` 加 `font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Noto Sans SC', sans-serif`。
+
+**问题 1b（桌面端卡片贴顶）**：`.login-page--desktop-app` 使用 `align-items: flex-start`，桌面端管理后台登录卡片贴在窗口顶部。
+
+**修复**：`align-items: flex-start` → `align-items: center`。
+
+## Bug 2：飞书 App Secret 无法修改（掩码处理缺失）
+
+**文件**：`src/renderer/components/settings/SettingsModal/contents/AuthProvidersModalContent.tsx`
+
+**根因**：服务端 GET `/api/admin/auth/providers/feishu` 把 `appSecret` 返回为 `'******'`（掩码）。钉钉/企微的 `loadProvider` 检测到 `'******'` 时清空输入框 + 记录 `secretMasked` 标志。飞书的 `loadProvider` 直接用 `{ ...prev, ...data.config }` 展开，`appSecret` 字面量变成 `'******'` → 用户打开飞书认证页面看到 `******`、修改后点保存，服务端看到 `config.appSecret === '******'` 走"保留旧值"逻辑 → 用户想要修改的新 Secret 被丢弃。
+
+**修复**：飞书三个路径补齐掩码逻辑：
+- `loadProvider`：检测 `'******'` → 清空输入 + 设 `feishuSecretMasked`
+- `persistProvider`：`appSecret.trim() || (feishuSecretMasked ? '******' : '')`
+- `testFeishu`：同上处理掩码
+- `onChange`：用户输入时清除 `feishuSecretMasked` 标志
+
+## Bug 3：客户端模式管理后台入口指向本机而非服务端
+
+**文件**：`src/renderer/utils/webuiApiBase.ts`
+
+**根因**：`getWebuiAdminBrowserOrigin()` 客户端模式下直接返回 `getClientEnterpriseServerOrigin()`（成员端口，如 `http://192.168.11.137:25809`）。管理后台在成员端口 +1（25810），但代码没转换端口。
+
+**修复**：客户端模式用 `buildWebuiAdminLoginUrlOnDedicatedPort()` 将成员端口 +1 后再返回 origin。所有「管理后台」按钮（WorkspaceIdentityPanel/EditionWorkspaceGuide/EditionModeSwitcher/sessions/tasks/superAssistant 等）都经过此函数，一处修复全覆盖。
+
+## Bug 4：Issues 创建卡死 — 第 7 轮 console.* 清除（真因）
+
+**文件**：`adminRoutes.ts`(44 处) + `devopsRoutes.ts`(20 处) + `devops/cciRoutes.ts`(5 处) + `kanbanRoutes.ts`(5 处) + `apiRoutes.ts`(4 处)
+
+**根因**：`51edb0d` 只修了 **IPC 桥接层**（`WebuiService.ts` + `webuiBridge.ts` 的 console.*），**漏了 Express 路由层**。Issue 创建走 `POST /api/admin/requirements` → Express 中间件 → catch 块 `console.error` → `@office-ai/platform` console patch → `bridge.emit` → `win.webContents.send` × N → **主进程 event loop 冻死** → `net.fetch()` 永不返回 → renderer IPC 永不返回 → 按钮转圈圈。
+
+即使在成功路径上，只要 HTTP 请求处理中任意一步触发 catch 块（CSRF 校验/DB 锁/并发冲突），路由层的 console.error 就会冻死主进程。
+
+**修复**：5 个 Express 路由文件共 78 处 `console.error/warn` 全部替换为 `logRouteError`/`logRouteWarn`（`appendFileSync` 写 `logs/webui-route-errors.log`）。
+
+### 六轮 console.* 清缴历史
+
+| 轮次 | 文件 | commit |
+|------|------|--------|
+| 1 | conversationBridge / modelBridge / acpConversationBridge / conversationSendService | `4b9453c` |
+| 2 | requestLoggingMiddleware | `2c98728` |
+| 3 | authRoutes catch 块 | `5fe47cb` |
+| 4 | databaseBridge / AionrsManager | `d80d2c6` |
+| 5 | ViteProxy / errorHandler | （合并入 d80d2c6） |
+| 6 | WebuiService / webuiBridge | `51edb0d` |
+| **7** | **adminRoutes / devopsRoutes / cciRoutes / kanbanRoutes / apiRoutes** | **`9aecb4a`** |
+
+> 第 6 轮 `51edb0d` 的 commit message 写的是"修复 Issues 创建卡死"，但只修了 IPC 桥接层，Express 路由层的 78 处 console.* 才是真因。`51edb0d` 只修了一半。
+
+**教训**：排查 console.* 不能只扫 IPC bridge 文件——Express 路由处理器也在同一条调用链上，catch 块里的 console.* 同样是 kill switch。任何走 `ipcMain.handle` → `handleAsync` → HTTP 请求 → Express handler 的链路，handler 内的 console.* 都会触发同样的死锁。
+
+## 涉及文件（本轮）
+
+| 文件 | 改动 |
+|------|------|
+| `src/renderer/pages/login/LoginPage.css` | 加中文字体栈 + 桌面端 `align-items: center` |
+| `src/renderer/components/settings/SettingsModal/contents/AuthProvidersModalContent.tsx` | 飞书 loadProvider/persistProvider/testFeishu 补掩码逻辑 |
+| `src/renderer/utils/webuiApiBase.ts` | 客户端模式 `getWebuiAdminBrowserOrigin` 端口 +1 |
+| `src/process/webserver/routes/adminRoutes.ts` | 44 处 console.error → logRouteError |
+| `src/process/webserver/routes/devopsRoutes.ts` | 20 处 console.error → logRouteError |
+| `src/process/webserver/routes/devops/cciRoutes.ts` | 5 处 console.error → logRouteError |
+| `src/process/webserver/routes/kanbanRoutes.ts` | 5 处 console.error → logRouteError |
+| `src/process/webserver/routes/apiRoutes.ts` | 4 处 console.error/warn → logRouteError/logRouteWarn |
