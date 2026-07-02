@@ -53,6 +53,7 @@ import {
   claimSystemAdmin,
   InstanceGovernanceError,
 } from '../auth/instanceGovernance';
+import { logRouteError } from '../webuiLog';
 
 const PROTECTED_IDS = new Set(['system_default_user']);
 
@@ -127,7 +128,7 @@ export function registerAdminRoutes(app: Express): void {
       const providers = await AuthProviderRepository.listProviders();
       res.json({ success: true, data: providers });
     } catch (err) {
-      console.error('[AdminRoute] listAuthProviders error:', err);
+      logRouteError('[AdminRoute] listAuthProviders error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -153,7 +154,7 @@ export function registerAdminRoutes(app: Express): void {
       }
       res.json({ success: true, data: { provider, enabled: row.enabled ? 1 : 0, config: cfg, updated_at: row.updated_at } });
     } catch (err) {
-      console.error('[AdminRoute] getAuthProvider error:', err);
+      logRouteError('[AdminRoute] getAuthProvider error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -204,7 +205,7 @@ export function registerAdminRoutes(app: Express): void {
 
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] setAuthProvider error:', err);
+      logRouteError('[AdminRoute] setAuthProvider error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -223,7 +224,7 @@ export function registerAdminRoutes(app: Express): void {
       await testLdapConnection(ldapConfig);
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] ldap test error:', err);
+      logRouteError('[AdminRoute] ldap test error', err);
       const message = formatLdapConnectionError(err, ldapConfig);
       res.status(400).json({ success: false, message });
     }
@@ -246,7 +247,7 @@ export function registerAdminRoutes(app: Express): void {
       const data = await searchLdapDirectoryForAdmin(ldapRow.config as LdapProviderConfig, query, limit);
       res.json({ success: true, data });
     } catch (err) {
-      console.error('[AdminRoute] ldap user search error:', err);
+      logRouteError('[AdminRoute] ldap user search error', err);
       const message = err instanceof Error ? err.message : 'LDAP search failed';
       res.status(400).json({ success: false, message });
     }
@@ -272,7 +273,7 @@ export function registerAdminRoutes(app: Express): void {
       );
       res.json({ success: true, data });
     } catch (err) {
-      console.error('[AdminRoute] ldap user resolve error:', err);
+      logRouteError('[AdminRoute] ldap user resolve error', err);
       const message = err instanceof Error ? err.message : 'LDAP resolve failed';
       res.status(400).json({ success: false, message });
     }
@@ -311,7 +312,7 @@ export function registerAdminRoutes(app: Express): void {
       }
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] smtp test error:', err);
+      logRouteError('[AdminRoute] smtp test error', err);
       const message = err instanceof Error ? err.message : 'SMTP test failed';
       res.status(400).json({ success: false, message });
     }
@@ -332,7 +333,7 @@ export function registerAdminRoutes(app: Express): void {
       await testFeishuAppCredentials(appId, appSecret);
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] feishu test error:', err);
+      logRouteError('[AdminRoute] feishu test error', err);
       const message = err instanceof Error ? err.message : 'Feishu test failed';
       res.status(400).json({ success: false, message });
     }
@@ -357,7 +358,7 @@ export function registerAdminRoutes(app: Express): void {
       await testDingTalkAppCredentials(appKey, appSecret);
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] dingtalk test error:', err);
+      logRouteError('[AdminRoute] dingtalk test error', err);
       const message = err instanceof Error ? err.message : 'DingTalk test failed';
       res.status(400).json({ success: false, message });
     }
@@ -378,7 +379,7 @@ export function registerAdminRoutes(app: Express): void {
       await testWeComAppCredentials(corpId, secret);
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] wecom test error:', err);
+      logRouteError('[AdminRoute] wecom test error', err);
       const message = err instanceof Error ? err.message : 'WeCom test failed';
       res.status(400).json({ success: false, message });
     }
@@ -412,7 +413,7 @@ export function registerAdminRoutes(app: Express): void {
         })),
       });
     } catch (err) {
-      console.error('[AdminRoute] listUsers error:', err);
+      logRouteError('[AdminRoute] listUsers error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -492,7 +493,7 @@ export function registerAdminRoutes(app: Express): void {
         }),
       });
     } catch (err) {
-      console.error('[AdminRoute] member-dashboard error:', err);
+      logRouteError('[AdminRoute] member-dashboard error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -516,7 +517,7 @@ export function registerAdminRoutes(app: Express): void {
         },
       });
     } catch (err) {
-      console.error('[AdminRoute] agent-token-usage error:', err);
+      logRouteError('[AdminRoute] agent-token-usage error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -555,7 +556,7 @@ export function registerAdminRoutes(app: Express): void {
           .all(tenantId, req.user!.id)) as Array<Record<string, unknown>>;
       res.json({ success: true, data: rows });
     } catch (err) {
-      console.error('[AdminRoute] listTeams error:', err);
+      logRouteError('[AdminRoute] listTeams error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -599,7 +600,7 @@ export function registerAdminRoutes(app: Express): void {
 
       res.json({ success: true, data: { id } });
     } catch (err) {
-      console.error('[AdminRoute] createTeam error:', err);
+      logRouteError('[AdminRoute] createTeam error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -646,7 +647,7 @@ export function registerAdminRoutes(app: Express): void {
         .run(...values);
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] updateTeam error:', err);
+      logRouteError('[AdminRoute] updateTeam error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -674,7 +675,7 @@ export function registerAdminRoutes(app: Express): void {
         .all(tenantId, teamId) as Array<Record<string, unknown>>;
       res.json({ success: true, data: rows });
     } catch (err) {
-      console.error('[AdminRoute] listTeamMembers error:', err);
+      logRouteError('[AdminRoute] listTeamMembers error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -724,7 +725,7 @@ export function registerAdminRoutes(app: Express): void {
       ).run(tenantId, teamId, userId, role, now, now);
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] addTeamMember error:', err);
+      logRouteError('[AdminRoute] addTeamMember error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -762,7 +763,7 @@ export function registerAdminRoutes(app: Express): void {
       ).run(role, now, tenantId, teamId, userId);
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] updateTeamMember error:', err);
+      logRouteError('[AdminRoute] updateTeamMember error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -791,7 +792,7 @@ export function registerAdminRoutes(app: Express): void {
       driver.prepare(`DELETE FROM team_memberships WHERE tenant_id = ? AND team_id = ? AND user_id = ?`).run(tenantId, teamId, userId);
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] removeTeamMember error:', err);
+      logRouteError('[AdminRoute] removeTeamMember error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -823,7 +824,7 @@ export function registerAdminRoutes(app: Express): void {
       await AuthIdentityRepository.bind(provider, externalId, userId);
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] bindIdentity error:', err);
+      logRouteError('[AdminRoute] bindIdentity error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -848,7 +849,7 @@ export function registerAdminRoutes(app: Express): void {
       await AuthIdentityRepository.unbindUser(provider, userId);
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] unbindIdentity error:', err);
+      logRouteError('[AdminRoute] unbindIdentity error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -872,7 +873,7 @@ export function registerAdminRoutes(app: Express): void {
       await UserRepository.updateTenantId(user.id, resolveAdminTenantId(req));
       res.json({ success: true, data: { id: user.id, username: user.username, role: user.role } });
     } catch (err) {
-      console.error('[AdminRoute] createUser error:', err);
+      logRouteError('[AdminRoute] createUser error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -930,7 +931,7 @@ export function registerAdminRoutes(app: Express): void {
         res.status(403).json({ success: false, code: err.code, message: err.message });
         return;
       }
-      console.error('[AdminRoute] setRole error:', err);
+      logRouteError('[AdminRoute] setRole error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -951,7 +952,7 @@ export function registerAdminRoutes(app: Express): void {
           res.status(403).json({ success: false, code: err.code, message: err.message });
           return;
         }
-        console.error('[AdminRoute] claim-system-admin error:', err);
+        logRouteError('[AdminRoute] claim-system-admin error', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }
@@ -976,7 +977,7 @@ export function registerAdminRoutes(app: Express): void {
       await WebuiService.resetUserPasswordWithEmailCode(id, password, emailCode);
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] resetPassword error:', err);
+      logRouteError('[AdminRoute] resetPassword error', err);
       const msg = err instanceof Error ? err.message : 'Internal server error';
       res.status(400).json({ success: false, message: msg });
     }
@@ -988,7 +989,7 @@ export function registerAdminRoutes(app: Express): void {
       const data = await WebuiService.requestResetPasswordEmailCode();
       res.json({ success: true, data: { maskedEmail: data.maskedEmail } });
     } catch (err) {
-      console.error('[AdminRoute] sendResetPasswordEmailCode error:', err);
+      logRouteError('[AdminRoute] sendResetPasswordEmailCode error', err);
       const msg = err instanceof Error ? err.message : 'Internal server error';
       res.status(400).json({ success: false, message: msg });
     }
@@ -1005,7 +1006,7 @@ export function registerAdminRoutes(app: Express): void {
         },
       });
     } catch (err) {
-      console.error('[AdminRoute] getAdminEmail error:', err);
+      logRouteError('[AdminRoute] getAdminEmail error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1026,7 +1027,7 @@ export function registerAdminRoutes(app: Express): void {
       });
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] setAdminEmail error:', err);
+      logRouteError('[AdminRoute] setAdminEmail error', err);
       const message = err instanceof Error ? err.message : 'Internal server error';
       res.status(400).json({ success: false, message });
     }
@@ -1038,7 +1039,7 @@ export function registerAdminRoutes(app: Express): void {
       const settings = await getOrgEditionSettings();
       res.json({ success: true, data: settings });
     } catch (err) {
-      console.error('[AdminRoute] getOrgEditionAccess error:', err);
+      logRouteError('[AdminRoute] getOrgEditionAccess error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1062,7 +1063,7 @@ export function registerAdminRoutes(app: Express): void {
       });
       res.json({ success: true, data: { editionSwitcherEnabled } });
     } catch (err) {
-      console.error('[AdminRoute] setOrgEditionAccess error:', err);
+      logRouteError('[AdminRoute] setOrgEditionAccess error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1090,7 +1091,7 @@ export function registerAdminRoutes(app: Express): void {
       await UserRepository.deleteUser(id);
       res.json({ success: true });
     } catch (err) {
-      console.error('[AdminRoute] deleteUser error:', err);
+      logRouteError('[AdminRoute] deleteUser error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1111,7 +1112,7 @@ export function registerAdminRoutes(app: Express): void {
           res.status(400).json({ success: false, code: err.code, message: err.message });
           return;
         }
-        console.error('[AdminRoute] enterprise setup error:', err);
+        logRouteError('[AdminRoute] enterprise setup error', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }
@@ -1142,7 +1143,7 @@ export function registerAdminRoutes(app: Express): void {
       }
       res.json({ success: true, data: row });
     } catch (err) {
-      console.error('[AdminRoute] get enterprise profile error:', err);
+      logRouteError('[AdminRoute] get enterprise profile error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1175,7 +1176,7 @@ export function registerAdminRoutes(app: Express): void {
         });
         res.json({ success: true });
       } catch (err) {
-        console.error('[AdminRoute] update enterprise profile error:', err);
+        logRouteError('[AdminRoute] update enterprise profile error', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }
@@ -1204,7 +1205,7 @@ export function registerAdminRoutes(app: Express): void {
           })),
         });
       } catch (err) {
-        console.error('[AdminRoute] list enterprise invites error:', err);
+        logRouteError('[AdminRoute] list enterprise invites error', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }
@@ -1242,7 +1243,7 @@ export function registerAdminRoutes(app: Express): void {
           res.status(400).json({ success: false, code: err.code, message: err.message });
           return;
         }
-        console.error('[AdminRoute] create enterprise invite error:', err);
+        logRouteError('[AdminRoute] create enterprise invite error', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }
@@ -1268,7 +1269,7 @@ export function registerAdminRoutes(app: Express): void {
           res.status(400).json({ success: false, code: err.code, message: err.message });
           return;
         }
-        console.error('[AdminRoute] revoke enterprise invite error:', err);
+        logRouteError('[AdminRoute] revoke enterprise invite error', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }
@@ -1290,7 +1291,7 @@ export function registerAdminRoutes(app: Express): void {
         const data = await getEnterpriseMemberCount(tenantId);
         res.json({ success: true, data });
       } catch (err) {
-        console.error('[AdminRoute] member-count error:', err);
+        logRouteError('[AdminRoute] member-count error', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }
@@ -1312,7 +1313,7 @@ export function registerAdminRoutes(app: Express): void {
         const data = await getEnterpriseExitPasswordStatus(tenantId);
         res.json({ success: true, data });
       } catch (err) {
-        console.error('[AdminRoute] exit-password status error:', err);
+        logRouteError('[AdminRoute] exit-password status error', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }
@@ -1339,7 +1340,7 @@ export function registerAdminRoutes(app: Express): void {
         await setEnterpriseExitPassword(tenantId, password);
         res.json({ success: true });
       } catch (err) {
-        console.error('[AdminRoute] set exit-password error:', err);
+        logRouteError('[AdminRoute] set exit-password error', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }
@@ -1361,7 +1362,7 @@ export function registerAdminRoutes(app: Express): void {
         await clearEnterpriseExitPassword(tenantId);
         res.json({ success: true });
       } catch (err) {
-        console.error('[AdminRoute] clear exit-password error:', err);
+        logRouteError('[AdminRoute] clear exit-password error', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
       }
     }

@@ -31,6 +31,7 @@ import {
 } from '@process/services/rag/RagDocumentImportService';
 import { PipelineService } from '@process/services/pipeline/PipelineService';
 import { recordDevopsAudit, DEVOPS_AUDIT_ACTIONS } from '../auth/auditLogService';
+import { logRouteError } from '../webuiLog';
 import { registerCciRoutes } from './devops/cciRoutes';
 import { registerCcodeRoutes } from './devops/ccodeRoutes';
 import { registerCflowRoutes } from './devops/cflowRoutes';
@@ -343,7 +344,7 @@ export function registerDevOpsRoutes(app: Express): void {
 
       res.json({ success: true, data: { id: docId, status: 'indexing', title: file.originalname, size: file.size } });
     } catch (err) {
-      console.error('[DevOpsRoute] rag upload error:', err);
+      logRouteError('[DevOpsRoute] rag upload error', err);
       res.status(500).json({ success: false, message: getRagErrorMessage(err) });
     }
   });
@@ -369,7 +370,7 @@ export function registerDevOpsRoutes(app: Express): void {
         }
         content = extractHtmlText(await fetchRes.text());
       } catch (error) {
-        console.error('[DevOpsRoute] import RAG URL fetch error:', error);
+        logRouteError('[DevOpsRoute] import RAG URL fetch error', error);
         res.status(400).json({ success: false, message: getRagErrorMessage(error) });
         return;
       }
@@ -407,7 +408,7 @@ export function registerDevOpsRoutes(app: Express): void {
 
       res.json({ success: true, data: { id: docId, status: 'indexing', title: docTitle } });
     } catch (err) {
-      console.error('[DevOpsRoute] import RAG URL error:', err);
+      logRouteError('[DevOpsRoute] import RAG URL error', err);
       res.status(500).json({ success: false, message: getRagErrorMessage(err) });
     }
   });
@@ -468,7 +469,7 @@ export function registerDevOpsRoutes(app: Express): void {
 
       res.json({ success: true, data: { id: docId, status: 'indexing', title: docTitle } });
     } catch (error) {
-      console.error('[DevOpsRoute] import RAG Feishu document error:', error);
+      logRouteError('[DevOpsRoute] import RAG Feishu document error', error);
       res.status(400).json({ success: false, message: getRagErrorMessage(error) });
     }
   });
@@ -515,7 +516,7 @@ export function registerDevOpsRoutes(app: Express): void {
 
       res.json({ success: true, data: rootItems });
     } catch (err) {
-      console.error('[DevOpsRoute] list requirements tree error:', err);
+      logRouteError('[DevOpsRoute] list requirements tree error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -576,7 +577,7 @@ export function registerDevOpsRoutes(app: Express): void {
       res.json({ success: true, data: { id } });
       void recordDevopsAudit(req, DEVOPS_AUDIT_ACTIONS.requirementCreate, `requirement:${id}:${type}`);
     } catch (err) {
-      console.error('[DevOpsRoute] create requirement error:', err);
+      logRouteError('[DevOpsRoute] create requirement error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -718,7 +719,7 @@ export function registerDevOpsRoutes(app: Express): void {
       res.json({ success: true });
       void recordDevopsAudit(req, DEVOPS_AUDIT_ACTIONS.requirementUpdate, `requirement:${id}`);
     } catch (err) {
-      console.error('[DevOpsRoute] update requirement error:', err);
+      logRouteError('[DevOpsRoute] update requirement error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -761,7 +762,7 @@ export function registerDevOpsRoutes(app: Express): void {
       res.json({ success: true });
       void recordDevopsAudit(req, DEVOPS_AUDIT_ACTIONS.requirementDelete, `requirement:${id}`);
     } catch (err) {
-      console.error('[DevOpsRoute] delete requirement error:', err);
+      logRouteError('[DevOpsRoute] delete requirement error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -799,7 +800,7 @@ export function registerDevOpsRoutes(app: Express): void {
 
       res.json({ success: true, data: { id: commentId } });
     } catch (err) {
-      console.error('[DevOpsRoute] create requirement comment error:', err);
+      logRouteError('[DevOpsRoute] create requirement comment error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -852,7 +853,7 @@ export function registerDevOpsRoutes(app: Express): void {
         }))
       );
     } catch (err) {
-      console.error('[DevOpsRoute] list requirement comments error:', err);
+      logRouteError('[DevOpsRoute] list requirement comments error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -877,7 +878,7 @@ export function registerDevOpsRoutes(app: Express): void {
 
       res.json({ success: true, data: rows });
     } catch (err) {
-      console.error('[DevOpsRoute] list RAG documents error:', err);
+      logRouteError('[DevOpsRoute] list RAG documents error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -920,7 +921,7 @@ export function registerDevOpsRoutes(app: Express): void {
 
       res.json({ success: true, data: { id: docId, status: 'indexing' } });
     } catch (err) {
-      console.error('[DevOpsRoute] upload document error:', err);
+      logRouteError('[DevOpsRoute] upload document error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -952,7 +953,7 @@ export function registerDevOpsRoutes(app: Express): void {
 
       res.json({ success: true });
     } catch (err) {
-      console.error('[DevOpsRoute] update RAG document scope error:', err);
+      logRouteError('[DevOpsRoute] update RAG document scope error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1014,7 +1015,7 @@ export function registerDevOpsRoutes(app: Express): void {
 
       res.json({ success: true, data: scoredResults });
     } catch (err) {
-      console.error('[DevOpsRoute] rag search error:', err);
+      logRouteError('[DevOpsRoute] rag search error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1046,7 +1047,7 @@ export function registerDevOpsRoutes(app: Express): void {
       res.json({ success: true });
       void recordDevopsAudit(req, DEVOPS_AUDIT_ACTIONS.ragDocumentDelete, `rag_document:${id}`);
     } catch (err) {
-      console.error('[DevOpsRoute] delete RAG document error:', err);
+      logRouteError('[DevOpsRoute] delete RAG document error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1096,7 +1097,7 @@ export function registerDevOpsRoutes(app: Express): void {
 
       res.json({ success: true, data: safeRows });
     } catch (err) {
-      console.error('[DevOpsRoute] list MCP servers error:', err);
+      logRouteError('[DevOpsRoute] list MCP servers error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1184,7 +1185,7 @@ export function registerDevOpsRoutes(app: Express): void {
       const mcpAction = id ? DEVOPS_AUDIT_ACTIONS.mcpUpdate : DEVOPS_AUDIT_ACTIONS.mcpCreate;
       void recordDevopsAudit(req, mcpAction, `mcp:${id ?? ''}:${name.trim()}`);
     } catch (err) {
-      console.error('[DevOpsRoute] set MCP server error:', err);
+      logRouteError('[DevOpsRoute] set MCP server error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1216,7 +1217,7 @@ export function registerDevOpsRoutes(app: Express): void {
       res.json({ success: true });
       void recordDevopsAudit(req, DEVOPS_AUDIT_ACTIONS.mcpDelete, `mcp:${id}`);
     } catch (err) {
-      console.error('[DevOpsRoute] delete MCP error:', err);
+      logRouteError('[DevOpsRoute] delete MCP error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1245,7 +1246,7 @@ export function registerDevOpsRoutes(app: Express): void {
       res.json({ success: true });
       void recordDevopsAudit(req, DEVOPS_AUDIT_ACTIONS.mcpToggle, `mcp:${id}:enabled=${enabled}`);
     } catch (err) {
-      console.error('[DevOpsRoute] toggle MCP error:', err);
+      logRouteError('[DevOpsRoute] toggle MCP error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1347,7 +1348,7 @@ export function registerDevOpsRoutes(app: Express): void {
         : driver.prepare(`SELECT id, tenant_id, name, description, content, enabled, scope, team_id, created_by, created_at, updated_at FROM skills_registry WHERE tenant_id = ? AND ${VISIBLE_RESOURCE_WHERE} ORDER BY name ASC`).all(tenantId, userId, tenantId, userId)) as any[];
       res.json({ success: true, data: rows });
     } catch (err) {
-      console.error('[DevOpsRoute] list skills error:', err);
+      logRouteError('[DevOpsRoute] list skills error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1391,7 +1392,7 @@ export function registerDevOpsRoutes(app: Express): void {
       }
       res.json({ success: true });
     } catch (err) {
-      console.error('[DevOpsRoute] set skill error:', err);
+      logRouteError('[DevOpsRoute] set skill error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -1421,7 +1422,7 @@ export function registerDevOpsRoutes(app: Express): void {
       }
       res.json({ success: true });
     } catch (err) {
-      console.error('[DevOpsRoute] delete skill error:', err);
+      logRouteError('[DevOpsRoute] delete skill error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });

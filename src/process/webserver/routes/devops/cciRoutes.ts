@@ -12,6 +12,7 @@ import {
   resolveDevopsTenantId,
   type DevopsRouteAuth,
 } from './shared';
+import { logRouteError } from '../../webuiLog';
 
 export function registerCciRoutes(app: Express, auth: DevopsRouteAuth): void {
   app.get('/api/admin/pipelines', apiRateLimiter, auth, async (req, res) => {
@@ -19,7 +20,7 @@ export function registerCciRoutes(app: Express, auth: DevopsRouteAuth): void {
       const pipelines = await CciService.listPipelines(resolveDevopsTenantId(req));
       res.json({ success: true, data: pipelines });
     } catch (error) {
-      console.error('[DevOpsRoute] list pipelines error:', error);
+      logRouteError('[DevOpsRoute] list pipelines error', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -44,7 +45,7 @@ export function registerCciRoutes(app: Express, auth: DevopsRouteAuth): void {
         res.status(400).json({ success: false, message: error.message });
         return;
       }
-      console.error('[DevOpsRoute] create pipeline error:', error);
+      logRouteError('[DevOpsRoute] create pipeline error', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -74,7 +75,7 @@ export function registerCciRoutes(app: Express, auth: DevopsRouteAuth): void {
         res.status(404).json({ success: false, message: error.message });
         return;
       }
-      console.error('[DevOpsRoute] update pipeline error:', error);
+      logRouteError('[DevOpsRoute] update pipeline error', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -88,7 +89,7 @@ export function registerCciRoutes(app: Express, auth: DevopsRouteAuth): void {
       );
       res.json({ success: true, data });
     } catch (error) {
-      console.error('[DevOpsRoute] trigger pipeline run error:', error);
+      logRouteError('[DevOpsRoute] trigger pipeline run error', error);
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Internal server error',
@@ -108,7 +109,7 @@ export function registerCciRoutes(app: Express, auth: DevopsRouteAuth): void {
       }
       res.json({ success: true, data: run });
     } catch (error) {
-      console.error('[DevOpsRoute] get pipeline run error:', error);
+      logRouteError('[DevOpsRoute] get pipeline run error', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });

@@ -8,6 +8,7 @@ import type { Express, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { getDatabase } from '@process/services/database/export';
 import { TokenMiddleware } from '../auth/middleware/TokenMiddleware';
+import { logRouteError } from '../webuiLog';
 import { apiRateLimiter } from '../middleware/rateLimiter';
 import { isWebuiBuiltinAdministrator } from '../auth/enterpriseRoles';
 
@@ -48,7 +49,7 @@ export function registerKanbanRoutes(app: Express): void {
         : db.listPersonalTasks(tenantId, userId);
       res.json({ success: true, data: result.data ?? [] });
     } catch (err) {
-      console.error('[KanbanRoute] list error:', err);
+      logRouteError('[KanbanRoute] list error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -81,7 +82,7 @@ export function registerKanbanRoutes(app: Express): void {
       if (!result.success) throw new Error(result.error);
       res.json({ success: true, data: task });
     } catch (err) {
-      console.error('[KanbanRoute] create error:', err);
+      logRouteError('[KanbanRoute] create error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -118,7 +119,7 @@ export function registerKanbanRoutes(app: Express): void {
       const result = db.updatePersonalTask(taskId, updates);
       res.json({ success: result.success });
     } catch (err) {
-      console.error('[KanbanRoute] update error:', err);
+      logRouteError('[KanbanRoute] update error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -147,7 +148,7 @@ export function registerKanbanRoutes(app: Express): void {
       const result = db.deletePersonalTask(taskId);
       res.json({ success: result.success });
     } catch (err) {
-      console.error('[KanbanRoute] delete error:', err);
+      logRouteError('[KanbanRoute] delete error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });
@@ -162,7 +163,7 @@ export function registerKanbanRoutes(app: Express): void {
         .map((u) => ({ id: u.id, username: u.username, role: u.role ?? 'member' }));
       res.json({ success: true, data: users });
     } catch (err) {
-      console.error('[KanbanRoute] listUsers error:', err);
+      logRouteError('[KanbanRoute] listUsers error', err);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   });

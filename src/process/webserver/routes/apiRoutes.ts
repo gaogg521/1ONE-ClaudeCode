@@ -18,6 +18,7 @@ import { ExtensionRegistry } from '@process/extensions';
 import { SpeechToTextService } from '@process/bridge/services/SpeechToTextService';
 import { isActivePreviewPort } from '@process/bridge/pptPreviewBridge';
 import { isActiveOfficeWatchPort } from '@process/bridge/officeWatchBridge';
+import { logRouteError, logRouteWarn } from '../webuiLog';
 import { ONE_TIMESTAMP_SEPARATOR } from '@/common/config/constants';
 import { acpDetector } from '@process/agent/acp/AcpDetector';
 import { resolveAionrsBinary } from '@process/agent/aionrs/binaryResolver';
@@ -290,7 +291,7 @@ function registerExtensionWebuiRoutes(app: Express, validateApiAccess: RequestHa
     try {
       routeModule = nativeRequire(routeMatch.routeEntry);
     } catch (error) {
-      console.error(
+      logRouteError(
         `[WebUI] Failed to load API route module: ${routeMatch.routeEntry} (${routeMatch.extensionName})`,
         error
       );
@@ -300,7 +301,7 @@ function registerExtensionWebuiRoutes(app: Express, validateApiAccess: RequestHa
 
     const handler = resolveRouteHandler(routeModule);
     if (!handler) {
-      console.warn(`[WebUI] API route has no function export: ${routeMatch.routeEntry} (${routeMatch.extensionName})`);
+      logRouteWarn(`[WebUI] API route has no function export: ${routeMatch.routeEntry} (${routeMatch.extensionName})`, '');
       res.status(500).json({ message: 'Invalid extension API route handler' });
       return;
     }
@@ -434,7 +435,7 @@ export function registerApiRoutes(app: Express): void {
           },
         });
       } catch (error) {
-        console.error('[API] Upload file error:', error);
+        logRouteError('[API] Upload file error', error);
         res.status(500).json({
           success: false,
           msg: error instanceof Error ? error.message : 'Failed to upload file',
@@ -489,7 +490,7 @@ export function registerApiRoutes(app: Express): void {
           data: result,
         });
       } catch (error) {
-        console.error('[API] Speech-to-text error:', error);
+        logRouteError('[API] Speech-to-text error', error);
         res.status(500).json({
           success: false,
           msg: error instanceof Error ? error.message : 'Speech-to-text failed',
