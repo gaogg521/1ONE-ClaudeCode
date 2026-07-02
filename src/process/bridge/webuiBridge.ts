@@ -179,7 +179,18 @@ export function initWebuiBridge(): void {
           await closeAdminWebListener();
           cleanupWebAdapter();
         } catch (err) {
-          console.warn('[WebUI Bridge] Error stopping previous server:', err);
+          // IPC handler — never use console.* (triggers bridge.adapter.emit, freezes main process). Write to file.
+          try {
+            const { appendFileSync, mkdirSync } = require('node:fs');
+            const { join } = require('node:path');
+            const { getPlatformServices } = require('@/common/platform');
+            const logsDir = getPlatformServices().paths.getLogsDir();
+            try { mkdirSync(logsDir, { recursive: true }); } catch {}
+            appendFileSync(join(logsDir, 'webui-bridge.log'),
+              `[${new Date().toISOString()}] Error stopping previous server: ${err instanceof Error ? err.message : String(err)}\n`, 'utf-8');
+          } catch {
+            // best-effort
+          }
         }
         webServerInstance = null;
       }
@@ -224,7 +235,18 @@ export function initWebuiBridge(): void {
         },
       };
     } catch (error) {
-      console.error('[WebUI Bridge] Start error:', error);
+      // IPC handler — never use console.* (triggers bridge.adapter.emit, freezes main process). Write to file.
+      try {
+        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { join } = require('node:path');
+        const { getPlatformServices } = require('@/common/platform');
+        const logsDir = getPlatformServices().paths.getLogsDir();
+        try { mkdirSync(logsDir, { recursive: true }); } catch {}
+        appendFileSync(join(logsDir, 'webui-bridge.log'),
+          `[${new Date().toISOString()}] Start error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+      } catch {
+        // best-effort
+      }
       return {
         success: false,
         msg: error instanceof Error ? error.message : 'Failed to start WebUI',
@@ -271,7 +293,18 @@ export function initWebuiBridge(): void {
 
       return { success: true };
     } catch (error) {
-      console.error('[WebUI Bridge] Stop error:', error);
+      // IPC handler — never use console.* (triggers bridge.adapter.emit, freezes main process). Write to file.
+      try {
+        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { join } = require('node:path');
+        const { getPlatformServices } = require('@/common/platform');
+        const logsDir = getPlatformServices().paths.getLogsDir();
+        try { mkdirSync(logsDir, { recursive: true }); } catch {}
+        appendFileSync(join(logsDir, 'webui-bridge.log'),
+          `[${new Date().toISOString()}] Stop error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+      } catch {
+        // best-effort
+      }
       return {
         success: false,
         msg: error instanceof Error ? error.message : 'Failed to stop WebUI',
@@ -355,7 +388,18 @@ export function initWebuiBridge(): void {
         },
       };
     } catch (error) {
-      console.error('[WebUI Bridge] Generate QR token error:', error);
+      // IPC handler — never use console.* (triggers bridge.adapter.emit, freezes main process). Write to file.
+      try {
+        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { join } = require('node:path');
+        const { getPlatformServices } = require('@/common/platform');
+        const logsDir = getPlatformServices().paths.getLogsDir();
+        try { mkdirSync(logsDir, { recursive: true }); } catch {}
+        appendFileSync(join(logsDir, 'webui-bridge.log'),
+          `[${new Date().toISOString()}] Generate QR token error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+      } catch {
+        // best-effort
+      }
       return {
         success: false,
         msg: error instanceof Error ? error.message : 'Failed to generate QR token',
@@ -443,7 +487,18 @@ export function initWebuiBridge(): void {
         },
       };
     } catch (error) {
-      console.error('[WebUI Bridge] Direct IPC: Generate QR token error:', error);
+      // IPC handler — never use console.* (triggers bridge.adapter.emit, freezes main process). Write to file.
+      try {
+        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { join } = require('node:path');
+        const { getPlatformServices } = require('@/common/platform');
+        const logsDir = getPlatformServices().paths.getLogsDir();
+        try { mkdirSync(logsDir, { recursive: true }); } catch {}
+        appendFileSync(join(logsDir, 'webui-bridge.log'),
+          `[${new Date().toISOString()}] Direct IPC QR token error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+      } catch {
+        // best-effort
+      }
       return {
         success: false,
         msg: error instanceof Error ? error.message : 'Failed to generate QR token',

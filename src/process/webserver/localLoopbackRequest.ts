@@ -7,7 +7,7 @@
  * Avoids renderer fetch CORS / private-network restrictions on Electron desktop.
  */
 
-import { net, session } from 'electron';
+import { net } from 'electron';
 import {
   ONE_WEBUI_CLIENT_DESKTOP,
   ONE_WEBUI_CLIENT_HEADER,
@@ -57,10 +57,17 @@ export async function invokeLoopbackRequest(input: LoopbackRequestInput): Promis
     headers,
     body: method === 'GET' || method === 'HEAD' ? undefined : input.body,
     bypassCustomProtocolHandlers: true,
-    session: session.defaultSession,
-  } as RequestInit & { bypassCustomProtocolHandlers?: boolean; session?: Electron.Session });
+  } as RequestInit & { bypassCustomProtocolHandlers?: boolean });
 
-  const bodyText = await response.text();
+  // Read body within a timeout — net.fetch has no built-in timeout, and a
+  // half-open TCP connection to the loopback server hangs the IPC call forever,
+  // which freezes the renderer (spinner spins indefinitely on Issue creation).
+  const bodyText = await Promise.race([
+    response.text(),
+    new Promise<string>((_, reject) =>
+      setTimeout(() => reject(new Error('LOOPBACK_TIMEOUT')), 15_000)
+    ),
+  ]) as string;
   const headerRecord = headersToRecord(response.headers);
   if (!headerRecord[CSRF_HEADER_NAME] && response.headers.has(CSRF_HEADER_NAME)) {
     headerRecord[CSRF_HEADER_NAME] = response.headers.get(CSRF_HEADER_NAME) ?? '';

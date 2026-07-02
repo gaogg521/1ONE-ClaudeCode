@@ -95,7 +95,21 @@ export class WebuiService {
     try {
       return await handler();
     } catch (error) {
-      console.error(`[WebUI Service] ${context} error:`, error);
+      // console.error here triggers @office-ai/platform's console patch → bridge.adapter.emit
+      // → win.webContents.send × N + broadcastToAll, freezing the main process.
+      // This handler wraps every webui IPC provider — any error triggers the freeze.
+      // Write to file instead.
+      try {
+        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { join } = require('node:path');
+        const { getPlatformServices } = require('@/common/platform');
+        const logsDir = getPlatformServices().paths.getLogsDir();
+        try { mkdirSync(logsDir, { recursive: true }); } catch {}
+        appendFileSync(join(logsDir, 'webui-service.log'),
+          `[${new Date().toISOString()}] ${context} error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+      } catch {
+        // best-effort
+      }
       return {
         success: false,
         msg: error instanceof Error ? error.message : `${context} failed`,
