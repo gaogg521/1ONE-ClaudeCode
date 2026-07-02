@@ -206,6 +206,7 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
   });
 
   const [feishuEnabled, setFeishuEnabled] = useState(false);
+  const [feishuSecretMasked, setFeishuSecretMasked] = useState(false);
   const [feishuConfig, setFeishuConfig] = useState({
     appId: '',
     appSecret: '',
@@ -285,7 +286,13 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
     }
     if (provider === 'feishu') {
       setFeishuEnabled(Boolean(data.enabled));
-      setFeishuConfig((prev) => ({ ...prev, ...data.config }));
+      setFeishuSecretMasked(data.config.appSecret === '******');
+      setFeishuConfig((prev) => ({
+        appId: String(data.config.appId ?? prev.appId),
+        appSecret: data.config.appSecret === '******' ? '' : String(data.config.appSecret ?? prev.appSecret),
+        redirectUri: String(data.config.redirectUri ?? prev.redirectUri),
+        externalIdField: String(data.config.externalIdField ?? prev.externalIdField),
+      }));
       return;
     }
     if (provider === 'dingtalk') {
@@ -395,7 +402,13 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
       if (provider === 'feishu') {
         await apiFetch(`/api/admin/auth/providers/${provider}`, {
           method: 'PUT',
-          body: withPolicy({ enabled: feishuEnabled, config: feishuConfig }),
+          body: withPolicy({
+            enabled: feishuEnabled,
+            config: {
+              ...feishuConfig,
+              appSecret: feishuConfig.appSecret.trim() || (feishuSecretMasked ? '******' : ''),
+            },
+          }),
         });
         return;
       }
@@ -446,6 +459,7 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
       dingtalkSecretMasked,
       feishuConfig,
       feishuEnabled,
+      feishuSecretMasked,
       ldapConfig,
       ldapEnabled,
       smtpConfig,
@@ -544,7 +558,12 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
     try {
       await apiFetch(`/api/admin/auth/providers/feishu/test`, {
         method: 'POST',
-        body: JSON.stringify({ config: feishuConfig }),
+        body: JSON.stringify({
+          config: {
+            ...feishuConfig,
+            appSecret: feishuConfig.appSecret.trim() || (feishuSecretMasked ? '******' : ''),
+          },
+        }),
       });
       Message.success(t('settings.authProviders.testSuccess', { defaultValue: '连接成功' }));
     } catch (error) {
@@ -552,7 +571,7 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
     } finally {
       setTestingFeishu(false);
     }
-  }, [feishuConfig, t]);
+  }, [feishuConfig, feishuSecretMasked, t]);
 
   const testDingtalk = useCallback(async () => {
     if (!dingtalkConfig.appKey.trim()) {
@@ -931,7 +950,7 @@ const AuthProvidersModalContent: React.FC<AuthProvidersModalContentProps> = ({
               <Input value={feishuConfig.appId} onChange={(v) => setFeishuConfig((s) => ({ ...s, appId: v }))} placeholder='cli_xxx' />
             </Form.Item>
             <Form.Item label={t('settings.authProviders.feishuAppSecret', { defaultValue: '飞书 App Secret' })} required>
-              <Input.Password value={feishuConfig.appSecret} onChange={(v) => setFeishuConfig((s) => ({ ...s, appSecret: v }))} placeholder='******' />
+              <Input.Password value={feishuConfig.appSecret} onChange={(v) => { setFeishuConfig((s) => ({ ...s, appSecret: v })); setFeishuSecretMasked(false); }} placeholder='******' />
             </Form.Item>
             <Form.Item
               label={t('settings.authProviders.feishuRedirectFrontend', { defaultValue: '飞书 Redirect URI（开放平台）' })}

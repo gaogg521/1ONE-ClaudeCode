@@ -32,6 +32,7 @@ body.login-page-active {
   overflow-x: hidden;
   overflow-y: auto;
   color-scheme: light;
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Noto Sans SC', sans-serif;
   background:
     radial-gradient(circle at 12% 22%, rgba(120, 170, 255, 0.16), transparent 28%),
     radial-gradient(circle at 86% 16%, rgba(129, 140, 248, 0.14), transparent 24%),
@@ -1173,7 +1174,7 @@ body.login-page-active {
   --login-panel-width: min(100%, 440px);
   --login-panel-height: auto;
   --login-side-padding: 20px;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   min-height: 100%;
   overflow-y: auto;
