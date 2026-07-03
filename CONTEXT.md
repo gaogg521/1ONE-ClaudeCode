@@ -1984,3 +1984,47 @@ commit `d80d2c6` 修了 `databaseBridge.ts` + `AionrsManager.ts`，但漏了这�
 - `vitest run tests/unit`：455 passed（+ 本轮新增 4 个用例通过），失败的 7 文件 21 用例全部核实为基线既存失败
 - 硬门禁生效性人工验证：新增一行 console.log 立刻报 error，符合预期
 - 运行时仍需桌面端 `npm run restart` 实测（webserver 那轮的 Issue 创建卡死修复已验证过流程；bridge/** 这轮是补防线，理论上不改变现有行为，只是把日志出口换掉）
+
+---
+
+# 2026-07-03 Issues 创建卡死 —— 真正的第二根因（不是 console）+ 客户端模式管理后台地址遗漏点
+
+## 背景
+
+打包出 1.23.18 装上实测，「创建 Issue」**依然转圈圈**。用户很无语。这次没有再猜测 console.*，而是直接查正式安装版（非 dev 环境）的用户数据目录日志，拿到了实锤证据。
+
+## 根因 1：`syncBrowserWebuiSessionToDesktop()` 的 IPC 调用完全没有超时保护
+
+**证据链**：
+- `logs/webui-requests.log`（请求一进来就写，不是等响应完才写）从应用启动到用户手动退出，**没有任何一条记录**——说明点「创建」后请求根本没走到 Express 层。
+- `logs/webui-service.log`（`WebuiService.handleAsync` 的 catch 块才会写）**文件都不存在**——说明不是报错，是真的卡住不 resolve/reject。
+- 但用户在应用挂起期间右键托盘、点退出，`before-quit → ChannelManager Shutdown → will-quit → quit(exitCode=0)` 整个优雅关闭流程完整走完——**主进程 event loop 没冻**，排除 console.* 死锁，说明是某个 IPC 调用链自己卡住了（异步 pending，不影响其他 IPC）。
+
+**定位**：`CreateIssueModal.handleSubmit()` → `ensureDesktopWebuiRunning()`（`src/renderer/utils/ensureDesktopWebui.ts`）→ `syncBrowserWebuiSessionToDesktop()`（`src/renderer/utils/syncBrowserWebuiSession.ts:23`）→ IPC `webui.syncBrowserWebuiSession` → 主进程 `WebuiService.syncBrowserWebuiSession()`（`session.defaultSession.cookies.get()` + `AuthService.verifyToken` + `UserRepository.findById` 串行 await）。`WebuiService.handleAsync` 只 catch 抛出的错误，从不处理"一直不 resolve"的情况——这条链路完全没有超时。6-23 深度审查时其实已经点出过这个薄弱点（"主进程 cookies.get/verifyToken/findById 串行 await 无超时"），但当时的结论是"渲染层 8s 超时已覆盖症状"——**那个 8s 超时（`withEnterpriseBootstrapTimeout`）只包在 `WebuiEnterpriseModeProvider.scheduleFullRefresh` 那条链路上，`ensureDesktopWebuiRunning` 是完全独立的另一个调用点，从未被覆盖**。
+
+**修复**：`syncBrowserWebuiSessionToDesktop()` 内部给 `webui.syncBrowserWebuiSession.invoke()` 套 `Promise.race` + 8 秒超时（复用 `WebuiEnterpriseModeProvider.tsx` 已有的 `withEnterpriseBootstrapTimeout` 同款模式），超时就 fall through 到已缓存的 session 继续走，不再无限期卡住调用方。
+
+**教训**：这轮排查第一次真正靠日志实锤定位，而不是继续假设是 console.* 同一类 bug。8 轮 console 排查建立的方法论（改完要 grep 复查）在这次完全不适用——不能一遇到"转圈圈"就往 console 死锁上套，先看进程有没有真的冻（能不能操作托盘/其他 UI），再看请求到没到 HTTP 层，两个信号一交叉基本就能定位到底是哪一类 bug。
+
+## 根因 2：客户端模式下「管理员专属后台」地址仍显示本机地址（用户主动发现）
+
+用户在验证时发现：设置 → WebUI 页面的"管理员专属后台（端口 25809）"显示的是本机局域网地址（`172.29.128.120:25809`），但这台机器在"企业部署模式"里已经配置为客户端、连接到远程服务器（`192.168.11.137:25809`，已连接企业"上海欢乐互娱网络科技公司"）。用户的判断是对的：客户端模式下这个地址应该指向服务端。
+
+**根因**：`WebuiModalContent.tsx` 的 `getAdminOrigin()` 只读本机 `status.adminNetworkUrl`/`status.adminLocalUrl`，完全没有检查部署角色（client/server）。这是 7-02 那轮修的"管理后台按钮指向本机而非服务端"bug（`getWebuiAdminBrowserOrigin()`，覆盖了 WorkspaceIdentityPanel/EditionWorkspaceGuide/EditionModeSwitcher/sessions/tasks/superAssistant 等按钮）的**遗漏点**——设置页 WebUI 面板里直接展示的这条 URL 走的是另一套本地计算逻辑，没有复用那次的修复。
+
+**修复**：`WebuiModalContent.tsx` 新增 `clientEnterpriseOrigin` state，用 `useEffect` 调用 `getClientEnterpriseServerOrigin()`（`webuiApiBase.ts` 已有导出）解析，并监听 `one-enterprise-context-refresh` 事件保持同步；`getAdminOrigin()` 优先检查这个值，用 `buildWebuiAdminLoginUrlOnDedicatedPort()` 转换成服务端 memberPort+1 的 origin（和 `getWebuiAdminBrowserOrigin()` 完全同构），查不到才回退到本机 `status`。「团队/员工访问」（成员端口）没有改动——那是本机自身局域网入口，不属于用户反馈的范围。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/renderer/utils/syncBrowserWebuiSession.ts` | `syncBrowserWebuiSessionToDesktop()` 内部加 8s `Promise.race` 超时 |
+| `src/renderer/components/settings/SettingsModal/contents/WebuiModalContent.tsx` | 新增 `clientEnterpriseOrigin` state + effect；`getAdminOrigin()` 优先返回客户端模式下的服务端 admin origin |
+| `tests/unit/WebuiModalContent.dom.test.tsx` | mock 补上新增的 `getClientEnterpriseServerOrigin` 导出 |
+
+## 验证
+
+- `tsc --noEmit`：两文件均无新增错误
+- `oxlint`/`oxfmt --check`：两文件干净（1 个 `formatExpiresAt` 既存 warning 与本次无关）
+- `vitest run tests/unit`：455 passed，与改动前完全一致（含本次新增/修复的 `WebuiModalContent.dom.test.tsx` 1 个用例）
+- 运行时仍需桌面端实测：Issue 创建不再无限转圈（最坏情况 8s 后仍能继续）；客户端模式下设置页「管理员专属后台」显示服务端地址

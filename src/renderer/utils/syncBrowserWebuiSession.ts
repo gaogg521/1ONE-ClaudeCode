@@ -14,13 +14,27 @@ import {
   type WebuiDesktopSession,
 } from '@/renderer/utils/webuiDesktopSession';
 
+// WebuiService.syncBrowserWebuiSession() (main process) awaits session.defaultSession.cookies.get()
+// and DB lookups with no internal timeout — WebuiService.handleAsync only catches thrown errors,
+// not hangs. ensureDesktopWebuiRunning() awaits this call directly before every Issues create/update
+// request, so an unresolved promise here blocks the whole action forever with the main process event
+// loop otherwise healthy (no console.* involved — confirmed via logs/webui-requests.log staying empty
+// while tray/IPC kept responding). Race against a timeout so a hang degrades to the cached session
+// instead of hanging the caller indefinitely.
+const SYNC_BROWSER_SESSION_TIMEOUT_MS = 8_000;
+
 export async function syncBrowserWebuiSessionToDesktop(): Promise<WebuiDesktopSession | null> {
   if (!isElectronDesktop()) {
     return getWebuiDesktopSession();
   }
 
   try {
-    const result = await webui.syncBrowserWebuiSession.invoke();
+    const result = await Promise.race([
+      webui.syncBrowserWebuiSession.invoke(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('SYNC_BROWSER_SESSION_TIMEOUT')), SYNC_BROWSER_SESSION_TIMEOUT_MS);
+      }),
+    ]);
     if (result.success && result.data?.token) {
       const next: WebuiDesktopSession = {
         userId: result.data.userId,

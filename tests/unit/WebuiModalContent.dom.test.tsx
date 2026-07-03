@@ -85,6 +85,7 @@ const fetchWebuiApiMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/renderer/utils/webuiApiBase', () => ({
   fetchWebuiApi: (...args: unknown[]) => fetchWebuiApiMock(...args),
+  getClientEnterpriseServerOrigin: () => Promise.resolve(null),
 }));
 
 vi.mock('@/renderer/hooks/webui/useWebuiEnterpriseMode', () => ({
@@ -265,7 +266,9 @@ describe('WebuiModalContent', () => {
       expect(screen.getByText('admin@example.com')).toBeInTheDocument();
     });
 
-    const emailEditButton = document.querySelector('[data-tooltip="settings.webui.editAdminEmailTooltip"] button') as HTMLButtonElement;
+    const emailEditButton = document.querySelector(
+      '[data-tooltip="settings.webui.editAdminEmailTooltip"] button'
+    ) as HTMLButtonElement;
     expect(emailEditButton).toBeTruthy();
 
     fireEvent.click(emailEditButton);
