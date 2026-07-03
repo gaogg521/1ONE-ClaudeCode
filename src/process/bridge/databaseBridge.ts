@@ -44,13 +44,13 @@ export function initDatabaseBridge(repo: IConversationRepository): void {
       // so a persistent error (e.g. client-mode token verify failing on remote-issued JWT)
       // freezes the main process. Write to file instead.
       try {
-        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { appendFile, mkdirSync } = require('node:fs');
         const { join } = require('node:path');
         const { getPlatformServices } = require('@/common/platform');
         const logsDir = getPlatformServices().paths.getLogsDir();
         try { mkdirSync(logsDir, { recursive: true }); } catch {}
-        appendFileSync(join(logsDir, 'database-bridge.log'),
-          `[${new Date().toISOString()}] getConversationMessages error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+        appendFile(join(logsDir, 'database-bridge.log'),
+          `[${new Date().toISOString()}] getConversationMessages error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8', () => {});
       } catch {
         // best-effort
       }
@@ -160,13 +160,13 @@ export function initDatabaseBridge(repo: IConversationRepository): void {
     } catch (error) {
       // IPC handler — never use console.* (triggers bridge.adapter.emit, freezes main process on repeated calls). Write to file.
       try {
-        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { appendFile, mkdirSync } = require('node:fs');
         const { join } = require('node:path');
         const { getPlatformServices } = require('@/common/platform');
         const logsDir = getPlatformServices().paths.getLogsDir();
         try { mkdirSync(logsDir, { recursive: true }); } catch {}
-        appendFileSync(join(logsDir, 'database-bridge.log'),
-          `[${new Date().toISOString()}] searchMessages error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+        appendFile(join(logsDir, 'database-bridge.log'),
+          `[${new Date().toISOString()}] searchMessages error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8', () => {});
       } catch {
         // best-effort
       }

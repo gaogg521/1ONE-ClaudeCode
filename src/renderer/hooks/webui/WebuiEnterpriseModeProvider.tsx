@@ -35,24 +35,11 @@ import { isElectronDesktop, openExternalUrl } from '@/renderer/utils/platform';
 import { fetchWebuiApi, getWebuiAdminBrowserOrigin, getWebuiApiBaseUrl } from '@/renderer/utils/webuiApiBase';
 import { buildWebuiAdminLoginUrl } from '@/common/config/webuiLoginAccess';
 import { ENTERPRISE_ADMIN_HOME_PATH } from '@/common/auth/enterpriseRoles';
-import {
-  getDesktopWebuiBearerToken,
-  syncBrowserWebuiSessionToDesktop,
-} from '@/renderer/utils/syncBrowserWebuiSession';
-import {
-  createEnterprise,
-  joinEnterpriseWithCode,
-} from '@/renderer/utils/enterpriseJoinApi';
+import { getDesktopWebuiBearerToken, syncBrowserWebuiSessionToDesktop } from '@/renderer/utils/syncBrowserWebuiSession';
+import { createEnterprise, joinEnterpriseWithCode } from '@/renderer/utils/enterpriseJoinApi';
 import { adminApi } from '@/renderer/utils/kanbanApi';
-import {
-  isEnterpriseAdminRole,
-  isSystemAdminRole,
-  resolveEnterpriseEditionPath,
-} from '@/common/auth/enterpriseRoles';
-import {
-  mergeDesktopEnterpriseContext,
-  persistEnterpriseWorkspaceEdition,
-} from '@/common/auth/enterpriseEditionSync';
+import { isEnterpriseAdminRole, isSystemAdminRole, resolveEnterpriseEditionPath } from '@/common/auth/enterpriseRoles';
+import { mergeDesktopEnterpriseContext, persistEnterpriseWorkspaceEdition } from '@/common/auth/enterpriseEditionSync';
 import { isEnterpriseTenantId } from '@/common/config/webuiEnterpriseConfig';
 import { setPostLoginRedirect } from '@/renderer/utils/postLoginRedirect';
 import { buildEnterpriseLoginPath, readCurrentHashPath } from '@/renderer/utils/enterpriseLoginNavigation';
@@ -285,6 +272,14 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   }, [loadEditionSwitcherFlag]);
 
   const desktopSyncInFlightRef = useRef(false);
+  // Cooldown after a timed-out/slow sync attempt — without this, repeated focus/
+  // visibilitychange events (e.g. from a "Not Responding" dialog itself stealing
+  // and returning focus, or rapid window switching) each schedule a fresh 8s-bounded
+  // attempt the instant the previous one's in-flight flag clears, so a consistently
+  // slow underlying call (main-process cookie/DB lookups) turns into a back-to-back
+  // retry storm that never lets the app settle. See CONTEXT.md 2026-07-03.
+  const desktopSyncCooldownUntilRef = useRef(0);
+  const DESKTOP_SYNC_COOLDOWN_MS = 15_000;
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -295,6 +290,9 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
         if (desktopSyncInFlightRef.current) {
           return;
         }
+        if (Date.now() < desktopSyncCooldownUntilRef.current) {
+          return;
+        }
         desktopSyncInFlightRef.current = true;
         const runDesktopSync = async () => {
           await syncBrowserWebuiSessionToDesktop();
@@ -303,11 +301,17 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
           }
           await refreshEnterpriseContext();
         };
+        const startedAt = Date.now();
         // 整条链加超时兜底：任一步骤卡死时，超时后仍会复位 in-flight 标志，
         // 否则一次挂起（如 DB/cookie 卡顿）会让标志永远为 true，永久禁用后续焦点同步。
         // withEnterpriseBootstrapTimeout 内部已吞错并打日志，同步失败/超时不会冒泡为未捕获 rejection。
         void withEnterpriseBootstrapTimeout(runDesktopSync(), 'desktopFocusSync').finally(() => {
           desktopSyncInFlightRef.current = false;
+          // Only cool down if this attempt actually ran the full timeout (i.e. was
+          // genuinely slow) — a fast, successful sync should not throttle the next one.
+          if (Date.now() - startedAt >= ENTERPRISE_BOOTSTRAP_TIMEOUT_MS) {
+            desktopSyncCooldownUntilRef.current = Date.now() + DESKTOP_SYNC_COOLDOWN_MS;
+          }
         });
       }, 800);
     };
@@ -342,13 +346,10 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   }, [isDesktop, refreshAuth, refreshEnterpriseContext]);
 
   const joinedByInstanceContext = enterpriseContext?.joined === true;
-  const joinedByUserIdentity =
-    Boolean(user && !isDesktopOperatorUser(user) && isEnterpriseTenantId(user.tenant_id));
+  const joinedByUserIdentity = Boolean(user && !isDesktopOperatorUser(user) && isEnterpriseTenantId(user.tenant_id));
   const hasInstanceEnterprise = joinedByInstanceContext;
   const hasJoinedEnterprise = joinedByUserIdentity;
-  const effectiveRole = isDesktop
-    ? (enterpriseContext?.role ?? user?.role)
-    : (user?.role ?? enterpriseContext?.role);
+  const effectiveRole = isDesktop ? (enterpriseContext?.role ?? user?.role) : (user?.role ?? enterpriseContext?.role);
 
   const authEditionSyncedRef = useRef(false);
   const prevWebUserIdRef = useRef<string | undefined>(undefined);
@@ -401,20 +402,23 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
     }
   }, [isDesktop, joinedByUserIdentity, loading, managementMode]);
 
-  const setManagementMode = useCallback(async (mode: WebuiManagementMode) => {
-    setManagementModeState(mode);
-    if (!isDesktop) {
-      writeBrowserWebuiManagementMode(mode);
-      return;
-    }
-    try {
-      await ConfigStorage.set(WEBUI_MANAGEMENT_MODE_KEY, mode);
-      await ConfigStorage.set(WEBUI_USER_CHOSE_STANDALONE_KEY, mode === 'standalone');
-    } catch {
-      const stored = await ConfigStorage.get(WEBUI_MANAGEMENT_MODE_KEY).catch((): undefined => undefined);
-      setManagementModeState(normalizeWebuiManagementMode(stored));
-    }
-  }, [isDesktop]);
+  const setManagementMode = useCallback(
+    async (mode: WebuiManagementMode) => {
+      setManagementModeState(mode);
+      if (!isDesktop) {
+        writeBrowserWebuiManagementMode(mode);
+        return;
+      }
+      try {
+        await ConfigStorage.set(WEBUI_MANAGEMENT_MODE_KEY, mode);
+        await ConfigStorage.set(WEBUI_USER_CHOSE_STANDALONE_KEY, mode === 'standalone');
+      } catch {
+        const stored = await ConfigStorage.get(WEBUI_MANAGEMENT_MODE_KEY).catch((): undefined => undefined);
+        setManagementModeState(normalizeWebuiManagementMode(stored));
+      }
+    },
+    [isDesktop]
+  );
 
   const openUrlInBrowser = useCallback(
     async (hashPath: string): Promise<'opened' | 'webui_not_running' | 'failed'> => {
@@ -487,8 +491,7 @@ export const WebuiEnterpriseModeProvider: React.FC<PropsWithChildren> = ({ child
   }, [isDesktop]);
 
   const showEnterpriseAdminNav = isEnterpriseAdminRole(effectiveRole);
-  const canUseEnterpriseEditionSwitcher =
-    editionSwitcherEnabled || isSystemAdminRole(effectiveRole);
+  const canUseEnterpriseEditionSwitcher = editionSwitcherEnabled || isSystemAdminRole(effectiveRole);
 
   const canCreateEnterprise = enterpriseContext?.canCreateEnterprise === true;
   const hasSystemAdmin = enterpriseContext?.hasSystemAdmin === true;

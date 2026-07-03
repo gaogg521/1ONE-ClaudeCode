@@ -33,6 +33,16 @@ log.transports.console.level = 'silly';
 // Cap each daily log file at 10 MB.
 log.transports.file.maxSize = 10 * 1024 * 1024;
 
+// electron-log's file transport defaults to `sync: true` (fs.writeFileSync on
+// every call). Since console.* is patched to route through here on the main
+// process's single JS thread, a synchronous write blocks the whole app —
+// including the window message pump — for as long as the disk I/O takes.
+// On machines with slow/contended disk I/O this reproduces as "Not
+// Responding" freezes triggered by ANY console.* call anywhere in the main
+// process. Use the async file write instead so a slow disk delays log
+// persistence rather than freezing the UI.
+log.transports.file.sync = false;
+
 // Patch global console so every console.log/warn/error from any module
 // goes through electron-log (and thus to the file transport).
 log.initialize();

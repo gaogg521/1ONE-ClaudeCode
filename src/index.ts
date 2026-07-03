@@ -15,6 +15,9 @@ Sentry.init({
   dsn: process.env.SENTRY_DSN,
 });
 
+// TEMP DIAGNOSTIC (see fsWriteWatchdog.ts) — must be imported before
+// configureConsoleLog so electron-log's own fs calls are wrapped too.
+import './process/utils/fsWriteWatchdog';
 import './process/utils/configureConsoleLog';
 import { app, BrowserWindow, nativeImage, net, powerMonitor, protocol, screen, session } from 'electron';
 import fixPath from 'fix-path';

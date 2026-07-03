@@ -37,15 +37,13 @@ export class WebuiService {
   private static readonly RESET_EMAIL_TTL_MS = 5 * 60 * 1000;
   private static readonly RESET_EMAIL_RESEND_COOLDOWN_MS = 60 * 1000;
   private static readonly RESET_EMAIL_MAX_ATTEMPTS = 5;
-  private static resetEmailChallenge:
-    | {
-        codeHash: string;
-        expiresAt: number;
-        attempts: number;
-        email: string;
-        sentAt: number;
-      }
-    | null = null;
+  private static resetEmailChallenge: {
+    codeHash: string;
+    expiresAt: number;
+    attempts: number;
+    email: string;
+    sentAt: number;
+  } | null = null;
 
   /**
    * 加载 webserver 函数（避免循环依赖）
@@ -100,13 +98,19 @@ export class WebuiService {
       // This handler wraps every webui IPC provider — any error triggers the freeze.
       // Write to file instead.
       try {
-        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { appendFile, mkdirSync } = require('node:fs');
         const { join } = require('node:path');
         const { getPlatformServices } = require('@/common/platform');
         const logsDir = getPlatformServices().paths.getLogsDir();
-        try { mkdirSync(logsDir, { recursive: true }); } catch {}
-        appendFileSync(join(logsDir, 'webui-service.log'),
-          `[${new Date().toISOString()}] ${context} error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+        try {
+          mkdirSync(logsDir, { recursive: true });
+        } catch {}
+        appendFile(
+          join(logsDir, 'webui-service.log'),
+          `[${new Date().toISOString()}] ${context} error: ${error instanceof Error ? error.message : String(error)}\n`,
+          'utf-8',
+          () => {}
+        );
       } catch {
         // best-effort
       }
@@ -253,8 +257,7 @@ export class WebuiService {
     const { getAdminWebListenPort } = await import('@process/webserver/index');
     const adminPort = running ? getAdminWebListenPort() : null;
     const adminLocalUrl = adminPort ? `http://localhost:${adminPort}` : undefined;
-    const adminNetworkUrl =
-      adminPort && allowRemote && lanIP ? `http://${lanIP}:${adminPort}` : undefined;
+    const adminNetworkUrl = adminPort && allowRemote && lanIP ? `http://${lanIP}:${adminPort}` : undefined;
 
     return {
       running,
@@ -366,11 +369,7 @@ export class WebuiService {
    * Reset an arbitrary user's password with admin email verification code.
    * Verification code is sent to `users.email` of the system admin user.
    */
-  static async resetUserPasswordWithEmailCode(
-    userId: string,
-    newPassword: string,
-    code: string
-  ): Promise<void> {
+  static async resetUserPasswordWithEmailCode(userId: string, newPassword: string, code: string): Promise<void> {
     this.verifyResetPasswordEmailCode(code);
 
     const passwordValidation = AuthService.validatePasswordStrength(newPassword);
@@ -460,7 +459,9 @@ export class WebuiService {
     const dissolve = driver.transaction(() => {
       driver.prepare("UPDATE conversations SET tenant_id = 'default' WHERE tenant_id != 'default'").run();
       driver.prepare("UPDATE users SET tenant_id = 'default' WHERE tenant_id != 'default'").run();
-      driver.prepare("UPDATE users SET role = 'org_admin' WHERE id = 'system_default_user' AND role = 'system_admin'").run();
+      driver
+        .prepare("UPDATE users SET role = 'org_admin' WHERE id = 'system_default_user' AND role = 'system_admin'")
+        .run();
       driver.prepare("UPDATE users SET role = 'member' WHERE role = 'system_admin'").run();
       driver.prepare("DELETE FROM tenants WHERE id != 'default'").run();
     });

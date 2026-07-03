@@ -14,7 +14,7 @@
 
 import { ipcBridge } from '@/common';
 import { getPlatformServices } from '@/common/platform';
-import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
+import { spawn, execFileSync, execSync, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';

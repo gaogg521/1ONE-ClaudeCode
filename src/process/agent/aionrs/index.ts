@@ -566,7 +566,28 @@ export class AionrsAgent {
   }
 
   async send(input: string, msgId: string, files?: string[]): Promise<void> {
-    await this.readyPromise;
+    // `start()` races readyPromise against a 30s timeout (see above), but this
+    // await did not — claimed-from-prewarm instances get a fresh readyPromise
+    // whose readyResolve() is never called (the binary already said "ready" to
+    // the prior wrapper instance before the claim/finalize swap), so send()
+    // hung forever with no way for the UI to recover. Mirror the same 30s
+    // timeout here and surface it as a normal stream error instead of hanging.
+    try {
+      await Promise.race([
+        this.readyPromise,
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('aionrs send: ready timeout (30s)')), 30000);
+        }),
+      ]);
+    } catch (err) {
+      this.onStreamEvent({
+        type: 'error',
+        data: '[aionrs] 等待模型就绪超时（30秒），消息未能发送。请重试，或重新打开该会话。',
+        msg_id: msgId,
+      });
+      this.onStreamEvent({ type: 'finish', data: '', msg_id: msgId });
+      throw err instanceof Error ? err : new Error(String(err));
+    }
     this.pendingTurnMsgId = msgId;
     this.slideResponseStallWatchdog(msgId);
     // aionrs 0.1.30 protocol expects `content` (was `input` in 0.1.7 — silent

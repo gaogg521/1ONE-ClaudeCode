@@ -8,7 +8,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../service/AuthService';
 import { createAuthMiddleware } from './TokenMiddleware';
 import { SECURITY_CONFIG } from '../../config/constants';
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFile, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { getPlatformServices } from '@/common/platform';
 
@@ -17,7 +17,11 @@ import { getPlatformServices } from '@/common/platform';
 // patch → bridge.adapter.emit('officeai-logger') → win.webContents.send +
 // broadcastToAll. When a browser opens the WebUI and loads dozens of static
 // assets in parallel, the main process's event loop fills up with synchronous
-// IPC sends and freezes. Writing to a file is synchronous and safe.
+// IPC sends and freezes. Writing to a file avoids that, but must be async
+// (appendFile, not appendFileSync): this runs on every single HTTP request
+// (twice), so a synchronous write blocks the main thread for as long as the
+// disk I/O takes — on machines with slow/contended disk this reproduces the
+// exact same freeze it was meant to avoid.
 const REQUEST_LOG_FILE = (() => {
   try {
     const logsDir = getPlatformServices().paths.getLogsDir();
@@ -31,7 +35,9 @@ const REQUEST_LOG_FILE = (() => {
 function writeRequestLog(line: string): void {
   if (!REQUEST_LOG_FILE) return;
   try {
-    appendFileSync(REQUEST_LOG_FILE, line, 'utf-8');
+    appendFile(REQUEST_LOG_FILE, line, 'utf-8', () => {
+      // best-effort — never throw from middleware
+    });
   } catch {
     // best-effort — never throw from middleware
   }

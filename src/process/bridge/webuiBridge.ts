@@ -181,13 +181,13 @@ export function initWebuiBridge(): void {
         } catch (err) {
           // IPC handler — never use console.* (triggers bridge.adapter.emit, freezes main process). Write to file.
           try {
-            const { appendFileSync, mkdirSync } = require('node:fs');
+            const { appendFile, mkdirSync } = require('node:fs');
             const { join } = require('node:path');
             const { getPlatformServices } = require('@/common/platform');
             const logsDir = getPlatformServices().paths.getLogsDir();
             try { mkdirSync(logsDir, { recursive: true }); } catch {}
-            appendFileSync(join(logsDir, 'webui-bridge.log'),
-              `[${new Date().toISOString()}] Error stopping previous server: ${err instanceof Error ? err.message : String(err)}\n`, 'utf-8');
+            appendFile(join(logsDir, 'webui-bridge.log'),
+              `[${new Date().toISOString()}] Error stopping previous server: ${err instanceof Error ? err.message : String(err)}\n`, 'utf-8', () => {});
           } catch {
             // best-effort
           }
@@ -237,13 +237,13 @@ export function initWebuiBridge(): void {
     } catch (error) {
       // IPC handler — never use console.* (triggers bridge.adapter.emit, freezes main process). Write to file.
       try {
-        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { appendFile, mkdirSync } = require('node:fs');
         const { join } = require('node:path');
         const { getPlatformServices } = require('@/common/platform');
         const logsDir = getPlatformServices().paths.getLogsDir();
         try { mkdirSync(logsDir, { recursive: true }); } catch {}
-        appendFileSync(join(logsDir, 'webui-bridge.log'),
-          `[${new Date().toISOString()}] Start error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+        appendFile(join(logsDir, 'webui-bridge.log'),
+          `[${new Date().toISOString()}] Start error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8', () => {});
       } catch {
         // best-effort
       }
@@ -295,13 +295,13 @@ export function initWebuiBridge(): void {
     } catch (error) {
       // IPC handler — never use console.* (triggers bridge.adapter.emit, freezes main process). Write to file.
       try {
-        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { appendFile, mkdirSync } = require('node:fs');
         const { join } = require('node:path');
         const { getPlatformServices } = require('@/common/platform');
         const logsDir = getPlatformServices().paths.getLogsDir();
         try { mkdirSync(logsDir, { recursive: true }); } catch {}
-        appendFileSync(join(logsDir, 'webui-bridge.log'),
-          `[${new Date().toISOString()}] Stop error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+        appendFile(join(logsDir, 'webui-bridge.log'),
+          `[${new Date().toISOString()}] Stop error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8', () => {});
       } catch {
         // best-effort
       }
@@ -390,13 +390,13 @@ export function initWebuiBridge(): void {
     } catch (error) {
       // IPC handler — never use console.* (triggers bridge.adapter.emit, freezes main process). Write to file.
       try {
-        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { appendFile, mkdirSync } = require('node:fs');
         const { join } = require('node:path');
         const { getPlatformServices } = require('@/common/platform');
         const logsDir = getPlatformServices().paths.getLogsDir();
         try { mkdirSync(logsDir, { recursive: true }); } catch {}
-        appendFileSync(join(logsDir, 'webui-bridge.log'),
-          `[${new Date().toISOString()}] Generate QR token error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+        appendFile(join(logsDir, 'webui-bridge.log'),
+          `[${new Date().toISOString()}] Generate QR token error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8', () => {});
       } catch {
         // best-effort
       }
@@ -489,13 +489,13 @@ export function initWebuiBridge(): void {
     } catch (error) {
       // IPC handler — never use console.* (triggers bridge.adapter.emit, freezes main process). Write to file.
       try {
-        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { appendFile, mkdirSync } = require('node:fs');
         const { join } = require('node:path');
         const { getPlatformServices } = require('@/common/platform');
         const logsDir = getPlatformServices().paths.getLogsDir();
         try { mkdirSync(logsDir, { recursive: true }); } catch {}
-        appendFileSync(join(logsDir, 'webui-bridge.log'),
-          `[${new Date().toISOString()}] Direct IPC QR token error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+        appendFile(join(logsDir, 'webui-bridge.log'),
+          `[${new Date().toISOString()}] Direct IPC QR token error: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8', () => {});
       } catch {
         // best-effort
       }

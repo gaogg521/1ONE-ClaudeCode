@@ -63,13 +63,13 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     // bridge.adapter.emit → win.webContents.send, which can freeze the main
     // process when many requests error in parallel. Write to file instead.
     try {
-      const { appendFileSync, mkdirSync } = require('node:fs');
+      const { appendFile, mkdirSync } = require('node:fs');
       const { join } = require('node:path');
       const { getPlatformServices } = require('@/common/platform');
       const logsDir = getPlatformServices().paths.getLogsDir();
       try { mkdirSync(logsDir, { recursive: true }); } catch {}
-      appendFileSync(join(logsDir, 'webui-errors.log'),
-        `[${new Date().toISOString()}] ${err instanceof Error ? err.stack || err.message : String(err)}\n`, 'utf-8');
+      appendFile(join(logsDir, 'webui-errors.log'),
+        `[${new Date().toISOString()}] ${err instanceof Error ? err.stack || err.message : String(err)}\n`, 'utf-8', () => {});
     } catch {
       // best-effort
     }

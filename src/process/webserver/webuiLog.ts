@@ -16,7 +16,7 @@
  * Use this instead of console.error/warn in src/process/webserver/**.
  */
 
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFile, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { getPlatformServices } from '@/common/platform';
 
@@ -30,6 +30,11 @@ const LOGS_DIR = (() => {
   }
 })();
 
+// appendFile (async) instead of appendFileSync: a sync write blocks the main
+// process's single JS thread — including the window message pump — for as
+// long as the disk I/O takes. On machines with slow/contended disk I/O this
+// turns "best-effort logging" into an app freeze. Fire-and-forget is fine
+// here since callers never depend on the write completing.
 function writeLog(fileName: string, label: string, error: unknown): void {
   if (!LOGS_DIR) return;
   try {
@@ -38,10 +43,13 @@ function writeLog(fileName: string, label: string, error: unknown): void {
       : typeof error === 'string'
         ? error
         : JSON.stringify(error);
-    appendFileSync(
+    appendFile(
       join(LOGS_DIR, fileName),
       `[${new Date().toISOString()}] ${label}: ${msg}\n`,
-      'utf-8'
+      'utf-8',
+      () => {
+        // best-effort — never throw from a logger
+      }
     );
   } catch {
     // best-effort — never throw from a logger

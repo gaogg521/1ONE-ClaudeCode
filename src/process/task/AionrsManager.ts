@@ -98,6 +98,15 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   /** Whether skills have already been injected into a prior turn. Prevents re-injection
    *  when loadSkillsInjection runs late or enabledSkills arrives via finalizeFromPrewarm. */
   private skillsAlreadyInjected = false;
+  /**
+   * The constructor fires `start()` without awaiting it (constructors can't be async).
+   * sendMessage() must await this before dispatching — otherwise, on the fallback path
+   * (prewarm claim miss -> fresh create+warmup), the very first send.message can race the
+   * newly-forked worker's process spawn / module load and get sent before the worker has
+   * even registered its `pipe.on('send.message', ...)` handler, silently vanishing with no
+   * error and no timeout anywhere in the chain. See CONTEXT.md 2026-07-03 "开发环境聊天卡死".
+   */
+  private startPromise!: Promise<void>;
 
   private inferProductLine(): string {
     const modelId = (this.model.useModel || '').toLowerCase();
@@ -139,8 +148,15 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     // even when the user selected full-auto mode at conversation creation.
     this.autoApproveEnabled = this.currentMode === 'yolo' || data.yoloMode === true;
 
-    // Start the worker bootstrap
-    void this.start().catch(() => {});
+    // Start the worker bootstrap. Stored so sendMessage() can await it (see
+    // startPromise doc comment) — the old `void this.start().catch(() => {})`
+    // silently swallowed failures AND let callers dispatch send.message before
+    // the worker had actually finished booting.
+    this.startPromise = this.start();
+    // Prevent Node's unhandledRejection detector from firing if start() fails and
+    // the user never sends a message (e.g. navigates away). sendMessage() below
+    // attaches its own independent .catch to startPromise when it actually awaits it.
+    this.startPromise.catch(() => {});
 
     // Pre-load enabled skills content so the first user turn can inject it.
     // aionrs has no native SkillManager and no activate_skill tool — without this
@@ -161,13 +177,19 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
     } catch (e) {
       // Main-process console.* triggers bridge.adapter.emit (frozen event loop on repeated calls). Write to file.
       try {
-        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { appendFile, mkdirSync } = require('node:fs');
         const { join } = require('node:path');
         const { getPlatformServices } = require('@/common/platform');
         const logsDir = getPlatformServices().paths.getLogsDir();
-        try { mkdirSync(logsDir, { recursive: true }); } catch {}
-        appendFileSync(join(logsDir, 'aionrs-manager.log'),
-          `[${new Date().toISOString()}] Failed to load skills content: ${e instanceof Error ? e.message : String(e)}\n`, 'utf-8');
+        try {
+          mkdirSync(logsDir, { recursive: true });
+        } catch {}
+        appendFile(
+          join(logsDir, 'aionrs-manager.log'),
+          `[${new Date().toISOString()}] Failed to load skills content: ${e instanceof Error ? e.message : String(e)}\n`,
+          'utf-8',
+          () => {}
+        );
       } catch {
         // best-effort
       }
@@ -408,6 +430,35 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
   }
 
   async sendMessage(data: { input: string; agentPrompt?: string; msg_id: string; files?: string[] }) {
+    // Wait for this manager's own worker bootstrap to finish before dispatching.
+    // See startPromise doc comment — without this, the fallback path (prewarm
+    // claim miss) could post send.message to a worker that hadn't finished
+    // forking/loading yet, and the message vanished with no error and no timeout
+    // anywhere in the chain.
+    try {
+      await Promise.race([
+        this.startPromise,
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('aionrs sendMessage: start() timeout (30s)')), 30000);
+        }),
+      ]);
+    } catch (err) {
+      this.status = 'finished';
+      ipcBridge.conversation.responseStream.emit({
+        type: 'error',
+        data: '[aionrs] 会话初始化超时，消息未能发送。请重试，或重新打开该会话。',
+        msg_id: data.msg_id,
+        conversation_id: this.conversation_id,
+      } as IResponseMessage);
+      ipcBridge.conversation.responseStream.emit({
+        type: 'finish',
+        data: '',
+        msg_id: data.msg_id,
+        conversation_id: this.conversation_id,
+      } as IResponseMessage);
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+
     const originalInput = data.input;
 
     // One-shot skills injection: aionrs has no native skill discovery, so we splice
@@ -573,13 +624,19 @@ export class AionrsManager extends BaseAgentManager<AionrsManagerData, string> {
           } catch (error) {
             // Main-process console.* triggers bridge.adapter.emit — write to file instead.
             try {
-              const { appendFileSync, mkdirSync } = require('node:fs');
+              const { appendFile, mkdirSync } = require('node:fs');
               const { join } = require('node:path');
               const { getPlatformServices } = require('@/common/platform');
               const logsDir = getPlatformServices().paths.getLogsDir();
-              try { mkdirSync(logsDir, { recursive: true }); } catch {}
-              appendFileSync(join(logsDir, 'aionrs-manager.log'),
-                `[${new Date().toISOString()}] Image vision description failed: ${error instanceof Error ? error.message : String(error)}\n`, 'utf-8');
+              try {
+                mkdirSync(logsDir, { recursive: true });
+              } catch {}
+              appendFile(
+                join(logsDir, 'aionrs-manager.log'),
+                `[${new Date().toISOString()}] Image vision description failed: ${error instanceof Error ? error.message : String(error)}\n`,
+                'utf-8',
+                () => {}
+              );
             } catch {
               // best-effort
             }

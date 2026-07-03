@@ -2028,3 +2028,273 @@ commit `d80d2c6` 修了 `databaseBridge.ts` + `AionrsManager.ts`，但漏了这�
 - `oxlint`/`oxfmt --check`：两文件干净（1 个 `formatExpiresAt` 既存 warning 与本次无关）
 - `vitest run tests/unit`：455 passed，与改动前完全一致（含本次新增/修复的 `WebuiModalContent.dom.test.tsx` 1 个用例）
 - 运行时仍需桌面端实测：Issue 创建不再无限转圈（最坏情况 8s 后仍能继续）；客户端模式下设置页「管理员专属后台」显示服务端地址
+
+---
+
+# 2026-07-03 续 —— 开发环境聊天卡死真因：AionrsAgent.send() 的 readyPromise 无超时
+
+## 背景
+
+上面两处修完，用户又报"开发环境聊天会卡死"：会话框发消息不回应，接着点全局设置整个应用"未响应"。这轮全程靠埋点日志实锤定位，没有再靠猜。
+
+## 排查过程
+
+1. **进程取证**：`tasklist`/`Get-CimInstance Win32_Process` 发现主 Electron 进程已退出，但它 fork 出的两个 agent worker 子进程（`--type=utility --utility-sub-type=node.mojom.NodeService`）还活着，相隔约 50 秒启动——是"未响应"弹窗被强杀（TerminateProcess，不走 `before-quit` 优雅清理）留下的孤儿。用 `npm run stop:dev` 清理干净，但这只是卡死的**结果**，不是根因。
+2. **加埋点**：给 `WebuiService.syncBrowserWebuiSession()` 和 `AionrsManager.sendMessage()` 加了逐步耗时日志（写 `logs/bridge-errors.log`，走 `logBridgeWarn`，不用 console）。
+3. **复现拿到实锤**：`[sendMessage:diag]` 日志显示"技能注入/模型切换检测/消息落库/进入 vision 分支前"全部在 3ms 内完成，**但 `super.sendMessage resolved` 这一行永远没出现**——精确定位到卡在 `AionrsManager.sendMessage()` → `super.sendMessage(data)`（`BaseAgentManager.sendMessage`）→ `ForkTask.postMessagePromise('send.message', data)` 这条链路。
+
+## 根因
+
+`ForkTask.postMessagePromise()`（`src/process/worker/fork/ForkTask.ts:105`）本身完全没有超时——它创建一个 Promise，只有 worker 子进程回传匹配 `pipeId` 的消息才会 resolve/reject。顺着这条链路查到 worker 侧 `pipe.on('send.message', ...)` → `deferred.with(agent.send(...))`（`src/process/worker/aionrs.ts:68`）→ `AionrsAgent.send()`（`src/process/agent/aionrs/index.ts:568`）：
+
+```ts
+async send(input, msgId, files) {
+  await this.readyPromise;   // ← 无超时，卡在这里
+  this.pendingTurnMsgId = msgId;
+  this.slideResponseStallWatchdog(msgId);  // ← 卡在上面这行永远走不到，"响应停滞看门狗"形同虚设
+  this.sendCommand({...});
+}
+```
+
+**关键发现**：`start()`（worker 首次启动）本来就有 `Promise.race([this.readyPromise, timeout])` 30 秒超时保护（`index.ts:311-316`，超时会 fallback 重试），但 `send()` 的这个 `await this.readyPromise` 从来没有超时。项目里还有一套专门"防止 UI 永远转圈"的 `slideResponseStallWatchdog` 机制（`RESPONSE_STALL_MS` 等），但它是在 `readyPromise` **resolve 之后**才被调用（`send()` 里 `slideResponseStallWatchdog` 排在 `await this.readyPromise` 之后一行）——如果 `readyPromise` 自己卡住，看门狗根本没机会被架设。
+
+**最可能的触发场景**（吻合"孤儿 worker"证据）：aionrs 预热池（`AionrsPrewarmPool`）会提前 spawn 一个 worker 并调用 `start()`，binary 发 `ready` 事件，`readyPromise` resolve。用户发送消息时"认领"（claim）这个预热的 worker，如果认领路径构造了一个**新的 `AionrsAgent`/`AionrsManager` 包装实例**包住同一个底层进程，这个新实例构造函数会生成一个全新的、未 resolve 的 `readyPromise`（`readyResolve`/`readyReject` 是每个实例私有的）——而真正的 `ready` 事件已经在旧实例存活期间发过了，不会再发一次，新实例的 `readyPromise` 就永远挂着。`send()` 卡在这里，UI 转圈圈转到天荒地老。
+
+## 修复
+
+给 `send()` 里的 `await this.readyPromise` 补上和 `start()` 一样的 30 秒超时（`Promise.race`），超时后：
+1. `throw` 出去，让调用方（`AionrsManager.sendMessage` → `useGuidSend`/`sendbox.tsx`）catch 到，正常复位 loading 状态；
+2. 同时主动 `onStreamEvent({type:'error', ...})` + `onStreamEvent({type:'finish', ...})`，走跟 `slideResponseStallWatchdog` 一样的"解锁 UI"路径，用户能看到明确的中文报错提示（"等待模型就绪超时，请重试或重新打开该会话"）并可以立即重试，而不是无限期转圈圈。
+
+用户明确要求"只对 send.message 加超时，其余消息类型（start/init.history/工具确认等）不动"——这次改动完全限定在 `AionrsAgent.send()` 内部，没有碰共享的 `ForkTask.postMessagePromise()`，不影响其他消息类型的行为。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/agent/aionrs/index.ts` | `send()` 内 `await this.readyPromise` 加 30s `Promise.race` 超时，超时走 error+finish 事件解锁 UI |
+| `src/process/bridge/services/WebuiService.ts` | `syncBrowserWebuiSession()` 加逐步耗时诊断日志（`TEMP DIAGNOSTIC`，待确认问题彻底解决后可删） |
+| `src/process/task/AionrsManager.ts` | `sendMessage()` 加逐步耗时诊断日志（`TEMP DIAGNOSTIC`，待确认问题彻底解决后可删） |
+
+## 验证
+
+- `tsc --noEmit`：无新增错误
+- `oxlint`（含 no-console 硬门禁）：0 个 console 相关问题；`oxfmt --check`：干净
+- `vitest run tests/unit`：3489 passed，与基线完全一致（第一次跑出现的 8 failed / 22 failed 是偶发抖动，重跑后恢复成基线的 7 failed / 21 failed）
+- 运行时仍需桌面端实测：具体触发路径（是否真的是预热认领导致新实例 readyPromise 永不 resolve）仍待用户在真实场景复现验证；即使触发机制的细节有出入，30s 超时兜底本身能确保这类问题不会再导致无限期转圈圈
+
+## 待办
+
+- `TEMP DIAGNOSTIC` 埋点（`WebuiService.syncBrowserWebuiSession` + `AionrsManager.sendMessage`）暂时保留，等用户确认卡死问题不再复现后可以清理
+- ~~预热认领是否构造新 AionrsAgent 实例~~ → 已用埋点实锤排除并找到真正根因，见下一节
+
+---
+
+# 2026-07-03 续 —— 聊天卡死真正根因找到：send.message 竞态到刚 fork 还没就绪的 worker
+
+## 排查过程（这轮全程靠埋点，不靠猜）
+
+上一轮 `readyPromise` 超时修复没解决问题（用户等了 30 秒以上仍然卡死），说明假设错了。追加三处更底层的埋点后一次性拿到实锤：
+
+1. `AionrsAgent.send()` 入口埋点（`logs/aionrs-send-diag.log`）——**文件压根不存在**，说明 worker 侧的 `send()` 从未被调用。
+2. `ForkTask.postMessage()` 埋点（`logs/bridge-errors.log` 里 `[ForkTask:diag]`）——**关键发现**：日志里出现了两次 `type=start`，间隔 **49 秒**：
+   ```
+   07:59:08.927  postMessage type=start  pipeId=7c235b09   ← 预热 spawn 的 worker
+   07:59:57.874  postMessage type=start  pipeId=1c265957   ← 又 spawn 了一个新 worker
+   07:59:58.436  postMessage type=send.message              ← 发给刚 spawn 的这个新 worker，间隔仅 562ms
+   ```
+3. `Pipe` worker 侧原始消息接收埋点（`logs/worker-pipe-diag.log`）——**文件也不存在**，说明这个新 worker 连"收到过任何一条消息"的记录都没有，不止是没收到 `send.message`。
+
+## 根因
+
+`AionrsPrewarmPool` 的 TTL 只有 15 秒（`DEFAULT_TTL_MS = 15_000`）。用户从 Guid 页选好模型/工作区到真正点发送，只要超过 15 秒（打字很容易超过），预热池的 entry 就已经被 TTL 淘汰（`evictInternal('ttl')` 杀掉了预热 worker），`useGuidSend.ts` 里 `ipcBridge.conversation.prewarmClaim.invoke(...)` 必然 MISS，走"回退路径"：
+
+```ts
+// useGuidSend.ts 第 374-412 行
+if (!conversation) {
+  conversation = await ipcBridge.conversation.create.invoke({...});  // 建新会话
+}
+...
+void ipcBridge.conversation.warmup.invoke({ conversation_id: conversation.id });  // 触发 getOrBuildTask，new AionrsManager()，fire-and-forget！
+await navigate(`/conversation/${conversation.id}`);  // 立刻跳转
+```
+
+跳转到会话页后，`AionrsSendBox.tsx` 的 `useEffect` 立刻从 sessionStorage 读出首条消息并调用 `executeCommand`（间接触发 `sendMessage`）——**跟上面的 `warmup` 完全没有互相等待**。
+
+而 `AionrsManager` 构造函数里 `void this.start().catch(() => {})` 本身就是 fire-and-forget（TS 构造函数不能是 async）。`start()` 的完整链路是：`ForkTask.init()`（同步 fork 出 worker 进程）→ `postMessagePromise('start', data)` → worker 收到 `'start'` 消息后才会执行 `pipe.on('send.message', ...)` 等 handler 的**注册**（`src/process/worker/utils.ts` 的 `forkTask()`：只有收到 `'start'` 消息、调用 `task(data, pipe)` 时，`send.message` 等 listener 才会被同步注册）。
+
+**竞态窗口**：`warmup`（内部触发 `new AionrsManager()` → fire-and-forget `start()`）和"跳转后自动发首条消息"之间只隔了约 562ms（实测）。如果 worker 进程刚 fork（Electron `utilityProcess.fork()` 需要真正拉起一个新 OS 进程 + Node 运行时 + 加载 `aionrs.ts` 的完整 import 链），562ms 内很可能连 `'start'` 消息本身都还没被处理完——`send.message` 消息此时被发送，但目标 worker 连 `pipe.on('send.message', ...)` 的 handler 都还没注册上，消息静默丢失，**没有任何错误、没有任何超时、`postMessagePromise` 永远挂着**。
+
+这也解释了为什么上一轮的 `readyPromise` 超时修复没用——那个超时保护的是"worker 已经在跑，等 ready 握手"这一段；这次的真因发生在**更早**的阶段：worker 进程本身还没来得及把 `send.message` 的 listener 注册上。
+
+## 修复（根治，不是兜底）
+
+给 `AionrsManager` 加 `startPromise` 字段，保存构造函数里发起的 `start()` 的 Promise；`sendMessage()` 改为**先 `await` 这个 `startPromise`（带 30s 超时兜底）再真正派发消息**——从根上堵住"worker 还没启动完就往它发消息"的竞态窗口，不管背后是 fork 延迟、模块加载慢、Defender 扫描还是别的什么原因，只要 `start()` 没完成，`sendMessage` 就不会真正把消息发出去。
+
+同时把构造函数里 `void this.start().catch(() => {})` 的静默吞错改成有日志记录（`start()` 成功/失败都会写 `logs/bridge-errors.log`），并保留 `.catch(() => {})` 防止用户中途放弃发送时触发 unhandledRejection。
+
+## 涉及文件（本轮追加）
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/task/AionrsManager.ts` | 新增 `startPromise` 字段；构造函数存住 `start()` 的 promise（有日志，不再静默吞错）；`sendMessage()` 先 await `startPromise`（30s 超时兜底，超时会发 error+finish 解锁 UI） |
+| `src/process/worker/fork/ForkTask.ts` | `postMessage()` 加诊断日志（`TEMP DIAGNOSTIC`，确认调用是否真的到达 + `this.fcp` 是否存在） |
+| `src/process/worker/fork/pipe.ts` | worker 侧原始消息接收入口加诊断日志（`logs/worker-pipe-diag.log`，`TEMP DIAGNOSTIC`） |
+
+## 验证
+
+- `tsc --noEmit`：无新增错误
+- `oxlint`（含 no-console 硬门禁）：0 个 console 相关问题；`oxfmt`：干净
+- `vitest run`：相关测试（aionrsImageToolResult / AionrsPrewarmPool / WorkerTaskManager 系列）全过；全量 `tests/unit` 待确认与基线一致
+- 运行时仍需桌面端实测：这次是真正的根治（消除竞态窗口），不是又一层超时兜底——请用户选模型/工作区后特意等超过 15 秒再发送（复现 claim MISS 场景），确认不再卡死
+
+## 待办
+
+- ~~`TEMP DIAGNOSTIC` 埋点确认问题彻底解决后统一清理~~ → 已清理，见下一节
+- `AionrsPrewarmPool` 的 15 秒 TTL 是否要调大，属于产品体验优化，不是本次 bug 的必要修复项（竞态窗口已经从"worker 层面"堵死，TTL 多短都不会再丢消息）
+
+---
+
+# 2026-07-03 续 —— procdump 实锤：诊断埋点本身在这台机器上造成了新的卡死
+
+## 背景
+
+`startPromise` 修复上线后，诊断埋点保留继续观察，结果又卡死了两次，且现象跟之前不一样：`getEnhancedEnv() took 0ms`、`fork() took 1ms`（排除了环境探测/fork 慢的猜测），日志停在 `postMessage type=start hasFcp=true` 之后，worker 侧诊断文件（`aionrs-send-diag.log`/`worker-pipe-diag.log`）全都不存在。用户提出关键反证：正式打包版本运行没问题——这一度让人怀疑是 Defender 扫描大文件（历史上 `aionrs-miss-freeze-investigation.md` 记录过的同类问题），但用户确认"不是 Defender"。
+
+## 排查方法：procdump + 免费 Python 库，不用装 WinDbg
+
+1. 复现卡死时，任务管理器右键主进程（无 `--type=` 参数的那个 `electron.exe`）→"创建转储文件"（Windows 自带，不用装任何工具）。
+2. `Get-Process -Id X | .CPU` 前后间隔几秒采样两次——**CPU 增量为 0**，排除死循环，确认是真阻塞。
+3. `pip install minidump pefile`，写 Python 脚本离线解析 dump：
+   - 列出全部线程的 IP 寄存器值，用 `pefile` 读本机 `C:\Windows\System32\ntdll.dll` 的导出表，把 RVA 映射成 `ZwXxx` 系统调用名。
+   - 绝大多数线程停在 `ZwWaitForSingleObject`/`ZwWaitForAlertByThreadId`/`win32u.dll`（消息泵正常空闲等待）。
+   - **一个线程停在 `ntdll!ZwWriteFile`**——同步文件写入卡住。
+   - 顺着这个线程的 RSP 往上翻栈（按 8 字节读取候选返回地址，比对模块基址表），调用链清晰可辨：`ntdll!ZwWriteFile → KERNELBASE.dll(WriteFile) → electron.exe 应用代码 → kernel32.dll → electron.exe 应用代码`——是应用自己发起的同步写文件卡住了，不是第三方库或 Chromium 内部逻辑。
+
+## 真凶
+
+本轮排查过程中加的全部诊断日志都走 `appendFileSync`（项目里公认"安全"的写法，因为同步、不触发 `console.*` 的 `bridge.adapter.emit` 死锁）。但 `ForkTask.postMessage()` 是**每发一条 IPC 消息就同步写一次日志**的高频路径——这台机器上同步文件写入偶尔会被某种外部因素（AV 实时防护 / 公司终端管理软件 / OneDrive 同步 AppData 之类，未继续深挖具体是谁）显著拖慢甚至阻塞，叠加高频调用后，**诊断代码本身在这台机器上变成了新的卡死源**，和原始 bug 混在一起，让排查更难而不是更容易。之前提到"正式打包版本没问题"其实不能证伪任何假设——打包的 1.23.19 出包于本轮 aionrs 调试**之前**，压根不包含这轮任何一处改动（含诊断日志），"打包没事"只能说明旧代码在他们测试的场景下没问题。
+
+## 处理
+
+全部 5 处 `TEMP DIAGNOSTIC` 埋点删除干净，只保留真正的修复逻辑：
+
+| 文件 | 保留的真修复 | 删除的诊断代码 |
+|------|------|------|
+| `src/process/task/AionrsManager.ts` | `startPromise` 字段 + `sendMessage()` 先 await 它（30s 超时兜底） | 构造函数/`sendMessage()` 里全部逐步耗时 `logBridgeWarn` |
+| `src/process/agent/aionrs/index.ts` | `send()` 内 `readyPromise` 30s 超时（超时发 error+finish 解锁 UI） | `diagLog()` 方法本身 + 全部调用点 |
+| `src/process/bridge/services/WebuiService.ts` | `syncBrowserWebuiSession()` 原有逻辑不变 | 全部 `mark`/`finish` 逐步耗时日志 |
+| `src/process/worker/fork/ForkTask.ts` | `postMessage()`/`init()` 原有逻辑不变 | `getEnhancedEnv`/`fork()` 耗时日志 + `postMessage` 调用确认日志 |
+| `src/process/worker/fork/pipe.ts` | worker 侧消息处理原有逻辑不变 | 原始消息接收诊断日志（`worker-pipe-diag.log`） |
+
+## 验证
+
+- `tsc --noEmit`：无新增错误（除既存 pptPreviewBridge execSync 4 处）
+- `oxlint`：清理后无新增 console/unused-var 问题；`oxfmt`：干净
+- `vitest run tests/unit`：3489 passed，与基线完全一致，清理诊断代码零回归
+- procdump 文件（687MB，`%TEMP%\electron (2).DMP`）+ Python 分析脚本用完即删
+
+## 教训（比这次的具体环境问题更重要）
+
+1. **`appendFileSync` 不是绝对安全的"万能诊断手段"**——它只解决"不触发 console 的 bridge.emit 死锁"这一个特定问题，不代表在任何机器、任何调用频率下都零风险。同步文件 I/O 仍可能被外部因素（AV/EDR/云同步）拖慢到阻塞级别，尤其是在高频调用点上。以后加诊断埋点要意识到：低频关键节点（构造函数、错误分支）随便加没问题；像"每条 IPC 消息""每次组件渲染"这种高频路径，加同步文件写入本身就是新增风险，要么限制粒度、要么用采样/节流。
+2. **排查中途症状"变了样"要警惕是不是诊断手段本身引入了新变量**——这次从"竞态到未就绪 worker"（有明确证据链的真 bug，已修复）变成"main process 卡在 ZwWriteFile"（完全不同的证据），一开始以为是同一个 bug 的不同表现，实际是两个独立问题叠加在一起。及时怀疑"是不是我自己的埋点把水搅浑了"，比一直加更多埋点更高效。
+3. **procdump（Windows 自带，任务管理器右键即可）+ 免费 Python 库（`pip install minidump pefile`）足以定位到"卡在哪个系统调用"这一层，不需要申请/安装 WinDbg**。这是一个通用技巧：遇到"进程 Not Responding 但 CPU 是 0%"这类问题，都可以用这个组合快速看到调用栈落在哪个 DLL/哪个 syscall，不需要完整的符号服务器也能定位到大方向。
+4. **`Get-Process -Id X | .CPU` 前后采样判断死循环 vs 真阻塞，是零安装成本的第一步诊断**——PowerShell 自带，几秒钟出结论，能立刻排除一整类假设（死循环类 bug 通常需要看代码逻辑；真阻塞类需要看外部依赖/系统调用），避免在错误的方向上继续深挖。
+
+---
+
+# 2026-07-03 续二 —— 清理诊断代码后仍复现，加 desktopFocusSync 冷却期
+
+## 背景
+
+诊断代码清理干净、重新测试，用户报告"还是一样"，但这次的 DevTools 控制台证据跟之前都不同：`[aionrs:prewarm] spawn done +189ms`（很快，健康）、但 `[Auth] Desktop user fetch failed, attempting local operator fallback: Error: syncBrowserWebuiSession timed out after 5000ms`、`[WebuiEnterpriseMode] desktopFocusSync timed out after 8000ms`、`[useNotificationClick] Registering notification click handler` 反复出现，像是在**循环**。
+
+## 排查
+
+顺着 `syncBrowserWebuiSession timed out after 5000ms` 这条新线索找到 `AuthContext.tsx:271-276` 的 `fetchDesktopCurrentUser()` —— 这是 `syncBrowserWebuiSessionToDesktop()` 的**第三个独立调用点**（前两个是 `ensureDesktopWebuiRunning.ts` 和 `WebuiEnterpriseModeProvider.tsx` 的 `runDesktopSync`），本身就有 5s 超时 + fallback，设计上是健全的，不是本次卡死的根源。
+
+真正的问题在 `WebuiEnterpriseModeProvider.tsx` 的 `scheduleFullRefresh`（`window focus` / `visibilitychange` 触发）：`desktopSyncInFlightRef` 只防止**并发**重入，但**没有冷却期**——如果底层 `syncBrowserWebuiSessionToDesktop()` 持续很慢（每次都跑满 8 秒超时），而 focus/visibilitychange 事件又反复到来（比如"未响应"弹窗本身抢焦点、切窗口、DevTools 开关都可能触发），上一次 8 秒尝试刚复位 in-flight 标志，下一个已排队的 800ms 防抖计时器立刻又发起一次新的 8 秒尝试——形成没有退避的连续重试风暴，`useNotificationClick` 的反复"Registering"是这些重试触发的 context 更新连带 `Layout` 重渲染的副作用。
+
+**未解之谜**：`WebuiService.syncBrowserWebuiSession()`（主进程）为什么持续这么慢，具体卡在 `session.defaultSession.cookies.get()` 还是 `UserRepository.findById` 还没有实锤（诊断日志已经清掉，且已确认高频加日志本身是新风险，这次没有重新加）。当前修复是"防止无退避的重试风暴"，不是"修好底层为什么慢"——两者独立，后者仍是待查项。
+
+## 修复
+
+`scheduleFullRefresh` 加冷却期：如果一次尝试真的跑满了 `ENTERPRISE_BOOTSTRAP_TIMEOUT_MS`（8s，说明确实慢，不是快速失败），复位后进入 15 秒冷却，冷却期内 focus/visibilitychange 事件不会触发新的尝试。快速成功的正常同步不受影响（不计入冷却）。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/renderer/hooks/webui/WebuiEnterpriseModeProvider.tsx` | `scheduleFullRefresh` 加 `desktopSyncCooldownUntilRef`，跑满超时后 15s 内不再重试 |
+
+## 验证
+
+- `tsc --noEmit`：无新增错误
+- `oxlint`/`oxfmt`：干净
+- `vitest run`：`webuiEnterpriseModeProvider.dom.test.tsx` 6 passed；全量 `tests/unit` 待确认与基线一致
+- 运行时仍需桌面端实测——这次修复针对的是"重试风暴"，如果底层 `syncBrowserWebuiSession` 慢的根因还在，用户仍会看到一次性的转圈/短暂卡顿，但不应该再无限循环下去
+
+## 待办
+
+- `WebuiService.syncBrowserWebuiSession()` 主进程侧持续偏慢的根因仍未定位（`session.defaultSession.cookies.get()` 或 `UserRepository.findById`），下次如需继续排查，诊断埋点要吸取上一轮教训：只加在低频/一次性调用点，不要加在 focus/visibilitychange 这类可能高频触发的路径上
+- `AuthContext.tsx` 的 `fetchDesktopCurrentUser`/`refresh` 虽然本身有超时保护，但同样没有冷却期，如果未来发现它也有重试风暴的迹象，可以参考这次的 `desktopSyncCooldownUntilRef` 模式加同款保护
+
+---
+
+# 2026-07-03 续三 —— 冷却期修复后仍复现，挖到 electron-log 默认同步写盘这个更底层的根因
+
+## 背景
+
+`desktopFocusSync` 冷却期修完，用户又报"还是不行"。此时排查已经进行了 9 轮，之前每一轮都以为找到了根因，结果都只是解决了叠加问题中的一个。这次换思路：不再从"哪个功能触发的"倒推，改用 procdump 抓实时快照，从操作系统调用栈往回查。
+
+## 排查过程
+
+1. 用户机器当时确认真的卡死（`Get-Process -Id X | .CPU` 前后采样不变 = 真阻塞非死循环），用 `rundll32 comsvcs.dll, MiniDump <pid> <path> full` 现场抓实时转储（零安装，比等下次自然复现再翻旧 dump 快得多；抓完要 `icacls <dump> /grant <user>:F`，因为 comsvcs.dll 生成的转储默认只给 SYSTEM/Administrators 权限，当前用户读不了）。
+2. 用 Python `minidump` 库枚举全部线程 RIP，发现固定模式：**6 个线程健康地停在 `win32u.dll!NtUserMsgWaitForMultipleObjectsEx`（消息泵正常空闲），只有 1 个线程卡在 `ntdll.dll!ZwWriteFile`**——这个特征在本轮之前的两次 procdump（8-9 轮排查期间）里也出现过，当时以为是自己加的诊断 `appendFileSync` 导致的，删干净后仍然复现，说明另有其他同步写入命中同一个坑。
+3. 用寄存器读取该线程的 `R10`（x64 syscall 会用 `r10` 保存原始 `rcx`，即 `ZwWriteFile` 第一个参数 FileHandle，因为 `syscall` 指令本身会破坏 `rcx`）去匹配 dump 里的 handle 表，用 `GrantedAccess` 位模式（`FILE_APPEND_DATA` 等）确认这就是一次 `appendFileSync`/`appendFile`-style 的追加写。
+4. 顺着这条线排查全部残留 `appendFileSync` 调用点，发现真正的更底层根因：**`src/process/utils/configureConsoleLog.ts` 用 `electron-log` 接管主进程 `console.*`，而 `electron-log` 的文件 transport 默认 `sync: true`（`node_modules/electron-log/src/node/transports/file/index.js:41`）**——也就是说，只要主进程任何地方（不只是已经硬门禁的 `webserver/**`/`bridge/**`，而是全部约 164 个还残留 `console.*` 的文件）调用一次 `console.log`，就会同步 `fs.writeFileSync`，直接卡住主/UI 线程。这是一条跟"`console.*` 触发 `bridge.adapter.emit` 广播死锁"（[[ipc-console-deadlock]]）完全独立的阻塞路径，两条路径共享同一个触发条件（调用 console.*）但机制不同。
+5. 更麻烦的是：我们自己写的"安全"日志助手（`logRouteWarn`/`logBridgeWarn` 等，本意是替代 console.* 规避 bridge.emit 死锁）用的也是同步 `appendFileSync`——跟 electron-log 是**同一类风险**，只是少了 IPC 广播那一层。这就是为什么第 8-9 轮把诊断代码删干净后问题仍然复现：electron-log 自己的同步写，以及我们自己的"安全"日志助手，两者都还是同步的。
+
+## 修复
+
+1. `configureConsoleLog.ts` 加一行 `log.transports.file.sync = false`，让 electron-log 改用异步 `fs.writeFile`——一行改动覆盖全部约 164 个残留 console.* 文件的风险，不用逐个文件清。
+2. 把所有自己写的同步日志改成异步：
+   - `webuiLog.ts`、`bridgeLog.ts`（`logRouteWarn`/`logRouteError`/`logBridgeWarn`/`logBridgeError` 的共享实现）
+   - 散落在各文件里内联 `const { appendFileSync } = require('node:fs')` 模式的 8 处：`webuiBridge.ts`（5 处）、`databaseBridge.ts`（2 处，其中 `getConversationMessages` 被渲染层**每 2.5 秒轮询一次**，是理论上风险最高的一处）、`WebuiService.ts`（`handleAsync`，几乎所有 `webui.*` IPC provider 复用）、`AionrsManager.ts`（2 处）、`AuthMiddleware.ts`（`requestLoggingMiddleware`，**每个 HTTP 请求都调用两次**）、`staticRoutes.ts`（**仅 dev 模式**下 Vite 代理失败时触发，很可能是"生产环境没这个问题"的直接原因之一）、`errorHandler.ts`。
+3. 顺手修了一个无关的预置 bug：`pptPreviewBridge.ts` 用了 `execSync` 但没导入（`tsc --noEmit` 顺带暴露的）。
+
+## 验证与后续复现
+
+`tsc --noEmit` 0 错误，`oxlint` 0 新增 error（构建产物里确认 `appendFileSync` 清零、`transports.file.sync = false` 编译进去了）。但**修复上线后用户仍复现了两次冻结**，procdump 显示同样的 `ZwWriteFile` 卡死特征，其中一次是在**全新启动的进程**上（排除"旧进程残留状态"）。查 Windows 系统事件日志发现：其中一次冻结前，笔记本经历了一次长时间 Modern Standby 休眠唤醒（本地时间 18:29 睡、20:00 醒），怀疑跟休眠唤醒后磁盘/驱动短暂未完全恢复有关——但这只是时间线吻合，**没有实锤**，且第二次复现的进程是唤醒 23 分钟后才启动的，不能完全排除是别的同步写入命中同一个坑。
+
+## 加了一个新工具：全局 fs 同步写 watchdog（诊断用，问题定位后应删除）
+
+鉴于 procdump 事后取证只能确认"有一次写入卡在 ZwWriteFile"，拿不到具体文件名（`comsvcs.dll` 生成的转储默认不含 handle 名称数据，需要 handle 表 + 寄存器匹配才能定位到 handle 号，仍拿不到路径字符串），新增 `src/process/utils/fsWriteWatchdog.ts`：在主进程入口最早期 monkey-patch `fs.writeFileSync`/`fs.appendFileSync`，每次调用**异步**（`fs.appendFile`，绝不自我阻塞）记录目标路径 + 调用栈，写入开始前就记一条"STARTED"（这样即使写入永远不返回，也能靠这条记录跟卡死时间点对上），超过 50ms 再记一条"SLOW"。写到 `logs/fs-write-watchdog.log`。
+
+**踩坑**：第一版用 `import * as fs from 'node:fs'`，打包后是只读的 ESM 命名空间对象，`fs.writeFileSync = ...` 直接抛 `TypeError: Cannot set property writeFileSync of [object Module] which has only a getter`，主进程启动即崩溃（弹出"A JavaScript error occurred in the main process"错误窗口）。改用 `require('node:fs')`（拿到可变的 CommonJS 模块对象）修复。**教训**：给已经用 ESM `import` 语法拿到的内置模块做属性覆盖式 monkey-patch，必须用 `require()`，不能用 `import * as`。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/utils/configureConsoleLog.ts` | 加 `log.transports.file.sync = false` |
+| `src/process/webserver/webuiLog.ts` | `appendFileSync` → 异步 `appendFile` |
+| `src/process/bridge/bridgeLog.ts` | 同上 |
+| `src/process/bridge/webuiBridge.ts` | 5 处内联同步写 → 异步 |
+| `src/process/bridge/databaseBridge.ts` | 2 处（含 2.5s 轮询热路径）→ 异步 |
+| `src/process/bridge/services/WebuiService.ts` | `handleAsync` 内联写 → 异步 |
+| `src/process/task/AionrsManager.ts` | 2 处内联写 → 异步 |
+| `src/process/webserver/auth/middleware/AuthMiddleware.ts` | `requestLoggingMiddleware`（每请求 2 次）→ 异步 |
+| `src/process/webserver/routes/staticRoutes.ts` | Vite 代理失败日志（仅 dev）→ 异步 |
+| `src/process/webserver/middleware/errorHandler.ts` | 同上 |
+| `src/process/bridge/pptPreviewBridge.ts` | 补 `execSync` 导入（无关预置 bug） |
+| `src/process/utils/fsWriteWatchdog.ts`（新增） | 全局 fs 同步写监控，诊断用，问题彻底定位后应删除 |
+| `src/index.ts` | 最早期导入 `fsWriteWatchdog`（在 `configureConsoleLog` 之前） |
+
+## 教训
+
+1. **"用 appendFileSync 替代 console.* 更安全"这个假设本身不成立**——两者都是同步文件写入，风险等级相同，只是 console.* 多了一层 `bridge.adapter.emit` 广播开销。真正的安全做法是"异步写、fire-and-forget"，不是"换个函数名但还是同步"。这条教训贯穿了从第 1 轮到现在的整个排查——每一轮都在用同步写日志去替代同步写日志（只是换了触发机制），直到这一轮才发现问题出在"同步"这个属性本身，不是"console.*"这个函数本身。
+2. **第三方依赖（`electron-log`）默认配置也可能是同步的**，不能默认"只要不是自己写的 console.* 就安全"。`electron-log` 的文件 transport `sync: true` 是默认值，不是这个项目主动选的，而是我们通过 `Object.assign(console, log.functions)` 把 `console.*` 接到它身上时顺带引入的隐藏风险。以后接入任何"把 console 重定向到文件"的库，都要检查它的写入模式是同步还是异步。
+3. **procdump 的 handle 表拿不到文件名时，寄存器（`r10`/`rcx`）+ `GrantedAccess` 位模式仍然能确认"这是一次追加写"这个大方向**，但要精确定位到具体文件/代码行，光靠事后静态分析效率很低——不如提前埋一个异步、启动前记录的全局 fs 写入 watchdog，下次复现直接看日志，不用再抓 dump 反复分析寄存器。
+4. **`import * as fs from 'node:fs'` 之后不能对返回对象做属性赋值式 monkey-patch**（打包后是只读 ESM 命名空间对象），要用 `require('node:fs')` 拿可变的 CommonJS 对象。
+5. **休眠/唤醒可能是外部干扰因素之一，但目前只是时间线巧合，没有实锤**——不要在没有第二个独立证据的情况下把"这次跟休眠时间对得上"当成确定结论对外宣称，只能作为一个待验证的怀疑方向记录下来。

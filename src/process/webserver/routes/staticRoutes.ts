@@ -119,17 +119,18 @@ function createViteDevProxy(): (req: Request, res: Response) => void {
       // proxy request fires this callback and freezes the main process.
       // Write to file instead (best-effort, never throw from middleware).
       try {
-        const { appendFileSync, mkdirSync } = require('node:fs');
+        const { appendFile, mkdirSync } = require('node:fs');
         const { join } = require('node:path');
         const { getPlatformServices } = require('@/common/platform');
         const logsDir = getPlatformServices().paths.getLogsDir();
         try {
           mkdirSync(logsDir, { recursive: true });
         } catch {}
-        appendFileSync(
+        appendFile(
           join(logsDir, 'webui-vite-proxy.log'),
           `[${new Date().toISOString()}] ${req.method} ${req.url} - ${err.message}\n`,
-          'utf-8'
+          'utf-8',
+          () => {}
         );
       } catch {
         // best-effort
