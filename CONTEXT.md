@@ -2298,3 +2298,9 @@ await navigate(`/conversation/${conversation.id}`);  // 立刻跳转
 3. **procdump 的 handle 表拿不到文件名时，寄存器（`r10`/`rcx`）+ `GrantedAccess` 位模式仍然能确认"这是一次追加写"这个大方向**，但要精确定位到具体文件/代码行，光靠事后静态分析效率很低——不如提前埋一个异步、启动前记录的全局 fs 写入 watchdog，下次复现直接看日志，不用再抓 dump 反复分析寄存器。
 4. **`import * as fs from 'node:fs'` 之后不能对返回对象做属性赋值式 monkey-patch**（打包后是只读 ESM 命名空间对象），要用 `require('node:fs')` 拿可变的 CommonJS 对象。
 5. **休眠/唤醒可能是外部干扰因素之一，但目前只是时间线巧合，没有实锤**——不要在没有第二个独立证据的情况下把"这次跟休眠时间对得上"当成确定结论对外宣称，只能作为一个待验证的怀疑方向记录下来。
+
+## 待办（续三）
+
+- ⚠️ **`src/process/utils/fsWriteWatchdog.ts` 是临时诊断工具，不是永久修复**。观察一段时间（跨几次休眠/唤醒周期）确认不再复现，或者复现后 watchdog 精确定位到了具体根因并修完，就要把这个文件删掉，同时删掉 `src/index.ts` 里 `import './process/utils/fsWriteWatchdog';` 这一行（在 `configureConsoleLog` 之前那一行）。不要让诊断代码长期留在主进程里。
+- `logs/fs-write-watchdog.log` 会持续增长（每次同步 fs 写入都记一行 STARTED），watchdog 移除前记得提醒用户这个文件可以定期清理，不影响功能。
+- 休眠/唤醒是否真的是触发因素仍未证实，如果后续观察到"每次休眠唤醒后一段时间内容易复现，正常使用时不复现"这类规律，可以回来补充实锤；如果观察不到规律，这条怀疑可以从"待验证方向"降级为排除项。
