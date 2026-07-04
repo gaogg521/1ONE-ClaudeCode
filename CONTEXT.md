@@ -3011,3 +3011,27 @@ fork 与上游修复前完全一致的两处 bug:no-auth 分支删了 sessionSto
 1. **用户选定选项 A(整体采纳上游 v2:fork AionCore + 上游前端壳),按 M0-M5 分期推进**;
 2. ✅ 7 轮改动已保底 commit + push(8aa2c72b,69 文件);darwin 二进制/aionrs 会话数据/临时文件未纳入,属本地产物;
 3. **下一步 = M0(开新会话)**:上游 v2 原版跑通(桌面 + aionui-web 服务器形态)+ 本地数据只读验证 + 确立 fork 分支策略(pin aioncoreVersion)。施工顺序模板 = 上游 #2672(wire format)→ #2668/#2677/#2682(技能三部曲)→ backend-launcher → 迁移三 PR(#2897/#3018/#3423)。M2(企业版 Rust crate)开工两周后设 checkpoint,超预期可降级 Node sidecar。
+
+---
+
+# 2026-07-04 第九轮 — M0 完成(选项 A 第一里程碑,当日跑通)
+
+用户拍板选项 A 后当场执行 M0,全部达成。详细报告:`docs/tech/v2-m0-report.md`(原件 `D:\aionui-m0\M0-REPORT.md`)。
+
+## 结果速览
+
+1. **aionui-web 服务器形态 ✅**:官方 v2.1.28 win-x64 发布包(sha256 校验),`D:\aionui-m0` 隔离运行(端口 25908,独立 data-dir)。API 冒烟全过:建会话(extra.skills 快照自动写入,#2677 实证)→ 发消息 → **本机 claude CLI 真实回复 M0-SMOKE-OK** → 消息 API 自带游标分页(原 Phase 4a 需求上游内置)。
+2. **桌面形态源码 dev ✅**:checkout v2.1.28 tag + bun install + bun run dev。AIONCORE_LISTENING → /health 3.9s 就绪 → 窗口正常。**踩坑**:dev 模式 binaryResolver 不查仓库 resources/,须把 bundled-aioncore 复制到 `node_modules/electron/dist/resources/`。**上游 legacy 迁移链(#3423 handoff repair)在 dev 启动中现场可见**——M5 的模板。
+3. **数据只读验证 ✅ 低风险坐实**:1one.db(50 会话/600 消息,integrity ok)与 AionCore schema 对照——**messages 逐列一致**;conversations 差异仅 tenant_id/team_id(随企业 crate 走)与 pinned(上游自动补列);extra.enabledSkills→skills 需 key 映射;本机企业表几乎全空,迁移量极小。
+4. **fork 分支策略(决议)**:双 fork(AionCore + AionUi)均以 release tag 为基线不追 HEAD;二开收敛在新增 crate + 最小 router diff;沿用 aioncoreVersion pin 机制指向自有 fork release;1one-command 仓库保持过渡期生产版本。
+
+## 待用户决定
+
+- fork 仓库归属(GitHub 账号/组织、公私有)——定了才能创建 fork 并开 M1。
+
+## 环境备忘(M1 会话可复用)
+
+- `D:\aionui-m0\web\aionui-web\`:web 形态可执行(--data-dir D:\aionui-m0\data --port 25908)
+- `D:\aionui-m0\AionUi`:v2.1.28 源码,bun 已装依赖,dev 可起(electron dist resources 已放 aioncore)
+- `C:\Users\allenzhao\AppData\Local\Temp\claude\aioncore`:AionCore v0.1.42 浅克隆(源码对照用)
+- 下一步 M1:渠道对齐实测(飞书/微信/钉钉/Telegram 配对全流程)+ 配对码手动输入兜底差距确认
