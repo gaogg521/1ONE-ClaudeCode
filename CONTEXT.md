@@ -3006,8 +3006,8 @@ fork 与上游修复前完全一致的两处 bug:no-auth 分支删了 sessionSto
 
 **选项 A(整体采纳),六里程碑 M0-M5,合计 17-28 人周**;M2(企业版 Rust)开工两周后设 checkpoint,超预期可降级为 Node sidecar 过渡(省 3-5 人周)。选项 B(自建 Node 后端)10-18 人周但永久分叉;选项 C(渐进修补)8-11 人周但维护成本发散。
 
-## 下一步(等用户决策)
+## 决策结果(2026-07-04 用户已拍板)
 
-1. 用户读 `docs/tech/v2-architecture-comparison.md` 拍板 A/B/C;
-2. 无论选哪条:先 commit 当前 7 轮未提交改动(过渡期生产版本保底);
-3. 若选 A:M0(上游 v2 原版跑通 + 数据只读验证)开新会话执行,施工顺序模板 = 上游 #2672(wire format)→ #2668/#2677/#2682(技能三部曲)→ backend-launcher → 迁移三 PR(#2897/#3018/#3423)。
+1. **用户选定选项 A(整体采纳上游 v2:fork AionCore + 上游前端壳),按 M0-M5 分期推进**;
+2. ✅ 7 轮改动已保底 commit + push(8aa2c72b,69 文件);darwin 二进制/aionrs 会话数据/临时文件未纳入,属本地产物;
+3. **下一步 = M0(开新会话)**:上游 v2 原版跑通(桌面 + aionui-web 服务器形态)+ 本地数据只读验证 + 确立 fork 分支策略(pin aioncoreVersion)。施工顺序模板 = 上游 #2672(wire format)→ #2668/#2677/#2682(技能三部曲)→ backend-launcher → 迁移三 PR(#2897/#3018/#3423)。M2(企业版 Rust crate)开工两周后设 checkpoint,超预期可降级 Node sidecar。
