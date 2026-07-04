@@ -546,9 +546,14 @@ export class WebuiService {
    * Pick up the latest browser WebUI login for this instance (IPC-only; not exposed over HTTP).
    */
   static async syncBrowserWebuiSession(): Promise<BrowserSessionSnapshot | null> {
+    // TEMP DIAGNOSTIC (2026-07-04): timing this call to find which await accounts for
+    // the ~8s delay users see before Issue creation falls through. console.* is safe
+    // now (async electron-log, see configureConsoleLog.ts) — remove once found.
+    const t0 = Date.now();
     const bridged = getLatestBrowserWebuiSession();
     if (bridged) {
       const verified = await AuthService.verifyToken(bridged.token);
+      console.log(`[sync-diag] bridged verify: ${Date.now() - t0}ms`);
       if (verified) {
         return bridged;
       }
@@ -559,7 +564,9 @@ export class WebuiService {
     // the client already delegates auth to the server by design. Without this, SSO
     // login succeeds on the remote but the desktop keeps the local operator session,
     // bouncing the user back to /enterprise/join.
+    const t1 = Date.now();
     const clientRemoteOrigin = await this.getClientEnterpriseServerOrigin();
+    console.log(`[sync-diag] getClientEnterpriseServerOrigin: ${Date.now() - t1}ms, result=${clientRemoteOrigin}`);
     if (clientRemoteOrigin) {
       try {
         const cookies = await session.defaultSession.cookies.get({
@@ -586,13 +593,17 @@ export class WebuiService {
       }
     }
 
+    const t2 = Date.now();
     const { getWebServerInstance } = await import('@process/bridge/webuiBridge');
     const instance = getWebServerInstance();
+    console.log(`[sync-diag] getWebServerInstance: ${Date.now() - t2}ms, port=${instance?.port}`);
     if (!instance?.port) {
       return null;
     }
 
+    const t3 = Date.now();
     const lanIP = this.getLanIP();
+    console.log(`[sync-diag] getLanIP: ${Date.now() - t3}ms`);
     const networkUrl = instance.allowRemote && lanIP ? `http://${lanIP}:${instance.port}` : undefined;
     const { buildWebuiSessionCookieUrls } = await import('@/common/config/webuiApiBaseCandidates');
     const cookieUrls = buildWebuiSessionCookieUrls({
@@ -601,25 +612,33 @@ export class WebuiService {
       networkUrl,
       lanIP: lanIP ?? undefined,
     });
+    console.log(`[sync-diag] cookieUrls: ${JSON.stringify(cookieUrls)}`);
 
     for (const url of cookieUrls) {
+      const tLoop = Date.now();
       try {
         const cookies = await session.defaultSession.cookies.get({
           url,
           name: AUTH_CONFIG.COOKIE.NAME,
         });
+        console.log(`[sync-diag] cookies.get(${url}): ${Date.now() - tLoop}ms, found=${cookies.length}`);
         const cookieToken = cookies[0]?.value;
         if (!cookieToken) {
           continue;
         }
+        const tVerify = Date.now();
         const decoded = await AuthService.verifyToken(cookieToken);
+        console.log(`[sync-diag] verifyToken(${url}): ${Date.now() - tVerify}ms`);
         if (!decoded) {
           continue;
         }
+        const tFind = Date.now();
         const user = await UserRepository.findById(decoded.userId);
+        console.log(`[sync-diag] findById(${url}): ${Date.now() - tFind}ms`);
         if (!user) {
           continue;
         }
+        console.log(`[sync-diag] TOTAL success: ${Date.now() - t0}ms`);
         return {
           userId: user.id,
           username: user.username,
@@ -628,10 +647,12 @@ export class WebuiService {
           token: cookieToken,
           updatedAt: Date.now(),
         };
-      } catch {
+      } catch (err) {
+        console.log(`[sync-diag] loop error for ${url}: ${Date.now() - tLoop}ms`, err);
         // try next host (127.0.0.1 vs LAN IP cookie jars)
       }
     }
+    console.log(`[sync-diag] TOTAL null (no session found): ${Date.now() - t0}ms`);
     return null;
   }
 

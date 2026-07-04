@@ -56,7 +56,7 @@
 ### ✅ 高性能
 
 - better-sqlite3 的同步API，避免mutex争用
-- WAL模式，提升并发性能
+- rollback journal 模式（2026-07-04 从 WAL 切回，见 schema.ts 注释：WAL 依赖的 -shm 共享内存映射文件在某些机器上会被杀毒软件实时扫描干扰，导致索引反复损坏）
 - 完善的索引设计
 - 支持事务操作
 
@@ -239,7 +239,7 @@ await importDatabaseFromJSON(data);
 1. **批量插入消息**: 使用 `insertMessages()` 而不是循环调用 `insertMessage()`
 2. **分页查询**: 大量数据时使用分页参数
 3. **定期清理**: 定期调用 `db.vacuum()` 清理数据库
-4. **WAL模式**: 数据库已启用WAL模式，支持读写并发
+4. **journal模式**: 2026-07-04 起改用 rollback journal（非 WAL），详见 schema.ts 注释
 5. **图片去重**: 系统自动通过hash去重，无需额外处理
 
 ## 故障排查

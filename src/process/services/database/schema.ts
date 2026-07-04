@@ -16,12 +16,19 @@ export function initSchema(db: ISqliteDriver): void {
   // instead of failing immediately (prevents "database is locked" errors
   // when multiple processes or startup tasks access the database concurrently)
   db.pragma('busy_timeout = 5000');
-  // Enable Write-Ahead Logging for better performance
+  // WAL mode was used here for better read/write concurrency, but it depends on a
+  // shared-memory-mapped `-shm` file for coordinating readers/writers. On at least one
+  // user's machine, real-time antivirus scanning interfering with that mmap'd file
+  // produced recurring index corruption ("wrong # of entries in index ...", "database
+  // disk image is malformed") that reappeared within minutes of a fresh REINDEX — not a
+  // one-time historical artifact. This app has essentially single-process access to its
+  // own database (no separate reader/writer processes needing WAL's concurrency), so the
+  // rollback-journal default trades a small amount of write throughput for not depending
+  // on shared memory mapping at all. See CONTEXT.md "2026-07-04" section.
   try {
-    db.pragma('journal_mode = WAL');
+    db.pragma('journal_mode = DELETE');
   } catch (error) {
-    console.warn('[Database] Failed to enable WAL mode, using default journal mode:', error);
-    // Continue with default journal mode if WAL fails
+    console.warn('[Database] Failed to set journal mode:', error);
   }
 
   // Users table (账户系统)

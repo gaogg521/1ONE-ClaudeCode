@@ -2304,3 +2304,107 @@ await navigate(`/conversation/${conversation.id}`);  // 立刻跳转
 - ⚠️ **`src/process/utils/fsWriteWatchdog.ts` 是临时诊断工具，不是永久修复**。观察一段时间（跨几次休眠/唤醒周期）确认不再复现，或者复现后 watchdog 精确定位到了具体根因并修完，就要把这个文件删掉，同时删掉 `src/index.ts` 里 `import './process/utils/fsWriteWatchdog';` 这一行（在 `configureConsoleLog` 之前那一行）。不要让诊断代码长期留在主进程里。
 - `logs/fs-write-watchdog.log` 会持续增长（每次同步 fs 写入都记一行 STARTED），watchdog 移除前记得提醒用户这个文件可以定期清理，不影响功能。
 - 休眠/唤醒是否真的是触发因素仍未证实，如果后续观察到"每次休眠唤醒后一段时间内容易复现，正常使用时不复现"这类规律，可以回来补充实锤；如果观察不到规律，这条怀疑可以从"待验证方向"降级为排除项。
+
+---
+
+# 2026-07-04 —— 卡死的真正终局：Electron 自己的 DIPS 数据库 + SQLite 数据库反复损坏，两条修复叠加后彻底不再卡死
+
+## 背景
+
+续三的 electron-log 异步化修复上线后，用户仍然复现了冻结（procdump 显示同样的 `ZwWriteFile` 特征），且是在**全新启动的进程**上复现——这排除了"旧进程残留状态"，也让人怀疑 electron-log 修复本身是否有效。
+
+## 排查：调用栈落在 electron.exe 框架二进制本身，不是我们的代码
+
+用同样的 procdump 方法论（见 [[aionrs-send-ready-timeout]] 记忆）现场抓取实时转储，这次的关键突破：
+
+1. 卡住线程的调用栈里 `electron.exe+0xbe6c290`、`+0x39b9784`、`+0xc0f52f0`、`+0x39bc0fb`、`+0x5ceca6`、`+0x44dfef4` 等偏移量，跟**前一天**（不同进程实例、不同日期）抓到的 dump **精确到字节完全一致**。`electron.exe` 是 `node_modules/electron/dist/electron.exe`——Electron 框架自带的二进制文件，我们改代码重新构建根本不会碰它一个字节。
+2. 同时新增的 `fsWriteWatchdog.ts`（拦截 Node `fs.writeFileSync`/`fs.appendFileSync` 这两个 JS 层函数）在这次冻结期间**完全没有记录任何内容**。
+
+两条证据合在一起：**这次卡住的同步写入压根不经过任何一行 JS 代码，是 Electron/Chromium 自己内部的 C++ 层在做同步文件写入**，我们之前修的所有 electron-log/appendFileSync 异步化都是真实存在、也修对了的问题，但都不是这一类冻结的直接原因。
+
+## 修复 1：禁用 Chromium 的 DIPS（反弹追踪检测）数据库
+
+检查 userData 目录发现 `DIPS`/`DIPS-wal` 文件（Chromium 自己维护的反追踪 SQLite 数据库）在持续增长（一天内从 53KB 涨到 152KB），是一个活跃的后台写入源。这个应用不是通用浏览器，没有第三方网站导航场景需要防反弹追踪，这个功能对本应用没有任何功能价值，只是多一个磁盘写入源。
+
+`src/process/utils/configureChromium.ts` 加：
+```ts
+if (app) {
+  app.commandLine.appendSwitch('disable-features', 'DIPS');
+}
+```
+不局限于 dev 模式（`disable-http-cache`/`disable-gpu-shader-disk-cache` 那两行是 dev-only，这一行没有下行风险，生产也一并禁用）。
+
+修完后重新构建测试，**这次没有再复现冻结**（Windows Task Manager `Get-Process | Responding` 一直是 `True`）。
+
+## 排查 2：冻结解决后暴露出的新症状——Issue 创建要等 8 秒 + 数据库报 "database disk image is malformed"
+
+冻结解决后，用户报告"创建 Issue 需要 8 秒才完成"，日志里反复出现：
+```
+SqliteError: database disk image is malformed
+    at OneCmdDatabase.getUserConversations ...
+```
+
+用项目自带的 `better-sqlite3`（跟 Electron 的 Node ABI 绑定，需要 `ELECTRON_RUN_AS_NODE=1 node_modules/.bin/electron script.js` 而不是系统 Node 直接跑，否则 NODE_MODULE_VERSION 不匹配）在只读模式跑 `PRAGMA integrity_check`：
+```js
+const Database = require('better-sqlite3');
+const db = new Database('C:/.../1one.db', { readonly: true, fileMustExist: true }); // 注意用正斜杠，反斜杠在 JS 字符串里对不认识的转义字母会被静默吃掉，路径会变成乱码
+```
+结果：100 条问题，全部是 `wrong # of entries in index X` / `row N missing from index X`——**索引跟表数据不一致**，不是表数据本身的页级损坏（这一点很重要，意味着能用 `REINDEX` 直接修，不需要复杂的数据恢复）。
+
+**修复步骤**（顺序：备份 → checkpoint → reindex/vacuum）：
+```js
+db.pragma('wal_checkpoint(TRUNCATE)');
+db.exec('REINDEX;');
+db.pragma('integrity_check'); // 第一次修完剩一条 "Page N: never used"（无害，只是有页分配了没被引用）
+db.exec('VACUUM;');           // 清掉未引用页，integrity_check 最终返回 "ok"
+```
+
+**但只 REINDEX 不够**——几分钟后正常使用又复现了同样的索引损坏（100 条问题原样重现，外加一条新的"Page 3063: never used"）。说明这不是历史遗留的一次性问题，是**正在持续发生**的写入损坏。
+
+## 修复 2：SQLite 从 WAL 模式切回 rollback journal（`journal_mode = DELETE`）
+
+WAL 模式依赖一个 `-shm` 共享内存映射文件用于读写协调。Windows 上"WAL + 实时杀毒/EDR 扫描干扰 mmap 文件"是导致 SQLite 索引反复损坏的经典组合（用户机器 Defender 实时保护确认开着；虽然后来用户自己加了排除路径，但代码层面的根治不应该依赖用户环境配置）。
+
+这个应用对自己的数据库基本是单进程独占访问（不需要 WAL 带来的多进程读写并发能力），`src/process/services/database/schema.ts` 里：
+```ts
+// 之前: db.pragma('journal_mode = WAL');
+db.pragma('journal_mode = DELETE');
+```
+换成 DELETE 模式后不再依赖 `-shm` 映射文件。同步更新了 `src/process/services/database/README.md` 里两处提到 WAL 的描述。
+
+修复后：`journal_mode` 确认变成 `delete`，`integrity_check` 持续保持 `ok`，`malformed` 报错不再出现。
+
+## 排查 3（进行中）：Issue 创建仍需 8 秒 + Issues 列表页显示 0 条（但超级助手能看到）
+
+数据库修复后，"8 秒"这个数字精确匹配 `syncBrowserWebuiSession.ts` 里手动加的 `SYNC_BROWSER_SESSION_TIMEOUT_MS = 8_000` 超时——说明每次都跑满超时才降级到兜底，不是数据库慢导致的，是这条 IPC 调用链本身没有在超时前拿到结果。
+
+直接查当前数据库内容验证了一个旁支怀疑（"是不是 tenant_id 不一致导致列表查不到"）——**排除**：最新创建的记录 `tenant_id` 全部是 `default`，跟列表查询 `WHERE r.tenant_id = ?` 的过滤条件一致，不是数据层面的租户不匹配。
+
+当前假设：Issue 创建走的是桌面本地兜底身份（`creator_id: desktop-local-admin`，能直接写库成功），而 Issues 列表页要通过 WebUI HTTP 接口 `/api/admin/requirements/tree` + 鉴权 token 才能读——如果 `syncBrowserWebuiSession()`（主进程 `WebuiService.ts`）一直没能在 8 秒内拿到有效 token（也就是每次都超时降级），列表请求会因为鉴权信息缺失而返回空，"超级助手"大概率走本地 IPC 直连数据库不需要这个 token，所以能看到数据。**这两个症状（8秒延迟 + 列表看不到）很可能是同一个根因的两种表现**，尚未最终定位到 `syncBrowserWebuiSession()` 内部具体卡在哪一步（`getClientEnterpriseServerOrigin`/`cookies.get`/`verifyToken`/`findById` 中的哪个）。
+
+已加计时诊断（主进程 `WebuiService.syncBrowserWebuiSession()` + 渲染层 `ensureDesktopWebuiRunning()`，均用安全的异步 `console.log`，不是同步文件写），待下次测试结果确定具体卡点后移除。
+
+## 涉及文件（本节新增/修改）
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/utils/configureChromium.ts` | 加 `app.commandLine.appendSwitch('disable-features', 'DIPS')`（非 dev-only） |
+| `src/process/services/database/schema.ts` | `journal_mode` 从 `WAL` 改为 `DELETE` |
+| `src/process/services/database/README.md` | 同步更新两处 WAL 相关描述 |
+| `src/process/bridge/services/WebuiService.ts` | `syncBrowserWebuiSession()` 加逐步计时 `console.log`（TEMP DIAGNOSTIC，待移除） |
+| `src/renderer/utils/ensureDesktopWebui.ts` | `ensureDesktopWebuiRunning()` 加逐步计时 `console.log`（TEMP DIAGNOSTIC，待移除） |
+| （运维操作，非代码）`1one.db` | `wal_checkpoint(TRUNCATE)` + `REINDEX` + `VACUUM` 修复索引损坏；`1one.db.backup.pre-reindex-*` 保留了修复前的快照 |
+
+## 数据丢失说明（历史遗留，非本次操作导致）
+
+对比三个时间点的 `requirements` 表内容（06-27 备份 / 07-04 修复前备份 / 当前），发现 06-27 存在的 7 条早期测试记录（"测试"、"测试2~5"、"test"、"test from shell"，均为 2026-06-03/06-05 创建的占位测试数据）在 07-01 之前的某个时间点就已经丢失，**丢失窗口早于本次排查开始，不是今天的 REINDEX/VACUUM/journal_mode 操作造成的**——这些操作只会重建索引/回收空间，不会删除行数据，且当前记录数（7 条）比修复前备份（2 条）更多，只增不减。丢失的记录内容都是占位测试数据，价值低，如需要可以从 `1one.db.backup.1782557970256`（06-27 备份）里原样恢复，但用户未要求恢复。真实丢失原因推测是本次排查过程中某次真冻结时进程被强制杀掉，SQLite 写入被打断——跟本节修复的索引损坏是同一类根因，журнал_mode 切换后理论上不应再复现。
+
+## 教训
+
+1. **procdump 抓到的调用栈落在第三方框架/依赖的二进制文件里（不是自己项目编译出的产物），就该立刻怀疑问题不在应用代码**——本例中 `electron.exe` 的偏移量在两次不同日期、不同进程实例的 dump 里完全一致，这本身就是"这是一段固定不变的框架代码"的强信号，不需要再猜是不是自己漏改了什么文件。
+2. **给 Electron 应用做"这个功能用不上"的 Chromium feature 排查是有效且低风险的减少磁盘 I/O 手段**——`DIPS`、GPU shader 缓存、HTTP 缓存这类 Chromium 内置但对纯 IPC 桌面应用没有实际价值的功能，都可以通过 `--disable-features`/专用 switch 关掉，减少一个不受应用代码控制的写入源。
+3. **SQLite `integrity_check` 报"索引不一致"跟"页损坏"是完全不同严重程度的问题**——前者 `REINDEX` 就能修，后者可能需要 `.recover`/导出重建，遇到 malformed 错误先跑 integrity_check 分清楚是哪一种，不要一上来就假设需要复杂恢复流程。
+4. **"REINDEX 修好了"不等于"根治了"——如果损坏在修复后的正常使用中很快又复现，说明还有一个持续在发生的写入损坏机制，不能止步于"这次修好了"就收工**，要往回找"为什么会持续损坏"，不能只处理症状。
+5. **WAL 模式在 Windows 上跟杀毒/EDR 实时扫描的组合是已知的 SQLite 损坏诱因**，对于本来就是单进程访问自己数据库的桌面应用，WAL 带来的并发收益往往不值得这个风险，rollback journal（DELETE 模式）更稳妥。
+6. **procdump 定位到"卡在同步写"之后，用 `fsWriteWatchdog.ts` 这类 JS 层拦截仍然可能一无所获**——如果卡住的写入在 Electron/Chromium 自己的 native 层，JS 层的 monkey-patch 天生看不到，这时候要回到"调用栈落在哪个二进制"这条线索，而不是纠结于"为什么我的监控没抓到"。
+7. **修复一个"卡死"类问题后，冒出的新症状（8秒延迟、列表看不到数据）不一定是新 bug，可能是同一根因换了个表现形式**——冻结解决后 IPC 调用不再无限期挂起，而是转为"总是精确等满超时值"，这本身就是有用的诊断线索（说明调用链本身有问题，不是间歇性变慢）。

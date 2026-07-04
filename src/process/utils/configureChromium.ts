@@ -33,6 +33,17 @@ if (app && !app.isPackaged) {
   app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 }
 
+// DIPS (bounce-tracking mitigation) maintains its own SQLite DB (`DIPS`/`DIPS-wal` in
+// userData) with periodic background writes from Chromium's C++ layer — invisible to any
+// JS-level fs instrumentation. This app is not a general-purpose browser (no third-party
+// site navigation to protect against bounce tracking), so the feature has no functional
+// value here, only an extra disk-write source. Disabled unconditionally (not dev-only):
+// no downside if this isn't the cause, and it's one less native write path to rule out
+// if freezes recur. See CONTEXT.md "2026-07-04" section.
+if (app) {
+  app.commandLine.appendSwitch('disable-features', 'DIPS');
+}
+
 // Configure Chromium command-line flags for WebUI and CLI modes
 // 为 WebUI 和 CLI 模式配置 Chromium 命令行参数
 
