@@ -2408,3 +2408,49 @@ db.pragma('journal_mode = DELETE');
 5. **WAL 模式在 Windows 上跟杀毒/EDR 实时扫描的组合是已知的 SQLite 损坏诱因**，对于本来就是单进程访问自己数据库的桌面应用，WAL 带来的并发收益往往不值得这个风险，rollback journal（DELETE 模式）更稳妥。
 6. **procdump 定位到"卡在同步写"之后，用 `fsWriteWatchdog.ts` 这类 JS 层拦截仍然可能一无所获**——如果卡住的写入在 Electron/Chromium 自己的 native 层，JS 层的 monkey-patch 天生看不到，这时候要回到"调用栈落在哪个二进制"这条线索，而不是纠结于"为什么我的监控没抓到"。
 7. **修复一个"卡死"类问题后，冒出的新症状（8秒延迟、列表看不到数据）不一定是新 bug，可能是同一根因换了个表现形式**——冻结解决后 IPC 调用不再无限期挂起，而是转为"总是精确等满超时值"，这本身就是有用的诊断线索（说明调用链本身有问题，不是间歇性变慢）。
+
+---
+
+# 2026-07-04 续 —— 8 秒延迟真正根因：`ConfigStorage.get()` 是渲染层专用 API，主进程调用永远不返回
+
+## 背景
+
+上一节修完 DIPS + journal_mode 之后彻底不再卡死，但暴露出两个新症状：① 创建 Issue 精确要等 8 秒才完成；② 第一次打开 Issues 列表页是空的，多点几次刷新才能看到历史记录（用户原话："这个肯定是有问题的，估计是同一个问题"——判断准确，两者确实是同一根因）。
+
+## 排查过程
+
+1. `8 秒` 这个数字精确匹配 `syncBrowserWebuiSession.ts` 里手动加的 `SYNC_BROWSER_SESSION_TIMEOUT_MS = 8_000`——说明 `webui.syncBrowserWebuiSession.invoke()` 这条 IPC 调用每次都跑满超时才降级到兜底，不是"偶尔变慢"，是**从不在超时前返回**。
+2. 加了逐层计时诊断（渲染层 `ensureDesktopWebuiRunning()` 走 DevTools console 安全打印；主进程 `WebuiService.syncBrowserWebuiSession()` 走 electron-log 异步写盘，均不会自我阻塞）后发现：`getStatus`（另一条 IPC 通道）能在 7-12ms 内正常响应，证明主线程没有被同步阻塞，问题是这一条特定 IPC 调用本身作为 Promise 永远不 resolve。
+3. 用 CDP（`remote-debugging-port=9230`，本项目 dev 模式默认开启）连上渲染进程的 DevTools，通过 `Runtime.evaluate` 直接调用 `window.electronAPI.emit('subscribe-webui.sync-browser-webui-session', {id, data})` 手动重放这条 IPC 请求（绕过所有 React 组件逻辑，排除 UI 层因素），确认**手动直接触发同样超时**——证实问题在 IPC 调用链本身，不是某个触发时机的偶发问题。
+4. 在 `webuiBridge.ts` 的 provider 包装最外层加日志确认：请求**确实到达了主进程**（`provider ENTERED` 稳定触发），但函数体内部除了第一行"进入 `getClientEnterpriseServerOrigin`"之外，后续任何一行日志都不出现——包括一个特意加的"对照测试"：`await ConfigStorage.get('language')`（一个在 app 里到处用、明确正常工作的 key）**同样卡住不返回**，证明问题跟具体调用的是哪个 key 无关，是 `ConfigStorage.get()` 这个调用本身、在这条调用栈里，从不 resolve。
+
+## 根因
+
+`ConfigStorage`（`@office-ai/platform` 的 `storage.buildStorage(...)`）的 `.get()`/`.set()` 是**为渲染层设计的 API**：渲染层调用 `.get()` 会走 `bridge.invoke()`（发一条 `subscribe-{channel}` 事件，等待对应的 `subscribe.callback-{channel}{id}` 响应），main 进程侧 `ConfigStorage.interceptor(configFile)`（`initStorage.ts`）注册了对应的 provider 来应答——这条链路完整、正确，渲染层调用完全没问题。
+
+但**从主进程代码内部调用 `ConfigStorage.get()`，同样会走 `.invoke()`**，而 `src/common/adapter/main.ts` 里主进程的 `bridge.adapter({emit, on})` 把 `emit` 重写成了 `win.webContents.send(...)`（发给渲染层）+ `broadcastToAll(...)`（WebSocket）——**主进程自己发起的 `.invoke()` 请求会被发送到渲染层，而不是主进程本地已经注册好的 provider**。没有任何渲染层代码给 `agent.config.storage.get` 注册 provider，请求发出去后石沉大海，`.invoke()` 返回的 Promise **永远不会 resolve**（不是抛错，`.catch()` 完全捕获不到）。
+
+`WebuiService.getClientEnterpriseServerOrigin()`（本轮 8 秒延迟的直接原因）和 `oneModelInfo.ts` 的 `listOneAgentSelectableModels()`/`resolveTProviderFromOneCompoundId()`（同一个坏模式，之前没人发现过在卡）都在主进程代码里直接调用了 `ConfigStorage.get()`。`oneModelInfo.ts` 里甚至有一行注释"Prefer ConfigStorage (intercepted) so updates are reflected immediately"——**写这段代码的人以为主进程调用 `ConfigStorage.get()` 会走本地拦截、更快更新，实际上完全相反：根本不会返回**。
+
+项目里正确的主进程内部读配置方式是 `ProcessConfig`（`src/process/utils/initStorage.ts` 导出的 `export const ProcessConfig = configFile`，是同一份 `JsonFileBuilder` 直接文件读写，不经过任何 IPC/bridge），`AcpDetector.ts`、`acp/index.ts`、`acpConversationBridge.ts`、`applicationBridge.ts`、`conversationBridge.ts`、`memoryBridge.ts` 等文件里都是这么用的——这才是主进程代码应该遵循的既有模式。
+
+## 修复
+
+把 `WebuiService.ts` 和 `oneModelInfo.ts` 里全部主进程侧 `ConfigStorage.get(...)` 调用改成 `ProcessConfig.get(...)`。CDP 手动重放验证：修复前稳定超时（`TIMEOUT_10s`），修复后 **8ms 内正常返回**（`GOT_RESPONSE in 8ms`）。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/bridge/services/WebuiService.ts` | `getClientEnterpriseServerOrigin()` 里 2 处 `ConfigStorage.get` → `ProcessConfig.get`；import 从 `@/common/config/storage` 改成 `@process/utils/initStorage`；清理全部诊断用 `console.log` |
+| `src/process/agent/one/oneModelInfo.ts` | 2 处 `ConfigStorage.get('model.config')` → `ProcessConfig.get(...)`，同样的坏模式，顺手修掉 |
+| `src/process/bridge/webuiBridge.ts` | 清理诊断用 `console.log`（provider 入口标记） |
+| `src/renderer/utils/ensureDesktopWebui.ts` | 清理诊断用 `console.log`（逐步计时） |
+
+## 排查方法论补充
+
+1. **CDP `Runtime.evaluate` 直接重放一条 IPC 请求，是隔离"UI 触发时机"和"IPC 调用链本身"两类问题的利器**——本项目 dev 模式默认开 `remote-debugging-port`（`configureChromium.ts`），`curl http://127.0.0.1:PORT/json` 拿到目标页面的 `webSocketDebuggerUrl`，用 Node 的 `ws` 包连上去发 `{method:"Runtime.evaluate", params:{expression, awaitPromise:true}}`，就能在不点任何 UI 按钮的情况下精确复现和调试一次 IPC 调用。比"改代码加日志→重新构建→点 UI→翻日志"这个循环快得多，尤其适合"怀疑是某条具体调用链的问题，而不是触发路径的问题"这种场景。
+2. **诊断信息"卡在哪一步"的标准做法：在函数体每个 await 之间插日志，看最后一条打印到哪一行**——本次真正定位靠的是发现"connect 到 provider 的入口能触发，但函数体内部任何一行后续日志都不出现"，直接把范围锁定到 `await ConfigStorage.get(...)` 这一行本身，而不是它前后的任何逻辑。
+3. **"对照测试"（换一个明确正常工作的输入，看是否复现同样的症状）是排除"是不是这个具体参数有问题"的最快方法**——加一行 `await ConfigStorage.get('language')`（明确到处用、正常工作的 key）立刻证明了问题不在 `WEBUI_DEPLOYMENT_ROLE_KEY` 这个 key 本身，而在 `ConfigStorage.get()` 这个调用方式，从主进程发起时就是坏的。
+4. **同一个 IPC/RPC 抽象库，在"发起方"和"响应方"处于同一个进程 vs 不同进程时，语义可能完全不同——不能假设"反正都是同一套 API，行为应该一致"**。`bridge.buildProvider()` 生成的 `{provider, invoke}` 在设计上是给"渲染层发起、主进程响应"这个方向用的；反过来在主进程内部同时调用 `provider()`（正确：本地拦截）和 `invoke()`（错误：会被当成"要发给渲染层"的请求）就会出问题。排查这类"看起来到处都用同一个 API，但在某个特定调用点上莫名其妙不工作"的 bug 时，要去确认这次调用的"进程上下文"是否跟这个 API 原本设计的调用方向一致。
+5. **代码注释里的"为什么这么写"，如果作者的理解本身是错的，会把后来者也带偏**——`oneModelInfo.ts` 里"Prefer ConfigStorage (intercepted) so updates are reflected immediately"这条注释，反映了写代码的人对这个 API 跨进程语义的误解，而且这个误解被写成了看起来很有道理的性能优化理由，容易让后续维护者不去怀疑这一行代码。遇到"这个函数一直卡住不报错也不返回"的问题时，不要因为代码里有一条听起来合理的注释就假设这行代码本身没问题。

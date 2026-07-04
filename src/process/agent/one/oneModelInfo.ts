@@ -4,9 +4,9 @@
 
 import type { AcpModelInfo } from '@/common/types/acpTypes';
 import type { IProvider, TProviderWithModel } from '@/common/config/storage';
-import { ConfigStorage } from '@/common/config/storage';
 import { getProviderAuthType } from '@/common/utils/platformAuthType';
 import { mainLog, mainWarn } from '@process/utils/mainLogger';
+import { ProcessConfig } from '@process/utils/initStorage';
 
 const COMPOUND_SEP = '::one::';
 
@@ -27,8 +27,11 @@ function isOpenAiCompatibleForOne(pwm: TProviderWithModel): boolean {
 }
 
 export async function listOneAgentSelectableModels(): Promise<Array<{ id: string; label: string }>> {
-  // Prefer ConfigStorage (intercepted) so updates are reflected immediately.
-  const providers = (await ConfigStorage.get('model.config').catch((): undefined => undefined)) as IProvider[] | undefined;
+  // ConfigStorage.get() routes through the bridge's renderer-oriented invoke()/provider()
+  // IPC mechanism and never resolves when called from main-process code (no renderer
+  // provides this channel). Use ProcessConfig (same underlying config file, read directly,
+  // no IPC) instead — see WebuiService.getClientEnterpriseServerOrigin() for the full story.
+  const providers = (await ProcessConfig.get('model.config').catch((): undefined => undefined)) as IProvider[] | undefined;
   if (!Array.isArray(providers)) return [];
   const out: Array<{ id: string; label: string }> = [];
   for (const p of providers) {
@@ -54,7 +57,7 @@ export async function listOneAgentSelectableModels(): Promise<Array<{ id: string
 export async function resolveTProviderFromOneCompoundId(modelId: string): Promise<TProviderWithModel | null> {
   const parsed = parseOneCompoundModelId(modelId);
   if (!parsed) return null;
-  const providers = (await ConfigStorage.get('model.config').catch((): undefined => undefined)) as IProvider[] | undefined;
+  const providers = (await ProcessConfig.get('model.config').catch((): undefined => undefined)) as IProvider[] | undefined;
   const p = providers?.find((x) => x.id === parsed.providerId);
   if (!p || p.enabled === false) return null;
   if (!p.model?.includes(parsed.modelName)) return null;

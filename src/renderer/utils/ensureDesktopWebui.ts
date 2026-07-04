@@ -15,21 +15,13 @@ export async function ensureDesktopWebuiRunning(): Promise<void> {
     return;
   }
 
-  // TEMP DIAGNOSTIC (2026-07-04): renderer console is always safe (no bridge patch).
-  // Remove once the ~8s Issue-create delay is root-caused.
-  const t0 = Date.now();
   const status = await webui.getStatus.invoke();
-  console.log(`[ensure-diag] getStatus: ${Date.now() - t0}ms, running=${status.success && status.data?.running}`);
   if (status.success && status.data?.running) {
-    const t1 = Date.now();
     await syncBrowserWebuiSessionToDesktop();
-    console.log(`[ensure-diag] syncBrowserWebuiSessionToDesktop: ${Date.now() - t1}ms`);
     return;
   }
 
-  const t2 = Date.now();
   const startResult = await webui.start.invoke({});
-  console.log(`[ensure-diag] start: ${Date.now() - t2}ms, success=${startResult.success}`);
   if (!startResult.success) {
     throw new Error('WEBUI_NOT_RUNNING');
   }
