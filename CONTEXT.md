@@ -3035,3 +3035,30 @@ fork 与上游修复前完全一致的两处 bug:no-auth 分支删了 sessionSto
 - `D:\aionui-m0\AionUi`:v2.1.28 源码,bun 已装依赖,dev 可起(electron dist resources 已放 aioncore)
 - `C:\Users\allenzhao\AppData\Local\Temp\claude\aioncore`:AionCore v0.1.42 浅克隆(源码对照用)
 - 下一步 M1:渠道对齐实测(飞书/微信/钉钉/Telegram 配对全流程)+ 配对码手动输入兜底差距确认
+
+---
+
+# 2026-07-05 第十轮 — M0 源码闭环补验 + fork 建立 + M1 渠道差距分析
+
+## 1. AionCore 源码构建闭环(用户质疑"为何用二进制"后补验,✅)
+
+rustup+MSVC 就绪,v0.1.41 源码 `cargo build --release` 首编 47m46s → 自编 aioncore.exe(73MB)独立实例 → claude CLI 真实回复 SELFBUILD-OK。**fork 加 crate 的技术前提全部就绪**。分工:M0/M1 用官方二进制,M2 起全部用自有 fork 源码构建。报告见 `docs/tech/v2-m0-report.md` 第 6 节。
+
+## 2. fork 仓库(用户拍板:gaogg521 账号、公开)
+
+- **gaogg521/AionCore**:已 fork,`one-main` 分支=v0.1.41 基线,已设默认分支(main 留作上游镜像);本地 `D:\aionui-m0\AionCore` 在 one-main 跟踪 origin。
+- **gaogg521/AionUi**:旧 fork 已存在(停在 6-22)。同步被挡:gh token 缺 workflow scope,**待用户跑 `gh auth refresh -s workflow -h github.com`** 后:`gh repo sync` → 从 v2.1.28 tag 建 one-main → 设默认分支(与 AionCore 同法)。
+
+## 3. M1 渠道差距分析(✅,文档 docs/tech/v2-m1-channel-gap.md)
+
+- 飞书/钉钉/Telegram:凭据/连接/配对逐项一致,**直接用上游零移植**。
+- 微信:路线不同(我们=本地 bridge 个人号形态;上游=官方 iLink Bot)。M1-3 实测后决策;不满足则把 WeixinMonitor 移植为 Rust ChannelPlugin(渠道域唯一可能移植项,参照 dingtalk 约 1-2k 行)。
+- 企微:上游前端有完整 WecomConfigForm 但后端无实现(占位)——双方均无,如需求成立 M2+ 自有 crate 实现(前端白送)。
+- **配对码手动输入兜底(交付约定):上游没有** → M4 在上游 5 个 ConfigForm 叠加共享组件(表单结构高度一致,一个组件全渠道复用)。
+- 助手/模型绑定:上游每渠道可绑助手+模型(assistantBinding.ts),比我们的配置键更强,零损失。
+
+## 待办(M1 收尾)
+
+1. 用户跑 gh auth refresh → 我完成 AionUi fork 基线(M1-2)。
+2. M1-3 真实配对 E2E:用户在上游实例(桌面窗口或 :25908)渠道设置自行填凭据(飞书/Telegram/微信 iLink),验证配对+对话+流式回写全流程;微信路线是否满足个人号需求是关键判断点。
+3. 会话限额注意:渠道分析 agent 曾撞限额(reset 3am),后改主会话精准检索完成。
