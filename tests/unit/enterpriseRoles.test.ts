@@ -48,7 +48,8 @@ describe('resolveEnterpriseTenantDisplayLabel', () => {
 
 describe('resolveEnterpriseEditionPath', () => {
   it('routes joined users to workspace', () => {
-    expect(resolveEnterpriseEditionPath(true)).toBe('/sessions');
+    // 90305cfe: default landing changed from session list (/sessions) to chat input (/guid)
+    expect(resolveEnterpriseEditionPath(true)).toBe('/guid');
   });
 
   it('routes not-joined users to join page', () => {
@@ -62,7 +63,7 @@ describe('resolvePostLoginRedirectPath', () => {
   });
 
   it('sends joined users away from join path to workspace', () => {
-    expect(resolvePostLoginRedirectPath('/enterprise/join', 'member', 'tenant-a')).toBe('/sessions');
+    expect(resolvePostLoginRedirectPath('/enterprise/join', 'member', 'tenant-a')).toBe('/guid');
   });
 
   it('keeps not-joined users on join path', () => {

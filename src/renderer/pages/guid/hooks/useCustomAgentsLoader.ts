@@ -42,11 +42,15 @@ export const useCustomAgentsLoader = ({
     ])
       .then(([agents, extAssistants]) => {
         if (!isActive) return;
-        const list = (agents || []).filter((agent: AcpBackendConfig) => {
-          // Keep preset assistants visible on Guid homepage even when ACP detection
-          // has not produced custom IDs yet (startup race / transient detection failure).
-          if (agent.isPreset) return true;
-          return availableCustomAgentIds.has(agent.id);
+        // Keep every configured agent visible. Preset assistants never depend on
+        // detection; CLI-backed custom agents whose backend was not detected are
+        // annotated (not dropped) so the UI can show "unavailable" with a repair
+        // entry instead of silently disappearing (upstream #3395 class).
+        // In-place assignment is safe: `agents` is a fresh deserialized copy
+        // from ConfigStorage, never shared with other consumers.
+        const list = (agents || []).map((agent: AcpBackendConfig) => {
+          agent.backendUnavailable = !agent.isPreset && !availableCustomAgentIds.has(agent.id);
+          return agent;
         });
 
         // Merge extension-contributed assistants (they are preset assistants that don't need

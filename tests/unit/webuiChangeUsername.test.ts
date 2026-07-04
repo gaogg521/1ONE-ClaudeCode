@@ -117,6 +117,15 @@ describe('UserRepository.updateUsername', () => {
 describe('WebuiService.changeUsername', () => {
   beforeEach(() => {
     vi.resetModules();
+    // WebuiService imports ProcessConfig from initStorage (33ce7b1 — main-process
+    // config must not go through the renderer-only ConfigStorage bridge), and
+    // initStorage's module init requires registered platform services. Stub it.
+    vi.doMock('@process/utils/initStorage', () => ({
+      ProcessConfig: {
+        get: vi.fn(async () => null),
+        set: vi.fn(async () => undefined),
+      },
+    }));
   });
 
   const makeAdminUser = (username = 'admin') => ({

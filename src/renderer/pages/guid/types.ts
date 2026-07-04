@@ -21,6 +21,8 @@ export type AvailableAgent = {
   presetAgentType?: PresetAgentType | string;
   isExtension?: boolean;
   extensionName?: string;
+  /** Configured but backing CLI not detected — shown dimmed with a repair entry instead of disappearing */
+  unavailable?: boolean;
 };
 
 /**

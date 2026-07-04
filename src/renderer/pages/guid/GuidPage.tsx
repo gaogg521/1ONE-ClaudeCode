@@ -256,6 +256,13 @@ const GuidPage: React.FC = () => {
     ]
   );
 
+  // Self-repair for undetected CLI agents: re-run detection; if the CLI is back
+  // (installed / PATH fixed), the pill becomes selectable again automatically.
+  const handleRepairAgent = useCallback(() => {
+    Message.info(t('guid.agentRedetecting', { defaultValue: 'Re-detecting agents...' }));
+    void agentSelection.refreshCustomAgents();
+  }, [agentSelection.refreshCustomAgents, t]);
+
   const handleSelectAssistant = useCallback(
     (assistantId: string) => {
       agentSelection.setSelectedAgentKey(assistantId);
@@ -661,6 +668,8 @@ const GuidPage: React.FC = () => {
               selectedAgentKey={agentSelection.selectedAgentKey}
               getAgentKey={agentSelection.getAgentKey}
               onSelectAgent={handleSelectAgentFromPillBar}
+              unavailableAgents={agentSelection.unavailableCustomAgents}
+              onRepairAgent={handleRepairAgent}
             />
           ) : null}
 

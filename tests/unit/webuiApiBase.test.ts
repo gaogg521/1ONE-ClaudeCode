@@ -28,6 +28,15 @@ vi.mock('@/renderer/utils/syncBrowserWebuiSession', () => ({
   getDesktopWebuiBearerToken: vi.fn(() => 'browser-synced-token'),
 }));
 
+// ConfigStorage.get from a test env has no bridge provider and never resolves —
+// getClientEnterpriseServerOrigin (client-mode routing) would hang the test.
+vi.mock('@/common/config/storage', () => ({
+  ConfigStorage: {
+    get: vi.fn(async () => null),
+    set: vi.fn(async () => undefined),
+  },
+}));
+
 vi.mock('@/renderer/utils/rememberEnterpriseApiOrigin', () => ({
   readEnterpriseApiOrigins: vi.fn(async () => [
     'http://localhost:25809',

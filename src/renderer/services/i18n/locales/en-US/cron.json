@@ -96,7 +96,9 @@
       "existingConversation": "Ongoing conversation",
       "newConversationHint": "Start fresh on every run",
       "existingConversationHint": "Keep building in one conversation",
-      "executionModeEditHint": "Execution mode cannot be changed after creation. Delete and recreate the task to switch modes."
+      "executionModeEditHint": "Execution mode cannot be changed after creation. Delete and recreate the task to switch modes.",
+      "customCronPlaceholder": "5-field cron expression, e.g. */15 * * * * or 0 9 1 * *",
+      "customCronRequired": "Cron expression is required"
     },
     "freq": {
       "manual": "Manual",

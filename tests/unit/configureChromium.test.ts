@@ -148,7 +148,9 @@ describe('configureChromium CDP (lightweight mock + file sandbox)', () => {
 
     expect(ctx.mod.cdpStartupEnabled).toBe(false);
     expect(ctx.mod.cdpPort).toBeNull();
-    expect(ctx.appendSwitch).not.toHaveBeenCalled();
+    // disable-features=DIPS is appended unconditionally (main-process freeze fix,
+    // c4a37d0) — only assert that no CDP switch was added.
+    expect(ctx.appendSwitch).not.toHaveBeenCalledWith('remote-debugging-port', expect.anything());
   });
 
   it('Allows explicit CDP enablement via environment variable in packaged builds', async () => {

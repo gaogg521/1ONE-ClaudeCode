@@ -90,6 +90,27 @@ export async function getDefaultGeminiModel(): Promise<TProviderWithModel> {
 }
 
 /**
+ * Resolve the Gemini model to use, falling back to the Google-Auth placeholder
+ * when no provider is configured or the configured provider was deleted
+ * (upstream #2050 — opening/creating a conversation must not crash on a
+ * missing provider entry).
+ */
+async function resolveGeminiModel(): Promise<TProviderWithModel> {
+  try {
+    return await getDefaultGeminiModel();
+  } catch {
+    return {
+      id: 'gemini-placeholder',
+      name: 'Gemini',
+      useModel: 'default',
+      platform: 'gemini-with-google-auth' as TProviderWithModel['platform'],
+      baseUrl: '',
+      apiKey: '',
+    };
+  }
+}
+
+/**
  * Build ICreateConversationParams for a CLI agent.
  * The backend will automatically fill in derived fields (gateway.cliPath, runtimeValidation, etc.).
  * [BUG-3 fix]: callers must invoke this inside a try block because getDefaultGeminiModel may throw.
@@ -153,7 +174,7 @@ export async function buildPresetAssistantParams(
   });
 
   const type = getConversationTypeForPreset(presetAgentType);
-  const model = type === 'gemini' ? await getDefaultGeminiModel() : ({} as TProviderWithModel);
+  const model = type === 'gemini' ? await resolveGeminiModel() : ({} as TProviderWithModel);
 
   return buildAgentConversationParams({
     backend: agent.backend,

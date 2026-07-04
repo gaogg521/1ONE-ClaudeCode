@@ -452,16 +452,30 @@ export class CronService {
           break;
         }
 
-        const timer = new Cron(
-          schedule.expr,
-          {
-            timezone: schedule.tz,
-            paused: false,
-          },
-          () => {
-            void this.executeJob(job);
-          }
-        );
+        // croner throws on invalid expressions (e.g. AI-generated cron from
+        // chat). One bad job must not abort service init and kill every other
+        // scheduled task — record the error on the job and keep going.
+        // (Upstream AionUi #2231 fixed the same failure mode.)
+        let timer: Cron;
+        try {
+          timer = new Cron(
+            schedule.expr,
+            {
+              timezone: schedule.tz,
+              paused: false,
+            },
+            () => {
+              void this.executeJob(job);
+            }
+          );
+        } catch (error) {
+          job.state.nextRunAtMs = undefined;
+          job.state.lastStatus = 'skipped';
+          job.state.lastError = `Invalid cron expression "${schedule.expr}": ${error instanceof Error ? error.message : String(error)}`;
+          await this.repo.update(job.id, { state: job.state });
+          this.emitter.emitJobUpdated(job);
+          break;
+        }
         this.timers.set(job.id, timer);
 
         // Sync nextRunAtMs with actual next run time and notify frontend

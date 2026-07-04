@@ -16,6 +16,7 @@ import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
 import type { GeminiAgentManager } from '@process/task/GeminiAgentManager';
 import type { TProviderWithModel } from '@/common/config/storage';
 import { prepareFirstMessage } from '@process/task/agentUtils';
+import { expandSlashSkillInvocation } from '@process/services/agentToolkit/slashSkillInvocation';
 import { copyFilesToDirectory } from '@process/utils';
 import { compressImagesInPlace } from '@process/services/imageCompress';
 import { buildPromptAugmentationPrefix, composeAgentPrompt } from '@process/services/promptAugmentation';
@@ -162,7 +163,16 @@ export async function sendConversationMessage(
     workspaceFiles.length > 0 ? buildDisplayMessage(textOnly, workspaceFiles, task.workspace) : textOnly;
 
   let agentContent = resolvedInput;
-  if (other.injectSkills?.length) {
+  // Explicit slash-skill invocation (/skill-name [args]) — picked from the
+  // slash menu or typed directly. Expands deterministically in the agent
+  // prompt while the displayed message keeps the "/skill-name" the user typed.
+  // GeminiAgentManager exposes enabledSkills directly; AcpAgentManager keeps it on options.
+  const managerWithSkills = task as { enabledSkills?: string[]; options?: { enabledSkills?: string[] } };
+  const conversationSkills = managerWithSkills.enabledSkills ?? managerWithSkills.options?.enabledSkills;
+  const slashSkillContent = await expandSlashSkillInvocation(textOnly, conversationSkills);
+  if (slashSkillContent) {
+    agentContent = slashSkillContent;
+  } else if (other.injectSkills?.length) {
     agentContent = await prepareFirstMessage(textOnly, {
       enabledSkills: other.injectSkills,
     });

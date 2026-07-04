@@ -48,15 +48,15 @@ describe('initSchema', () => {
     expect(firstExecIndex).toBeGreaterThan(busyTimeoutIndex);
   });
 
-  it('enables WAL journal mode', () => {
+  it('uses DELETE journal mode (WAL caused repeated index corruption — see c4a37d0)', () => {
     initSchema(driver);
 
-    expect(driver.pragma).toHaveBeenCalledWith('journal_mode = WAL');
+    expect(driver.pragma).toHaveBeenCalledWith('journal_mode = DELETE');
   });
 
-  it('continues if WAL mode fails', () => {
+  it('continues if journal mode pragma fails', () => {
     driver.pragma.mockImplementation((sql: string) => {
-      if (sql === 'journal_mode = WAL') throw new Error('WAL not supported');
+      if (sql === 'journal_mode = DELETE') throw new Error('pragma not supported');
     });
 
     expect(() => initSchema(driver)).not.toThrow();

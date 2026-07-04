@@ -244,17 +244,18 @@ class OpenClawAgentManager extends BaseAgentManager<OpenClawAgentManagerData> {
       }
 
       let agentContent = data.agentPrompt ?? data.agentContent ?? data.content;
-      if (this.isFirstMessage && !data.agentContent && !data.agentPrompt) {
+      if (this.isFirstMessage) {
+        // Inject on top of the actual send payload — skipping injection when
+        // agentPrompt/agentContent is present would drop rules and skills for
+        // every message routed through sendConversationMessage.
         agentContent = await applyAgentToolkitFirstMessage(
-          data.content,
+          agentContent,
           {
             presetContext: this.options.presetContext,
             enabledSkills: this.options.enabledSkills,
           },
-          { backend: 'openclaw-gateway', customWorkspace: this.options.customWorkspace, fullSkillContent: true }
+          { backend: 'openclaw-gateway', customWorkspace: this.options.customWorkspace }
         );
-        this.isFirstMessage = false;
-      } else if (this.isFirstMessage) {
         this.isFirstMessage = false;
       }
 

@@ -55,6 +55,8 @@ export type GuidAgentSelectionResult = {
   getEffectiveAgentType: (agentInfo: { backend: AcpBackend; customAgentId?: string } | undefined) => EffectiveAgentInfo;
   refreshCustomAgents: () => Promise<void>;
   customAgentAvatarMap: Map<string, string | undefined>;
+  /** Configured CLI agents whose backend was not detected — for the pill bar's "unavailable" entries */
+  unavailableCustomAgents: AvailableAgent[];
 };
 
 type UseGuidAgentSelectionOptions = {
@@ -139,6 +141,24 @@ export const useGuidAgentSelection = ({
     availableCustomAgentIds,
   });
 
+  // Configured CLI agents whose backend was not detected. Rendered in the pill
+  // bar as dimmed "unavailable" entries with a re-detect action, instead of
+  // silently disappearing. Kept separate from availableAgents so selection
+  // persistence and fallback logic never pick them.
+  const unavailableCustomAgents = useMemo<AvailableAgent[]>(
+    () =>
+      customAgents
+        .filter((agent) => !agent.isPreset && agent.backendUnavailable && agent.enabled !== false)
+        .map((agent) => ({
+          backend: 'custom' as AcpBackend,
+          name: agent.name,
+          customAgentId: agent.id,
+          avatar: agent.avatar,
+          unavailable: true,
+        })),
+    [customAgents]
+  );
+
   const { resolvePresetRulesAndSkills, resolvePresetContext, resolvePresetAgentType, resolveEnabledSkills } =
     usePresetAssistantResolver({ customAgents, localeKey });
 
@@ -162,7 +182,10 @@ export const useGuidAgentSelection = ({
       );
       if (foundInAvailable) return foundInAvailable;
 
-      const assistant = customAgents.find((a) => a.id === customAgentId);
+      // Only assistants (prompt-based presets) may synthesize an entry here.
+      // CLI-backed custom agents that reach this fallback are undetected —
+      // synthesizing isPreset:true for them would misroute selection.
+      const assistant = customAgents.find((a) => a.id === customAgentId && a.isPreset);
       if (assistant) {
         return {
           backend: 'custom' as AcpBackend,
@@ -570,5 +593,6 @@ export const useGuidAgentSelection = ({
     getEffectiveAgentType,
     refreshCustomAgents,
     customAgentAvatarMap,
+    unavailableCustomAgents,
   };
 };

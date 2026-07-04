@@ -17,6 +17,8 @@
 
 - **架构与约束**
   - `docs/tech/architecture.md`：三进程架构、边界、IPC 约束
+  - `docs/tech/skills-invocation.md`：技能调用机制（catalog 数据源、三条注入路径、关键不变量、排查入口）——改助手/技能相关代码前必读
+  - `docs/tech/v2-architecture-comparison.md`：v2 架构迁移《对比清单》决策文档（五能力域对比、三策略选项、M0-M5 里程碑）——做架构迁移相关工作前必读
   - `docs/conventions/file-structure.md`：目录结构与拆分规则（单目录≤10子项）
   - `docs/CODE_STYLE.md`：代码风格与格式化规范
 

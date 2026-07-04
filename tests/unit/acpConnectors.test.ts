@@ -288,7 +288,7 @@ describe('connectCodex - Windows diagnostics', () => {
       'codex.cmd',
       ['--version'],
       expect.objectContaining({
-        env: { PATH: '/usr/bin' },
+        env: expect.objectContaining({ PATH: '/usr/bin' }),
         shell: true,
         timeout: 5000,
         windowsHide: true,
@@ -300,7 +300,7 @@ describe('connectCodex - Windows diagnostics', () => {
       'codex.cmd',
       ['login', 'status'],
       expect.objectContaining({
-        env: { PATH: '/usr/bin' },
+        env: expect.objectContaining({ PATH: '/usr/bin' }),
         shell: true,
         timeout: 5000,
         windowsHide: true,

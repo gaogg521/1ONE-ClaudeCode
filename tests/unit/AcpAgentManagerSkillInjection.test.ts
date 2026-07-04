@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Track calls to prepareFirstMessageWithSkillsIndex
-const { mockPrepareFirstMessage, mockAgentSendMessage } = vi.hoisted(() => ({
+const { mockPrepareFirstMessage, mockAgentSendMessage, mockSkillsIndexRefresh } = vi.hoisted(() => ({
   mockPrepareFirstMessage: vi.fn(async (content: string) => `[injected] ${content}`),
   mockAgentSendMessage: vi.fn(async () => ({ success: true })),
+  mockSkillsIndexRefresh: vi.fn(async (content: string) => `[index-refresh] ${content}`),
 }));
 
 // --- Module mocks ---
@@ -126,6 +127,7 @@ vi.mock('@process/task/agentUtils', () => ({
     }
     return content;
   }),
+  prepareSkillsIndexRefresh: mockSkillsIndexRefresh,
 }));
 
 vi.mock('@process/services/agentToolkit/config', () => ({
@@ -156,6 +158,7 @@ vi.mock('@process/agent/acp', () => ({
 }));
 
 import AcpAgentManager from '@process/task/AcpAgentManager';
+import { SKILLS_INDEX_REFRESH_INTERVAL } from '@process/services/agentToolkit/firstMessage';
 
 function createManager(
   overrides: {
@@ -178,7 +181,11 @@ function createManager(
   return manager;
 }
 
-async function sendFirstMessage(manager: InstanceType<typeof AcpAgentManager>, content = 'Hello') {
+async function sendFirstMessage(
+  manager: InstanceType<typeof AcpAgentManager>,
+  content = 'Hello',
+  agentPrompt?: string
+) {
   // Stub initAgent to set up a mock agent without actual process bootstrapping
   const mockAgent = {
     sendMessage: mockAgentSendMessage,
@@ -192,7 +199,7 @@ async function sendFirstMessage(manager: InstanceType<typeof AcpAgentManager>, c
   // Override initAgent to just return the already-bootstrapped agent
   vi.spyOn(manager, 'initAgent').mockResolvedValue(mockAgent as never);
 
-  return manager.sendMessage({ content, msg_id: 'msg-1' });
+  return manager.sendMessage({ content, msg_id: 'msg-1', ...(agentPrompt !== undefined && { agentPrompt }) });
 }
 
 describe('AcpAgentManager — first-message skill injection', () => {
@@ -250,6 +257,41 @@ describe('AcpAgentManager — first-message skill injection', () => {
     });
   });
 
+  it('applies injection ON TOP of agentPrompt when present (regression: agentPrompt used to bypass injection)', async () => {
+    const manager = createManager({
+      backend: 'claude',
+      customWorkspace: false,
+      presetContext: 'You are helpful.',
+    });
+
+    await sendFirstMessage(manager, 'Hello', '[augmented] Hello with attachments');
+
+    const sentContent = mockAgentSendMessage.mock.calls[0][0].content as string;
+    // Rules must be injected into the payload that is actually sent (agentPrompt),
+    // not into data.content which is then discarded.
+    expect(sentContent).toContain('[Assistant Rules');
+    expect(sentContent).toContain('You are helpful.');
+    expect(sentContent).toContain('[augmented] Hello with attachments');
+  });
+
+  it('applies index injection on top of agentPrompt for non-native backend', async () => {
+    const manager = createManager({
+      backend: 'opencode',
+      customWorkspace: false,
+      presetContext: 'Some rules',
+      enabledSkills: ['pdf'],
+    });
+
+    await sendFirstMessage(manager, 'Hello', '[augmented] Hello');
+
+    expect(mockPrepareFirstMessage).toHaveBeenCalledWith('[augmented] Hello', {
+      presetContext: 'Some rules',
+      enabledSkills: ['pdf'],
+    });
+    const sentContent = mockAgentSendMessage.mock.calls[0][0].content as string;
+    expect(sentContent).toBe('[injected] [augmented] Hello');
+  });
+
   it('skips presetContext injection when presetContext is undefined (native path)', async () => {
     const manager = createManager({
       backend: 'claude',
@@ -262,5 +304,54 @@ describe('AcpAgentManager — first-message skill injection', () => {
     const sentContent = mockAgentSendMessage.mock.calls[0][0].content as string;
     // No preset context → content should be passed through unchanged
     expect(sentContent).toBe('Test message');
+  });
+});
+
+describe('AcpAgentManager — periodic skills-index refresh', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('re-injects a lightweight index every SKILLS_INDEX_REFRESH_INTERVAL messages (index-injection backend)', async () => {
+    const manager = createManager({
+      backend: 'opencode',
+      presetContext: 'Some rules',
+      enabledSkills: ['pdf'],
+    });
+
+    await sendFirstMessage(manager, 'first');
+
+    // Messages 2..INTERVAL do not refresh yet
+    for (let i = 0; i < SKILLS_INDEX_REFRESH_INTERVAL - 1; i++) {
+      await manager.sendMessage({ content: `msg-${i}`, msg_id: `msg-${i}` });
+    }
+    expect(mockSkillsIndexRefresh).not.toHaveBeenCalled();
+
+    // The INTERVAL-th message after the first triggers the refresh
+    await manager.sendMessage({ content: 'trigger', msg_id: 'msg-trigger' });
+    expect(mockSkillsIndexRefresh).toHaveBeenCalledTimes(1);
+    const sentContent = mockAgentSendMessage.mock.calls.at(-1)?.[0].content as string;
+    expect(sentContent).toBe('[index-refresh] trigger');
+
+    // Counter resets after a successful refresh — next message is plain again
+    await manager.sendMessage({ content: 'after', msg_id: 'msg-after' });
+    expect(mockSkillsIndexRefresh).toHaveBeenCalledTimes(1);
+    expect(mockAgentSendMessage.mock.calls.at(-1)?.[0].content).toBe('after');
+  });
+
+  it('never refreshes for a native-skill backend (nothing was index-injected)', async () => {
+    const manager = createManager({
+      backend: 'claude',
+      customWorkspace: false,
+      presetContext: 'Some rules',
+      enabledSkills: ['pdf'],
+    });
+
+    await sendFirstMessage(manager, 'first');
+    for (let i = 0; i < SKILLS_INDEX_REFRESH_INTERVAL + 2; i++) {
+      await manager.sendMessage({ content: `msg-${i}`, msg_id: `msg-${i}` });
+    }
+
+    expect(mockSkillsIndexRefresh).not.toHaveBeenCalled();
   });
 });

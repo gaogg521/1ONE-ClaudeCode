@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { AcpSkillManager } from '@process/task/AcpSkillManager';
+import { AcpSkillManager, logSkillEvent } from '@process/task/AcpSkillManager';
 import { getAgentToolkitConfig } from './config';
 
 let prefetchPromise: Promise<void> | null = null;
@@ -25,6 +25,6 @@ export function prefetchAgentToolkitSkillsIndex(): void {
     const skillManager = AcpSkillManager.getInstance();
     await skillManager.discoverSkills();
   })().catch((error) => {
-    console.warn('[agentToolkit] prefetchSkillsIndex failed:', error);
+    logSkillEvent('prefetchSkillsIndex failed', error);
   });
 }

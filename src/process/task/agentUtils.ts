@@ -155,6 +155,31 @@ For example:
 }
 
 /**
+ * 会话中途的轻量技能索引刷新。
+ * CLI（Claude/Codex 等）自行压缩上下文时可能把首条消息注入的技能索引挤掉，
+ * 周期性地在用户消息前重附一次索引，保证长对话中 agent 仍知道有哪些技能可用。
+ * 只附索引，不重复助手规则（规则体积大，且多数 CLI 压缩会保留 system 级内容）。
+ *
+ * Lightweight mid-session skills-index refresh. CLI-side context compaction
+ * can drop the index injected with the first message; periodically re-attach
+ * it so long conversations keep skill awareness. Index only — assistant rules
+ * are not repeated (they are large, and most CLIs preserve system content).
+ *
+ * @returns 刷新后的消息内容，无技能可注入时返回 null
+ */
+export async function prepareSkillsIndexRefresh(content: string, config: FirstMessageConfig): Promise<string | null> {
+  const skillManager = AcpSkillManager.getInstance(config.enabledSkills);
+  await skillManager.discoverSkills(config.enabledSkills);
+  if (!skillManager.hasAnySkills()) return null;
+
+  const skillsIndex = skillManager.getSkillsIndex();
+  if (skillsIndex.length === 0) return null;
+
+  const indexText = buildSkillsIndexText(skillsIndex);
+  return `[Skills Index Reminder — these skills are still available]\n${indexText}\n\n[User Request]\n${content}`;
+}
+
+/**
  * 构建系统指令（仅 skills 索引，不注入全文 - 用于 Gemini）
  * Build system instructions with skills INDEX only (no full content - for Gemini)
  *

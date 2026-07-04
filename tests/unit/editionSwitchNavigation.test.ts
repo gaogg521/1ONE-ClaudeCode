@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { navigateAfterEditionSwitch } from '@/renderer/utils/editionSwitchNavigation';
 
 describe('navigateAfterEditionSwitch', () => {
-  it('routes desktop operator on joined instance to sessions instead of join', () => {
+  it('routes desktop operator on joined instance to workspace instead of join', () => {
     const navigate = vi.fn();
     navigateAfterEditionSwitch({
       next: 'enterprise',
@@ -13,7 +13,8 @@ describe('navigateAfterEditionSwitch', () => {
       isAuthenticated: true,
       isDesktopOperator: true,
     });
-    expect(navigate).toHaveBeenCalledWith('/sessions', undefined);
+    // 90305cfe: default landing changed from session list (/sessions) to chat input (/guid)
+    expect(navigate).toHaveBeenCalledWith('/guid', undefined);
   });
 
   it('routes unjoined desktop instance to join for regular members', () => {

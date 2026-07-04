@@ -14,10 +14,38 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { existsSync } from 'fs';
+import { existsSync, appendFile, mkdirSync } from 'fs';
 import { getSkillsDir, getBuiltinSkillsCopyDir, getAutoSkillsDir } from '@process/utils/initStorage';
 import { ExtensionRegistry } from '@process/extensions';
 import { readSkillMetadata } from '@process/extensions/resolvers/utils/skillMetadata';
+import { getPlatformServices } from '@/common/platform';
+
+// File-based logging instead of console.*: this module runs in the main process,
+// where console.* is patched by @office-ai/platform into a synchronous broadcast
+// (bridge.adapter.emit → win.webContents.send × N). Skill discovery scans the
+// filesystem and can emit many log lines — see CLAUDE.md "主进程 console 禁令".
+const SKILL_LOGS_DIR = (() => {
+  try {
+    const dir = getPlatformServices().paths.getLogsDir();
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  } catch {
+    return '';
+  }
+})();
+
+/** Append a line to logs/skills.log (async, best-effort, never throws). */
+export function logSkillEvent(message: string, error?: unknown): void {
+  if (!SKILL_LOGS_DIR) return;
+  try {
+    const detail = error === undefined ? '' : error instanceof Error ? ` :: ${error.message}` : ` :: ${JSON.stringify(error)}`;
+    appendFile(path.join(SKILL_LOGS_DIR, 'skills.log'), `[${new Date().toISOString()}] ${message}${detail}\n`, 'utf-8', () => {
+      // best-effort — never throw from a logger
+    });
+  } catch {
+    // best-effort — never throw from a logger
+  }
+}
 
 /**
  * Skill 定义（与 aioncli-core 兼容）
@@ -53,16 +81,19 @@ function extractBody(content: string): string {
  * ACP Skill Manager
  * 为 ACP agents 提供 skills 的索引加载和按需获取能力
  *
- * 使用单例模式避免重复文件系统扫描
- * Uses singleton pattern to avoid repeated filesystem scans
+ * 每个 enabledSkills 组合对应一个缓存实例，避免重复文件系统扫描。
+ * 不再使用互斥单例：并发会话使用不同助手（不同 enabledSkills）时各自持有
+ * 独立实例，互不覆盖。
+ * One cached instance per enabledSkills combination, avoiding repeated
+ * filesystem scans. No longer a mutually-exclusive singleton: concurrent
+ * conversations with different assistants keep independent instances.
  *
  * 支持两类 skills:
  * - 内置 skills (_builtin/): 所有场景自动注入
  * - 可选 skills: 通过 enabledSkills 参数控制
  */
 export class AcpSkillManager {
-  private static instance: AcpSkillManager | null = null;
-  private static instanceKey: string | null = null;
+  private static instances: Map<string, AcpSkillManager> = new Map();
 
   private skills: Map<string, SkillDefinition> = new Map();
   private autoSkills: Map<string, SkillDefinition> = new Map();
@@ -80,8 +111,8 @@ export class AcpSkillManager {
   }
 
   /**
-   * 获取单例实例（带 enabledSkills 缓存键）
-   * Get singleton instance (with enabledSkills cache key)
+   * 获取缓存实例（按 enabledSkills 组合缓存，互不覆盖）
+   * Get cached instance (keyed by enabledSkills combination, non-exclusive)
    *
    * @param enabledSkills - 启用的 skills 列表，用作缓存键 / Enabled skills list, used as cache key
    * @returns AcpSkillManager 实例 / AcpSkillManager instance
@@ -89,25 +120,20 @@ export class AcpSkillManager {
   static getInstance(enabledSkills?: string[]): AcpSkillManager {
     const cacheKey = enabledSkills?.toSorted().join(',') || 'all';
 
-    // 如果缓存键变化，需要重新创建实例
-    // If cache key changed, need to recreate instance
-    if (AcpSkillManager.instance && AcpSkillManager.instanceKey === cacheKey) {
-      return AcpSkillManager.instance;
+    let instance = AcpSkillManager.instances.get(cacheKey);
+    if (!instance) {
+      instance = new AcpSkillManager();
+      AcpSkillManager.instances.set(cacheKey, instance);
     }
-
-    // 创建新实例
-    AcpSkillManager.instance = new AcpSkillManager();
-    AcpSkillManager.instanceKey = cacheKey;
-    return AcpSkillManager.instance;
+    return instance;
   }
 
   /**
-   * 重置单例实例（用于测试或配置变更）
-   * Reset singleton instance (for testing or config changes)
+   * 重置所有缓存实例（用于测试或技能目录变更后强制重新扫描）
+   * Reset all cached instances (for tests, or force re-scan after skills change)
    */
   static resetInstance(): void {
-    AcpSkillManager.instance = null;
-    AcpSkillManager.instanceKey = null;
+    AcpSkillManager.instances.clear();
   }
 
   /**
@@ -119,7 +145,7 @@ export class AcpSkillManager {
 
     const builtinDir = this.autoSkillsDir;
     if (!existsSync(builtinDir)) {
-      console.log(`[AcpSkillManager] Builtin skills directory not found: ${builtinDir}`);
+      logSkillEvent(`Builtin skills directory not found: ${builtinDir}`);
       this.autoInitialized = true;
       return;
     }
@@ -149,13 +175,13 @@ export class AcpSkillManager {
 
           this.autoSkills.set(skillName, skillDef);
         } catch (error) {
-          console.warn(`[AcpSkillManager] Failed to load builtin skill ${skillName}:`, error);
+          logSkillEvent(`Failed to load builtin skill ${skillName}`, error);
         }
       }
 
-      console.log(`[AcpSkillManager] Discovered ${this.autoSkills.size} builtin skills`);
+      logSkillEvent(`Discovered ${this.autoSkills.size} builtin skills`);
     } catch (error) {
-      console.error(`[AcpSkillManager] Failed to discover builtin skills:`, error);
+      logSkillEvent('Failed to discover builtin skills', error);
     }
 
     this.autoInitialized = true;
@@ -190,7 +216,7 @@ export class AcpSkillManager {
 
         // 避免与内置/可选 skills 冲突 / Avoid conflicts with builtin/optional skills
         if (this.autoSkills.has(extSkill.name) || this.skills.has(extSkill.name)) {
-          console.warn(`[AcpSkillManager] Extension skill "${extSkill.name}" conflicts with existing skill, skipping`);
+          logSkillEvent(`Extension skill "${extSkill.name}" conflicts with existing skill, skipping`);
           continue;
         }
 
@@ -205,10 +231,10 @@ export class AcpSkillManager {
       }
 
       if (this.extensionSkills.size > 0) {
-        console.log(`[AcpSkillManager] Loaded ${this.extensionSkills.size} extension skills`);
+        logSkillEvent(`Loaded ${this.extensionSkills.size} extension skills`);
       }
     } catch (error) {
-      console.warn('[AcpSkillManager] Failed to load extension skills:', error);
+      logSkillEvent('Failed to load extension skills', error);
     }
 
     this.extensionInitialized = true;
@@ -272,15 +298,22 @@ export class AcpSkillManager {
               runtimeFiles: metadata.runtimeFiles,
             });
           } catch (error) {
-            console.warn(`[AcpSkillManager] Failed to load skill ${skillName}:`, error);
+            logSkillEvent(`Failed to load skill ${skillName}`, error);
           }
         }
       } catch (error) {
-        console.error(`[AcpSkillManager] Failed to discover skills in ${dir}:`, error);
+        logSkillEvent(`Failed to discover skills in ${dir}`, error);
       }
     }
 
-    console.log(`[AcpSkillManager] Discovered ${this.skills.size} optional skills`);
+    logSkillEvent(`Discovered ${this.skills.size} optional skills`);
+
+    // Surface stale references: enabled skills that no longer exist in any
+    // skills directory (deleted/renamed after the assistant was configured).
+    const missing = enabledSkills.filter((name) => !this.hasSkill(name));
+    if (missing.length > 0) {
+      logSkillEvent(`Enabled skills not found in any skills directory (stale assistant references): ${missing.join(', ')}`);
+    }
 
     this.initialized = true;
   }
@@ -375,7 +408,7 @@ export class AcpSkillManager {
         );
         skill.body = parts.filter((part) => part.trim().length > 0).join('\n\n').trim();
       } catch (error) {
-        console.warn(`[AcpSkillManager] Failed to load skill body for ${name}:`, error);
+        logSkillEvent(`Failed to load skill body for ${name}`, error);
         skill.body = '';
       }
     }

@@ -45,12 +45,13 @@ export const useGeminiInitialMessage = ({
 
     if (!storedMessage) return;
 
-    // If no auth, store message in input box and trigger auto-detection from this new message point
+    // If no auth, store message in input box and trigger auto-detection from this new message point.
+    // Keep sessionStorage intact so the effect can pick the message up and
+    // actually send it once auth finishes loading (upstream #2342).
     if (hasNoAuth) {
       try {
         const { input } = JSON.parse(storedMessage) as { input: string };
         setContent(input);
-        sessionStorage.removeItem(storageKey);
       } catch {
         // Ignore parse errors
       }
@@ -67,6 +68,10 @@ export const useGeminiInitialMessage = ({
 
     // Clear immediately to prevent duplicate sends
     sessionStorage.removeItem(storageKey);
+
+    // Clear input box content (may have been placed there during the
+    // hasNoAuth phase) — the message is about to be sent for real.
+    setContent('');
 
     const sendInitialMessage = async () => {
       try {
@@ -112,5 +117,6 @@ export const useGeminiInitialMessage = ({
     };
 
     void sendInitialMessage();
-  }, [conversationId, currentModelId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setContent/refs are stable; hasNoAuth added so the auth-ready transition re-runs the send (upstream #2342)
+  }, [conversationId, currentModelId, hasNoAuth]);
 };

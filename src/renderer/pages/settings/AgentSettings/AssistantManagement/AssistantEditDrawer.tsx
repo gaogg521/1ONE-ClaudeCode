@@ -4,10 +4,12 @@
  */
 import type { AssistantListItem, SkillInfo } from './types';
 import type { SkillPlatform } from '@/common/types/skillMetadata';
+import { ipcBridge } from '@/common';
 import EmojiPicker from '@/renderer/components/chat/EmojiPicker';
 import MarkdownView from '@/renderer/components/Markdown';
 import classNames from 'classnames';
 import {
+  Alert,
   Avatar,
   Button,
   Checkbox,
@@ -155,6 +157,29 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
   const totalActiveSkillsCount = selectedSkills.filter(
     (name) => pendingSkills.some((skill) => skill.name === name) || availableSkills.some((skill) => skill.name === name)
   ).length;
+  // Auto-injected (_builtin) skill names — not part of availableSkills but
+  // always resolvable at runtime, so they must not be flagged as missing.
+  const [autoSkillNames, setAutoSkillNames] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    ipcBridge.fs.listAutoSkills
+      .invoke()
+      .then((list) => {
+        if (!cancelled) setAutoSkillNames((list ?? []).map((skill) => skill.name));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  // Enabled skill names with no matching entry in the Skills Hub catalog —
+  // stale references left behind after a skill was deleted or renamed.
+  const missingSkills = selectedSkills.filter(
+    (name) =>
+      !pendingSkills.some((skill) => skill.name === name) &&
+      !availableSkills.some((skill) => skill.name === name) &&
+      !autoSkillNames.includes(name)
+  );
   const isRuleEditable = !isReadonlyAssistant;
   const rulesContainerHeight = rulesExpanded
     ? '420px'
@@ -261,6 +286,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
           <div className='flex items-center gap-8px'>
             <Button
               type='primary'
+              data-testid='btn-save-assistant'
               onClick={handleSave}
               disabled={!isCreating && isReadonlyAssistant}
               className='w-[100px] rounded-[100px]'
@@ -279,6 +305,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
           {!isCreating && !isExtensionAssistant(activeAssistant) && (
             <Button
               status='danger'
+              data-testid='btn-delete-assistant'
               onClick={handleDeleteClick}
               className='rounded-[100px]'
               style={{ backgroundColor: 'rgb(var(--danger-1))' }}
@@ -289,7 +316,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
         </div>
       }
     >
-      <div className='flex flex-col h-full overflow-hidden'>
+      <div data-testid='assistant-editor-drawer' className='flex flex-col h-full overflow-hidden'>
         <div className='settings-drawer-surface flex flex-col flex-1 gap-16px rounded-16px p-20px overflow-y-auto'>
           {/* Name & Avatar */}
           <div className='flex-shrink-0'>
@@ -324,6 +351,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                 </EmojiPicker>
               )}
               <Input
+                data-testid='input-assistant-name'
                 value={editName}
                 onChange={(value) => setEditName(value)}
                 disabled={isReadonlyAssistant}
@@ -339,6 +367,7 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
               {t('settings.assistantDescription', { defaultValue: 'Assistant Description' })}
             </Typography.Text>
             <Input
+              data-testid='input-assistant-description'
               className='mt-10px rounded-4px bg-bg-1'
               value={editDescription}
               onChange={(value) => setEditDescription(value)}
@@ -508,6 +537,43 @@ const AssistantEditDrawer: React.FC<AssistantEditDrawerProps> = ({
                   {t('settings.addSkills', { defaultValue: 'Add Skills' })}
                 </Button>
               </div>
+
+              {missingSkills.length > 0 && (
+                <Alert
+                  type='warning'
+                  className='mb-12px'
+                  content={
+                    <div className='flex flex-col gap-8px'>
+                      <span>
+                        {t('settings.assistantMissingSkillsWarning', {
+                          defaultValue:
+                            'The following enabled skills are missing from the Skills Hub (deleted or renamed) and cannot be invoked at runtime:',
+                        })}
+                      </span>
+                      <div className='flex flex-wrap gap-4px'>
+                        {missingSkills.map((name) => (
+                          <Tag key={`missing-${name}`} size='small' color='red'>
+                            {name}
+                          </Tag>
+                        ))}
+                      </div>
+                      {!isReadonlyAssistant && (
+                        <Button
+                          size='mini'
+                          type='outline'
+                          status='warning'
+                          className='self-start settings-pill-button'
+                          onClick={() =>
+                            setSelectedSkills(selectedSkills.filter((name) => !missingSkills.includes(name)))
+                          }
+                        >
+                          {t('settings.assistantMissingSkillsRemove', { defaultValue: 'Remove broken references' })}
+                        </Button>
+                      )}
+                    </div>
+                  }
+                />
+              )}
 
               <div className='settings-note-card mb-12px flex flex-col gap-12px'>
                 <div className='flex flex-col gap-8px'>

@@ -18,6 +18,8 @@ const {
   realpathSyncMock,
   statSyncMock,
   writeFileSyncMock,
+  existsSyncMock,
+  execFileSyncMock,
   fakePort,
 } = vi.hoisted(() => ({
   startHandler: { fn: undefined as ((...args: any[]) => any) | undefined },
@@ -28,6 +30,9 @@ const {
   realpathSyncMock: vi.fn((p: string) => p),
   statSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
+  // Bundled-officecli detection (manifest.json probe) — false keeps tests on the PATH resolution branch
+  existsSyncMock: vi.fn(() => false),
+  execFileSyncMock: vi.fn(),
   fakePort: { value: 55555 },
 }));
 
@@ -58,6 +63,7 @@ vi.mock('../../src/common', () => ({
 vi.mock('node:child_process', () => ({
   spawn: (...args: any[]) => spawnMock(...args),
   execSync: (...args: any[]) => execSyncMock(...args),
+  execFileSync: (...args: any[]) => execFileSyncMock(...args),
 }));
 
 vi.mock('node:fs', () => ({
@@ -65,6 +71,7 @@ vi.mock('node:fs', () => ({
     realpathSync: (...args: any[]) => realpathSyncMock(...args),
     statSync: (...args: any[]) => statSyncMock(...args),
     writeFileSync: (...args: any[]) => writeFileSyncMock(...args),
+    existsSync: (...args: any[]) => existsSyncMock(...args),
   },
 }));
 
@@ -393,15 +400,16 @@ describe('pptPreviewBridge', () => {
     it('triggers install if versions differ', async () => {
       vi.useFakeTimers();
       statSyncMock.mockReturnValue({ mtimeMs: Date.now() - 25 * 60 * 60 * 1000 });
+      // Local version now read via execFileSync(exe, ['--version']); remote via execSync(curl)
+      execFileSyncMock.mockReturnValueOnce('1.0.17');
       execSyncMock
-        .mockReturnValueOnce('1.0.17')
         .mockReturnValueOnce('https://github.com/iOfficeAI/OfficeCli/releases/tag/v1.0.18')
         .mockReturnValue('');
 
       initPptPreviewBridge();
       await vi.advanceTimersByTimeAsync(6000);
 
-      expect(execSyncMock).toHaveBeenCalledWith('officecli --version', expect.any(Object));
+      expect(execFileSyncMock).toHaveBeenCalledWith(expect.any(String), ['--version'], expect.any(Object));
       expect(writeFileSyncMock).toHaveBeenCalled();
       expect(statusEmitMock).toHaveBeenCalledWith({ state: 'installing' });
       vi.useRealTimers();
@@ -410,9 +418,8 @@ describe('pptPreviewBridge', () => {
     it('does not install if versions match', async () => {
       vi.useFakeTimers();
       statSyncMock.mockReturnValue({ mtimeMs: Date.now() - 25 * 60 * 60 * 1000 });
-      execSyncMock
-        .mockReturnValueOnce('1.0.18')
-        .mockReturnValueOnce('https://github.com/iOfficeAI/OfficeCli/releases/tag/v1.0.18');
+      execFileSyncMock.mockReturnValueOnce('1.0.18');
+      execSyncMock.mockReturnValueOnce('https://github.com/iOfficeAI/OfficeCli/releases/tag/v1.0.18');
 
       initPptPreviewBridge();
       await vi.advanceTimersByTimeAsync(6000);

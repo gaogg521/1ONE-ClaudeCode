@@ -28,8 +28,18 @@ interface UploadStateSnapshot {
 
 // ── Internal store ─────────────────────────────────────────────────────────
 
+interface UploadEntry {
+  percent: number;
+  size: number;
+  source: UploadSource;
+  /** Conversation this upload is bound to — used by abortUploads (upstream #3019) */
+  conversationId?: string;
+  /** Fires when the upload is aborted (e.g. conversation switched away) */
+  onAbort?: () => void;
+}
+
 let nextId = 0;
-const uploads = new Map<number, { percent: number; size: number; source: UploadSource }>();
+const uploads = new Map<number, UploadEntry>();
 const listeners = new Set<() => void>();
 
 let globalSnapshot: UploadStateSnapshot = { activeCount: 0, isUploading: false, overallPercent: 0 };
@@ -75,22 +85,37 @@ function subscribe(listener: () => void): () => void {
 
 // ── Public API for upload callers ──────────────────────────────────────────
 
+export interface TrackUploadOptions {
+  source?: UploadSource;
+  /** Bind the upload to a conversation; used by abortUploads({ exceptConversationId }) */
+  conversationId?: string;
+  /** Called when the upload is aborted via abortUploads(...) */
+  onAbort?: () => void;
+}
+
 /**
  * Register a new upload. Returns an object with:
  * - `id`: opaque handle
  * - `onProgress(percent)`: call from XHR progress handler
- * - `finish()`: call when upload completes (success or error)
+ * - `finish()`: call when upload completes (success, error, or abort)
  */
 export function trackUpload(
   fileSize: number,
-  source: UploadSource = 'sendbox'
+  sourceOrOptions: UploadSource | TrackUploadOptions = 'sendbox'
 ): {
   id: number;
   onProgress: (percent: number) => void;
   finish: () => void;
 } {
+  const opts: TrackUploadOptions = typeof sourceOrOptions === 'string' ? { source: sourceOrOptions } : sourceOrOptions;
   const id = nextId++;
-  uploads.set(id, { percent: 0, size: fileSize, source });
+  uploads.set(id, {
+    percent: 0,
+    size: fileSize,
+    source: opts.source ?? 'sendbox',
+    conversationId: opts.conversationId,
+    onAbort: opts.onAbort,
+  });
   recalcSnapshot();
   notify();
 
@@ -110,6 +135,34 @@ export function trackUpload(
       notify();
     },
   };
+}
+
+/**
+ * Abort in-flight uploads (upstream #3019). Fires each matching entry's
+ * onAbort (which should cancel the underlying XHR — the caller's finally
+ * block then removes the entry via finish()) and drops it from the store so
+ * stray progress bars never leak into another conversation.
+ *
+ * @param filter.source                only abort uploads in this source bucket
+ * @param filter.exceptConversationId  keep uploads bound to this conversation
+ */
+export function abortUploads(filter: { source?: UploadSource; exceptConversationId?: string | null } = {}): void {
+  let changed = false;
+  for (const [id, entry] of uploads.entries()) {
+    if (filter.source && entry.source !== filter.source) continue;
+    if (filter.exceptConversationId != null && entry.conversationId === filter.exceptConversationId) continue;
+    try {
+      entry.onAbort?.();
+    } catch {
+      // aborting is best-effort — never let one bad callback stop the sweep
+    }
+    uploads.delete(id);
+    changed = true;
+  }
+  if (changed) {
+    recalcSnapshot();
+    notify();
+  }
 }
 
 // ── Stable snapshot getters (module-level to avoid per-render closure churn) ─

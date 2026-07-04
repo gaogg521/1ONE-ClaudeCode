@@ -2454,3 +2454,560 @@ db.pragma('journal_mode = DELETE');
 3. **"对照测试"（换一个明确正常工作的输入，看是否复现同样的症状）是排除"是不是这个具体参数有问题"的最快方法**——加一行 `await ConfigStorage.get('language')`（明确到处用、正常工作的 key）立刻证明了问题不在 `WEBUI_DEPLOYMENT_ROLE_KEY` 这个 key 本身，而在 `ConfigStorage.get()` 这个调用方式，从主进程发起时就是坏的。
 4. **同一个 IPC/RPC 抽象库，在"发起方"和"响应方"处于同一个进程 vs 不同进程时，语义可能完全不同——不能假设"反正都是同一套 API，行为应该一致"**。`bridge.buildProvider()` 生成的 `{provider, invoke}` 在设计上是给"渲染层发起、主进程响应"这个方向用的；反过来在主进程内部同时调用 `provider()`（正确：本地拦截）和 `invoke()`（错误：会被当成"要发给渲染层"的请求）就会出问题。排查这类"看起来到处都用同一个 API，但在某个特定调用点上莫名其妙不工作"的 bug 时，要去确认这次调用的"进程上下文"是否跟这个 API 原本设计的调用方向一致。
 5. **代码注释里的"为什么这么写"，如果作者的理解本身是错的，会把后来者也带偏**——`oneModelInfo.ts` 里"Prefer ConfigStorage (intercepted) so updates are reflected immediately"这条注释，反映了写代码的人对这个 API 跨进程语义的误解，而且这个误解被写成了看起来很有道理的性能优化理由，容易让后续维护者不去怀疑这一行代码。遇到"这个函数一直卡住不报错也不返回"的问题时，不要因为代码里有一条听起来合理的注释就假设这行代码本身没问题。
+
+---
+
+# 2026-07-04 助手/技能中心调用问题 — 分析与第一轮修复
+
+## 背景
+
+用户反馈"助手和技能中心的调用总是出现各种问题"。对照上游 AionUi 仓库（https://github.com/iOfficeAI/AionUi）与官网分析后确认：问题不是单个 bug，而是**旧架构的设计缺陷 + 上游已修复但本 fork 未跟进的一批 fix** 叠加。
+
+## 与上游的分叉现状（重要背景，影响后续所有决策）
+
+- 本 fork 于 **2026-04-08 从 AionUi ~v1.9.x 快照全量导入**（首个 commit "项目第一次代码全量提交"），**无 git 血缘**，无法直接 merge 上游，只能按 release notes 逐个 cherry-pick 移植。
+- 上游当前 **v2.1.28**（2026-07-03 发布，1-3 天一发版），已完成 monorepo 重构（`packages/desktop/`），并补齐了助手/技能的 e2e 测试（`tests/e2e/features/assistants`、`builtin-skill-migration`、`settings/skills`）。
+- 上游 v2.1.24–v2.1.28 集中修复了与本次症状直接相关的问题：
+  - v2.1.24：**统一 skill catalog**（设置 UI 与实际安装一致，PR #3424）；助手 backing agent 掉线不再静默消失（显示 unavailable + 自修复入口，PR #3395）
+  - v2.1.25：**助手技能默认值从 agent 配置动态加载**，替换硬编码列表（PR #3445）
+  - v2.1.26：记住上次选择的助手（PR #3468）；默认模型/模式从 runtime 配置读取（PR #3466）
+  - v2.1.28：**会话技能进 `/` 斜杠菜单**供用户显式调用（PR #3482）；团队聊天正确传递 skills + MCP
+
+## 本地调用链的根因分析
+
+技能调用机制：首条消息注入技能索引（名字+描述）→ 模型在回复中输出 `[LOAD_SKILL: 名称]` 文本标记 → `GeminiAgentManager` 正则解析后把技能全文喂回。脆弱点：
+
+1. **`[LOAD_SKILL]` 文本协议本身脆弱**（最大的"各种问题"来源）：模型不输出标记 / 名字写错 / 包进代码块 / 上下文压缩后索引丢失（索引只注入首条消息），技能就静默不加载。
+2. **`AcpSkillManager` 互斥单例被多会话互踩**：`getInstance(enabledSkills)` 用互斥单例+缓存键，`prefetchSkillsIndex` 无参调用（键 `'all'`）会把助手会话刚建好的实例整个替换；不同助手的并发会话来回重建单例，缓存完全失效并构成竞态温床。
+3. **`AcpSkillManager` 满是 console.***：位于 `src/process/` 下，技能发现是扫盘操作，触发主进程 console 禁令描述的 bridge 广播阻塞风险（同 6-23/7-01 卡死问题同源）。
+4. **助手 enabledSkills 无一致性校验**：技能被删除/改名后，助手配置里的引用悬空，运行时静默找不到，UI 无任何提示。
+5. **注入逻辑三路分支**（`firstMessage.ts` 的 useSkillsIndex/nativeOnlyRules/fullSkillContent）：不同 backend 注入方式不同，行为不一致、难排查（本轮未动，列入待办）。
+
+## 本轮修复清单
+
+### 1. [已修复] AcpSkillManager 互斥单例 → 按 enabledSkills 组合的 Map 缓存
+
+**方案**：`private static instance + instanceKey` 改为 `private static instances: Map<string, AcpSkillManager>`。每个 enabledSkills 组合持有独立实例，并发会话互不覆盖；`prefetchSkillsIndex` 的无参调用（`'all'` 键）不再破坏助手会话的实例。`resetInstance()` 改为清空整个 Map（技能目录变更时强制重扫，语义不变，测试 `skillsMarket.test.ts` 通过）。
+
+### 2. [已修复] AcpSkillManager + prefetchSkillsIndex 清除全部 console.*
+
+**方案**：模块内新增 `logSkillEvent()`（异步 `appendFile`，best-effort，never-throw，模式对齐 `bridgeLog.ts`），写入 `logs/skills.log`。替换 11 处 console.log/warn/error。技能排查以后看 `logs/skills.log`。
+
+### 3. [已修复] 助手 enabledSkills 引用一致性校验（UI + 运行时）
+
+**方案**：
+- UI：`AssistantEditDrawer` 技能区顶部新增 warning Alert——列出"已启用但技能中心不存在"的技能名（红色 Tag），附一键"移除失效引用"按钮（只读助手不显示按钮）。i18n key：`settings.assistantMissingSkillsWarning` / `assistantMissingSkillsRemove`（zh-CN + en-US）。
+- 运行时：`discoverSkills()` 扫描完成后，把"启用了但任何技能目录都找不到"的名字写入 `logs/skills.log`（stale assistant references），排查时可直接定位。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/task/AcpSkillManager.ts` | 单例→Map 缓存；新增 `logSkillEvent()`；11 处 console.* 替换；discoverSkills 末尾记录 stale 引用 |
+| `src/process/services/agentToolkit/prefetchSkillsIndex.ts` | catch 里的 console.warn → `logSkillEvent` |
+| `src/renderer/pages/settings/AgentSettings/AssistantManagement/AssistantEditDrawer.tsx` | 新增 missingSkills 计算 + warning Alert + 一键移除 |
+| `src/renderer/services/i18n/locales/{zh-CN,en-US}/settings.json` | 各新增 2 个 key |
+| `src/renderer/services/i18n/i18n-keys.d.ts` | 重新生成 |
+
+## 验证情况
+
+- `npx tsc --noEmit` 通过
+- `node scripts/check-i18n.js` 通过（历史遗留 warning 与本次无关）
+- 技能相关 5 个单测文件 40 用例全过（skillsMarket / AcpAgentManagerSkillInjection / geminiAgentManagerThinking / acpAgentManagerCronGuard / acpSlashCommandsUpdatedEvent）
+- oxlint 0 error；剩余 2 个 await-in-loop warning 为原有代码，未动
+- **未做**：桌面端手工验证（`npm run restart` 后打开助手编辑抽屉，人为把某个已启用技能目录改名，确认红色告警出现、一键移除生效、`logs/skills.log` 出现 stale 记录）
+
+## 后续待办（按优先级）
+
+1. **桌面端手工验证本轮改动**（`npm run restart`，见上）；确认后 commit（中文 commit message，等用户确认再提交）。
+2. **提交后打新 Windows 安装包**（交付约定：`src/**` 行为变更必须 `npm run dist:win`；打包前 bump package.json patch 版本并 commit push；不删旧 .exe）。
+3. **中期对齐上游**（把 release notes 当补丁清单移植）：
+   - 统一 skill catalog 服务：技能中心 UI / 助手编辑器 / 运行时注入读同一数据源（对应上游 PR #3424）
+   - 技能索引不只注入首条消息：会话恢复/上下文压缩后重新注入，或每 N 轮轻量刷新
+   - 技能进 `/` 斜杠菜单供用户显式调用（对应上游 PR #3482），降低对 `[LOAD_SKILL]` 文本协议的依赖
+   - `ASSISTANT_PRESETS.defaultEnabledSkills` 从技能目录实际元数据推导，替换硬编码（对应上游 PR #3445）
+   - 助手 backing agent 不可用时显示 unavailable + 自修复入口，而非静默消失（对应上游 PR #3395）
+4. **简化 `firstMessage.ts` 三路注入分支**，统一各 backend 的技能注入行为（改动面大，需单独一轮）。
+5. **流程建设**：
+   - 加 `upstream` remote（https://github.com/iOfficeAI/AionUi）作 cherry-pick 参考源；每次上游发版扫 release notes，凡 assistant/skill/cron 相关 fix 评估移植
+   - 把上游 `tests/e2e/features/assistants`、`settings/skills` 的 e2e 测试场景搬过来做回归防线
+
+---
+
+# 2026-07-04 助手/技能第二轮 — 上游对齐(待办 3/4/5)+ 意外挖出核心回归
+
+接上一节。用户要求继续做待办 3(中期对齐上游)、4(简化注入分支)、5(流程建设)。实施过程中挖出一个比所有计划项都重要的回归 bug(见修复 1)。
+
+## 修复清单
+
+### 1. [已修复][核心回归] agentPrompt 把首条消息的规则+技能注入整个覆盖掉
+
+**问题**：`e24ec81d`（2026-06-15，附件增强功能）给 `sendConversationMessage` 加了 `agentPrompt`（附件上下文前缀 + 干净正文），所有渲染端消息都会携带它。但 `AcpAgentManager.sendMessage` 发送的是 `data.agentPrompt ?? contentToSend`——首条消息辛苦算出来的 `applyAgentToolkitFirstMessage(contentToSend)`（助手规则 + 技能索引）被直接丢弃。**自 6-15 起，所有 ACP 会话的助手规则和技能索引根本没送到 agent**。OpenClaw 同类问题（有 agentPrompt 时整个跳过注入）。这能直接解释"助手调用总是出现各种问题"且时好时坏（gemini 助手走 GEMINI.md 原生机制不受影响，ACP 助手全军覆没）。
+
+**为什么测试没拦住**：`AcpAgentManagerSkillInjection.test.ts` 的用例全部不带 agentPrompt 调用，恰好绕过回归路径。
+
+**方案**：注入改为应用在"实际发送的字符串"上（`data.agentPrompt ?? data.content`），OpenClaw 同步修复（NanoBot 本来就是正确模式）。新增 2 个带 agentPrompt 的回归用例钉死。
+
+**影响文件**：`AcpAgentManager.ts`、`OpenClawAgentManager.ts`、`tests/unit/AcpAgentManagerSkillInjection.test.ts`
+
+### 2. [已完成][待办3-斜杠菜单] 技能进 `/` 菜单 + 确定性展开（对齐上游 #3482）
+
+**方案**（管道大部分已存在，只做接线）：
+- `SlashCommandSource` 增加 `'skill'`（`src/common/chat/slash/types.ts`）
+- `conversation.getSlashCommands` provider：原来非 acp 会话直接返回空；现在对所有会话类型追加"会话已启用技能"命令项（`kind:'template'`、`selectionBehavior:'insert'`，选中后填入 `/skill-name `，与上游 UX 一致）。与 ACP 原生命令重名时跳过技能项。
+- 新增 `agentToolkit/slashSkillInvocation.ts`：`parseSlashInvocation` + `expandSlashSkillInvocation`。发送时在 `sendConversationMessage` 统一拦截：输入是 `/skill-name [args]` 且技能在会话 enabledSkills 里 → 把技能全文确定性注入 agent prompt（用户看到的消息仍是自己输入的 `/skill-name`）。名字不在启用列表的不展开，留给 ACP 原生命令（/compact 等）。
+- 渲染端零改动：所有 SendBox 已用 `useSlashCommands`，菜单自动出现。gemini worker 用 `agentPrompt ?? input`，展开对 gemini/acp/aionrs/nanobot/remote 全部生效。
+
+**意义**：技能调用从"祈祷模型输出 [LOAD_SKILL] 标记"多了一条确定性路径，用户可显式调用。
+
+### 3. [已完成][待办4] 简化 firstMessage.ts 注入分支
+
+**发现**：三路分支中第三路（`!nativeOnlyRules && ...`）逻辑上不可达——`useSkillsIndex === false` 时 `nativeOnlyRules` 必为 true。`fullSkillContent` 选项只在死分支中使用。
+
+**方案**：删除死分支和 `fullSkillContent` 选项，收敛为两路：需要索引注入 → `prepareFirstMessageWithSkillsIndex`；backend 原生支持技能 → 只注入规则。OpenClaw/NanoBot 调用点同步去掉 `fullSkillContent: true`。行为不变（有测试背书），可读性大幅提升。
+
+### 4. [已完成][待办3-预置一致性] preset defaultEnabledSkills 构建期校验（对齐上游 #3445）
+
+**核实结论**：首页选助手建会话读的是存储配置（`useCustomAgentsLoader` → `resolveEnabledSkills`），不是硬编码 preset——上游 #3445 的具体 bug 在本 fork 不存在。硬编码 `defaultEnabledSkills` 只做首次落库种子。
+
+**方案**：新增 `tests/unit/assistantPresetSkillRefs.test.ts`——逐个断言每个 preset 的 defaultEnabledSkills 在 `src/process/resources/skills/{name}` 或 `_builtin/{name}` 有 SKILL.md。种子引用坏了在 CI 就报。
+
+**顺手修的误报**：上一轮的助手编辑抽屉"缺失技能"告警会误报 `_builtin` 技能（如 cowork 的 skill-creator，`listAvailableSkills` 不含 `_builtin`）。已在抽屉里拉取 `listAutoSkills` 并从 missing 计算中排除。
+
+### 5. [已核实无需改动][待办3-统一catalog] skill catalog 数据源已经是统一的（对齐上游 #3424）
+
+技能中心 UI 和助手编辑器都走 `fs.listAvailableSkills`（+`listAutoSkills`）同一 provider；运行时 `AcpSkillManager` 扫同样的目录（`builtin-skills copy dir` + `skills dir` + `_builtin`），元数据解析都是同一个 `readSkillMetadata`。上游 #3424 要解决的"UI 与实际安装不一致"在本 fork 无结构性问题。不做投机重构。
+
+### 6. [已核实+缓解][待办3-索引重注入] 会话恢复不丢技能
+
+**核实结论**：`isFirstMessage` 是 per-manager-instance 字段——app 重启/manager 闲置回收后重建,下一条消息自动重新注入规则+索引,"重启后丢技能"场景本来就覆盖。真正缺口只剩**会话中途 CLI 自行压缩上下文**导致索引被挤掉,这个从 host 侧无法可靠检测。**缓解**:修复 2 的斜杠菜单给了用户确定性重新调用技能的入口。不做"每 N 轮重注入"的投机实现。
+
+### 7. [已完成][待办5] 流程建设
+
+- `git remote add upstream https://github.com/iOfficeAI/AionUi.git`,push URL 已设为 DISABLED 防误推,已 fetch 近 200 提交作 cherry-pick 参考（`git log upstream/main`）。
+- 上游 e2e 场景移植：本轮以单测形式覆盖了 assistants/skills 的关键不变量（preset 引用完整性、注入回归、斜杠展开）；上游 Playwright e2e 整套搬迁工作量大,列入后续。
+
+## 涉及文件（本轮新增改动）
+
+| 文件 | 改动 |
+|------|------|
+| `src/process/task/AcpAgentManager.ts` | 注入应用于实际发送串（修复 agentPrompt 覆盖回归） |
+| `src/process/task/OpenClawAgentManager.ts` | 同上 + 去掉 fullSkillContent |
+| `src/process/task/NanoBotAgentManager.ts` | 去掉 fullSkillContent |
+| `src/process/services/agentToolkit/firstMessage.ts` | 删除不可达分支与 fullSkillContent 选项 |
+| `src/process/services/agentToolkit/slashSkillInvocation.ts` | 新增：斜杠技能解析与确定性展开 |
+| `src/process/bridge/conversationBridge.ts` | getSlashCommands 追加会话技能命令项 |
+| `src/process/bridge/services/conversationSendService.ts` | 发送时拦截斜杠技能调用并展开 |
+| `src/common/chat/slash/types.ts` | SlashCommandSource 增加 'skill' |
+| `AssistantEditDrawer.tsx` | 缺失告警排除 _builtin 自动技能（修误报） |
+| `tests/unit/slashSkillInvocation.test.ts` | 新增 12 用例 |
+| `tests/unit/assistantPresetSkillRefs.test.ts` | 新增 preset 引用校验 |
+| `tests/unit/AcpAgentManagerSkillInjection.test.ts` | 新增 2 个 agentPrompt 回归用例 |
+
+## 验证情况
+
+- `npx tsc --noEmit` 通过；oxlint 新增文件 0 warning 0 error（存量 warning/error 未动）
+- 技能/斜杠/bridge 相关 12 个测试文件 98 用例全过
+- 全量单测：3661 过 / 27 失败——失败的 10 个文件（企业版路由、pptPreviewBridge、configureChromium 等）**已用 git stash 基线验证为存量失败，与本轮无关**
+- i18n 校验通过
+- **未做**：桌面端手工验证（重点：① ACP 助手会话首条消息后 agent 是否遵守助手规则——回归修复的直接验证；② 会话里输 `/` 是否出现技能项、选择+发送后技能是否生效）
+
+## 后续待办（更新版）
+
+1. **桌面端手工验证**（`npm run restart`）：上面两条 + 上一轮的失效引用告警。
+2. **确认后 commit + `npm run dist:win` 打包**（打包前 bump patch 版本,不删旧 .exe）。
+3. **中期（本轮未做）**：
+   - 助手 backing agent 不可用时显示 unavailable + 自修复入口（上游 #3395,涉及 agent 探测 UI,单独一轮）
+   - 上游 Playwright e2e 整套搬迁评估
+   - 存量 27 个失败单测分诊修复（企业版路由/pptPreviewBridge/configureChromium,与技能无关但该修）
+4. **上游跟进机制**：每次上游发版扫 release notes（`gh release view vX.Y.Z -R iOfficeAI/AionUi`）,assistant/skill/cron 相关 fix 评估 cherry-pick（`git log upstream/main --oneline -- packages/desktop/...`）。
+
+## 2026-07-04 补充：桌面端实测验证结果（CDP 重放）
+
+按既有方法论（CDP 9230 + `Runtime.evaluate` 重放 IPC，绕过 UI 直接验证调用链），`npm run restart` 全量构建启动后实测：
+
+| 验证项 | 结果 |
+|--------|------|
+| `list-auto-skills` 返回 22 个 `_builtin` 技能（含 skill-creator）——抽屉误报修复的依赖成立 | ✅ PASS |
+| 创建带 `enabledSkills: ['officecli-docx','mermaid']` 的 gemini 会话 | ✅ PASS |
+| **`conversation.get-slash-commands` 对 gemini 会话返回 2 个 `source:'skill'` 命令项**（改动前对非 acp 会话恒返回 `[]`），`selectionBehavior:'insert'` 正确 | ✅ PASS |
+| 测试会话清理（remove-conversation） | ✅ PASS |
+| `logs/skills.log` 记录启动 prefetch（22 builtin）与按会话 discovery（22 builtin + 2 optional）——console→文件日志替换在真实运行中生效 | ✅ 确认 |
+
+验证脚本：临时脚本（scratchpad），核心是 `window.electronAPI.emit('subscribe-{channel}', {id, data})` + 监听 `subscribe.callback-{channel}{id}`，可按此模式随时重建。
+
+**未实测**（需真实模型调用，由单测覆盖）：ACP 首条消息注入回归修复的端到端行为——单测 `AcpAgentManagerSkillInjection.test.ts` 带 agentPrompt 的 2 个用例已钉死；使用者日常对话即可感知（ACP 助手重新遵守规则）。
+
+## 文档沉淀
+
+- 新增 `docs/tech/skills-invocation.md`：技能调用机制完整文档（catalog 数据源、三条注入路径、agentPrompt 关键不变量、排查入口），并已挂入 `.claude/CLAUDE.md` 路由表（"改助手/技能相关代码前必读"）。
+
+---
+
+# 2026-07-04 第三轮 — 收尾原分析的全部剩余待办
+
+接前两轮。本轮完成三件事：助手 unavailable 显示（上游 #3395）、存量 27 个失败单测全部清零、上游 e2e 场景搬迁。至此 7-04 最初分析给出的改进清单**全部落地**。
+
+## 1. [已完成] 助手/Agent 不可用显示 + 自修复入口（对齐上游 #3395）
+
+**根因定位**：`useCustomAgentsLoader` 对非预置（CLI 型）自定义 agent 做硬过滤——ACP 检测不到 backend（CLI 未装/被移除/启动竞态）时整个条目从首页消失，无任何提示。这正是上游 v2.1.24 修的"assistants silently disappearing"。
+
+**方案**（渲染层，主进程零改动）：
+- `AcpBackendConfig` 新增运行时标记 `backendUnavailable`（不持久化）；loader 不再过滤，改为标注。
+- `useGuidAgentSelection` 新增 `unavailableCustomAgents` memo（独立列表，**不回写** `availableAgents` state——避免 availableCustomAgentIds→loader→merge 的循环依赖；选中持久化/fallback 逻辑也永远不会选到它们）。
+- `AgentPillBar` 渲染不可用条目：降透明度 + 右上角警示点 + tooltip 说明；点击即自修复（`refreshCustomAgents` 重新检测 + 提示），检测恢复后自动变回可选。
+- `findAgentByKey` 的助手兜底加 `isPreset` guard，防止未检测的 CLI agent 被误当作预置助手合成选中项。
+- i18n：`guid.agentUnavailable` / `agentUnavailableTooltip` / `agentRedetecting`（zh-CN + en-US）。
+
+**涉及文件**：`useCustomAgentsLoader.ts`、`useGuidAgentSelection.ts`、`AgentPillBar.tsx`、`GuidPage.tsx`、`guid/types.ts`、`acpTypes.ts`、`locales/{zh-CN,en-US}/guid.json`
+
+## 2. [已完成] 存量 27 个失败单测分诊 — 全部清零（473 文件 / 3687 用例 0 失败）
+
+逐个分诊结论：**全部是"代码有意改动、测试没跟上"或"mock 落后于源码"，无一真 bug**。修复对照：
+
+| 测试文件 | 根因 | 处理 |
+|----------|------|------|
+| guidAgentHooks.dom (3) | aionrs 内置引擎改为恒可用且 fallback 首位（防 gemini 卡死），测试断言旧顺序 | 按现意图更新断言（fallback 恒返回 aionrs、永不为 null） |
+| enterpriseRoles (2) / editionSwitchNavigation (1) / enterpriseLoginNavigation (1) | 90305cfe 默认落点 /sessions→/guid，测试断言旧路径 | 更新断言 + 注明 commit |
+| enterpriseEditionSync (1) | 合并优先级有意反转（本机已加入企业以本机为准，防 SSO 覆盖显示"单机实例"），测试断言旧优先级 | 按 doc comment 更新断言与用例名 |
+| pptPreviewBridge (12) | 源码加了 bundled-officecli 检测（`fs.existsSync` manifest 探测）+ 版本检查改 `execFileSync`，测试 mock 缺这两个函数 | mock 补 `existsSync`（返回 false 走 PATH 分支）+ `execFileSync`，更新版本检查断言 |
+| schema (1) | c4a37d0 有意 WAL→DELETE（WAL 反复索引损坏），测试断言 WAL | 更新断言 + 注明 commit |
+| configureChromium (1) | c4a37d0 无条件 append `disable-features=DIPS`，测试断言"完全不调用" | 改为断言"无 CDP 开关" |
+| webuiApiBase (1, 挂 20s) | 8ca5256e 客户端模式路由新调 `getClientEnterpriseServerOrigin`→`ConfigStorage.get`，测试环境无 provider 永不 resolve | 测试补 ConfigStorage mock |
+| webuiChangeUsername (4) | 33ce7b1 WebuiService 改 import ProcessConfig（initStorage 模块级需要 platform services） | 测试补 initStorage mock |
+
+**教训（值得进流程）**：这批失败暴露同一个模式——**修 bug 时不跑/不更新受影响的测试**，欠账攒到 27 个。之后每次 fix 提交前应至少跑受影响目录的单测（AGENTS.md 已要求 `bun run test` before commit，需要真正执行）。
+
+## 3. [已完成] 上游 e2e 场景搬迁（assistants/skills）
+
+**评估结论**：本 fork 已有完整 Playwright+Electron e2e 基建（`tests/e2e/fixtures.ts` 单例 app + `helpers/bridge.ts` 的 invokeBridge）。上游的 assistants/skills e2e 依赖新版 UI 的 `data-testid`（单列表+全页编辑器），fork 是抽屉式 UI，**按文件搬不可行，按场景语义搬**。
+
+**产物**：`tests/e2e/specs/assistants-skills.e2e.ts`（4 用例，真实 Electron 启动实测 4/4 通过，16s）：
+1. 技能 catalog 可读且统一（available + auto/_builtin 均非空、条目带名字）
+2. 已启用的助手只引用可解析技能（config 里的 enabledSkills ⊆ catalog——运行时版的 preset 引用校验）
+3. 带 enabledSkills 的会话在斜杠菜单中出现对应技能（source:'skill'、insert 行为——本次新功能的 e2e 回归防线）
+4. 不带 enabledSkills 的会话无技能斜杠项（负向）
+
+运行方式：`npx playwright test tests/e2e/specs/assistants-skills.e2e.ts`（需先 `npm run stop:dev` 释放实例）。
+
+## 验证情况（本轮）
+
+- `npx tsc --noEmit` 通过；oxlint 改动文件 0 warning 0 error；i18n 校验通过
+- **全量单测 473 文件 / 3687 用例 0 失败**（此前 10 文件 27 失败全部清零）
+- 新 e2e 4/4 通过（真实 Electron 实例）
+- 桌面开发实例已被 e2e 流程停止（`npm run stop:dev`），需要时 `npm run restart` 重启
+
+## 当前待办（收敛后）
+
+1. 桌面端人工体验一轮（重点：ACP 助手遵守规则、`/` 菜单技能、不可用 agent 的警示点与一键重检）
+2. 确认后 commit（中文 message、等用户确认）→ bump patch → `npm run dist:win` 打包（交付约定）
+3. 日常机制：上游发版扫 release notes cherry-pick；fix 提交前跑受影响单测
+
+---
+
+# 2026-07-04 第四轮 — 补齐三个"有意留缺"项（用户确认后开工）
+
+第三轮汇报时明确标注的三个缺口，按用户确认的优先级 8 > 7 > 5 全部补齐。
+
+## 1. [已完成] 助手 UI 交互层 e2e（原第 8 项缺口）
+
+- **前置**：给助手管理 UI 补 `data-testid`（对齐上游命名习惯）：
+  - `AssistantListPanel`：`assistant-card-{id}` / `switch-enabled-{id}` / `btn-duplicate-{id}` / `btn-delete-{id}` / `btn-create-assistant`
+  - `AssistantEditDrawer`：`assistant-editor-drawer` / `input-assistant-name` / `input-assistant-description` / `btn-save-assistant` / `btn-delete-assistant`
+  - e2e 导航 helper 增加 `assistants: '#/settings/assistants'` 路由
+- **新增 `tests/e2e/specs/assistants-ui.e2e.ts`**（按上游 P0 用例语义重写，适配本 fork 抽屉式编辑器）：
+  - P0-1 创建助手全流程（抽屉打开→填名/描述→保存→列表出卡片→删除清理，顺带覆盖删除确认 Modal）
+  - P0-2 卡片点击开编辑器；enabled 开关原地切换不弹编辑器、状态翻转、可还原
+  - P0-3 复制内置助手 → create 模式编辑器、名字预填、取消不落库
+  - P0-4 内置助手编辑器：edit 模式、名字预填、删除可用（**实测发现本 fork 内置助手身份字段可编辑**，与上游 v2.1.25 的"identity fields locked"不同——按本 fork 实际行为断言，若未来对齐上游需同步改此用例）
+- **实测**：与 assistants-skills.e2e.ts 合跑 8/8 通过（25s，真实 Electron）。
+
+## 2. [已完成] 上游 release 自动扫描（原第 7 项缺口）
+
+建了 Claude 定时任务 `upstream-aionui-release-scan`（每天 ~10:25）：扫最近 26h 的 AionUi 发版 → 筛 assistant/skill/slash/cron/注入/MCP 相关条目 → 输出中文报告 + 是否值得移植的评估（prompt 里已挂 skills-invocation.md 与 CONTEXT.md 路由，避免推荐已移植内容）。
+**注意**：任务跑在 Claude 桌面应用里，应用关闭时到点不跑、下次启动补跑。任务文件：`C:\Users\allenzhao\.claude\scheduled-tasks\upstream-aionui-release-scan\SKILL.md`。
+
+## 3. [已完成] 技能索引每 N 轮轻量重注入（原第 5 项缺口）
+
+- `agentUtils.prepareSkillsIndexRefresh()`：只构建索引提醒块（不重复助手规则），前缀 `[Skills Index Reminder]`。
+- `firstMessage.applyAgentToolkitIndexRefresh()`：门控（toolkit 开启 + backend 走索引注入路径才生效；原生技能 backend 返回 null）。`SKILLS_INDEX_REFRESH_INTERVAL = 20`。
+- `AcpAgentManager`：新增 `messagesSinceToolkitInjection` 计数器——首条消息全量注入后清零；此后每条用户消息 +1，到 20 做一次轻量刷新并清零；不适用（原生/关闭）时消息原样发送、计数保留下次重试。
+- 单测 +2（触发时机、原生 backend 永不触发），该文件 20/20 过。
+
+## 验证情况（本轮）
+
+- tsc 通过；新代码 oxlint 0 warning（存量文件的旧 warning 未动）
+- 技能注入相关单测 20/20；两个助手 e2e spec 合跑 8/8
+- 全量单测最终跑数见下轮记录（后台执行中，如有意外会另行记录；截至上一轮为 0 失败基线）
+
+## 至此
+
+7-04 最初分析的 1-8 项全部完成，无保留缺口。日常机制：每日上游扫描任务 + 双层测试防线（18 个技能相关单测 + 8 个 e2e）。下一步仍是:人工体验 → commit（等用户确认）→ bump patch → dist:win 打包。
+
+---
+
+# 2026-07-04 第五轮 — 上游全量对齐审计(v1.9.10 → v2.1.28,51 个版本)
+
+用户要求全面对齐上游、排查整体 bug。方法:拉全 51 个版本 release notes 逐条分类,对高危项在本地代码逐个核查"bug 是否存在"。
+
+## 架构分界(决定适用性的关键)
+
+- fork 基线 = 2026-04-08 全量导入 ≈ **v1.9.9**,比之前估计的 v1.9.16 更早——**整个 v1.9.10~v1.9.25 修复批次都可能缺失**。
+- 上游 v2.0 起换 Rust 后端(aioncore)+ 前后端分离,**v2.1.x 的大部分修复不适用**本 fork 的 Electron 单体架构(概念可参考,代码不可移植)。
+- 结论:移植金矿 = v1.9.10–v1.9.25 同架构修复 + v2.1.x 中纯渲染层修复。
+
+## 本轮已确认并修复(1)
+
+### [已修复] cron 无效表达式使 CronService 初始化整体失败(上游 #2231 同类)
+`CronService.startTimer` 直接 `new Cron(schedule.expr)`,croner 对无效表达式 throw;init 循环启动所有任务时一个坏表达式 → catch 后 rethrow → **所有定时任务停摆**。本 fork 的 cron 表达式常由 AI 聊天生成,比上游更易踩。已加 try/catch:坏任务记 `lastStatus:'skipped'` + `lastError`(含原始表达式)落库并通知前端,其余任务不受影响。tsc + 全量 3541 用例通过。
+
+## 已核查确认「无此 bug」(fork 已有等效实现)(4)
+
+| 上游修复 | 本地核查结论 |
+|---|---|
+| #2571/#2214 DB 误恢复丢数据(CANTOPEN 触发恢复)| `isSqliteCorruptionError` 只匹配真损坏文案且排除 native-module 错误;恢复前有 quarantine 备份 |
+| #2618 Windows PATH 增强(cargo/go/deno/.local/bin)| `shellEnv.ts` 已覆盖 |
+| #3018 已删 provider/助手启动复活 | server 配置迁移有一次性 flag;内置助手删除走 hidden 机制不复活 |
+| #3366 Windows PDF 预览空白(file:// URL)| PDFViewer 已做反斜杠归一化 + `file:///` 前缀 |
+
+## 已确认缺失、建议移植:Windows ACP 可靠性三件套(P0)
+
+fork 有 `resources/bundled-bun`(npx 型 ACP 连接走 bundled bun),但缺上游三个配套修复:
+1. **#2451 bunx 缓存损坏自动检测清理**——`bun x` 已知问题会把临时缓存搞坏,之后 Claude/Codex/CodeBuddy **每次重试必挂**,用户无从自救
+2. **#2482 bun 缓存目录重定向到 userData**——避免 Windows EPERM(Defender 锁文件)
+3. **#2496 覆盖 TMP/TEMP 使 bunx 工作目录避开杀软扫描路径**——本机已有 Defender 冻结前科(officecli manifest 探测),同类根因
+三个都是 `acpConnectors.ts`/启动路径的小改动,建议下一轮一起移植。
+
+## 架构适用、按优先级排查/移植候选(未逐行核查)
+
+**P1(用户可感知的正确性)**:
+- #2205 用户消息气泡文本原样保留(不被 trim/改写)
+- #2342 gemini 首次启动 auth 加载完成后补发首条消息
+- #2320 编辑 cron 任务时自定义表达式被重置
+- #2487/#2502 cron 改用原地更新(防竞态数据丢失)/ 忽略对已删任务的更新
+- #2345 app 退出时清理泄漏进程(fork 只覆盖了 worker kill 时孤儿,应用退出路径待核)
+- #3019 切换会话时中断上一会话的 in-flight 上传(grep 未见 abort 逻辑)
+- #2050 模型 provider 被删后打开旧会话崩溃
+**P2(体验/健壮性)**:
+- #2619/#2595/#2598 ACP idle 时序:正常退出误报 crash、idle 态 setMode 报错、initialize 顶层 modes 丢失
+- #2225 流式输出期间自动滚动;#2223 会话切换 snapshot 过度重建
+- #2229/#2422 malformed tool payload 渲染守卫
+- #3308 从注册表水合 GUI 进程 PATH(桌面快捷方式启动时 CLI 检测更可靠)
+- v1.9.11–1.9.15 team 模式修复批次(fork 有 team 模块,量大,建议专轮:工作区同步 #2362、leader 崩溃恢复 #2358、排队消息回滚 #2289 等)
+
+## 不适用(v2.x 后端架构专属,仅概念参考)
+
+aioncore 启动诊断链、web-host 端口管理、conversation 分页(靠后端 API)、conversation-scope MCP(后端实现)、runtime policy、model selector 后端数据源、更新器 CDN 元数据等。
+
+## 长效机制
+
+每日 10:25 的 `upstream-aionui-release-scan` 定时任务持续跟进新发版;本轮的分类清单可作为它的基线。
+
+---
+
+# 2026-07-04 第六轮 — Phase 1 移植落地(用户授权大改动后的第一批)
+
+用户授权做大架构改动对齐官方能力。**战略决策(已与用户同步)**:不照搬上游 v2.0 Rust 后端分离(会推倒企业版/渠道/数字员工等全部二开,收益是已用自有方式实现的"可部署性");路线改为 Phase1 可靠性对齐 → Phase2 ACP 2.0 协议层移植 → Phase3 team 修复批次 → Phase4 v2.x 能力在自有架构内重实现。
+
+## 本轮完成(Phase 1)
+
+### 1. [已移植] bun 三件套(Windows ACP 可靠性,#2451/#2482/#2496)
+- `acpConnectors.prepareCleanEnv`:BUN_INSTALL_CACHE_DIR/BUN_TMPDIR 重定向到 userData;Windows 下 TMP/TEMP 一并指向 bun-tmp,使 bunx 工作目录整链避开杀软扫描路径(EPERM 根治)
+- `connectNpxBackend` 增加第三阶段重试:检测 "Cannot find package/module"(bunx 缓存损坏特征)→ `clearBunxCache` 从错误路径提取 bunx-* 缓存目录删除 → 重试一次
+- 移植上游单测为 `tests/unit/acpBunxCache.test.ts`(9 用例);`acpConnectors.test.ts` 的 env 精确断言改 objectContaining(与上游同改)
+
+### 2. [已移植] #2320 编辑 cron 任务不再静默改写自定义表达式
+fork 的 `parseCronExpr` 比上游 bug 更重:`*/15 * * * *` 被误判 hourly,日/月字段直接忽略——编辑一次即破坏调度。已移植:新增 'custom' 频率类型 + 严格的预设匹配(不满足即 custom)+ 自定义表达式输入框(编辑时原样带出、保存时原样写回)+ 空表达式提交校验。i18n:`cron.page.form.customCronPlaceholder/customCronRequired`(freq.custom 两语言原本就有)。
+
+### 3. [已移植] #2050 provider 删光后预置助手建会话崩溃
+fork 已修 CLI 路径但 `buildPresetAssistantParams` 仍裸调 `getDefaultGeminiModel()`(throw)。新增 `resolveGeminiModel()` fallback 到 Google-Auth placeholder。
+
+### 4. [已移植] #2205 用户消息气泡原样渲染
+用户输入原来走 MarkdownView(换行合并、`#`/`*` 被解释)。现在 `position==='right'` 的消息用 `whitespace-pre-wrap` 纯文本渲染,复制也取原文。
+
+### 5. [已核查无需移植] #2345 退出泄漏进程
+fork 的 `before-quit` 已覆盖 worker/team/channel/preview/snapshot 清理 + 6-23 的 worker exit 孤儿处理,比上游同期实现更全。
+
+### 6. [上一轮已修] cron 无效表达式击穿 CronService init(#2231 同类)
+
+## 本轮未完成(移植候选,留待下一批)
+
+- **#3019 切换会话中断 in-flight 上传**(渲染层,需梳理 fork 的上传 hook 结构)
+- **#2342 gemini 首启 auth 加载后补发首条消息**(需核对 fork 的 useGeminiInitialMessage 时序)
+- **Phase 2:ACP 2.0 协议层移植**(#2310/#2520/#2548/#2549,上游同架构时期完成,含单一所有者 ProcessAcpClient、异步批量 CLI 检测、YOLO 模式;改动面大,建议独立会话专轮做)
+- **Phase 3:team 修复批次**(v1.9.11–1.9.15 十余个)
+- **Phase 4:会话消息分页(参考 #3422 概念)、Butler 型自维护助手(在自有架构内实现)**
+
+## 验证情况
+
+- tsc 通过;i18n 校验通过;新增/修改行 lint 干净(45 个 warning 全在 acpConnectors/CronService 的存量 console 等旧代码)
+- acpBunxCache(9)+ acpConnectors(23)通过;全量单测后台跑完 exit 0(汇总行见任务输出)
+- **未做**:桌面端手工验证(bun 三件套需真实 Windows + Claude/Codex 启动场景;cron 自定义表达式建议 UI 手测一次)
+
+### 全量单测补充说明(本轮末次运行)
+
+473 文件通过,唯一失败 `guidAgentSelection.dom.test.ts › selectedMode defaults to auto-approve` 为**顺序依赖 flake**:单文件运行 6/6 恒过(stash 前后均验证),仅全量运行时偶发——疑似其他测试污染共享的 ConfigStorage/localStorage mock 状态。与本轮移植无关,列入待办:给该测试文件补 beforeEach 状态隔离。
+
+---
+
+# 2026-07-04 第七轮 — P1 尾巴清零(Phase 1 完结)
+
+## 1. [已移植] #3019 切换会话中断 in-flight 上传(fork 适配版)
+
+上游是 v2.1.2 monorepo 统一 SendBox 架构,fork 按自有结构适配:
+- `useUploadState`:`trackUpload` 支持 options(conversationId 绑定 + onAbort 回调,保留旧字符串签名兼容);新增 `abortUploads({source?, exceptConversationId?})`
+- `uploadFileViaHttp` 新增第 4 参 `registerAbort`,暴露 `xhr.abort()`
+- 两个调用点接线(`FileService.processDroppedFiles`、`useWorkspacePaste`),abort 触发 XHR 取消
+- 新增 `useAbortUploadsOnConversationChange` hook,挂在会话根组件(`pages/conversation/index.tsx`):切会话时清掉上一会话的上传,卸载时清空 source 桶
+- 注:fork 的 Electron 路径走 IPC 临时文件(无长 XHR),该 bug 主要影响 WebUI 模式——本移植正好覆盖
+
+## 2. [已移植] #2342 gemini 首次启动 auth 加载后补发首条消息
+
+fork 与上游修复前完全一致的两处 bug:no-auth 分支删了 sessionStorage(auth 好了消息已丢)、effect 依赖缺 `hasNoAuth`(auth 转变不触发)。已移植:no-auth 阶段保留 sessionStorage、真正发送时清空输入框草稿、依赖数组补 hasNoAuth。测试:更新旧断言(sessionStorage 保留)+ 新增 auth missing→ready 转变即发送的用例(上游同款),3/3 过。
+
+## 验证情况
+
+- tsc 通过;新文件 lint 0 警告
+- **全量单测 0 失败(3697 通过)**——上轮的 guidAgentSelection flake 本轮未复现,坐实偶发
+- 至此第五轮审计的 P0/P1 清单**全部清零**(9 项移植 + 2 项核查无需移植)
+
+## Phase 1 总账(第六+七轮)
+
+已移植:#2451/#2482/#2496(bun 三件套)、#2231(cron 表达式击穿)、#2320(cron 编辑改写)、#2050(provider 崩溃)、#2205(消息原样)、#3019(上传中断)、#2342(gemini 首发)。核查无需移植:#2571/#2214、#2618、#3018、#3366、#2345。
+
+## 下一步(建议新会话专轮)
+
+**Phase 2:ACP 2.0 协议层移植** — 参考上游 #2310(模块化协议层+单一所有者 ProcessAcpClient)、#2520(V1→V2 phase 2 + YOLO 模式)、#2548/#2549(审计缺口+idle 状态机)、#2485(异步批量 CLI 检测,启动提速)。上游在同架构(v1.9.18)完成,可移植性好,但涉及 `src/process/agent/acp/**` 全域,建议独立会话、先拉 `git log upstream/v1.9.18 -- src/process/agent/acp` 对照 fork 差异再动手。之后 Phase 3(team 批次)、Phase 4(会话分页/Butler 在自有架构内实现)。
+
+---
+
+# 后续阶段交接说明(Phase 2/3/4,各开新会话执行)
+
+> 2026-07-04 与用户约定:Phase 2/3/4 均在**新会话**中执行,每个 Phase 一个会话。新会话开工前先读本文件 2026-07-04 各章节(尤其第五轮审计的架构分界结论)+ `docs/tech/skills-invocation.md`。当前工作区有 7 轮未提交改动,新 Phase 开工前建议先让用户确认 commit。
+
+## Phase 2:ACP 2.0 协议层移植(未开始)
+
+- **目标**:移植上游 v1.9.18 的 ACP 模块化协议层——单一所有者 ProcessAcpClient、异步批量 CLI 检测(启动提速)、YOLO 模式、idle 状态机修复。
+- **参考 PR**:#2310(协议层主体)、#2520(V1→V2 phase 2 + YOLO)、#2548(审计缺口 #20-#26)、#2549(idle 转移)、#2485(异步批量检测)。
+- **入手路径**:`git fetch upstream --tags` 后 `git diff v1.9.17..v1.9.18 -- src/process/agent/acp` 看全貌;fork 侧对应 `src/process/agent/acp/**`(AcpConnection.ts、acpConnectors.ts 等)。注意 fork 在此目录已有二开(bun 三件套、agentSetupHints、buildStartupErrorMessage 等),**不能整目录覆盖,要按模块渐进替换**,每步跑 tests/unit/acp*。
+- **风险**:改动面最大的一个 Phase;涉及所有 ACP backend(claude/codex/codebuddy/自定义)。建议先把 e2e `acp-agent.e2e.ts` 跑通做基线。
+
+## Phase 3:team 模式修复批次(未开始,已做初步侦察)
+
+- **目标**:移植 v1.9.11–1.9.15 的 team 可靠性修复。fork 的 team 模块在 `src/process/team/`(Mailbox/TaskManager/TeamMcpServer/TeamSession/TeammateManager 等,结构与上游同期接近)。
+- **按优先级的移植清单**:
+  1. #2377 转 team 时工作区被覆盖(丢原会话工作目录)
+  2. #2362 team 启动时同步 workspace 到所有成员(否则互读文件 file-not-found)
+  3. #2358 leader 崩溃后被自动移除(应原地恢复)
+  4. #2265 team 流式期间无限 DB refresh + 死 IPC
+  5. #2289 排队消息在 teammate accept 后回滚丢失
+  6. #2426 teammate standby 时 300s LLM 超时(prompt 指示立即结束 turn)
+  7. #2425 静默 agent 升级为 failed + 通知 leader
+  8. #2429 MCP TCP 内存暴涨防护
+  9. 次级:#2412(gemini worker 崩溃检测)、#2436(全屏槽位同步)、#2393(去掉完成确认弹窗)、#2338(历史 team 成员恢复)
+- **方法**:逐个 `gh pr diff <n> -R iOfficeAI/AionUi`,先在 fork 对应文件 grep 关键符号判断"已有/缺失/已分叉",再决定移植/跳过(与第五轮审计同方法论)。fork 的 team 有自己的二开(TeamRuntimeAdminPublisher 企业版相关),小心别破坏。
+- **测试**:tests/unit 下有 team 相关测试(grep teamBridge/TeammateManager);e2e 有 team 场景(上游 #2616/#2670 可参考补)。
+
+## Phase 4:上游 v2.x 能力在自有架构内重实现(未开始)
+
+### 4a. 会话消息分页(参考上游 #3422 概念,代码不可移植——上游靠 Rust 后端 API)
+- **现状**:fork 打开会话一次性加载全部消息(长会话卡顿)。消息存 SQLite(`src/process/services/database/`,messages 表),渲染层经 IPC 拉取。
+- **实现思路**:DB 层加游标分页查询(按 createdAt/id 倒序 limit N);IPC 桥新增分页通道;渲染层 Messages 列表先载最近 N 条,上滚触发加载更早批次;注意与流式新消息追加、消息去重(msg_id)共存。
+- **入口**:渲染层消息加载 hook(grep `getMessages`/`messageList`)+ `databaseBridge.ts`。
+
+### 4b. Butler 型自维护助手("应用管家",参考上游 v2.1.20 概念)
+- **目标**:内置助手,用户用自然语言配置/诊断应用("帮我看看为什么定时任务没跑"/"给 PPT 助手加个技能")。
+- **fork 已有的基建正好够**:preset assistant 体系(`assistantPresets.ts` + resources/assistant/)+ builtin MCP 体系(内置 MCP 三件套约定见记忆 builtin-mcp-asar-unpack)。
+- **实现思路**:
+  1. 新建 builtin MCP `one-app-butler`:暴露只读诊断工具(读配置键、列助手/技能/MCP/定时任务、读 logs/*.log 尾部、健康检查),写操作(改配置/加技能)按需逐个加并走确认。
+  2. 新建 preset assistant `app-butler`(中文名"应用管家"),规则文件写清可用工具与安全边界,defaultEnabledSkills 留空,依赖 MCP 工具。
+  3. 注意:新增内置 MCP 必须同步 asarUnpack + build-mcp-servers + constants 三处(踩坑记忆)。
+- **范围控制**:第一版只做"诊断+查询"(只读),"via chat 配置"(写操作)参考上游 #3446 做第二版。
+
+## 通用注意(每个新会话都适用)
+
+- 主进程禁 console(坑1);测试走桌面端 `npm run restart`;commit 中文、main 分支、等用户确认;打包前 bump patch。
+- 每完成一个 Phase 更新本文件 + 跑全量 `npx vitest run`(基线:3697 通过 0 失败,存在一个 guidAgentSelection 顺序依赖 flake,单文件恒过)。
+- 每日 10:25 有 upstream-aionui-release-scan 定时任务盯上游新发版。
+
+---
+
+# 架构对齐总体规划 — v2 架构评估与迁移决策(优先级最高,先于 Phase 2-4 执行)
+
+> 2026-07-04 用户新授权:**必要时推倒重来重构也划算**。理由:上游(aionui.com)在 Agent 协作、内置助手、远程控制、自动化上都很稳定,而本 fork 只具备"自己的服务端形式",基础架构能力未对齐导致一直不稳定。
+> **硬性要求:真正大改之前,必须先产出一份详细对比清单,列出改了之后的优点是什么**,交用户决策后再动手。
+> **重要:本评估应先于 Phase 2/3/4 执行** —— 若决策采纳 v2 架构,Phase 2(ACP 协议层)被 v2 后端天然取代、Phase 3(team 修复)大部分被取代、Phase 4(分页/Butler)上游已内置,先做它们会白干。
+
+## 已核实的关键事实(2026-07-04,评估会话可直接引用)
+
+1. **AionCore(iOfficeAI/AionCore)是 Apache-2.0 开源 Rust 项目**(约 9MB Rust 源码),不是黑盒二进制——**可以 fork 并用自有 crate 扩展**。技术栈 Axum+Tokio+sqlx+rustls,单二进制 27-55MB,6 平台(mac/linux/win × x64/arm64)。
+2. **AionCore 的 crate 划分已覆盖本 fork 二开的大部分领域**:`aionui-ai-agent`(ACP/agent 运行时)、`aionui-channel`(渠道!)、`aionui-auth`(认证,WebUI auth 已并入后端 SQLite,上游 #2816)、`aionui-cron`、`aionui-assistant`、`aionui-mcp`、`aionui-extension`(扩展机制)、`aionui-team-prompts`、`aionui-realtime`(WS 事件总线)、`aionui-db`、`aionui-conversation`、`aionui-office`、`aionui-file`、`aionui-shell`、`aionui-system`、`aionui-api-types`。
+3. **上游前端 packages**:`desktop`(Electron 薄壳)/ `web-host`(独立 Web 宿主,脱离 Electron)/ `web-cli` / `shared-scripts`。桌面模式透明内嵌后端(传 desktop pid 管生命周期,#3250);协议为 HTTP `/api/*` + `/ws` 事件总线,wire format snake_case(#2672),完全开放。
+4. **ACP/agent 实现已整体迁入后端**(#2804 #2819),首条消息技能注入也在后端(#2668),技能读 `extra.skills` 快照(#2677)+ symlink 契约(#2682)。前端只剩渲染。
+5. 迁移期兼容参考:上游 #2897(容忍退役 id、保留用户 preset_agent_type、gemini→aionrs 默认迁移)、#3018(一次性迁移 flag)、#3423(旧库启动修复)——上游自己趟过 v1→v2 用户数据迁移,这些 PR 是现成教材。
+
+## 不稳定性的架构归因(支持用户判断的证据链)
+
+本文件记录的历史卡死/顽疾,**几乎全部源于"重活压在 Electron 主进程"这一结构**,v2 的进程分离从根上消除该类别:
+| 本 fork 踩过的坑 | 架构根因 | v2 下是否结构性消失 |
+|---|---|---|
+| 主进程 console.* 冻死(4 轮排查) | console 被 patch 成同步广播,跑在主进程事件循环 | ✅ 业务日志在后端进程,与 UI 事件循环无关 |
+| DIPS+SQLite 损坏卡死 | Electron 框架二进制与业务 DB 同进程互扰 | ✅ DB 在后端进程(sqlx) |
+| ConfigStorage 主进程调用永不返回 | 同一 IPC 抽象双向语义不一致 | ✅ 统一 HTTP/WS 单向契约 |
+| WebUI IPC 无超时转圈 | Express+WS 塞在主进程,桥接语义脆弱 | ✅ web-host 独立进程,标准 HTTP |
+| aionrs send 竞态/worker 孤儿 | fork worker 生命周期手工管理 | ✅ 后端 tokio 统一管理子进程 |
+| getEnhancedEnv/Defender 首扫冻结 | 同步 IO 在主进程微任务里 | ✅ 后端异步 IO |
+
+## 评估会话必须产出的《对比清单》(用户决策文档,模板)
+
+按用户点名的能力域逐一对比,每域一节:**现状实现(文件/机制)→ 上游 v2 实现 → 差距与不稳定点 → 迁移后收益(具体到"哪类 bug 消失/哪个体验变好")**:
+1. **Agent 协作(team)**:现状 src/process/team/**(TCP + 手工进程管理)vs 后端 aionui-team-prompts + runtime;
+2. **内置助手**:现状 assistantPresets 硬编码 + 首条消息注入 vs 后端 aionui-assistant + 治理页;
+3. **远程控制**:现状 Express-in-Electron WebUI + 企业版客户端/服务器 vs web-host + aionui-auth + Cloudflare tunnel(Butler 一键公网);
+4. **自动化(cron)**:现状 croner-in-主进程 vs aionui-cron(后端,时区修复/原地更新都已内置);
+5. **基础设施**:IPC bridge vs HTTP+WS;better-sqlite3(主进程)vs sqlx(后端);技能注入链 vs 后端注入+symlink 契约。
+
+然后给出**三个策略选项**,各附四大二开资产(WebUI server 模式、企业版客户端/服务器、飞书/微信渠道、数字员工)的去向、工作量级(人周)、风险、回滚方案:
+- **选项 A|整体采纳**:fork AionCore(Apache-2.0 允许),企业版/渠道/数字员工移植为自有 Rust crate 或 extension;前端换上游 packages/desktop + web-host 再叠 UI 二开。收益最大(全部架构性顽疾消失+持续跟上游),成本最大(Rust 移植),**已确认无授权障碍**。
+- **选项 B|混合架构**:保留 TS 技术栈,但采纳 v2 的架构模式——把 agent 运行时/DB/cron/渠道从主进程抽到独立 Node 子进程(自建 mini-backend),主进程只剩窗口管理,通信换 HTTP+WS。收益:消除主进程顽疾类;成本:中;风险:自建协议长期维护、仍追不上上游功能。
+- **选项 C|渐进修补**(原 Phase 2-4 路线):成本最小,但架构性顽疾只能逐个打补丁,与上游渐行渐远。
+- 评估会话应给出**明确推荐**(基于上面证据链,倾向 A,分期实施:先跑通"上游 v2 原版+零二开"作为 M0 基线 → 逐个移植二开资产 → 灰度切换),但决定权在用户。
+
+## 评估会话第一步要验证的问题清单
+
+1. AionCore 的 extension 机制(aionui-extension crate + 上游 examples/)能否承载渠道/企业版逻辑,还是必须改 crate 源码?
+2. 上游 `aionui-channel` 已支持哪些渠道(确认 WeCom/weixin/Telegram 现状),与 fork 的飞书/钉钉/微信实现差距多大?
+3. 企业版"客户端/服务器"语义(deploymentRole/enterpriseServerUrl/SSO/JIT)在 aionui-auth 上如何映射?
+4. 数字员工(digitalEmployee)依赖的 conversation/cron API 在 v2 后端是否齐备?
+5. 数据迁移:fork 的 1one.db(better-sqlite3 schema)+ one-config.txt → AionCore sqlx schema 的映射表;参考上游 #2897/#3018/#3423。
+6. 构建链:fork 的 dist:win 打包(asarUnpack 三件套、bundled-* 资源)在上游 electron-builder 配置下如何重排。
+
+## 执行建议
+
+- 评估会话产出《对比清单》即止(不写代码),交用户拍板;
+- 若选 A:后续按 M0(原版跑通)→ M1(渠道)→ M2(企业版)→ M3(数字员工)→ M4(灰度切换)分会话推进,每个 M 一个可回滚的里程碑;
+- 本仓库 7 轮未提交改动是 Electron 架构上的修复,**无论选哪条路都建议先 commit 保底**(选 A 后它们仍是过渡期生产版本的稳定性保障)。
+
+---
+
+# 2026-07-04 第八轮 — v2 架构评估完成,《对比清单》已产出(待用户拍板)
+
+按上节规划执行的评估会话。三路并行调研(AionCore 源码浅克隆逐 crate 核查 / AionUi v2 monorepo+关键 PR / 本 fork 四大资产逐文件盘点)已完成,**产出决策文档 `docs/tech/v2-architecture-comparison.md`**(五能力域对比 + 三策略选项 + 资产去向/工作量/风险/回滚 + 推荐),未写任何代码。
+
+## 相对上节预评估的关键修正(后续会话必读)
+
+1. **extension 机制承载不了二开**——`aionui-extension` 是 manifest 声明式贡献模型,`channel_plugins` 是 metadata-only 空壳(JS 入口从不执行),无法注入 HTTP 路由/后台服务。选项 A 必然 = fork AionCore + 自有 crate(Apache-2.0 无障碍;注意 LICENSE=Apache-2.0 但 Cargo.toml 写 MIT,两处不一致)。
+2. **渠道资产上游已内置**——aionui-channel 有飞书(WS 长连)/微信(官方 iLink Bot)/钉钉(Stream+AI Card)/Telegram,含 6 位配对码+会话隔离+流式回写,与 fork 同构。最大的一块二开(1.2 万行)在选项 A 下基本白送。缺 WeCom(双方都没有)。
+3. **企业版是唯一必须新写的后端域**——aionui-auth 无 SSO/租户/RBAC,需自有 Rust crate(约 6-10 人周,是选项 A 主要成本)。
+4. **数字员工 API 齐备**——POST conversations / POST messages(返回 turn_id)/ WS message.stream+turn.completed / cron 执行目标即"向会话发消息"。
+5. 上游节奏 = 最大战略风险:AionCore 近乎日更、贡献者全内部、外部 PR 通道未验证 → 按长期 fork 规划,pin aioncoreVersion 批量升级,二开收敛在自有 crate。
+
+## 推荐(详见文档)
+
+**选项 A(整体采纳),六里程碑 M0-M5,合计 17-28 人周**;M2(企业版 Rust)开工两周后设 checkpoint,超预期可降级为 Node sidecar 过渡(省 3-5 人周)。选项 B(自建 Node 后端)10-18 人周但永久分叉;选项 C(渐进修补)8-11 人周但维护成本发散。
+
+## 下一步(等用户决策)
+
+1. 用户读 `docs/tech/v2-architecture-comparison.md` 拍板 A/B/C;
+2. 无论选哪条:先 commit 当前 7 轮未提交改动(过渡期生产版本保底);
+3. 若选 A:M0(上游 v2 原版跑通 + 数据只读验证)开新会话执行,施工顺序模板 = 上游 #2672(wire format)→ #2668/#2677/#2682(技能三部曲)→ backend-launcher → 迁移三 PR(#2897/#3018/#3423)。

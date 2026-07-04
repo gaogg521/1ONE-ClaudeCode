@@ -39,7 +39,11 @@ import { hasCronCommands } from './CronCommandDetector';
 import { skillSuggestWatcher } from '@process/services/cron/SkillSuggestWatcher';
 import { extractAndStripThinkTags } from './ThinkTagDetector';
 import type { AgentKillReason } from './IAgentManager';
-import { applyAgentToolkitFirstMessage } from '@process/services/agentToolkit/firstMessage';
+import {
+  applyAgentToolkitFirstMessage,
+  applyAgentToolkitIndexRefresh,
+  SKILLS_INDEX_REFRESH_INTERVAL,
+} from '@process/services/agentToolkit/firstMessage';
 import { ensureCodegraphWorkspaceIndexed } from '@process/services/agentToolkit/codegraph';
 import { shouldAutoInitCodegraph } from '@process/services/agentToolkit/workspace';
 import { extractTextFromMessage, processCronInMessage } from './MessageMiddleware';
@@ -86,6 +90,8 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
   private bootstrap: Promise<AcpAgent> | undefined;
   private bootstrapping: boolean = false;
   private isFirstMessage: boolean = true;
+  /** User messages sent since the last toolkit injection (see SKILLS_INDEX_REFRESH_INTERVAL) */
+  private messagesSinceToolkitInjection: number = 0;
   options: AcpAgentManagerData;
   private currentMode: string = 'default';
   private persistedModelId: string | null = null;
@@ -815,26 +821,49 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
       }
 
       if (data.msg_id && data.content) {
-        let contentToSend = data.content;
+        // Inject on top of the string actually sent to the agent. When
+        // data.agentPrompt (attachment augmentation) is present it is the send
+        // payload — injecting into data.content and then sending agentPrompt
+        // would silently drop the assistant rules and skills index.
+        let contentToSend = data.agentPrompt ?? data.content;
         if (contentToSend.includes(ONE_FILES_MARKER)) {
           contentToSend = contentToSend.split(ONE_FILES_MARKER)[0].trimEnd();
         }
 
-        // Run CLI bootstrap and first-message toolkit injection in parallel.
+        // Run CLI bootstrap and toolkit injection in parallel.
+        // First message: full injection (rules + skills index). Every
+        // SKILLS_INDEX_REFRESH_INTERVAL messages after that: lightweight
+        // index-only refresh so CLI-side context compaction in long
+        // conversations doesn't permanently drop skill awareness.
         const initPromise = this.initAgent(this.options);
-        const toolkitPromise = this.isFirstMessage
-          ? applyAgentToolkitFirstMessage(
-              contentToSend,
-              {
-                presetContext: this.options.presetContext,
-                enabledSkills: this.options.enabledSkills,
-              },
-              {
-                backend: this.options.backend,
-                customWorkspace: this.options.customWorkspace,
+        const toolkitConfig = {
+          presetContext: this.options.presetContext,
+          enabledSkills: this.options.enabledSkills,
+        };
+        const toolkitOptions = {
+          backend: this.options.backend,
+          customWorkspace: this.options.customWorkspace,
+        };
+        let toolkitPromise: Promise<string> | null = null;
+        if (this.isFirstMessage) {
+          toolkitPromise = applyAgentToolkitFirstMessage(contentToSend, toolkitConfig, toolkitOptions);
+        } else {
+          this.messagesSinceToolkitInjection += 1;
+          if (this.messagesSinceToolkitInjection >= SKILLS_INDEX_REFRESH_INTERVAL) {
+            const originalContent = contentToSend;
+            toolkitPromise = applyAgentToolkitIndexRefresh(originalContent, toolkitConfig, toolkitOptions).then(
+              (refreshed) => {
+                if (refreshed) {
+                  this.messagesSinceToolkitInjection = 0;
+                  return refreshed;
+                }
+                // Not applicable (native skills / toolkit disabled) — leave the
+                // message unchanged; the counter stays and retries next message.
+                return originalContent;
               }
-            )
-          : null;
+            );
+          }
+        }
 
         await initPromise;
         if (toolkitPromise) {
@@ -843,11 +872,12 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
 
         const result = await this.agent.sendMessage({
           ...data,
-          content: data.agentPrompt ?? contentToSend,
+          content: contentToSend,
         });
         // 首条消息发送后标记，无论是否有 presetContext
         if (this.isFirstMessage) {
           this.isFirstMessage = false;
+          this.messagesSinceToolkitInjection = 0;
         }
         // Note: cronBusyGuard.setProcessing(false) is not called here
         // because the response streaming is still in progress.

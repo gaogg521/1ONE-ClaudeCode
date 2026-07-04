@@ -139,8 +139,10 @@ describe('useAgentAvailability', () => {
 
   // -- getAvailableFallbackAgent -----------------------------------------------
 
-  it('getAvailableFallbackAgent returns first available agent in fallback order', () => {
-    // Only claude is available -> gemini is first in fallback but not available
+  it('getAvailableFallbackAgent prefers the bundled aionrs engine over detected CLIs', () => {
+    // aionrs is bundled with the app and always available — it heads the
+    // fallback order so OpenAI-protocol users never get routed to a
+    // half-configured CLI (see useAgentAvailability fallback comment).
     const { result } = renderHook(() =>
       useAgentAvailability({
         modelList: [],
@@ -150,10 +152,10 @@ describe('useAgentAvailability', () => {
       })
     );
 
-    expect(result.current.getAvailableFallbackAgent()).toBe('claude');
+    expect(result.current.getAvailableFallbackAgent()).toBe('aionrs');
   });
 
-  it('getAvailableFallbackAgent returns gemini first when googleAuth is true', () => {
+  it('getAvailableFallbackAgent still prefers aionrs when googleAuth is true', () => {
     const { result } = renderHook(() =>
       useAgentAvailability({
         modelList: [],
@@ -163,11 +165,11 @@ describe('useAgentAvailability', () => {
       })
     );
 
-    // gemini comes first in fallback order
-    expect(result.current.getAvailableFallbackAgent()).toBe('gemini');
+    // aionrs precedes gemini in the ordered fallback list even with Google auth
+    expect(result.current.getAvailableFallbackAgent()).toBe('aionrs');
   });
 
-  it('getAvailableFallbackAgent returns null when nothing is available', () => {
+  it('getAvailableFallbackAgent never returns null — the bundled aionrs engine is always available', () => {
     const { result } = renderHook(() =>
       useAgentAvailability({
         modelList: [],
@@ -177,7 +179,7 @@ describe('useAgentAvailability', () => {
       })
     );
 
-    expect(result.current.getAvailableFallbackAgent()).toBeNull();
+    expect(result.current.getAvailableFallbackAgent()).toBe('aionrs');
   });
 
   // -- getEffectiveAgentType ---------------------------------------------------

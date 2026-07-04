@@ -270,6 +270,15 @@ export interface AcpBackendConfig {
   /** 是否为基于提示词的预设（无需 CLI 二进制文件）/ Whether this is a prompt-based preset (no CLI binary required) */
   isPreset?: boolean;
 
+  /**
+   * 运行时标记：该 agent 的 CLI 后端未被检测到（未安装/已移除/检测瞬时失败）。
+   * 由渲染层加载逻辑标注，不持久化到配置。用于 UI 显示"不可用"而非静默隐藏。
+   * Runtime flag: the agent's backing CLI was not detected (not installed /
+   * removed / transient detection failure). Annotated by renderer loading
+   * logic, never persisted. Used to render "unavailable" instead of hiding.
+   */
+  backendUnavailable?: boolean;
+
   /** 此预设的系统提示词或规则上下文 / The system prompt or rule context for this preset */
   context?: string;
 

@@ -94,11 +94,59 @@ describe('useGeminiInitialMessage', () => {
       expect(setContent).toHaveBeenCalledWith('draft from guide');
     });
 
-    expect(sessionStorage.getItem('gemini_initial_message_conv-no-auth')).toBeNull();
+    // sessionStorage is kept so the effect can pick the message up and send it
+    // once auth finishes loading (upstream #2342)
+    expect(sessionStorage.getItem('gemini_initial_message_conv-no-auth')).not.toBeNull();
     expect(autoSwitchTriggeredRef.current).toBe(true);
     expect(setShowSetupCard).toHaveBeenCalledWith(true);
     expect(performFullCheck).toHaveBeenCalledTimes(1);
     expect(mockGeminiSendInvoke).not.toHaveBeenCalled();
+  });
+
+  it('sends the initial message after auth transitions from missing to ready (upstream #2342)', async () => {
+    const setContent = vi.fn();
+    const setActiveMsgId = vi.fn();
+    const setWaitingResponse = vi.fn();
+
+    sessionStorage.setItem(
+      'gemini_initial_message_conv-transition',
+      JSON.stringify({ input: 'hello from guide', files: [] })
+    );
+
+    // Phase 1: no auth — message placed in input box, kept in sessionStorage
+    const { rerender } = renderHook(
+      ({ hasNoAuth, currentModelId }: { hasNoAuth: boolean; currentModelId: string | undefined }) =>
+        useGeminiInitialMessage({
+          conversationId: 'conv-transition',
+          currentModelId,
+          hasNoAuth,
+          setContent,
+          setActiveMsgId,
+          setWaitingResponse,
+          autoSwitchTriggeredRef: { current: false },
+          setShowSetupCard: vi.fn(),
+          performFullCheck: vi.fn().mockResolvedValue(undefined),
+        }),
+      { initialProps: { hasNoAuth: true, currentModelId: undefined as string | undefined } }
+    );
+
+    await waitFor(() => {
+      expect(setContent).toHaveBeenCalledWith('hello from guide');
+    });
+    expect(mockGeminiSendInvoke).not.toHaveBeenCalled();
+
+    // Phase 2: auth finished loading — the stored message must now be sent
+    rerender({ hasNoAuth: false, currentModelId: 'gemini-2.5' });
+
+    await waitFor(() => {
+      expect(mockGeminiSendInvoke).toHaveBeenCalledTimes(1);
+    });
+    expect(mockGeminiSendInvoke).toHaveBeenCalledWith(
+      expect.objectContaining({ input: 'hello from guide', conversation_id: 'conv-transition' })
+    );
+    expect(sessionStorage.getItem('gemini_initial_message_conv-transition')).toBeNull();
+    // Input box draft is cleared once the message is actually sent
+    expect(setContent).toHaveBeenCalledWith('');
   });
 
   it('sends the initial prompt immediately when auth and model are ready', async () => {

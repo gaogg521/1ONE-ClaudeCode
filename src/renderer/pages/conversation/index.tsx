@@ -8,6 +8,7 @@ import ChatConversation from './components/ChatConversation';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import { useConversationTabs } from './hooks/ConversationTabsContext';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
+import { useAbortUploadsOnConversationChange } from '@/renderer/hooks/file/useAbortUploadsOnConversationChange';
 
 const ChatConversationIndex: React.FC = () => {
   const { id } = useParams();
@@ -16,6 +17,9 @@ const ChatConversationIndex: React.FC = () => {
   const { closePreview } = usePreviewContext();
   const { openTab } = useConversationTabs();
   const { syncTitleFromHistory } = useAutoTitle();
+  // Cancel in-flight uploads from the previous conversation when switching,
+  // so stray progress bars/thumbnails never leak across (upstream #3019)
+  useAbortUploadsOnConversationChange(id);
   const previousConversationIdRef = useRef<string | undefined>(undefined);
   const defaultConversationTitle = t('conversation.welcome.newConversation');
 

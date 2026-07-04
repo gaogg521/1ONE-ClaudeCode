@@ -18,8 +18,9 @@ describe('enterprise login navigation', () => {
   });
 
   it('does not redirect back to login pages', () => {
-    expect(buildEnterpriseLoginPath('/login?mode=enterprise')).toBe('/login?redirect=%2Fsessions&mode=enterprise');
-    expect(buildWebuiAdminLoginPath('/login')).toBe('/login?redirect=%2Fsessions&mode=admin');
+    // 90305cfe: default landing changed from session list (/sessions) to chat input (/guid)
+    expect(buildEnterpriseLoginPath('/login?mode=enterprise')).toBe('/login?redirect=%2Fguid&mode=enterprise');
+    expect(buildWebuiAdminLoginPath('/login')).toBe('/login?redirect=%2Fguid&mode=admin');
   });
 
   it('parses explicit login intents while keeping legacy mode compatibility', () => {

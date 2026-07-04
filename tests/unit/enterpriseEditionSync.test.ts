@@ -9,7 +9,10 @@ import { mergeDesktopEnterpriseContext } from '@/common/auth/enterpriseEditionSy
 import { isEnterpriseAdminConsolePath } from '@/renderer/pages/enterprise/paths';
 
 describe('mergeDesktopEnterpriseContext', () => {
-  it('prefers browser session when present', () => {
+  it('prefers local ipc snapshot when this machine has joined an enterprise', () => {
+    // Merge priority (see mergeDesktopEnterpriseContext doc): a joined local
+    // instance keeps its own identity — the browser SSO session must not
+    // downgrade it (otherwise the overview page shows "单机实例").
     const merged = mergeDesktopEnterpriseContext(
       {
         joined: true,
@@ -24,7 +27,7 @@ describe('mergeDesktopEnterpriseContext', () => {
         role: 'member',
       }
     );
-    expect(merged.role).toBe('member');
+    expect(merged.role).toBe('org_admin');
     expect(merged.joined).toBe(true);
   });
 

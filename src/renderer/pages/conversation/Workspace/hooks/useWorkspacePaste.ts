@@ -115,9 +115,16 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
         let successCount = 0;
         try {
           for (let i = 0; i < fileList.length; i++) {
-            const tracker = trackUpload(fileList[i].size, 'workspace');
+            let abortXhr: (() => void) | undefined;
+            const tracker = trackUpload(fileList[i].size, {
+              source: 'workspace',
+              conversationId,
+              onAbort: () => abortXhr?.(),
+            });
             try {
-              await uploadFileViaHttp(fileList[i], conversationId, tracker.onProgress);
+              await uploadFileViaHttp(fileList[i], conversationId, tracker.onProgress, (abort) => {
+                abortXhr = abort;
+              });
               successCount++;
             } catch (error) {
               if (error instanceof Error && error.message === 'FILE_TOO_LARGE') {

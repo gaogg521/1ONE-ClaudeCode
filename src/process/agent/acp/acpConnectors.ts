@@ -13,7 +13,8 @@
 import type { ChildProcess, SpawnOptions } from 'child_process';
 import { execFile as execFileCb, execFileSync, spawn } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, promises as fs } from 'fs';
+import { existsSync, promises as fs, rmSync } from 'fs';
+import { getPlatformServices } from '@/common/platform';
 import os from 'os';
 import path from 'path';
 import {
@@ -144,6 +145,27 @@ export async function prepareCleanEnv(): Promise<Record<string, string | undefin
       delete merged[key];
     }
   }
+
+  // Redirect bun cache AND temp directories out of the system temp folder
+  // (upstream #2482 + #2496). On Windows, antivirus software (e.g. Windows
+  // Defender) actively scans %TEMP%, causing EPERM (NtSetInformationFile)
+  // when bun/bunx renames files during package install. BUN_INSTALL_CACHE_DIR
+  // and BUN_TMPDIR alone are not enough — bunx creates its working directory
+  // (`bunx-<uid>-<pkg>`) under the OS TMP/TEMP path, so the *source* files of
+  // the move are still locked by the scanner. Override TMP/TEMP on Windows so
+  // the entire bun file-operation chain stays inside userData.
+  const userDataDir = getPlatformServices().paths.getDataDir();
+  if (!merged.BUN_INSTALL_CACHE_DIR) {
+    merged.BUN_INSTALL_CACHE_DIR = path.join(userDataDir, 'bun-cache');
+  }
+  if (!merged.BUN_TMPDIR) {
+    merged.BUN_TMPDIR = path.join(userDataDir, 'bun-tmp');
+  }
+  if (process.platform === 'win32') {
+    merged.TMP = merged.BUN_TMPDIR;
+    merged.TEMP = merged.BUN_TMPDIR;
+  }
+
   return merged;
 }
 
@@ -288,6 +310,44 @@ export type NpxPrepareResult = {
   npxCommand: string;
   extraArgs?: string[];
 };
+
+// ── Bunx cache corruption detection & cleanup (upstream #2451) ──────
+
+/**
+ * Detect bunx cache corruption from stderr.
+ * bun x may fail to install all transitive dependencies (known bun issue),
+ * producing "Cannot find package" (Unix) or "Cannot find module" (Windows).
+ * Once the cache is in this state, every retry fails the same way until the
+ * cache directory is removed.
+ */
+export function isBunxCacheCorruption(stderr: string): boolean {
+  return /Cannot find (?:package|module)/i.test(stderr);
+}
+
+/**
+ * Extract the bunx cache root directory from the error path in stderr and delete it.
+ *
+ * Stderr from bun contains the full path to the missing module, e.g.:
+ *   Unix:    /tmp/bunx-501-@zed-industries/claude-agent-acp@0.21.0/node_modules/...
+ *   Windows: C:\Users\...\Temp\bunx-1743022513-@zed-industries\claude-agent-acp@0.21.0\node_modules\...
+ *
+ * We extract everything up to the versioned package dir (before /node_modules)
+ * and remove it so the next `bun x` invocation does a fresh install.
+ *
+ * @returns The cache directory that was cleared, or null if extraction failed.
+ */
+export function clearBunxCache(stderr: string): string | null {
+  const match = stderr.match(/([^\s'"]*[/\\]bunx-\d+[^\s/\\]*[/\\][^\s/\\]+@[^\s/\\]+)[/\\]node_modules/);
+  if (!match) return null;
+
+  const cacheDir = match[1];
+  try {
+    rmSync(cacheDir, { recursive: true, force: true });
+    return cacheDir;
+  } catch {
+    return null;
+  }
+}
 
 // ── Backend-specific connectors ─────────────────────────────────────
 
@@ -599,7 +659,23 @@ async function connectNpxBackend(config: {
 
     await cleanup();
 
-    await setup(spawnNpxBackend(backend, npxPackage, npxCommand, cleanEnv, workingDir, isWindows, false, opts));
+    try {
+      await setup(spawnNpxBackend(backend, npxPackage, npxCommand, cleanEnv, workingDir, isWindows, false, opts));
+    } catch (secondError) {
+      // Phase 3: bunx cache corruption leaves every retry failing with
+      // "Cannot find package/module" until the cache dir is removed
+      // (upstream #2451). Clear it and retry once with a fresh install.
+      const errMsg = secondError instanceof Error ? secondError.message : String(secondError);
+      if (isBunxCacheCorruption(errMsg)) {
+        const cleared = clearBunxCache(errMsg);
+        if (cleared) {
+          await cleanup();
+          await setup(spawnNpxBackend(backend, npxPackage, npxCommand, cleanEnv, workingDir, isWindows, false, opts));
+          return;
+        }
+      }
+      throw secondError;
+    }
   }
 }
 

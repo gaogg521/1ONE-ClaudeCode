@@ -95,6 +95,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
     return (
       <div
         key={assistant.id}
+        data-testid={`assistant-card-${assistant.id}`}
         className='group border border-solid border-[var(--color-neutral-3)] bg-fill-0 rounded-16px px-16px py-14px flex items-center justify-between cursor-pointer transition-all duration-180 hover:border-[var(--color-primary-light-4)] hover:bg-bg-1'
         onClick={() => {
           setActiveAssistantId(assistant.id);
@@ -118,6 +119,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
           onClick={(e) => e.stopPropagation()}
         >
           <span
+            data-testid={`btn-duplicate-${assistant.id}`}
             className='invisible group-hover:visible text-12px text-primary cursor-pointer hover:underline transition-all'
             onClick={() => {
               onDuplicate(assistant);
@@ -130,6 +132,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
               type='text'
               size='small'
               status='danger'
+              data-testid={`btn-delete-${assistant.id}`}
               icon={<Delete size={16} />}
               className='!rounded-10px invisible group-hover:visible'
               onClick={() => {
@@ -139,6 +142,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
           )}
           <Switch
             size='small'
+            data-testid={`switch-enabled-${assistant.id}`}
             checked={assistantIsExtension ? true : assistant.enabled !== false}
             disabled={assistantIsExtension}
             onChange={(checked) => {
@@ -214,6 +218,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
               <Button
                 type='primary'
                 size='small'
+                data-testid='btn-create-assistant'
                 className={`!rounded-[100px] ${isMobile ? '!w-full !h-36px' : '!px-16px !h-32px'}`}
                 icon={<Plus size={14} fill='currentColor' />}
                 onClick={onCreate}

@@ -22,8 +22,9 @@ export type SlashCommandSelectionBehavior = 'execute' | 'insert';
  * Indicates where the slash command originates from.
  * - `acp`: Provided by the ACP agent (e.g., Claude)
  * - `builtin`: Built into the application
+ * - `skill`: A skill enabled on the conversation (invoked as /skill-name)
  */
-export type SlashCommandSource = 'acp' | 'builtin';
+export type SlashCommandSource = 'acp' | 'builtin' | 'skill';
 
 /**
  * Represents a single slash command item in the autocomplete list.

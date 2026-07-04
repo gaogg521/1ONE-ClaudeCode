@@ -30,6 +30,8 @@ import { readOpenClawConfig } from '@process/agent/openclaw/openclawConfig';
 import { migrateConversationToDatabase } from './migrationUtils';
 import { ConversationSideQuestionService } from './services/ConversationSideQuestionService';
 import { sendConversationMessage } from './services/conversationSendService';
+import { AcpSkillManager } from '@process/task/AcpSkillManager';
+import type { SlashCommandItem } from '@/common/chat/slash/types';
 import { DESKTOP_OPERATOR_USER_ID } from '@/common/auth/enterpriseRoles';
 import { resolvePersonalAgentPreset } from '@process/digitalEmployee/resolvePersonalAgentPreset';
 
@@ -558,17 +560,36 @@ export function initConversationBridge(
         return { success: true, data: { commands: [] } };
       }
 
-      if (conversation.type !== 'acp') {
-        return { success: true, data: { commands: [] } };
+      const commands: SlashCommandItem[] = [];
+
+      if (conversation.type === 'acp') {
+        // Use getTask (cache-only) to avoid spawning a worker process on read-only queries
+        const task = workerTaskManager.getTask(conversation_id) as unknown as AcpAgentManager | undefined;
+        if (task && task.type === 'acp') {
+          commands.push(...(await task.loadAcpSlashCommands()));
+        }
       }
 
-      // Use getTask (cache-only) to avoid spawning a worker process on read-only queries
-      const task = workerTaskManager.getTask(conversation_id) as unknown as AcpAgentManager | undefined;
-      if (!task || task.type !== 'acp') {
-        return { success: true, data: { commands: [] } };
+      // Surface the conversation's enabled skills in the slash menu so users
+      // can invoke a skill explicitly (/skill-name) instead of relying on the
+      // model to request it via the [LOAD_SKILL] marker.
+      const enabledSkills = (conversation.extra as { enabledSkills?: string[] } | undefined)?.enabledSkills;
+      if (enabledSkills?.length) {
+        const skillManager = AcpSkillManager.getInstance(enabledSkills);
+        await skillManager.discoverSkills(enabledSkills);
+        for (const skill of skillManager.getSkillsIndex()) {
+          if (!enabledSkills.includes(skill.name)) continue;
+          if (commands.some((cmd) => cmd.name === skill.name)) continue;
+          commands.push({
+            name: skill.name,
+            description: skill.description,
+            kind: 'template',
+            source: 'skill',
+            selectionBehavior: 'insert',
+          });
+        }
       }
 
-      const commands = await task.loadAcpSlashCommands();
       return { success: true, data: { commands } };
     } catch (error) {
       return {

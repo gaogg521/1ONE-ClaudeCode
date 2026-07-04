@@ -218,6 +218,8 @@
   "assistantMainAgent": "Main Agent",
   "addSkills": "Add Skills",
   "addSkillsTitle": "Add Skills",
+  "assistantMissingSkillsWarning": "The following enabled skills are missing from the Skills Hub (deleted or renamed) and cannot be invoked at runtime:",
+  "assistantMissingSkillsRemove": "Remove broken references",
   "skillRecommendationsTitle": "Recommended for this Agent",
   "skillRecommendationsEmpty": "No recommendations yet for this Agent type.",
   "skillTemplatesTitle": "Skill Templates",

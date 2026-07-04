@@ -218,6 +218,8 @@
   "assistantMainAgent": "主代理",
   "addSkills": "添加技能",
   "addSkillsTitle": "添加技能",
+  "assistantMissingSkillsWarning": "以下已启用的技能在技能中心找不到（可能已被删除或改名），运行时将无法调用：",
+  "assistantMissingSkillsRemove": "移除失效引用",
   "skillRecommendationsTitle": "当前 Agent 推荐技能",
   "skillRecommendationsEmpty": "这个 Agent 类型暂时还没有可参考的技能推荐。",
   "skillTemplatesTitle": "技能模板",

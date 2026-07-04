@@ -21,7 +21,8 @@ const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 export async function uploadFileViaHttp(
   file: File,
   conversationId?: string,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  registerAbort?: (abort: () => void) => void
 ): Promise<string> {
   if (file.size > MAX_UPLOAD_SIZE_BYTES) {
     throw new Error('FILE_TOO_LARGE');
@@ -36,6 +37,9 @@ export async function uploadFileViaHttp(
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/upload');
     xhr.withCredentials = true;
+    // Expose the aborter so the upload can be cancelled when the user
+    // switches conversations mid-flight (upstream #3019)
+    registerAbort?.(() => xhr.abort());
 
     if (onProgress) {
       xhr.upload.addEventListener('progress', (e) => {
@@ -278,9 +282,16 @@ class FileServiceClass {
         try {
           if (!isElectronDesktop()) {
             // WebUI: upload via HTTP multipart to the conversation workspace uploads directory
-            const tracker = trackUpload(file.size, source);
+            let abortXhr: (() => void) | undefined;
+            const tracker = trackUpload(file.size, {
+              source,
+              conversationId,
+              onAbort: () => abortXhr?.(),
+            });
             try {
-              filePath = await uploadFileViaHttp(file, conversationId || '', tracker.onProgress);
+              filePath = await uploadFileViaHttp(file, conversationId || '', tracker.onProgress, (abort) => {
+                abortXhr = abort;
+              });
             } finally {
               tracker.finish();
             }

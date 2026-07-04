@@ -9,9 +9,17 @@ import {
   type FirstMessageConfig,
   prepareFirstMessage,
   prepareFirstMessageWithSkillsIndex,
+  prepareSkillsIndexRefresh,
 } from '@process/task/agentUtils';
 import { getAgentToolkitConfig } from './config';
 import { getSuperpowersSessionContext } from './superpowersHooks';
+
+/**
+ * 每多少条用户消息做一次轻量技能索引刷新（仅索引注入路径的 backend 生效）。
+ * How many user messages between lightweight skills-index refreshes
+ * (only applies to backends on the index-injection path).
+ */
+export const SKILLS_INDEX_REFRESH_INTERVAL = 20;
 
 export async function shouldInjectSkillsIndex(
   backend: string | undefined,
@@ -47,7 +55,7 @@ function prependRulesBlock(existing: string, block: string): string {
 export async function applyAgentToolkitFirstMessage(
   content: string,
   config: FirstMessageConfig,
-  options: { backend?: string; customWorkspace?: boolean; fullSkillContent?: boolean }
+  options: { backend?: string; customWorkspace?: boolean }
 ): Promise<string> {
   const toolkit = await getAgentToolkitConfig();
   if (!toolkit.enabled) {
@@ -56,21 +64,12 @@ export async function applyAgentToolkitFirstMessage(
 
   let result = content;
   const useSkillsIndex = await shouldInjectSkillsIndex(options.backend, options.customWorkspace);
-  const nativeOnlyRules =
-    hasNativeSkillSupport(options.backend) &&
-    !options.customWorkspace &&
-    !toolkit.injectSkillsForAllAgents;
 
   if (useSkillsIndex) {
     result = await prepareFirstMessageWithSkillsIndex(result, config);
-  } else if (nativeOnlyRules && config.presetContext) {
+  } else if (config.presetContext) {
+    // Backend discovers skills natively — only assistant rules need injection.
     result = await prepareFirstMessage(result, { presetContext: config.presetContext });
-  } else if (!nativeOnlyRules && (config.presetContext || (config.enabledSkills?.length ?? 0) > 0)) {
-    if (options.fullSkillContent) {
-      result = await prepareFirstMessage(result, config);
-    } else {
-      result = await prepareFirstMessageWithSkillsIndex(result, config);
-    }
   }
 
   if (toolkit.superpowersHooksEnabled) {
@@ -85,4 +84,25 @@ export async function applyAgentToolkitFirstMessage(
   }
 
   return result;
+}
+
+/**
+ * Mid-session lightweight skills-index refresh (index only, no rules).
+ * Returns null when not applicable: toolkit disabled, or the backend
+ * discovers skills natively (no index injection to refresh).
+ */
+export async function applyAgentToolkitIndexRefresh(
+  content: string,
+  config: FirstMessageConfig,
+  options: { backend?: string; customWorkspace?: boolean }
+): Promise<string | null> {
+  const toolkit = await getAgentToolkitConfig();
+  if (!toolkit.enabled) {
+    return null;
+  }
+  const useSkillsIndex = await shouldInjectSkillsIndex(options.backend, options.customWorkspace);
+  if (!useSkillsIndex) {
+    return null;
+  }
+  return prepareSkillsIndexRefresh(content, config);
 }

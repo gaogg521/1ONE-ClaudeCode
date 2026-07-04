@@ -140,7 +140,7 @@ class NanoBotAgentManager extends BaseAgentManager<NanoBotAgentManagerData> {
             presetContext: this.options.presetContext,
             enabledSkills: this.options.enabledSkills,
           },
-          { backend: 'nanobot', customWorkspace: this.options.customWorkspace, fullSkillContent: true }
+          { backend: 'nanobot', customWorkspace: this.options.customWorkspace }
         );
         this.isFirstMessage = false;
       }

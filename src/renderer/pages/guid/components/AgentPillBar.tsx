@@ -21,6 +21,10 @@ type AgentPillBarProps = {
   selectedAgentKey: string;
   getAgentKey: (agent: { backend: AcpBackend; customAgentId?: string }) => string;
   onSelectAgent: (key: string) => void;
+  /** Configured agents whose CLI was not detected — rendered dimmed with a repair action */
+  unavailableAgents?: AvailableAgent[];
+  /** Called when the user clicks an unavailable agent (self-repair: re-detect) */
+  onRepairAgent?: (agent: AvailableAgent) => void;
 };
 
 const AgentPillBar: React.FC<AgentPillBarProps> = ({
@@ -28,6 +32,8 @@ const AgentPillBar: React.FC<AgentPillBarProps> = ({
   selectedAgentKey,
   getAgentKey,
   onSelectAgent,
+  unavailableAgents,
+  onRepairAgent,
 }) => {
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
@@ -121,6 +127,40 @@ const AgentPillBar: React.FC<AgentPillBarProps> = ({
               </React.Fragment>
             );
           })}
+        {(unavailableAgents ?? []).map((agent) => (
+          <Tooltip
+            key={`unavailable-${getAgentKey(agent)}`}
+            content={t('guid.agentUnavailableTooltip', {
+              defaultValue:
+                "This agent's CLI was not detected (not installed or removed). Click to re-detect, or check Settings → Agents.",
+            })}
+          >
+            <div
+              data-agent-pill='true'
+              data-agent-key={getAgentKey(agent)}
+              data-agent-unavailable='true'
+              className='group relative flex items-center cursor-pointer whitespace-nowrap p-4px opacity-40 hover:opacity-70'
+              style={{ transition: 'opacity 0.2s ease' }}
+              onClick={() => onRepairAgent?.(agent)}
+            >
+              <Robot theme='outline' size={20} fill='currentColor' style={{ flexShrink: 0 }} />
+              <span
+                className='absolute rd-50%'
+                style={{ top: 2, right: 2, width: 7, height: 7, background: 'rgb(var(--warning-6))' }}
+              />
+              <span
+                className='font-medium text-14px max-w-0 opacity-0 overflow-hidden group-hover:max-w-140px group-hover:opacity-100 group-hover:ml-8px'
+                style={{
+                  color: 'var(--text-primary)',
+                  transition:
+                    'max-width 0.6s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) 0.05s, margin 0.6s cubic-bezier(0.2, 0.8, 0.3, 1)',
+                }}
+              >
+                {agent.name} · {t('guid.agentUnavailable', { defaultValue: 'Unavailable' })}
+              </span>
+            </div>
+          </Tooltip>
+        ))}
         {!isMobile && <div className='text-16px lh-1 p-2px select-none opacity-30'>|</div>}
         <Tooltip content={t('settings.agentManagement.discoverMoreAgents', { defaultValue: '发现更多 Agent' })}>
           <div
