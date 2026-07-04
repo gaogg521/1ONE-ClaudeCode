@@ -58,3 +58,13 @@
 - [ ] 桌面形态最终确认后端 spawn + UI 手工体验一轮（窗口已起，见附录日志）
 - [ ] 决定 fork 仓库归属（GitHub 账号/组织、公私有）→ 用户拍板后创建
 - [ ] M1 开工：渠道对齐实测（飞书/微信/钉钉/Telegram 配对码全流程）+ 配对码手动输入兜底 UI 差距确认
+
+## 6. 补充验证：AionCore 源码构建闭环（✅ 用户提出后当日完成）
+
+用户质疑"为什么用二进制而不是源码"——M0 用官方预编译产物是复刻上游自身流程（AionUi 前端 pin `aioncoreVersion` 下载 release 二进制），但选项 A 要求我们具备源码构建能力（M2 起全部后端二进制出自自有 fork 源码）。已当场验证：
+
+- 工具链：rustup（官方 win.rustup.rs 安装，minimal profile）+ 本机已有 MSVC 2022 BuildTools；AionCore `rust-toolchain.toml` pin 1.95.0 自动拉取。
+- 源码：`D:\aionui-m0\AionCore`（v0.1.41 tag，与桌面 pin 一致）。
+- 构建：`cargo build --release -p aionui-app` **47 分 46 秒**（首次冷编译，含全部依赖），产物 `target/release/aioncore.exe` 73MB（与官方 release 体积一致）。内嵌 bun 为可选（build.rs 无 blob 时用 stub，运行时回退系统 bun）——本地开发构建零额外资源准备。
+- 验证：自编二进制独立起实例（25918 端口、独立 data-dir）→ `/health` 返回 `{"status":"ok","version":"0.1.41"}` → 建会话发消息 → **claude CLI 真实回复 SELFBUILD-OK**。源码 → 构建 → 运行 → agent 全链路闭环成立。
+- 结论：fork AionCore 加自有 crate 的技术前提全部就绪。日常迭代注意首次冷编译 ~48 分钟，增量编译会快得多；M2 起建议配 CI 出 release 产物。
