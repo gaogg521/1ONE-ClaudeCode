@@ -3193,3 +3193,66 @@ fork 现状:gaogg521/AionCore one-main = b4ec43f(M2a d11d120 + M3a b4ec43f 已�
 - gaogg521/AionUi one-main = bd3e424(v2.1.28 基线 + M3c superAssistant UI 首屏)。
 
 **下一步(第十六轮候选)**:M4(管理后台 + httpBridge 适配层 + 桌面客户端连远端)或 M2b(飞书 SSO → one-sso crate,需用户提供真实飞书应用凭据做 E2E)。剩余未完成项:第十三轮清单 2-8(M3b/M3c 已勾掉)。M3 整体(M3a+M3b+M3c)完成,可以推进 M4 或 M5(数据迁移+打包+灰度)。
+
+---
+
+# 2026-07-05 第十六轮 — M3 整体完成 + M2 剩余范围澄清(交接清单 v2)
+
+第十三轮的交接清单已过时(M3b/M3c 已完成),本轮重新发布权威清单。
+
+## M3 整体完成 ✅
+
+| 子里程碑 | fork commit | 内容 | 验收 |
+|---|---|---|---|
+| M3a | AionCore `b4ec43f` | one-employee crate 骨架 + one_personal_agents/one_employee_runs 表 + 员工 CRUD API + 个人员工 run-now | 单测 4/4 + 冒烟 11/11(真实 claude 72s) |
+| M3b | AionCore `18bea4a` | 团队员工 run-now(TeamSessionService + get_run_state 轮询)+ cron 30s 扫描循环(复用 compute_next_run,零上游 diff)+ 002 迁移三列 | 单测 6/6 + cron 链路冒烟全过(Every 60s→13s success→nextRunAt 回写) |
+| M3c | AionUi `bd3e424` | superAssistant UI 首屏(三 tab + 4 Modal + personalAgent httpBridge provider + 侧栏入口) | tsc 0 + oxlint 0 + API 链路冒烟全过(list/create/update/runNow 11.8s/setSchedule/listRuns) |
+
+设计文档 `docs/tech/v2-m3-employee-design.md` 进度头已更新到 M3c 完成,记录 8 条关键实现事实。
+
+## M2 剩余范围澄清
+
+原 §6 里程碑里的 **M2c(邀请码 join/exit/建企业 + RBAC extractor + 审计)已并入 M2a 交付**——commit d11d120 标题即"join/exit/create + 邀请码 + RBAC",五表含 one_tenant_invites/one_audit_logs。所以 M2 剩余只有三项:
+
+| 子里程碑 | 状态 | 入口 |
+|---|---|---|
+| M2a | ✅ 完成 | AionCore `d11d120` |
+| ~~M2c~~ | ✅ 已并入 M2a | 邀请码 join/exit/create + RBAC extractor + 审计日志表 |
+| **M2b** | ⏳ 未开始 | 飞书 SSO → one-sso crate;设计在 `docs/tech/v2-m2-enterprise-crate-design.md` §3-4;实现+单测可先行,真实飞书 E2E 需用户提供飞书应用凭据 |
+| **M2d** | ⏳ 未开始 | 钉钉/企微/LDAP + 组织同步;复制 M2b 模式 |
+| **M2e** | ⏳ 部分完成 | M2a 已带 `/api/one/admin/invites` + `/exit-password`;剩余 users 列表/角色管理/runtime 节点管理(与 M4 管理页联调) |
+
+设计文档 `docs/tech/v2-m2-enterprise-crate-design.md` 进度头已更新,标清 M2c 已并入 M2a。
+
+## 权威未完成项清单(v2,替换第十三轮)
+
+| # | 项 | 状态与入口 |
+|---|---|---|
+| 1 | ~~M3b 团队员工 run-now + cron~~ | ✅ 完成(AionCore `18bea4a`) |
+| 2 | ~~M3c superAssistant UI 首屏~~ | ✅ 完成(AionUi `bd3e424`) |
+| 3 | **M2b 飞书 SSO(one-sso crate)** | 设计在 v2-m2-enterprise-crate-design.md §3-4;实现+单测可先行,真实飞书 E2E 需用户凭据 |
+| 4 | **M2d 钉钉/企微/LDAP + 组织同步** | 复制 M2b 模式 |
+| 5 | **M2e 管理后台 API 收尾** | M2a 已带部分 `/api/one/admin/*`;剩 users/角色/runtime 节点(与 M4 联调) |
+| 6 | **M4 UI 移植 + httpBridge 适配层 + 桌面客户端连远端** | superAssistant 剩余面板(Runtimes/Issues/EnterpriseCollaboration)+ 企业/管理页 httpBridge 重接线 + 配对码手动兜底组件(上游缺口,5 个 ConfigForm 共享组件)+ 桌面客户端连远端 aioncore |
+| 7 | **M5 数据迁移 + 打包 + 灰度** | 映射表在 v2-m0-report.md §3;照抄上游 #2897/#3018/#3423 模式 |
+| 8 | **M1-3 渠道真实配对 E2E** | 用户凭据,必做;测试实例重启命令见第十二轮 |
+| 9 | **横切**:微信 iLink vs bridge 决策、workflow scope→CI、web 实例登录(resetpass) | 详见第十/十一轮 |
+
+## fork 现状
+
+- **gaogg521/AionCore one-main = `18bea4a`**(M2a `d11d120` + M3a `b4ec43f` + M3b `18bea4a` 已推送)
+- **gaogg521/AionUi one-main = `bd3e424`**(v2.1.28 基线 + M3c superAssistant UI 首屏已推送)
+- cargo 在 `~/.cargo/bin`(bash 需手动 `export PATH="/c/Users/allenzhao/.cargo/bin:$PATH"`)
+- AionCore fork 工作目录 `D:\aionui-m0\AionCore`(one-main 分支)
+- AionUi fork 工作目录 `D:\aionui-m0\AionUi`(one-main 分支)
+- ⚠️ `/d/AionUi` 是上游 iOfficeAI/AionUi(main 分支),**不是 fork**——别搞混
+
+## 下一步建议(第十七轮候选)
+
+按依赖关系,推荐顺序:
+1. **M4**(UI 移植收尾 + httpBridge 适配层 + 客户端连远端)——M3c 已完成个人员工 UI,M4 补企业/管理页 + 客户端模式,让 fork 真正可用。
+2. **M2b**(飞书 SSO)——需要用户提供飞书应用凭据做 E2E,实现+单测可先行。
+3. **M5**(数据迁移 + 打包 + 灰度)——M4 完成后做最终迁移发布。
+4. **M2d/M2e**——可并行,复制 M2b 模式。
+
+或者用户可指定其他顺序。
