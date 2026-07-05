@@ -6,14 +6,14 @@
 
 ## 一句话当前状态
 
-**M2 + M3 整体完成；M4a（企业页首屏：/enterprise 六 tab + oneOrg/oneAdmin httpBridge 域）已完成。剩 M4b（登录页 SSO 按钮，草稿已备）/ M4c（配对码兜底组件）/ M4d（客户端连远端）/ M5 / LDAP / M1-3 渠道 E2E。**
+**M2 + M3 整体完成；M4a（企业页 /enterprise 六 tab + oneOrg/oneAdmin httpBridge 域）+ M4b（登录页 SSO 按钮）已完成。剩 M4c（配对码兜底组件）/ M4d（客户端连远端）/ superAssistant 剩余面板 / M5 / LDAP / M1-3 渠道 E2E。**
 
 ## fork 仓库 + 工作目录
 
 | 仓库 | 远端 | 本地工作目录 | 分支 | HEAD |
 |---|---|---|---|---|
 | AionCore fork | `gaogg521/AionCore` | `D:\aionui-m0\AionCore` | `one-main` | `a442bfb` |
-| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `f2b7031` |
+| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `adbfdb2` |
 
 ⚠️ **`/d/AionUi` 是上游 iOfficeAI main，不是 fork**——别搞混。fork 在 `D:\aionui-m0\AionUi`。
 
@@ -58,11 +58,12 @@ bun run dev                            # 桌面 dev（Electron）
 
 **M4a 已完成**（AionUi `f2b7031`）：企业页 `pages/enterprise/`（概览 join/create/exit + 成员/邀请码/审计/运行时/SSO 设置五个管理 tab）+ ipcBridge `oneOrg`/`oneAdmin` 两个 httpBridge 域 + `/enterprise` 路由 + Sider 入口。管理 tab 用 `/api/one/org/context` 的 role 门禁（AuthContext 无 role）。
 
+**M4b 已完成**（AionUi `adbfdb2`）：登录页 SSO 按钮 `pages/login/components/LoginSsoButtons.tsx`——拉 `/api/one/sso/providers` 过滤 enabled+configured，同窗口跳 authorize（callback Set-Cookie 回跳 /#/guid）；desktop runtime 渲染 null。⚠️ 视觉 E2E 未做（需重建 renderer bundle + 浏览器打开 WebUI login 页），tsc/oxlint/端点形状已验。
+
 M4 剩余：
 
-- **M4b 登录页 SSO 按钮**：浏览器模式直接 `window.location.href = /api/one/sso/{provider}/authorize?redirect=...`（callback Set-Cookie 回跳）；**桌面 runtime 目前完全跳过认证**（AuthContext `isDesktopRuntime → authenticated`），深链 token 流程只在 M4d 连远端时才需要。成品草稿在会话 scratchpad `m4a/LoginSsoButtons.tsx`（含 CSS），落到 `pages/login/components/` 接进 index.tsx 即可
-- **M4c 配对码手动兜底组件**：上游缺口，5 个 ConfigForm 共享组件（飞书/钉钉/微信/TG/邮件）
-- **M4d 桌面客户端连远端**：httpBridge baseUrl 支持指向 `enterpriseServerUrl`，桌面加"企业模式"开关；深链挂点已有（`process/utils/deepLink.ts` 的 aionui:// handler + `ipcBridge.deepLink.received` + `useDeepLink`），缺 token→session 换取机制
+- **M4c 配对码手动兜底组件**：上游缺口，5 个 ConfigForm 共享组件（飞书/钉钉/微信/TG/邮件）。先侦察上游渠道 ConfigForm 位置（搜 `packages/desktop/src/renderer` 里 feishu/telegram 的配对 UI），做一个共享的「输入 6 位配对码 → Approve/Reject」组件插进 5 个表单
+- **M4d 桌面客户端连远端**：httpBridge baseUrl 支持指向 `enterpriseServerUrl`，桌面加"企业模式"开关；深链挂点已有（`process/utils/deepLink.ts` 的 aionui:// handler + `ipcBridge.deepLink.received` + `useDeepLink`），缺 token→session 换取机制。**桌面 runtime 目前完全跳过认证**（AuthContext `isDesktopRuntime → authenticated`），连远端时要引入真实认证——这是 M4d 最大的设计点
 - **superAssistant 剩余面板**：Runtimes / Issues / EnterpriseCollaboration（Runtimes 可复用 oneAdmin.listRuntimeNodes）
 
 **入口**：`D:\aionui-m0\AionUi\packages\desktop\src\renderer\`，参考 M3c superAssistant 与 M4a enterprise 的实现模式。

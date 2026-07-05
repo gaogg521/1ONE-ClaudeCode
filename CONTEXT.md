@@ -3457,3 +3457,33 @@ M2d 原范围含 LDAP,但 1one `LdapAuthProvider.ts` 525 行很重(ldap3 crate +
 2. **M4c 配对码兜底组件**(5 ConfigForm)
 3. **M5 数据迁移 + 打包 + 灰度**
 4. **LDAP / M1-3 渠道 E2E**(等用户凭据)
+
+---
+
+# 2026-07-05 第十八轮补充 — M4b 登录页 SSO 按钮完成
+
+紧接 M4a 同日完成,AionUi fork one-main 推进到 `adbfdb2`。
+
+## 实现
+
+- **pages/login/components/LoginSsoButtons.tsx**(新):挂载时 fetch `/api/one/sso/providers`(5s AbortSignal 超时),过滤 `enabled && configured && provider !== 'ldap'`,每个 provider 渲染一个按钮;点击 `window.location.href = /api/one/sso/{provider}/authorize?redirect=%2Fguid`(同窗口,后端 302 到 OAuth,callback Set-Cookie 后 302 回 `/#/guid`)
+- **desktop runtime 渲染 null**(window.electronAPI 存在即桌面;桌面跳过认证,SSO 深链随 M4d)
+- **接入点**:login/index.tsx `</form>` 之后、footer 之前;LoginPage.css 追加 `.login-page__sso*` 样式(跟随白卡片硬编码配色,该文件不用 CSS 变量)
+- 请求失败/非 aioncore 后端 → 静默不渲染,不影响密码登录
+
+## 验收
+
+- tsc --noEmit 零错误,oxlint 0 warnings
+- providers 端点形状已在 M4a 冒烟实测(`{success,data:[{provider,enabled,configured}]}`,组件读 `json.data`)
+- ⚠️ **视觉 E2E 未做**:aioncore 内嵌的是上游预构建 renderer bundle,看新按钮需 `bun run package` 重建后从 WebUI 浏览器打开 login 页 + 配置至少一个 enabled 的 provider。留给渠道 E2E 轮次一起验
+
+## fork 现状
+
+- gaogg521/AionCore one-main = `a442bfb`(无变化)
+- **gaogg521/AionUi one-main = `adbfdb2`**(f2b7031 + M4b 登录 SSO 按钮)
+
+## 下一步(第十九轮候选)
+
+1. **M4c 配对码兜底组件**(5 ConfigForm,先侦察上游渠道配置 UI 位置)
+2. **M4d 客户端连远端**(最大设计点:桌面 runtime 目前跳过认证,连远端要引入真实认证 + token→session 换取)
+3. superAssistant 剩余面板 / M5 / LDAP / 渠道 E2E
