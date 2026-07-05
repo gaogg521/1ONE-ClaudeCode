@@ -1,19 +1,19 @@
 # v2 迁移接手快速入门（Handoff Quickstart）
 
-> **接手 AI 直接读这一份就能干活。** 最后更新：2026-07-05 第十七轮。
+> **接手 AI 直接读这一份就能干活。** 最后更新：2026-07-05 第十八轮。
 >
 > 项目：1ONE ClaudeCode 把后端从 Node/Electron 迁移到 fork AionCore（Rust）+ 上游 v2 前端壳。用户已拍板"选项 A"：fork `gaogg521/AionCore` + `gaogg521/AionUi`，按 M0-M5 推进。
 
 ## 一句话当前状态
 
-**M2 整体完成（M2a/M2b/M2d/M2e，LDAP 待后续）+ M3 整体完成（M3a/M3b/M3c）。剩 M4（UI 移植收尾 + httpBridge + 客户端连远端）/ M5（数据迁移 + 打包 + 灰度）/ LDAP / M1-3 渠道 E2E。**
+**M2 + M3 整体完成；M4a（企业页首屏：/enterprise 六 tab + oneOrg/oneAdmin httpBridge 域）已完成。剩 M4b（登录页 SSO 按钮，草稿已备）/ M4c（配对码兜底组件）/ M4d（客户端连远端）/ M5 / LDAP / M1-3 渠道 E2E。**
 
 ## fork 仓库 + 工作目录
 
 | 仓库 | 远端 | 本地工作目录 | 分支 | HEAD |
 |---|---|---|---|---|
 | AionCore fork | `gaogg521/AionCore` | `D:\aionui-m0\AionCore` | `one-main` | `a442bfb` |
-| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `bd3e424` |
+| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `f2b7031` |
 
 ⚠️ **`/d/AionUi` 是上游 iOfficeAI main，不是 fork**——别搞混。fork 在 `D:\aionui-m0\AionUi`。
 
@@ -56,14 +56,16 @@ bun run dev                            # 桌面 dev（Electron）
 
 ### 1. M4：UI 移植收尾 + httpBridge 适配层 + 客户端连远端
 
-M3c 已完成个人员工 UI（superAssistant 首屏三 tab）。M4 要补：
+**M4a 已完成**（AionUi `f2b7031`）：企业页 `pages/enterprise/`（概览 join/create/exit + 成员/邀请码/审计/运行时/SSO 设置五个管理 tab）+ ipcBridge `oneOrg`/`oneAdmin` 两个 httpBridge 域 + `/enterprise` 路由 + Sider 入口。管理 tab 用 `/api/one/org/context` 的 role 门禁（AuthContext 无 role）。
 
-- **superAssistant 剩余面板**：Runtimes / Issues / EnterpriseCollaboration（依赖 one-org 企业域 API）
-- **企业/管理页 httpBridge 重接线**：登录页 SSO 按钮 + 管理后台页面（users/invites/roles/audit/runtime），调 `/api/one/sso/*` + `/api/one/admin/*`
-- **配对码手动兜底组件**：上游缺口，5 个 ConfigForm 共享组件（飞书/钉钉/微信/TG/邮件）
-- **桌面客户端连远端**：httpBridge baseUrl 支持指向 `enterpriseServerUrl`，桌面加"企业模式"开关决定连本地还是远端
+M4 剩余：
 
-**入口**：`D:\aionui-m0\AionUi\packages\desktop\src\renderer\`，参考 M3c 的 superAssistant 实现模式（`pages/superAssistant/` + `ipcBridge.personalAgent` httpBridge provider）。
+- **M4b 登录页 SSO 按钮**：浏览器模式直接 `window.location.href = /api/one/sso/{provider}/authorize?redirect=...`（callback Set-Cookie 回跳）；**桌面 runtime 目前完全跳过认证**（AuthContext `isDesktopRuntime → authenticated`），深链 token 流程只在 M4d 连远端时才需要。成品草稿在会话 scratchpad `m4a/LoginSsoButtons.tsx`（含 CSS），落到 `pages/login/components/` 接进 index.tsx 即可
+- **M4c 配对码手动兜底组件**：上游缺口，5 个 ConfigForm 共享组件（飞书/钉钉/微信/TG/邮件）
+- **M4d 桌面客户端连远端**：httpBridge baseUrl 支持指向 `enterpriseServerUrl`，桌面加"企业模式"开关；深链挂点已有（`process/utils/deepLink.ts` 的 aionui:// handler + `ipcBridge.deepLink.received` + `useDeepLink`），缺 token→session 换取机制
+- **superAssistant 剩余面板**：Runtimes / Issues / EnterpriseCollaboration（Runtimes 可复用 oneAdmin.listRuntimeNodes）
+
+**入口**：`D:\aionui-m0\AionUi\packages\desktop\src\renderer\`，参考 M3c superAssistant 与 M4a enterprise 的实现模式。
 
 ### 2. M5：数据迁移 + 打包 + 灰度
 
