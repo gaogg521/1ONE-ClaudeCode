@@ -10,8 +10,10 @@
 ### 关键文档（建议按任务先读）
 
 - **v2 迁移接手**
-  - `docs/tech/v2-handoff-quickstart.md`：**接手快速入门（精炼自包含，一读就能干活）**——做 M4/M5/LDAP 等迁移工作前必读
-  - `CONTEXT.md` 第十七轮（最底部）：当前状态 + 权威未完成项清单 v3 + fork 现状
+  - `docs/tech/v2-handoff-quickstart.md`：**接手快速入门（精炼自包含，一读就能干活）**——做 v2 迁移相关工作前必读
+  - `docs/tech/v2-phase2-plan.md`：**二期计划（唯一排期入口）**——前置决策 D1-D5、DevOps 二期（编排动作/RAG/注册表 UI）、工程收尾、验证轮、三波次排期。一期（M0-M5）已全部完成，做二期任何工作前必读
+  - `docs/tech/v2-m5-migration.md`：M5 数据迁移/打包/灰度全记录 + §4 遗留清扫表 + §5 Issues/EC 看板重建
+  - `CONTEXT.md` 第十九轮（最底部）：当前状态 + 权威未完成项清单 v4 + fork 现状
 
 - **开发与运行**
   - `docs/development.md`：本地开发、常用脚本、环境说明

@@ -86,7 +86,7 @@ AIONUI_BACKEND_LOCAL_PATH='D:\aionui-m0\AionCore\target\release\aioncore.exe' bu
 2. **M4b 视觉 E2E**：浏览器 WebUI 用的是 aioncore 二进制内嵌的上游 renderer bundle，需先把 fork renderer 构建产物嵌入 aioncore（web 资产重建），再验登录页 SSO 按钮。
 3. **横切决策**（问用户）：微信 iLink vs bridge、workflow scope→CI、fork 安装包品牌（AionUi→1ONE 需改 appId/productName 并回归 userData 路径）。
 4. **灰度执行**：AionCore CI release 流水线（建成后打包切 `AIONUI_BACKEND_REPO=gaogg521/AionCore`）、acp.customAgents 迁移专项。
-5. **DevOps 二期**（待用户排期/选型）：看板编排动作对齐 one-employee（assign/breakdown/autopilot）、RAG 向量管线（先选嵌入模型）、Skills/MCP/RAG 注册表管理界面、其余 DevOps 域（milestones/pipelines/测试计划）。
+5. **DevOps 二期**（待用户排期/选型）：看板编排动作对齐 one-employee（assign/breakdown/autopilot）、RAG 向量管线（先选嵌入模型）、Skills/MCP/RAG 注册表管理界面、其余 DevOps 域（milestones/pipelines/测试计划）。**完整二期计划（前置决策 D1-D5 + A/B/C 分组 + 三波次排期）见 `docs/tech/v2-phase2-plan.md`。**
 
 ## 关键约束（踩坑沉淀，不可再犯）
 
