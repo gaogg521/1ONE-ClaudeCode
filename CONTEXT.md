@@ -3572,3 +3572,53 @@ AionUi one-main → `3ef8778`。M4d 两处遗留接线补完:
 冒烟:`authorize?desktop=1` 返回 303 到飞书 OAuth(state 带 desktop 标记);真实 OAuth 回环 E2E 需用户渠道凭据(排渠道 E2E 轮)。tsc/oxlint 零错误。
 
 fork 现状:AionCore `c6f65e3`、**AionUi `3ef8778`**。M4 完整收官,下一步 M5。
+
+---
+
+# 2026-07-05 第十九轮 — M5 完成 + M0-M5 遗留项清扫
+
+按第十八轮交接开工 M5,当日完成 M5a/M5b/M5c 并按用户指令完成 M0-M5 遗留项清扫。**详细实施记录:`docs/tech/v2-m5-migration.md`(本轮唯一详情源,含全部验证数据)。**
+
+## M5a 数据迁移(AionUi fork `1005524`)
+
+- `oneMigration/` 模块:1one.db(conversations/messages/teams/mailbox/cron_jobs)+ one-config.txt(白名单键)一次性导入 v2
+- 目标自适应:aionui-backend.db 存在→直写+复跑 002 A/B/C 归一化+acp_session 回填;否则写 aionui.db 走常规 handoff
+- 幂等 marker(one-import.json)+ 导入前镜像备份;1one 原库只读不动
+- 本机真实数据验证:158 会话/2196 消息导入,aioncore API 4 种会话类型全部可读;桌面 dev 真实代码路径 562ms 完成
+- 关键坑:aioncore 013 改了 cron_jobs(去 agent_type,assistant-first)和 acp_session(去 agent_backend)——导入 SQL 按目标列形态分支
+
+## M5b 打包链(AionUi fork `2d5d1ff`)
+
+- prepare-aioncore 新增 `AIONUI_BACKEND_LOCAL_PATH`(内嵌本地 cargo 产物)+ `AIONUI_BACKEND_REPO`(fork 仓库覆盖)
+- 已出完整 Windows 安装包(out/AionUi-2.1.28-win-x64.exe,内嵌 fork aioncore + managed-resources)
+
+## M5c 灰度(流程约定,见 m5 文档 §3)
+
+appId 不同→与 1ONE ClaudeCode 并存安装;v2 首启自动导入;回滚=继续用旧版(数据从未离开)。
+
+## 遗留项清扫(AionCore fork `1ede4f9` + AionUi `2d5d1ff`)
+
+- ✅ **LDAP**(M2d 尾巴):one-sso providers/ldap.rs + POST /api/one/sso/ldap/login + SSO_INVALID_CREDENTIALS;路由冒烟 5/5;真实目录 E2E 待环境
+- ✅ **resetpass 横切**:`aioncore --data-dir <dir> resetpass` 直改库;非 local 实例全链路验证(401→重置→登录拿 token)
+- ✅ **superAssistant Runtimes tab**:计数+设置入口+企业组织节点卡片
+- ✅ **附带修复**:aionui-app 两个 CSRF e2e 自 M4d 起一直红(断言旧行为),已对齐 Bearer 豁免契约,11/11 过
+- ⛔ **Issues/EnterpriseCollaboration 面板**:依赖 v2 未迁移的 DevOps 后端域(issues/RAG/技能注册),需产品拍板是否重建
+- ⚠️ 待用户:微信 iLink 决策、workflow CI、渠道/OAuth/视觉 E2E 凭据、fork 安装包品牌(AionUi→1ONE?)、acp.customAgents 迁移专项、AionCore CI release 流水线
+
+## 权威未完成项清单 v4(替换第十七轮 v3)
+
+| # | 项 | 状态 | 入口 |
+|---|---|---|---|
+| 1 | ~~M2/M3/M4/M5 全部里程碑~~ | ✅ 完成 | AionCore `1ede4f9` / AionUi `2d5d1ff` |
+| 2 | ~~M2d LDAP~~ | ✅ 完成 | 真实目录 E2E 待用户环境 |
+| 3 | ~~resetpass 横切~~ | ✅ 完成 | `aioncore resetpass` |
+| 4 | M1-3 渠道真实配对 E2E + M4b 视觉 + M4d OAuth E2E | ⏳ 等用户凭据 | 测试实例重启命令见第十二轮;视觉 E2E 另需 aioncore 内嵌 web 资产从 fork renderer 重建 |
+| 5 | 横切:微信 iLink vs bridge、workflow scope→CI | ⏳ 等用户决策 | 第十/十一轮 |
+| 6 | Issues/EnterpriseCollaboration 面板(需先重建后端域) | ⏳ 等产品拍板 | m5 文档 §4 |
+| 7 | 灰度执行:安装包品牌、AionCore CI release、acp.customAgents 专项 | ⏳ 灰度期推进 | m5 文档 §3-4 |
+
+## fork 现状(2026-07-05 第十九轮末)
+
+- **gaogg521/AionCore one-main = `1ede4f9`**(M5 清扫:LDAP + resetpass + CSRF 测试对齐)
+- **gaogg521/AionUi one-main = `2d5d1ff`**(M5a `1005524` + M5b/Runtimes `2d5d1ff`)
+- Windows 安装包:`D:\aionui-m0\AionUi\out\AionUi-2.1.28-win-x64.exe`

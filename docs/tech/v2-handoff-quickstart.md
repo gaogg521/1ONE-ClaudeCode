@@ -1,19 +1,19 @@
 # v2 迁移接手快速入门（Handoff Quickstart）
 
-> **接手 AI 直接读这一份就能干活。** 最后更新：2026-07-05 第十八轮。
+> **接手 AI 直接读这一份就能干活。** 最后更新：2026-07-05 第十九轮。
 >
 > 项目：1ONE ClaudeCode 把后端从 Node/Electron 迁移到 fork AionCore（Rust）+ 上游 v2 前端壳。用户已拍板"选项 A"：fork `gaogg521/AionCore` + `gaogg521/AionUi`，按 M0-M5 推进。
 
 ## 一句话当前状态
 
-**M2 + M3 整体完成；M4a/M4b/M4c/M4d 全部完成（企业页 + 登录 SSO 按钮 + 配对码兜底 + 桌面连远端）。M4 仅剩 superAssistant 剩余面板（可选收尾）。下一步 M5（数据迁移 + 打包 + 灰度）/ LDAP / M1-3 渠道 E2E。**
+**M0-M5 全部完成（M5 = 数据迁移 + 打包链 + 灰度约定，详见 `docs/tech/v2-m5-migration.md`）；遗留项清扫完成（LDAP / resetpass / Runtimes tab 已做掉）。剩余项全部依赖用户输入：渠道/OAuth/视觉 E2E 凭据、微信 iLink 决策、安装包品牌拍板、灰度执行。权威清单 v4 在 CONTEXT 第十九轮。**
 
 ## fork 仓库 + 工作目录
 
 | 仓库 | 远端 | 本地工作目录 | 分支 | HEAD |
 |---|---|---|---|---|
-| AionCore fork | `gaogg521/AionCore` | `D:\aionui-m0\AionCore` | `one-main` | `c6f65e3` |
-| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `3ef8778` |
+| AionCore fork | `gaogg521/AionCore` | `D:\aionui-m0\AionCore` | `one-main` | `1ede4f9` |
+| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `2d5d1ff` |
 
 ⚠️ **`/d/AionUi` 是上游 iOfficeAI main，不是 fork**——别搞混。fork 在 `D:\aionui-m0\AionUi`。
 
@@ -21,7 +21,8 @@ cargo 在 `~/.cargo/bin`，bash 里要先 `export PATH="/c/Users/allenzhao/.carg
 
 ## 必读文档（按顺序，接手会话第一次读这 7 份就够）
 
-1. **`CONTEXT.md` 第十八轮 + 四个补充节**（最底部）— M4 全程实现记录 + fork 现状；权威未完成项清单 v3 在第十七轮
+1. **`CONTEXT.md` 第十九轮**（最底部）— M5 + 遗留项清扫记录、**权威未完成项清单 v4**、fork 现状
+1.5 **`docs/tech/v2-m5-migration.md`** — M5 数据迁移/打包/灰度全记录（做灰度、迁移排障、LDAP/resetpass 细节先读这份）
 2. **本文件**（你正在读的）— 快速入门
 3. `docs/tech/v2-architecture-comparison.md` — 选项 A 决策文档（M0-M5 路线图）
 4. `docs/tech/v2-m2-enterprise-crate-design.md` — M2 设计（M2 整体完成，进度头有 LDAP 待办清单）
@@ -52,55 +53,26 @@ bun run dev                            # 桌面 dev（Electron）
 
 ⚠️ **aioncore.exe 不接受 `start` 子命令**（那是 web 形态），直接 `aioncore.exe --local --port ...`。也没有 `--no-open`。
 
-## 下一步任务（按优先级）
+## 已完成里程碑速查（详情按路由读，不要重做侦察）
 
-### 1. M4：UI 移植收尾 + httpBridge 适配层 + 客户端连远端
+- **M4 全部完成**：企业页（`f2b7031`）/ 登录 SSO 按钮（`adbfdb2`）/ 配对码兜底（`2526dc3`）/ 桌面连远端 + SSO 深链（`c6f65e3`+`9f79c45`+`3ef8778`）——详见 CONTEXT 第十八轮
+- **M5 全部完成**：数据迁移（AionUi `1005524`，oneMigration/ 模块）+ 打包链（`2d5d1ff`，`AIONUI_BACKEND_LOCAL_PATH`/`AIONUI_BACKEND_REPO`）+ 灰度约定——**详见 `docs/tech/v2-m5-migration.md`**
+- **遗留项清扫完成**（AionCore `1ede4f9`）：LDAP 密码登录（`POST /api/one/sso/ldap/login`）、resetpass CLI（`aioncore --data-dir <dir> resetpass`）、superAssistant Runtimes tab、CSRF e2e 对齐 M4d 契约
 
-**M4a 已完成**（AionUi `f2b7031`）：企业页 `pages/enterprise/`（概览 join/create/exit + 成员/邀请码/审计/运行时/SSO 设置五个管理 tab）+ ipcBridge `oneOrg`/`oneAdmin` 两个 httpBridge 域 + `/enterprise` 路由 + Sider 入口。管理 tab 用 `/api/one/org/context` 的 role 门禁（AuthContext 无 role）。
+出包命令（fork 安装包）：
 
-**M4b 已完成**（AionUi `adbfdb2`）：登录页 SSO 按钮 `pages/login/components/LoginSsoButtons.tsx`——拉 `/api/one/sso/providers` 过滤 enabled+configured，同窗口跳 authorize（callback Set-Cookie 回跳 /#/guid）；desktop runtime 渲染 null。⚠️ 视觉 E2E 未做（需重建 renderer bundle + 浏览器打开 WebUI login 页），tsc/oxlint/端点形状已验。
+```bash
+cd D:\aionui-m0\AionUi
+AIONUI_BACKEND_LOCAL_PATH='D:\aionui-m0\AionCore\target\release\aioncore.exe' bun run dist:win
+# 产物 out/AionUi-<version>-win-x64.exe
+```
 
-**M4c 已完成**（AionUi `2526dc3`）：共享组件 `channels/ManualPairingInput.tsx`（手动输入 6 位配对码 → Approve/Reject），插入飞书/钉钉/Telegram/企微/微信 5 个 ConfigForm 的待批准区块底部，复用各表单已有 handler（`/api/channel/pairings/approve|reject` 按 code 查 pending，与前端列表无关）。注意：兜底与 pending 区块同渲染条件（`enabled && authorizedUsers.length === 0`）。
+## 下一步任务（全部依赖用户输入，权威清单 v4 在 CONTEXT 第十九轮）
 
-**M4d 已完成**（AionCore `c6f65e3` + AionUi `9f79c45`）：桌面「企业模式直登」——企业页顶部 RemoteServerSection（仅桌面）：开关 + 服务器地址 + 用户名密码直登（POST 远端 `/login` 取 body token）。`common/adapter/enterpriseMode.ts` 用 localStorage 存状态（仅渲染层，主进程仍连本地）；httpBridge 企业模式下 baseUrl→远端 + `Authorization: Bearer` + WS 用 Sec-WebSocket-Protocol 首值传 token。后端配套：Bearer 请求豁免 CSRF（cookie 路径保护不变）+ CORS 全模式开启（wildcard 无 credentials）。切换走 `location.reload()`。桌面 SSO 深链登录已接线（AionUi `3ef8778`）：RemoteServerSection 探测远端 providers 渲染「企业 SSO」按钮 → 系统浏览器开 `authorize?desktop=1` → callback 302 到 `aionui://sso-callback` → useDeepLink 校验本地已配置该服务器后写 session 并 reload。SSO JIT 用户是随机密码，深链是 SSO-only 企业桌面端唯一登录通路。真实 OAuth E2E 需渠道凭据。
-
-M4 剩余（可选收尾）：
-
-- **superAssistant 剩余面板**：Runtimes / Issues / EnterpriseCollaboration（Runtimes 可复用 oneAdmin.listRuntimeNodes）
-
-**入口**：`D:\aionui-m0\AionUi\packages\desktop\src\renderer\`，参考 M3c superAssistant 与 M4a enterprise 的实现模式。
-
-### 2. M5：数据迁移 + 打包 + 灰度
-
-- 数据映射表在 `docs/tech/v2-m0-report.md` §3
-- 照抄上游 #2897/#3018/#3423 三个迁移 PR 的模式
-- 打包：`npm run dist:win`（打包前必须 bump package.json version patch+1）
-
-### 2.5 M5 之后:M0-M5 遗留项清扫（用户指令,必做）
-
-M5 做完后**再次核对 M0-M5 全部遗留项,能自主完成的全部完成**,不要只收尾 M5。当前已知遗留项(2026-07-05 核对):
-
-| 遗留项 | 能否自主完成 |
-|---|---|
-| superAssistant 剩余面板(Runtimes/Issues/EnterpriseCollaboration,Runtimes 可复用 oneAdmin.listRuntimeNodes) | ✅ 做掉 |
-| LDAP provider(见下节 §3) | ✅ 做掉(真实 LDAP 服务器 E2E 除外) |
-| 横切 resetpass:非 local 实例默认用户密码为空无法登录,需正式的密码设置/重置通路 | ✅ 做掉 |
-| 横切:微信 iLink vs bridge 决策、workflow scope→CI | ⚠️ 列出方案问用户 |
-| M1-3 渠道真实配对 E2E、M4b 视觉 E2E、M4d 真实 OAuth E2E | ❌ 等用户凭据,明确列给用户 |
-
-清扫完成后更新 CONTEXT.md 权威清单(发布 v4)+ 本文件 + 自动记忆。
-
-### 3. LDAP（M2d 尾巴）
-
-- 加 `ldap3` workspace dep
-- 实现 `LdapProvider::authenticate(config, username, password) -> LdapAuthSuccess`
-- 加 `POST /api/one/sso/ldap/login` 路由（非 OAuth，密码直登）
-- JIT 复用 `resolve_or_provision_user`（LDAP external_id = directory objectGUID）
-- 1one `src/process/webserver/auth/providers/LdapAuthProvider.ts`（525 行）作规格书
-
-### 4. M1-3 渠道真实配对 E2E
-
-需要用户提供飞书/钉钉/TG/微信凭据，必做。测试实例重启命令见 CONTEXT.md 第十二轮。
+1. **M1-3 渠道真实配对 E2E + M4d OAuth E2E + LDAP 真实目录 E2E**：等用户提供飞书/钉钉/TG/微信凭据与 AD/LDAP 环境。测试实例重启命令见 CONTEXT 第十二轮。
+2. **M4b 视觉 E2E**：浏览器 WebUI 用的是 aioncore 二进制内嵌的上游 renderer bundle，需先把 fork renderer 构建产物嵌入 aioncore（web 资产重建），再验登录页 SSO 按钮。
+3. **横切决策**（问用户）：微信 iLink vs bridge、workflow scope→CI、fork 安装包品牌（AionUi→1ONE 需改 appId/productName 并回归 userData 路径）。
+4. **灰度执行**：AionCore CI release 流水线（建成后打包切 `AIONUI_BACKEND_REPO=gaogg521/AionCore`）、acp.customAgents 迁移专项、Issues/EnterpriseCollaboration 面板（需先拍板是否重建对应后端域）。
 
 ## 关键约束（踩坑沉淀，不可再犯）
 
@@ -162,8 +134,8 @@ M5 做完后**再次核对 M0-M5 全部遗留项,能自主完成的全部完成*
 ## 接手 prompt 模板（给新会话用）
 
 ```
-读 D:\1one-command\docs\tech\v2-handoff-quickstart.md，然后读 CONTEXT.md 第十八轮
-（含补充一至四），开始做 M5（数据迁移 + 打包 + 灰度）。先读 docs/tech/v2-m0-report.md
-§3 数据映射表和上游 #2897/#3018/#3423 三个迁移 PR 的模式，确定 M5 第一步切多大。
-M5 做完后，按 quickstart §2.5 再次核对 M0-M5 遗留项，能自主完成的全部完成。
+读 D:\1one-command\docs\tech\v2-handoff-quickstart.md，然后读 CONTEXT.md 第十九轮
+（权威清单 v4）。M0-M5 已全部完成，剩余项都依赖我的输入——先把「下一步任务」四类
+待办列给我确认（渠道/LDAP E2E 凭据、视觉 E2E、横切决策、灰度执行），我拍板后开工。
+涉及数据迁移或打包细节先读 docs/tech/v2-m5-migration.md。
 ```
