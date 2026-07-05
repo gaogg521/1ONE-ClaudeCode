@@ -3089,3 +3089,13 @@ rustup+MSVC 就绪,v0.1.41 源码 `cargo build --release` 首编 47m46s → 自�
 | M2 编码 | 设计已备,可开工(建议新会话,读本节+设计文档) |
 | workflow scope | 用户侧待解,不阻塞 M2a |
 | 上游实例 | web:25908 与桌面 dev 均在跑(D:\aionui-m0) |
+
+---
+
+# 2026-07-05 第十二轮 — 进度对账(跨会话汇总)
+
+另一会话完成 M2a(one-org,fork d11d120)与 M3 设计+M3a(one-employee),进度标注在两份设计文档头部(v2-m2-enterprise-crate-design.md / v2-m3-employee-design.md)。**M2 未全部完成**——剩 M2b(飞书 SSO,下一步)/M2d(其余 providers+org 同步)/M2e(管理后台收尾);M3 剩 M3b(团队员工+cron)/M3c(UI 首屏)。之后 M4(UI 移植+配对兜底组件+客户端连远端)、M5(数据迁移+打包+灰度)。
+
+横切遗留:M1-3 渠道真实 E2E(用户凭据,必做)、微信 iLink vs bridge 决策、workflow scope→CI、web 实例登录(resetpass 可解)。
+
+**注意**:D:\aionui-m0 的两个上游测试实例(web:25908/桌面 dev)随会话重启已停;需要时重新拉起:web 形态 `D:\aionui-m0\web\aionui-web\aionui-web.exe start --port 25908 --no-open --data-dir D:\aionui-m0\data --log-dir D:\aionui-m0\logs`;桌面 `cd D:\aionui-m0\AionUi && bun run dev`(注意 dev 的 aioncore 已复制在 electron dist resources)。
