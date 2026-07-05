@@ -1,5 +1,7 @@
 # M3 设计 — 数字员工编排在 AionCore fork 中的 crate 化
 
+> **进度**：M3a ✅ 完成（2026-07-05，fork commit 见 one-main）。one-employee crate 落地：one_personal_agents/one_employee_runs 表 + `/api/one/employee/*` CRUD + run-now 编排。验收：单测 4/4、`--local` 冒烟 11/11（含真实 claude agent 一轮 72s，summary 正确提取）。关键实现事实：① `run_agent_turn` 同步等待整轮并返回 Completed/Failed——1one 的 cronBusyGuard.onceIdle 完成判定问题直接消解；② backend 标签（"claude"等）须经 `AgentRegistry::find_builtin_by_backend` 解析为 `Acp` 并把 agent_id/backend 注入 extra，直接 serde 解析 AgentType 会报 unknown；③ workspace 兜底（新会话 extra 无 workspace 时 mkdir + 回写）必须做，否则 turn 可能失败。下一步 M3b（团队员工 run-now + cron 集成）。
+>
 > 2026-07-05 开工稿。M3 = 「数字员工：编排逻辑 API 化 + superAssistant UI 移植」（对比清单 4–6 人周）。
 > 规格书 = 1one 现有实现：`src/process/digitalEmployee/**`（566 行编排）+ `src/renderer/pages/superAssistant/**`（6553 行 UI）+ cron 挂钩（digitalEmployeeCronRun.ts）。
 
