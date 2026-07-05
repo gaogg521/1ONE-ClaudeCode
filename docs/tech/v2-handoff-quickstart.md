@@ -13,7 +13,7 @@
 | 仓库 | 远端 | 本地工作目录 | 分支 | HEAD |
 |---|---|---|---|---|
 | AionCore fork | `gaogg521/AionCore` | `D:\aionui-m0\AionCore` | `one-main` | `c6f65e3` |
-| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `9f79c45` |
+| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `3ef8778` |
 
 ⚠️ **`/d/AionUi` 是上游 iOfficeAI main，不是 fork**——别搞混。fork 在 `D:\aionui-m0\AionUi`。
 
@@ -21,7 +21,7 @@ cargo 在 `~/.cargo/bin`，bash 里要先 `export PATH="/c/Users/allenzhao/.carg
 
 ## 必读文档（按顺序，接手会话第一次读这 7 份就够）
 
-1. **`CONTEXT.md` 第十七轮**（最底部）— 当前状态 + 权威未完成项清单 v3 + fork 现状 + 编译命令
+1. **`CONTEXT.md` 第十八轮 + 四个补充节**（最底部）— M4 全程实现记录 + fork 现状；权威未完成项清单 v3 在第十七轮
 2. **本文件**（你正在读的）— 快速入门
 3. `docs/tech/v2-architecture-comparison.md` — 选项 A 决策文档（M0-M5 路线图）
 4. `docs/tech/v2-m2-enterprise-crate-design.md` — M2 设计（M2 整体完成，进度头有 LDAP 待办清单）
@@ -148,7 +148,7 @@ M4 剩余（可选收尾）：
 ## 接手 prompt 模板（给新会话用）
 
 ```
-读 D:\1one-command\docs\tech\v2-handoff-quickstart.md，然后读 CONTEXT.md 第十七轮，
-开始做 M4（UI 移植收尾 + httpBridge 适配层 + 客户端连远端）。先做侦察：看 AionUi fork
-的 D:\aionui-m0\AionUi\packages\desktop\src\renderer\ 现有结构，确定 M4 第一步切多大。
+读 D:\1one-command\docs\tech\v2-handoff-quickstart.md，然后读 CONTEXT.md 第十八轮
+（含补充一至四），开始做 M5（数据迁移 + 打包 + 灰度）。先读 docs/tech/v2-m0-report.md
+§3 数据映射表和上游 #2897/#3018/#3423 三个迁移 PR 的模式，确定 M5 第一步切多大。
 ```
