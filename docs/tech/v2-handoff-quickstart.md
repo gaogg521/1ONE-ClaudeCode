@@ -62,7 +62,7 @@ bun run dev                            # 桌面 dev（Electron）
 
 **M4c 已完成**（AionUi `2526dc3`）：共享组件 `channels/ManualPairingInput.tsx`（手动输入 6 位配对码 → Approve/Reject），插入飞书/钉钉/Telegram/企微/微信 5 个 ConfigForm 的待批准区块底部，复用各表单已有 handler（`/api/channel/pairings/approve|reject` 按 code 查 pending，与前端列表无关）。注意：兜底与 pending 区块同渲染条件（`enabled && authorizedUsers.length === 0`）。
 
-**M4d 已完成**（AionCore `c6f65e3` + AionUi `9f79c45`）：桌面「企业模式直登」——企业页顶部 RemoteServerSection（仅桌面）：开关 + 服务器地址 + 用户名密码直登（POST 远端 `/login` 取 body token）。`common/adapter/enterpriseMode.ts` 用 localStorage 存状态（仅渲染层，主进程仍连本地）；httpBridge 企业模式下 baseUrl→远端 + `Authorization: Bearer` + WS 用 Sec-WebSocket-Protocol 首值传 token。后端配套：Bearer 请求豁免 CSRF（cookie 路径保护不变）+ CORS 全模式开启（wildcard 无 credentials）。切换走 `location.reload()`。SSO 深链登录桌面版是后续增强（挂点在 deepLink.ts）。
+**M4d 已完成**（AionCore `c6f65e3` + AionUi `9f79c45`）：桌面「企业模式直登」——企业页顶部 RemoteServerSection（仅桌面）：开关 + 服务器地址 + 用户名密码直登（POST 远端 `/login` 取 body token）。`common/adapter/enterpriseMode.ts` 用 localStorage 存状态（仅渲染层，主进程仍连本地）；httpBridge 企业模式下 baseUrl→远端 + `Authorization: Bearer` + WS 用 Sec-WebSocket-Protocol 首值传 token。后端配套：Bearer 请求豁免 CSRF（cookie 路径保护不变）+ CORS 全模式开启（wildcard 无 credentials）。切换走 `location.reload()`。桌面 SSO 深链登录已接线（AionUi `3ef8778`）：RemoteServerSection 探测远端 providers 渲染「企业 SSO」按钮 → 系统浏览器开 `authorize?desktop=1` → callback 302 到 `aionui://sso-callback` → useDeepLink 校验本地已配置该服务器后写 session 并 reload。SSO JIT 用户是随机密码，深链是 SSO-only 企业桌面端唯一登录通路。真实 OAuth E2E 需渠道凭据。
 
 M4 剩余（可选收尾）：
 

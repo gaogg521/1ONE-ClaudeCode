@@ -3557,3 +3557,18 @@ AionCore one-main → `c6f65e3`,AionUi one-main → `9f79c45`。**M4 四个子�
 
 1. **M5 数据迁移 + 打包 + 灰度**(映射表 docs/tech/v2-m0-report.md §3,照抄上游 #2897/#3018/#3423)
 2. superAssistant 剩余面板(可选)/ LDAP / M1-3 渠道 E2E(等用户凭据)/ 横切项(web 实例 resetpass 等)
+
+---
+
+# 2026-07-05 第十八轮补充四 — 桌面 SSO 深链登录接线完成(M4d 补全)
+
+AionUi one-main → `3ef8778`。M4d 两处遗留接线补完:
+
+1. **RemoteServerSection**:地址有效且未登录时探测远端 `/api/one/sso/providers`(400ms 防抖+5s 超时,失败静默),渲染「企业 SSO」按钮;点击先持久化服务器地址,再系统浏览器打开 `{url}/api/one/sso/{provider}/authorize?desktop=1`
+2. **useDeepLink 新增 sso-callback 分支**:校验 token 存在 + **本地已配置企业服务器地址**(深链 token 绑定用户自己选的 URL,防恶意深链把客户端导向攻击者后端);写 enterpriseMode session → 开启企业模式 → 跳 /#/enterprise → reload
+
+**为什么必须做**:SSO JIT 建的用户是随机密码(M2 设计),密码直登不可用——深链是 SSO-only 企业桌面端唯一登录通路。
+
+冒烟:`authorize?desktop=1` 返回 303 到飞书 OAuth(state 带 desktop 标记);真实 OAuth 回环 E2E 需用户渠道凭据(排渠道 E2E 轮)。tsc/oxlint 零错误。
+
+fork 现状:AionCore `c6f65e3`、**AionUi `3ef8778`**。M4 完整收官,下一步 M5。
