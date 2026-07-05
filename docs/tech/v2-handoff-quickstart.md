@@ -12,8 +12,8 @@
 
 | 仓库 | 远端 | 本地工作目录 | 分支 | HEAD |
 |---|---|---|---|---|
-| AionCore fork | `gaogg521/AionCore` | `D:\aionui-m0\AionCore` | `one-main` | `1ede4f9` |
-| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `2d5d1ff` |
+| AionCore fork | `gaogg521/AionCore` | `D:\aionui-m0\AionCore` | `one-main` | `368d7fd` |
+| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `46b88d4` |
 
 ⚠️ **`/d/AionUi` 是上游 iOfficeAI main，不是 fork**——别搞混。fork 在 `D:\aionui-m0\AionUi`。
 
@@ -58,6 +58,7 @@ bun run dev                            # 桌面 dev（Electron）
 - **M4 全部完成**：企业页（`f2b7031`）/ 登录 SSO 按钮（`adbfdb2`）/ 配对码兜底（`2526dc3`）/ 桌面连远端 + SSO 深链（`c6f65e3`+`9f79c45`+`3ef8778`）——详见 CONTEXT 第十八轮
 - **M5 全部完成**：数据迁移（AionUi `1005524`，oneMigration/ 模块）+ 打包链（`2d5d1ff`，`AIONUI_BACKEND_LOCAL_PATH`/`AIONUI_BACKEND_REPO`）+ 灰度约定——**详见 `docs/tech/v2-m5-migration.md`**
 - **遗留项清扫完成**（AionCore `1ede4f9`）：LDAP 密码登录（`POST /api/one/sso/ldap/login`）、resetpass CLI（`aioncore --data-dir <dir> resetpass`）、superAssistant Runtimes tab、CSRF e2e 对齐 M4d 契约
+- **Issues/EnterpriseCollaboration 重建完成**（用户拍板；AionCore `368d7fd` one-devops crate + AionUi `46b88d4` 协作看板 tab）——详见 m5 文档 §5；编排动作/RAG 向量管线/注册表管理 UI 为后续项
 
 出包命令（fork 安装包）：
 
@@ -72,7 +73,8 @@ AIONUI_BACKEND_LOCAL_PATH='D:\aionui-m0\AionCore\target\release\aioncore.exe' bu
 1. **M1-3 渠道真实配对 E2E + M4d OAuth E2E + LDAP 真实目录 E2E**：等用户提供飞书/钉钉/TG/微信凭据与 AD/LDAP 环境。测试实例重启命令见 CONTEXT 第十二轮。
 2. **M4b 视觉 E2E**：浏览器 WebUI 用的是 aioncore 二进制内嵌的上游 renderer bundle，需先把 fork renderer 构建产物嵌入 aioncore（web 资产重建），再验登录页 SSO 按钮。
 3. **横切决策**（问用户）：微信 iLink vs bridge、workflow scope→CI、fork 安装包品牌（AionUi→1ONE 需改 appId/productName 并回归 userData 路径）。
-4. **灰度执行**：AionCore CI release 流水线（建成后打包切 `AIONUI_BACKEND_REPO=gaogg521/AionCore`）、acp.customAgents 迁移专项、Issues/EnterpriseCollaboration 面板（需先拍板是否重建对应后端域）。
+4. **灰度执行**：AionCore CI release 流水线（建成后打包切 `AIONUI_BACKEND_REPO=gaogg521/AionCore`）、acp.customAgents 迁移专项。
+5. **DevOps 二期**（待用户排期/选型）：看板编排动作对齐 one-employee（assign/breakdown/autopilot）、RAG 向量管线（先选嵌入模型）、Skills/MCP/RAG 注册表管理界面、其余 DevOps 域（milestones/pipelines/测试计划）。
 
 ## 关键约束（踩坑沉淀，不可再犯）
 

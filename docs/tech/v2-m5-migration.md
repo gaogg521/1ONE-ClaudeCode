@@ -94,10 +94,25 @@ AIONUI_BACKEND_LOCAL_PATH='D:\aionui-m0\AionCore\target\release\aioncore.exe' bu
 | M2d LDAP provider | ✅ 完成(AionCore `1ede4f9`)。one-sso `providers/ldap.rs`(ldap3 0.11/rustls,服务绑定→搜索→用户绑定验密→UPN 回退)+ `POST /api/one/sso/ldap/login`(JIT + Set-Cookie + body token)+ `SSO_INVALID_CREDENTIALS`(401)。冒烟 5/5:无 provider 404 / upsert / 未达服务器超时 / configured=true / 空密码 401。**真实 AD/OpenLDAP 目录 E2E 待用户环境** |
 | 横切 resetpass | ✅ 完成(同提交)。`aioncore --data-dir <dir> resetpass [--username X]` 直改库重置密码(`/api/webui/reset-password` 是 local-only,服务器实例此前无通路)。已验证:非 local 实例旧密码 401 → resetpass → 新密码登录拿 token |
 | superAssistant Runtimes 面板 | ✅ 完成(AionUi `2d5d1ff`)。运行时 tab:员工/运行中/启用 MCP 计数 + 设置入口;企业成员显示组织节点卡片跳 /enterprise |
-| superAssistant Issues / EnterpriseCollaboration 面板 | ⛔ 受阻:依赖 1one DevOps 后端域(issues/RAG/企业技能注册),v2 按选项 A 决策未迁移这些域。移植面板=先重建后端 crate,需产品拍板是否要 |
+| superAssistant Issues / EnterpriseCollaboration 面板 | ✅ 用户拍板重建后当日完成(AionCore `368d7fd` + AionUi `46b88d4`,详见 §5) |
 | M4d 附带修复 | ✅ aionui-app 两个 CSRF e2e 断言的是 M4d 之前行为(Bearer 也要 CSRF),M4d 后一直红;已对齐新契约(cookie 无 CSRF→403 保留,Bearer 豁免→200),11/11 过 |
 | 微信 iLink vs bridge 决策、workflow scope→CI | ⚠️ 待用户决策(见 CONTEXT 第十/十一轮) |
 | M1-3 渠道真实配对 E2E、M4b 视觉 E2E、M4d 真实 OAuth E2E | ⚠️ 等用户凭据/环境。另注:M4b 视觉 E2E 还需 aioncore 内嵌 web 资产从 fork renderer 重建(浏览器 WebUI 用的是二进制内嵌上游 bundle) |
+
+## 5. Issues / EnterpriseCollaboration 重建(用户拍板后当日完成)
+
+**后端**(AionCore `368d7fd`):新增 `one-devops` crate(自有 `_one_devops_migrations` 账本):
+- `one_requirements`(type epic/feature/story/bug/task × status backlog/planning/developing/testing/completed × priority low/medium/high/urgent,CHECK 约束)+ `one_requirement_comments`
+- `one_skill_registry` / `one_mcp_registry` / `one_rag_documents`(RAG 是元数据注册表——chunk/embedding/搜索管线待嵌入模型选型后另做)
+- 路由 `/api/one/devops/*`:requirements tree(嵌套森林)/ POST / PATCH(区分缺省与显式 null)/ DELETE(递归子树级联含评论)/ comments;三个注册表 list/upsert/delete。挂 auth 中间件,成员可写
+- 单测 5 例 + API 冒烟 12 步全过;测试池 `max_connections(1)` 修 `sqlite::memory:` 多连接空库 flake(⚠️ 新 crate 写 sqlx 内存库测试必须锁单连接)
+
+**前端**(AionUi `46b88d4`):ipcBridge `oneDevops` 域 + `types/devops/devopsTypes.ts`;superAssistant 新增「协作看板」tab(IssuesTab:五列状态看板/新建/详情抽屉/状态流转/删除/评论)+ CollaborationContextPanel(知识库/Skills/MCP 标签汇总)。
+
+**本期明确不做**(后续项):
+- 1one 编排类动作(assign 数字员工自动跑 / breakdown 自动拆解 / autopilot)——依赖 1one team-slot 模型,应对齐 v2 one-employee 体系重新设计
+- RAG 向量管线(需先拍板嵌入模型)、RAG/Skills/MCP 注册表的管理界面(面板导航按钮暂略)
+- milestones / test plans / pipelines / value stream 等其余 DevOps 全家桶域
 
 **遗留/开放项**:
 - fork 安装包沿用上游品牌(AionUi/com.aionui.app);若灰度需要 1ONE 品牌与图标,需要改 electron-builder.yml 的 appId/productName(注意会改变 userData 路径,须连同 one-import 源定位一起回归)——待产品拍板。

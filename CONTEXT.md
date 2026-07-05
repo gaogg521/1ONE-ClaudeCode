@@ -3622,3 +3622,18 @@ appId 不同→与 1ONE ClaudeCode 并存安装;v2 首启自动导入;回滚=继
 - **gaogg521/AionCore one-main = `1ede4f9`**(M5 清扫:LDAP + resetpass + CSRF 测试对齐)
 - **gaogg521/AionUi one-main = `2d5d1ff`**(M5a `1005524` + M5b/Runtimes `2d5d1ff`)
 - Windows 安装包:`D:\aionui-m0\AionUi\out\AionUi-2.1.28-win-x64.exe`
+
+---
+
+# 2026-07-05 第十九轮补充 — Issues/EnterpriseCollaboration 重建完成(用户拍板)
+
+用户确认这两个面板必须重建,当日完成第一期。**详情:docs/tech/v2-m5-migration.md §5。**
+
+- **后端**:AionCore `368d7fd` 新增 one-devops crate——one_requirements(+comments)/one_skill_registry/one_mcp_registry/one_rag_documents(元数据),路由 /api/one/devops/*,单测 5 例 + 冒烟 12 步全过
+- **前端**:AionUi `46b88d4`——ipcBridge oneDevops 域 + superAssistant「协作看板」tab(五列看板/新建/详情/流转/评论)+ CollaborationContextPanel
+- **本期不做**:编排动作(assign/breakdown/autopilot,需对齐 one-employee 重设计)、RAG 向量管线(等嵌入模型选型)、注册表管理界面、其余 DevOps 域(milestones/pipelines/测试计划等)
+- **踩坑**:sqlx `sqlite::memory:` 测试池必须 max_connections(1),否则第二条池连接是独立空库 → 偶发 no such table
+
+权威清单 v4 更新:第 6 项(Issues/EC 面板)✅ 完成;新增后续项=编排动作对齐 one-employee、RAG 向量管线、注册表管理 UI(均待用户排期/选型)。
+
+fork 现状:**AionCore `368d7fd`、AionUi `46b88d4`**;安装包重出于 out/AionUi-2.1.28-win-x64.exe(内嵌 one-devops 后端 + 看板 UI)。
