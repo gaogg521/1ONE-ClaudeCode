@@ -4,17 +4,17 @@
 >
 > 工作目录与编译命令见 `docs/tech/v2-handoff-quickstart.md`；fork 现状：AionCore `368d7fd` / AionUi `46b88d4`（均在 one-main）。
 
-## 0. 前置决策（需用户拍板，按解锁范围排序）
+## 0. 前置决策（2026-07-05 用户授权自主拍板）
 
-这些决策不落地，对应实施项无法开工。建议按序逐个拍板：
+用户 2026-07-05 授权自主决策 D 组。结论如下：
 
-| # | 决策 | 解锁项 | 参考 |
+| # | 决策 | 结论 | 解锁项 |
 |---|---|---|---|
-| D1 | **嵌入模型选型**（本地模型如 bge/gte + ONNX/candle 内嵌，还是走 API 如 OpenAI/智谱，还是依赖用户本机 Ollama） | A2 RAG 向量管线 | `one_rag_documents` 现状见 m5 文档 §5 |
-| D2 | **微信 iLink vs bridge** | C1 渠道 E2E 微信部分 | CONTEXT 第十/十一轮 |
-| D3 | **fork 安装包品牌**（AionUi → 1ONE：改 electron-builder.yml appId/productName；⚠️ 会改变 userData 路径，须连同 one-import 源定位一起回归） | B3 品牌化实施、灰度正式发布 | m5 文档 §5 遗留项 |
-| D4 | **workflow scope → CI** | 渠道 workflow 相关收尾 | CONTEXT 第十/十一轮 |
-| D5 | **E2E 凭据与环境**（飞书/钉钉/TG/微信渠道凭据、OAuth 应用、真实 AD/OpenLDAP 目录） | C 组全部验证项 | 测试实例重启命令见 CONTEXT 第十二轮 |
+| D1 | 嵌入模型选型 | ✅ **OpenAI-compatible embeddings provider 抽象**：设置里配 base_url + key + model；云端点或私有端点（vLLM/Ollama/Xinference 的 OpenAI 兼容口）皆可。不内嵌大模型文件（避打包体积 + Windows Defender 首扫坑），不硬依赖 Ollama。隐私由"部署方指自己的端点"保证，符合"数据不离开"定位 | A2 RAG |
+| D2 | 微信 iLink vs bridge | ✅ **采用上游官方 iLink Bot（选项 A 已白送）**，不移植 fork 的本地 bridge 个人号形态。理由：个人号自动化有封号/合规风险，官方 Bot 是正道；移植 WeixinMonitor 是 1-2k 行额外工作，收益仅"个人号"这一有风险形态。若用户后续明确要个人号，再单独立项 | C1 渠道 E2E 微信部分 |
+| D3 | fork 安装包品牌（AionUi→1ONE） | ✅ **暂不做，推迟到正式灰度前一次性做**。理由：改 appId 会改 userData 路径，牵动 M5 one-import 源定位回归；开发迭代期频繁改会让本地测试数据目录漂移；品牌收益在灰度前无实际价值 | B3（推迟） |
+| D4 | workflow scope → CI | ✅ **已解决**。B1 期间实证：成功推送 `.github/workflows/release.yml` 修改并 `gh workflow run` dispatch，说明 gh token 已具 workflow scope。无残留动作 | — |
+| D5 | E2E 凭据与环境 | ⛔ **无法自主**——硬依赖用户提供的真实凭据/目录/OAuth 应用。C 组验证全部卡此。这是唯一真正等用户的项 | C 组全部 |
 
 ## A. DevOps 域二期（核心功能，一期看板的延续）
 
@@ -37,9 +37,8 @@
 
 ### A4 其余 DevOps 域
 
-- **内容**：milestones / test plans / pipelines / value stream 等 DevOps 全家桶剩余域。
-- **建议**：需求驱动、按需排期，不一次铺开。若做，**milestones 优先**（与现有 requirements 树关联最紧，表结构增量最小）。
-- **入口**：`one-devops` crate 增表 + `_one_devops_migrations` 账本增 migration。⚠️ 新增 sqlx 内存库测试必须 `max_connections(1)`（一期踩坑）。
+- **milestones** ✅ 2026-07-05 完成（AionCore `19ba3c2` + AionUi `4652aa2` + `8ca7985`）：`one_milestones` 表（migration 002）+ CRUD + 路由；requirement 经详情抽屉下拉关联 milestone；协作资源 tab 加里程碑管理区（状态/截止日期/删除时清理关联需求软链）。后端 curl + 单测 + 浏览器 E2E 全过（含修复 Arco DatePicker 经 Form 传字符串导致 dueAt 未保存的 bug）。补齐了 `requirement.milestone_id` 自 001 起悬空的问题。
+- **test plans / pipelines / value stream** 等其余域：需求驱动、按需排期，未做。入口同 `one-devops` crate 增表 + migration。⚠️ 新增 sqlx 内存库测试必须 `max_connections(1)`。
 
 ## B. 工程与灰度收尾
 
