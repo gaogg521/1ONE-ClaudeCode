@@ -3487,3 +3487,30 @@ M2d 原范围含 LDAP,但 1one `LdapAuthProvider.ts` 525 行很重(ldap3 crate +
 1. **M4c 配对码兜底组件**(5 ConfigForm,先侦察上游渠道配置 UI 位置)
 2. **M4d 客户端连远端**(最大设计点:桌面 runtime 目前跳过认证,连远端要引入真实认证 + token→session 换取)
 3. superAssistant 剩余面板 / M5 / LDAP / 渠道 E2E
+
+---
+
+# 2026-07-05 第十八轮补充二 — M4c 配对码手动兜底完成
+
+AionUi fork one-main 推进到 `2526dc3`。
+
+## 实现
+
+- **channels/ManualPairingInput.tsx**(新,共享组件):Input(过滤非数字,6 位才可提交)+ Approve/Reject 按钮,props 接收各表单已有的 handleApprovePairing/handleRejectPairing
+- **插入 5 个 ConfigForm**(Lark/DingTalk/Telegram/Wecom/Weixin):每个「待批准配对请求」区块底部(Empty/列表之后),两处 Edit(import + 渲染),五个表单该区块是完全相同的复制粘贴结构,锚点 `settings.assistant.reject` 每文件唯一
+- **后端确认**:aionui-channel/pairing.rs `PAIRING_CODE_LENGTH=6`、TTL 10min;approve/reject 按 code 查 pending,与前端列表无关 → 手动输码有效
+- 兜底与 pending 区块同渲染条件(`pluginStatus?.enabled && authorizedUsers.length === 0`),即已授权用户后不再显示——符合「授权首个用户时事件未推送」的兜底场景
+
+## 验收
+
+- tsc --noEmit 零错误;oxlint 20 warnings 与 stash 基线完全一致(上游预存),新组件零警告
+- 真实渠道 E2E(实际发消息触发配对再手动输码)留渠道 E2E 轮次
+
+## fork 现状
+
+- gaogg521/AionCore one-main = `a442bfb`(无变化)
+- **gaogg521/AionUi one-main = `2526dc3`**(M4a f2b7031 + M4b adbfdb2 + M4c 2526dc3)
+
+## M4 剩余
+
+仅 **M4d 客户端连远端**(设计点:桌面 runtime 跳过认证→连远端需真实认证 + token→session 换取)+ superAssistant 剩余面板(Runtimes/Issues/EnterpriseCollaboration)。

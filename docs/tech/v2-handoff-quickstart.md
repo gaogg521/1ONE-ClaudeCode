@@ -6,14 +6,14 @@
 
 ## 一句话当前状态
 
-**M2 + M3 整体完成；M4a（企业页 /enterprise 六 tab + oneOrg/oneAdmin httpBridge 域）+ M4b（登录页 SSO 按钮）已完成。剩 M4c（配对码兜底组件）/ M4d（客户端连远端）/ superAssistant 剩余面板 / M5 / LDAP / M1-3 渠道 E2E。**
+**M2 + M3 整体完成；M4a（企业页 /enterprise 六 tab + oneOrg/oneAdmin httpBridge 域）+ M4b（登录页 SSO 按钮）+ M4c（配对码手动兜底，5 渠道 ConfigForm）已完成。剩 M4d（客户端连远端）/ superAssistant 剩余面板 / M5 / LDAP / M1-3 渠道 E2E。**
 
 ## fork 仓库 + 工作目录
 
 | 仓库 | 远端 | 本地工作目录 | 分支 | HEAD |
 |---|---|---|---|---|
 | AionCore fork | `gaogg521/AionCore` | `D:\aionui-m0\AionCore` | `one-main` | `a442bfb` |
-| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `adbfdb2` |
+| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `2526dc3` |
 
 ⚠️ **`/d/AionUi` 是上游 iOfficeAI main，不是 fork**——别搞混。fork 在 `D:\aionui-m0\AionUi`。
 
@@ -60,9 +60,10 @@ bun run dev                            # 桌面 dev（Electron）
 
 **M4b 已完成**（AionUi `adbfdb2`）：登录页 SSO 按钮 `pages/login/components/LoginSsoButtons.tsx`——拉 `/api/one/sso/providers` 过滤 enabled+configured，同窗口跳 authorize（callback Set-Cookie 回跳 /#/guid）；desktop runtime 渲染 null。⚠️ 视觉 E2E 未做（需重建 renderer bundle + 浏览器打开 WebUI login 页），tsc/oxlint/端点形状已验。
 
+**M4c 已完成**（AionUi `2526dc3`）：共享组件 `channels/ManualPairingInput.tsx`（手动输入 6 位配对码 → Approve/Reject），插入飞书/钉钉/Telegram/企微/微信 5 个 ConfigForm 的待批准区块底部，复用各表单已有 handler（`/api/channel/pairings/approve|reject` 按 code 查 pending，与前端列表无关）。注意：兜底与 pending 区块同渲染条件（`enabled && authorizedUsers.length === 0`）。
+
 M4 剩余：
 
-- **M4c 配对码手动兜底组件**：上游缺口，5 个 ConfigForm 共享组件（飞书/钉钉/微信/TG/邮件）。先侦察上游渠道 ConfigForm 位置（搜 `packages/desktop/src/renderer` 里 feishu/telegram 的配对 UI），做一个共享的「输入 6 位配对码 → Approve/Reject」组件插进 5 个表单
 - **M4d 桌面客户端连远端**：httpBridge baseUrl 支持指向 `enterpriseServerUrl`，桌面加"企业模式"开关；深链挂点已有（`process/utils/deepLink.ts` 的 aionui:// handler + `ipcBridge.deepLink.received` + `useDeepLink`），缺 token→session 换取机制。**桌面 runtime 目前完全跳过认证**（AuthContext `isDesktopRuntime → authenticated`），连远端时要引入真实认证——这是 M4d 最大的设计点
 - **superAssistant 剩余面板**：Runtimes / Issues / EnterpriseCollaboration（Runtimes 可复用 oneAdmin.listRuntimeNodes）
 
