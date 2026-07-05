@@ -3118,3 +3118,33 @@ rustup+MSVC 就绪,v0.1.41 源码 `cargo build --release` 首编 47m46s → 自�
 | 8 | 横切:微信 iLink vs bridge 决策、workflow scope→CI、web 实例登录(resetpass) | 详见第十/十一轮 |
 
 fork 现状:gaogg521/AionCore one-main = b4ec43f(M2a d11d120 + M3a b4ec43f 已推送);gaogg521/AionUi one-main = v2.1.28 基线未动。cargo 在 ~/.cargo/bin(bash 需手动 export PATH)。
+
+---
+
+# 2026-07-05 第十四轮 — M3b 完成(团队员工 run-now + cron 30s 扫描循环)
+
+按第十三轮交接清单第 1 项开工,当日完成并推送(fork commit 18bea4a,gaogg521/AionCore one-main)。
+
+**实现要点**:
+- **002 迁移**:`one_personal_agents` 加 `schedule TEXT`(CronScheduleDto JSON,tag="kind")/`schedule_enabled INTEGER`/`next_run_at INTEGER` 三列 + 部分索引 `WHERE schedule_enabled=1`。
+- **团队员工 run-now**:`EmployeeService::run_now_team(owner, agent_id, team_id, slot_id)` → `TeamSessionService::get_team` 取 `TeamResponse.assistants[].conversation_id` → `send_message_to_agent` fire-and-ack → 轮询 `get_run_state` 直到 `active_run.is_none()`(3s 间隔、15min 上限)→ `extract_summary` 复用 M3a 路径。
+- **cron 30s 扫描循环**(`spawn_scheduler`):每 30s `scan_once` 查 `WHERE schedule_enabled=1 AND next_run_at<=now` → 命中后立即 `next_run_at=NULL` 防重入 → 调 `start_personal_run(TRIGGER_CRON)`(复用 M3a 建会话/run_agent_turn 路径) → `execute_run` 完成后调 `recompute_next_run` 用上游 `compute_next_run(&CronSchedule, now)` 重排。零上游 diff(全是 pub API)。
+- **路由**:POST `/api/one/employee/agents/:id/run-team`(body: team_id+slot_id) + PUT `/api/one/employee/agents/:id/schedule`(body: CronScheduleDto + enabled)。
+- **上游 diff 仍限挂载点**:routes.rs wiring 多 3 行(clone team_session_service before move + with_team_session + spawn_scheduler)。
+
+**关键修正(侦察记录的 bug)**:§2.5 说"CronSchedule serde 形状(tagged enum,L19)"——实际 `CronSchedule` 只派生 `Debug, Clone, PartialEq`,**不派生 serde**。可 serde 的是 `CronScheduleDto`(`aionui-api-types/src/cron.rs` L12,tag="kind")。存库用 Dto JSON,调用 `compute_next_run` 时用 `schedule_from_dto(&dto)` 转换。
+
+**验收**:
+- 单测 6/6(M3a 5 个 + M3b 新增 `compute_next_run_every`/`compute_next_run_at_is_absolute` + 迁移断言加强)。
+- `--local` 冒烟 cron 链路全过:建员工 → PUT schedule(Every 60s) → 等 ~60s → runs 表出现 `triggerSource:"cron"` 记录 → 真实 claude 一轮 13s → `status:"success"` + `summary:"M3b cron冒烟OK"` → `nextRunAt` 自动回写 +60s(1783219798784 → 1783219884144)。
+- team run 错误处理:不存在 team 返回 `Internal error: team get_team: Team not found`(冒烟验证)。
+
+**踩坑**:
+- ① 首版 cron 扫描器把 `run_id` 当 conversation_id 传给 `execute_run` → 必然 `run_agent_turn` 失败。重构抽出 `start_personal_run(trigger_source)` 复用建会话逻辑,手动/cron 共用。
+- ② 首版 team run 把 `team_run_id` 当 conversation_id 存,summary 提取会查不到消息。改用 `get_team` 提前拿 slot 真实 conversation_id。
+- ③ `states.team` 在 `team_routes(states.team)` 时 move 了,后面 `.with_team_session(states.team.service.clone())` borrow after move。在 move 前先 `let team_session_service = states.team.service.clone();`。
+- ④ aioncore.exe 不接受 `start` 子命令(web 形态才有),直接 `aioncore.exe --local --port ...`。也没有 `--no-open`。
+
+**fork 现状**:gaogg521/AionCore one-main = 18bea4a(M2a d11d120 + M3a b4ec43f + M3b 18bea4a 已推送);gaogg521/AionUi one-main = v2.1.28 基线未动。
+
+**下一步(第十五轮候选)**:M3c(superAssistant UI 移植首屏——Overview/AgentsTab 重接线 `/api/one/employee/*`,与 M4 httpBridge 适配层共用)或 M2b(飞书 SSO → one-sso crate,需用户提供真实飞书应用凭据做 E2E)。剩余未完成项:第十三轮清单 2-8(M3b 已勾掉)。
