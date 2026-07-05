@@ -3099,3 +3099,22 @@ rustup+MSVC 就绪,v0.1.41 源码 `cargo build --release` 首编 47m46s → 自�
 横切遗留:M1-3 渠道真实 E2E(用户凭据,必做)、微信 iLink vs bridge 决策、workflow scope→CI、web 实例登录(resetpass 可解)。
 
 **注意**:D:\aionui-m0 的两个上游测试实例(web:25908/桌面 dev)随会话重启已停;需要时重新拉起:web 形态 `D:\aionui-m0\web\aionui-web\aionui-web.exe start --port 25908 --no-open --data-dir D:\aionui-m0\data --log-dir D:\aionui-m0\logs`;桌面 `cd D:\aionui-m0\AionUi && bun run dev`(注意 dev 的 aioncore 已复制在 electron dist resources)。
+
+---
+
+# 2026-07-05 第十三轮 — 未完成项登记(交接清单,本会话不再写码)
+
+用户指示:只记录、不实施,由其他会话接续。**当前全部未完成项**(权威清单,接手会话按序取活):
+
+| # | 项 | 状态与入口 |
+|---|---|---|
+| 1 | **M3b 团队员工 run-now + cron 集成** | 技术侦察已完成并写入 `docs/tech/v2-m3-employee-design.md` §2.5(团队 API/完成判定/cron 决策改自带扫描循环+复用 compute_next_run/002 迁移三列),照抄可直接实现 |
+| 2 | **M2b 飞书 SSO(one-sso crate)** | 设计在 v2-m2-enterprise-crate-design.md §3-4;实现+单测可先行,真实飞书 E2E 需用户凭据 |
+| 3 | M2d 钉钉/企微/LDAP + 组织同步 | 复制 M2b 模式 |
+| 4 | M2e 管理后台 API 收尾 | M2a 已带部分 /api/one/admin/* |
+| 5 | M3c+M4 UI 移植 | superAssistant 首屏+企业/管理页 httpBridge 重接线+配对码手动兜底组件(上游缺口,5 个 ConfigForm 共享组件)+桌面客户端连远端 |
+| 6 | M5 数据迁移+打包+灰度 | 映射表在 v2-m0-report.md §3;照抄上游 #2897/#3018/#3423 模式 |
+| 7 | M1-3 渠道真实配对 E2E | 用户凭据,必做;测试实例重启命令见第十二轮 |
+| 8 | 横切:微信 iLink vs bridge 决策、workflow scope→CI、web 实例登录(resetpass) | 详见第十/十一轮 |
+
+fork 现状:gaogg521/AionCore one-main = b4ec43f(M2a d11d120 + M3a b4ec43f 已推送);gaogg521/AionUi one-main = v2.1.28 基线未动。cargo 在 ~/.cargo/bin(bash 需手动 export PATH)。

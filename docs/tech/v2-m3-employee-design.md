@@ -24,6 +24,13 @@
 - **完成判定**：M3a 落地时对齐上游 cron 执行器的等待/完成机制（event bus 订阅 agent 流事件或轮询会话 status），二选一以上游已验证路径为准；不移植 cronBusyGuard。
 - **定时触发**：不自建 scheduler。复用上游 `aionui-cron`（At/Every/Cron 三模式齐备），员工的 cron 任务目标=员工会话；one-employee 通过监听自己创建的会话完成事件统一回写 run 记录（手动/定时同一条路径）。
 
+## 2.5 M3b 开工侦察（2026-07-05 已核实，可直接按此实现）
+
+- **团队员工 run-now 的上游 API**：`TeamSessionService::send_message_to_agent(user_id, team_id, slot_id, content, files)` → 返回 `TeamRunAckResponse{team_run_id, accepted_slot_id,…}`（fire-and-ack，非同步等待）。完成判定：轮询 `get_run_state(user_id, team_id)` → `TeamRunStateResponse{active_run: Option<…>}`，active_run 变 None 或 team_run_id 更换即完成（建议 3s 间隔、15min 上限）。slot→conversation_id 在 team types 的 slot 结构里（`crates/aionui-team/src/types.rs` ~L96），summary 复用 M3a 的 `extract_summary(conversation_id)`。
+- **TeamSessionService 获取**：`aionui-app/src/router/state.rs` L586 构造，存于 `TeamRouterState.service: Arc<TeamSessionService>`（`states.team.service`）——EmployeeService::new 加一个参数从 routes.rs 现有 wiring hunk 传入即可（不新增上游 diff 点）。
+- **cron 集成决策（推翻 §2 原案）**：读了 `aionui-cron/src/executor.rs`——cron 执行全程内部管理（busy 重试/artifact/skill-suggest），**无外部完成钩子**，挂 run 记录必须改上游或订 event bus（NewConversation 模式还无法注入我们的 marker）。**改为：one-employee 自带 30s 扫描循环**，但调度语义复用上游公开函数 `aionui_cron::scheduler::compute_next_run(&CronSchedule, now)`（pub，At/Every/Cron+tz 全支持）——零上游 diff、语义一致。存储：新增自有迁移 `002_schedule.sql` 给 one_personal_agents 加 `schedule TEXT`(CronSchedule 的 serde JSON)/`schedule_enabled INTEGER`/`next_run_at INTEGER` 三列，扫描 `WHERE schedule_enabled=1 AND next_run_at<=now` → 走既有 run_now 路径（trigger_source='cron'）→ 回写 next_run_at。重启安全。
+- **CronSchedule serde 形状**（tagged enum，`crates/aionui-cron/src/types.rs` L19）：`At{at_ms,description}` / `Every{every_ms,description}` / `Cron{expr,tz,description}`。
+
 ## 3. 内部里程碑
 
 | 步骤 | 内容 | 验收 |
