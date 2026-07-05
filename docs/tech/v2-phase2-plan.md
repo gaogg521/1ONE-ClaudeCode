@@ -20,10 +20,9 @@
 
 ### A1 看板编排动作（assign 数字员工 / breakdown 自动拆解 / autopilot）
 
-- **内容**：需求卡片上的编排动作——assign 给数字员工自动执行、epic/feature 自动拆解为子需求、autopilot 全自动流转。
-- **设计约束**：不照搬 1one 的 team-slot 模型；必须对齐 v2 `one-employee` 体系（M3 crate，设计见 `docs/tech/v2-m3-employee-design.md`）重新设计。**实施前先出一份编排设计文档**（employee ↔ requirement 关联模型、执行会话归属、状态回写路径）。
-- **入口**：后端 `one-devops` crate（AionCore `368d7fd`）+ 前端 IssuesTab（AionUi `46b88d4`）。
-- **建议顺序**：assign（单卡片手动指派执行）→ breakdown（LLM 拆解生成子树）→ autopilot（规则驱动自动流转），逐级验证再上一层。
+- **设计文档**：`docs/tech/v2-a1-orchestration-design.md`（三层路线 + L1 实现细节 + 验证记录）。
+- **L1 assign + 手动派活** ✅ 2026-07-05 完成（AionCore `c9e2093` + AionUi `b1b967f`）：需求指派给数字员工 → 派活让员工带需求上下文跑一次 → 状态推进 developing + agent 评论回写会话/run。后端 curl + 浏览器 E2E + 单测全过。**L1 限制**：只能派给操作者自己的数字员工（个人级隔离）。
+- **L2 breakdown**（LLM 拆解 epic/feature 为子需求树）、**L3 autopilot**（自动触发 + 团队共享数字员工，依赖 one-employee tenant 改造）——后续。
 
 ### A2 RAG 向量管线
 
