@@ -3391,10 +3391,11 @@ M2d 原范围含 LDAP,但 1one `LdapAuthProvider.ts` 525 行很重(ldap3 crate +
 ## 关键文档入口(接手会话必读)
 
 按读的顺序:
-1. **本文件(CONTEXT.md)第十七轮** — 当前状态 + 权威未完成项清单 v3
-2. `docs/tech/v2-architecture-comparison.md` — 选项 A 决策文档(M0-M5 路线图)
-3. `docs/tech/v2-m2-enterprise-crate-design.md` — M2 设计(M2 整体完成,LDAP 待后续)
-4. `docs/tech/v2-m3-employee-design.md` — M3 设计(M3 整体完成)
-5. `docs/tech/v2-m0-report.md` — M0 报告(数据映射表 §3,M5 用)
-6. `docs/tech/v2-m1-channel-gap.md` — M1 渠道差距分析
-7. Claude Code 自动记忆 `~/.claude/projects/D--1one-command/memory/upstream-alignment-roadmap.md` — 路线图摘要 + How to apply
+1. **`docs/tech/v2-handoff-quickstart.md`** — 接手快速入门(精炼自包含,一读就能干活)
+2. **本文件(CONTEXT.md)第十七轮** — 当前状态 + 权威未完成项清单 v3
+3. `docs/tech/v2-architecture-comparison.md` — 选项 A 决策文档(M0-M5 路线图)
+4. `docs/tech/v2-m2-enterprise-crate-design.md` — M2 设计(M2 整体完成,LDAP 待后续)
+5. `docs/tech/v2-m3-employee-design.md` — M3 设计(M3 整体完成)
+6. `docs/tech/v2-m0-report.md` — M0 报告(数据映射表 §3,M5 用)
+7. `docs/tech/v2-m1-channel-gap.md` — M1 渠道差距分析
+8. Claude Code 自动记忆 `~/.claude/projects/D--1one-command/memory/upstream-alignment-roadmap.md` — 路线图摘要 + How to apply

@@ -9,6 +9,10 @@
 
 ### 关键文档（建议按任务先读）
 
+- **v2 迁移接手**
+  - `docs/tech/v2-handoff-quickstart.md`：**接手快速入门（精炼自包含，一读就能干活）**——做 M4/M5/LDAP 等迁移工作前必读
+  - `CONTEXT.md` 第十七轮（最底部）：当前状态 + 权威未完成项清单 v3 + fork 现状
+
 - **开发与运行**
   - `docs/development.md`：本地开发、常用脚本、环境说明
   - `docs/WEBUI_GUIDE.md`：WebUI 使用与注意事项
@@ -19,6 +23,10 @@
   - `docs/tech/architecture.md`：三进程架构、边界、IPC 约束
   - `docs/tech/skills-invocation.md`：技能调用机制（catalog 数据源、三条注入路径、关键不变量、排查入口）——改助手/技能相关代码前必读
   - `docs/tech/v2-architecture-comparison.md`：v2 架构迁移《对比清单》决策文档（五能力域对比、三策略选项、M0-M5 里程碑）——做架构迁移相关工作前必读
+  - `docs/tech/v2-m2-enterprise-crate-design.md`：M2 企业版 crate 设计（M2 整体完成，进度头有 LDAP 待办）
+  - `docs/tech/v2-m3-employee-design.md`：M3 数字员工 crate 设计（M3 整体完成）
+  - `docs/tech/v2-m0-report.md`：M0 报告（§3 数据映射表，M5 用）
+  - `docs/tech/v2-m1-channel-gap.md`：M1 渠道差距分析
   - `docs/conventions/file-structure.md`：目录结构与拆分规则（单目录≤10子项）
   - `docs/CODE_STYLE.md`：代码风格与格式化规范
 
