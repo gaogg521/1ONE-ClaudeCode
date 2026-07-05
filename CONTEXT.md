@@ -3062,3 +3062,30 @@ rustup+MSVC 就绪,v0.1.41 源码 `cargo build --release` 首编 47m46s → 自�
 1. 用户跑 gh auth refresh → 我完成 AionUi fork 基线(M1-2)。
 2. M1-3 真实配对 E2E:用户在上游实例(桌面窗口或 :25908)渠道设置自行填凭据(飞书/Telegram/微信 iLink),验证配对+对话+流式回写全流程;微信路线是否满足个人号需求是关键判断点。
 3. 会话限额注意:渠道分析 agent 曾撞限额(reset 3am),后改主会话精准检索完成。
+
+---
+
+# 2026-07-05 第十一轮 — M1-2 收尾 + M2 企业 crate 设计
+
+## M1-2 fork 基线(✅ 全部完成)
+
+- **gaogg521/AionCore**:one-main@v0.1.41,默认分支,本地 D:\aionui-m0\AionCore 跟踪中。
+- **gaogg521/AionUi**:用户网页点 Sync fork 解决同步(gh token 至今缺 workflow scope,命令行两条路都被挡);one-main@v2.1.28(a5a8b34)已建+设默认,本地跟踪中。
+- **workflow scope 仍未解决**——影响:向 fork 推 .github/workflows 文件(M2 的 CI)。绕法:GitHub 网页编辑器手工建 workflow,或用户再走一次 gh auth refresh 设备码全流程(要按 Enter、等终端打印 Authentication complete)。
+
+## M1-3 真实配对 E2E(等用户操作)
+
+监控已架好(persistent Monitor 盯 web 实例渠道/配对日志)。用户需在 http://127.0.0.1:25908 设置→渠道自行填凭据(Telegram/飞书/微信 iLink)。**web 登录问题**:该实例 --local 模式从未打印过密码;要登录跑 `D:\aionui-m0\web\aionui-web\aionui-web.exe resetpass --data-dir D:\aionui-m0\data` 重置并打印。用户暂时搁置。
+
+## M2 设计文档(✅ docs/tech/v2-m2-enterprise-crate-design.md)
+
+要点:`one-org`/`one-sso` 两个 crate(one- 前缀区别上游);**DB 用自管迁移器+_one_migrations 表**(不进上游 sqlx migrator,否则 rebase 撞号必炸);不改上游 users 表(企业属性外挂 one_user_org);路由前缀 /api/one/*;RBAC 做成只包自己路由的 extractor,SSO 签发复用上游 auth(pub 可调性 M2 第一周验证);客户端连远端 = M4 在 AionUi fork 侧做 httpBridge baseUrl 指向;M2 内部 a-e 五步+两周 checkpoint;DevOps 全家桶表不进 M2。
+
+## 当前所有支线状态
+
+| 支线 | 状态 |
+|---|---|
+| M1-3 渠道 E2E | 等用户填凭据(监控在跑) |
+| M2 编码 | 设计已备,可开工(建议新会话,读本节+设计文档) |
+| workflow scope | 用户侧待解,不阻塞 M2a |
+| 上游实例 | web:25908 与桌面 dev 均在跑(D:\aionui-m0) |
