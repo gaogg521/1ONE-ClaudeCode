@@ -3514,3 +3514,46 @@ AionUi fork one-main 推进到 `2526dc3`。
 ## M4 剩余
 
 仅 **M4d 客户端连远端**(设计点:桌面 runtime 跳过认证→连远端需真实认证 + token→session 换取)+ superAssistant 剩余面板(Runtimes/Issues/EnterpriseCollaboration)。
+
+---
+
+# 2026-07-05 第十八轮补充三 — M4d 桌面连远端完成,M4 整体完成
+
+AionCore one-main → `c6f65e3`,AionUi one-main → `9f79c45`。**M4 四个子项(a/b/c/d)全部完成**,仅剩 superAssistant 剩余面板作可选收尾。
+
+## 实现(方案 2:桌面内直登,深链 SSO 作后续增强)
+
+### AionCore(c6f65e3)
+
+- **csrf.rs**:携带非空 `Authorization: Bearer` 的请求跳过 Double Submit Cookie 校验(Bearer 头无法被跨站携带);cookie 会话路径 CSRF 不变
+- **routes.rs**:CORS 从仅 `--local` 改为无条件挂载(`allow_origin(Any)` 且不 allow_credentials → 跨域请求不带 cookie,凭据只能显式 Bearer,安全)
+
+### AionUi(9f79c45)
+
+- **common/adapter/enterpriseMode.ts**(新):localStorage 三键(enabled/server-url/session{token,userId,username});主进程无 localStorage → 主进程 ipcBridge 调用不受影响仍连本地
+- **httpBridge**:`isEnterpriseRemoteActive()` 时 getBaseUrl→远端、httpRequest 加 Bearer 头、getWsUrl→远端 /ws、ensureWs 用 `new WebSocket(url, [token])`(后端 extract_token_from_ws_headers 支持 Sec-WebSocket-Protocol 首值,realtime handler 会回显 protocol 完成握手)
+- **enterprise 页 RemoteServerSection**(仅桌面):开关 + 服务器地址 + 用户名/密码直登(POST `${url}/login`,响应体 `{success,user,token}`)+ 已登录 Tag/退出按钮;所有切换 `location.reload()` 重建全部 hooks/WS
+- 关闭企业模式保留 session(下次开启免重登);退出登录 best-effort POST /logout 拉黑 token
+
+## 关键事实
+
+- **上游 /login 响应体直接带 token**(不只 Set-Cookie)——桌面直登无需任何后端新路由
+- **上游 auth 全链路原生支持 Bearer**(HTTP header 优先于 cookie;WS 支持 Authorization > Cookie > Sec-WebSocket-Protocol)
+- CSRF 只在非 local 挂、CORS 原来只在 local 挂——远端模式正好两个都要动
+- 非 local 实例默认用户(admin/system_default_user)密码为空,登录被拒;冒烟时用 bun:sqlite + bcryptjs 直接 UPDATE users.password_hash(横切项"web 实例登录 resetpass"仍待做正式方案)
+
+## 验收
+
+- cargo test -p aionui-auth 20/20;tsc --noEmit 零错误;oxlint 新文件零警告
+- 非 local 冒烟(25914)五连:OPTIONS 预检 `access-control-allow-origin:*` → 无 Bearer POST 报 CSRF_INVALID(保护未破)→ 伪 Bearer 401(到认证层)→ /login 返回 JWT → Bearer GET context + POST org/create 无 cookie 全通
+- 桌面 UI 实际连远端 E2E(两台机/两实例)留给用户验收
+
+## fork 现状
+
+- **gaogg521/AionCore one-main = `c6f65e3`**
+- **gaogg521/AionUi one-main = `9f79c45`**
+
+## 下一步(第十九轮候选)
+
+1. **M5 数据迁移 + 打包 + 灰度**(映射表 docs/tech/v2-m0-report.md §3,照抄上游 #2897/#3018/#3423)
+2. superAssistant 剩余面板(可选)/ LDAP / M1-3 渠道 E2E(等用户凭据)/ 横切项(web 实例 resetpass 等)

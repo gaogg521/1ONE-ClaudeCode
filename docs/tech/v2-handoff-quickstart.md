@@ -6,14 +6,14 @@
 
 ## 一句话当前状态
 
-**M2 + M3 整体完成；M4a（企业页 /enterprise 六 tab + oneOrg/oneAdmin httpBridge 域）+ M4b（登录页 SSO 按钮）+ M4c（配对码手动兜底，5 渠道 ConfigForm）已完成。剩 M4d（客户端连远端）/ superAssistant 剩余面板 / M5 / LDAP / M1-3 渠道 E2E。**
+**M2 + M3 整体完成；M4a/M4b/M4c/M4d 全部完成（企业页 + 登录 SSO 按钮 + 配对码兜底 + 桌面连远端）。M4 仅剩 superAssistant 剩余面板（可选收尾）。下一步 M5（数据迁移 + 打包 + 灰度）/ LDAP / M1-3 渠道 E2E。**
 
 ## fork 仓库 + 工作目录
 
 | 仓库 | 远端 | 本地工作目录 | 分支 | HEAD |
 |---|---|---|---|---|
-| AionCore fork | `gaogg521/AionCore` | `D:\aionui-m0\AionCore` | `one-main` | `a442bfb` |
-| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `2526dc3` |
+| AionCore fork | `gaogg521/AionCore` | `D:\aionui-m0\AionCore` | `one-main` | `c6f65e3` |
+| AionUi fork | `gaogg521/AionUi` | `D:\aionui-m0\AionUi` | `one-main` | `9f79c45` |
 
 ⚠️ **`/d/AionUi` 是上游 iOfficeAI main，不是 fork**——别搞混。fork 在 `D:\aionui-m0\AionUi`。
 
@@ -62,9 +62,10 @@ bun run dev                            # 桌面 dev（Electron）
 
 **M4c 已完成**（AionUi `2526dc3`）：共享组件 `channels/ManualPairingInput.tsx`（手动输入 6 位配对码 → Approve/Reject），插入飞书/钉钉/Telegram/企微/微信 5 个 ConfigForm 的待批准区块底部，复用各表单已有 handler（`/api/channel/pairings/approve|reject` 按 code 查 pending，与前端列表无关）。注意：兜底与 pending 区块同渲染条件（`enabled && authorizedUsers.length === 0`）。
 
-M4 剩余：
+**M4d 已完成**（AionCore `c6f65e3` + AionUi `9f79c45`）：桌面「企业模式直登」——企业页顶部 RemoteServerSection（仅桌面）：开关 + 服务器地址 + 用户名密码直登（POST 远端 `/login` 取 body token）。`common/adapter/enterpriseMode.ts` 用 localStorage 存状态（仅渲染层，主进程仍连本地）；httpBridge 企业模式下 baseUrl→远端 + `Authorization: Bearer` + WS 用 Sec-WebSocket-Protocol 首值传 token。后端配套：Bearer 请求豁免 CSRF（cookie 路径保护不变）+ CORS 全模式开启（wildcard 无 credentials）。切换走 `location.reload()`。SSO 深链登录桌面版是后续增强（挂点在 deepLink.ts）。
 
-- **M4d 桌面客户端连远端**：httpBridge baseUrl 支持指向 `enterpriseServerUrl`，桌面加"企业模式"开关；深链挂点已有（`process/utils/deepLink.ts` 的 aionui:// handler + `ipcBridge.deepLink.received` + `useDeepLink`），缺 token→session 换取机制。**桌面 runtime 目前完全跳过认证**（AuthContext `isDesktopRuntime → authenticated`），连远端时要引入真实认证——这是 M4d 最大的设计点
+M4 剩余（可选收尾）：
+
 - **superAssistant 剩余面板**：Runtimes / Issues / EnterpriseCollaboration（Runtimes 可复用 oneAdmin.listRuntimeNodes）
 
 **入口**：`D:\aionui-m0\AionUi\packages\desktop\src\renderer\`，参考 M3c superAssistant 与 M4a enterprise 的实现模式。
