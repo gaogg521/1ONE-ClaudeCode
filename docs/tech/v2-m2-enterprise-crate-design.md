@@ -1,5 +1,7 @@
 # M2 设计 — 企业版能力在 AionCore fork 中的 crate 化
 
+> **进度**：M2a ✅ 完成（2026-07-05，fork commit `d11d120`）。one-org crate 落地：自管迁移器（`_one_migrations`）+ 五表 + `/api/one/org|admin/*` 路由 + RBAC extractor + join/exit/create/邀请码全逻辑。验收：单测 6/6、`--local` curl 冒烟 16/16。§4 的风险点已消除——上游 `CurrentUser`/`hash_password`/`verify_password`/`update_jwt_secret` 全部 pub，**零 diff 进 aionui-auth**；会话失效用 per-user jwt_secret 轮换实现（比 TS 全局失效更精确）。上游 diff 实测：workspace Cargo.toml +2 行、aionui-app Cargo.toml +1 行、routes.rs 3 个小 hunk（挂载+启动迁移）。下一步 M2b（飞书 SSO provider → one-sso crate）。
+>
 > 2026-07-05 预研稿（M2 开工前基准）。现有 TS 实现（`src/process/webserver/auth/**` 约 4.2k 行 + `adminRoutes.ts` 1.4k 行）作为逻辑规格书，翻译为 AionCore fork（gaogg521/AionCore，one-main@v0.1.41）的自有 crate。
 
 ## 1. crate 布局（二开收敛原则：新增 crate + 最小挂载 diff）
