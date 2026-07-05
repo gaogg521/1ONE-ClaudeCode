@@ -3353,3 +3353,48 @@ M2d 原范围含 LDAP,但 1one `LdapAuthProvider.ts` 525 行很重(ldap3 crate +
 1. **M4**(UI 移植收尾 + httpBridge 适配层 + 客户端连远端)——M3c 已完成个人员工 UI,M4 补企业/管理页 + 客户端模式,让 fork 真正可用。
 2. **M5**(数据迁移 + 打包 + 灰度)——M4 完成后做最终迁移发布。
 3. **LDAP**(M2d 尾巴)——需要 ldap3 crate + 真实 LDAP 服务器做 E2E。
+
+---
+
+## 权威未完成项清单 v3(替换第十六轮 v2,2026-07-05 第十七轮发布)
+
+第十六轮的 v2 清单已过时(M2b/M2d/M2e 已完成),本轮重新发布。**接手会话按此清单取活**。
+
+| # | 项 | 状态 | 入口 |
+|---|---|---|---|
+| 1 | ~~M2a one-org crate~~ | ✅ 完成 | AionCore `d11d120` |
+| 2 | ~~M2b 飞书 SSO~~ | ✅ 完成 | AionCore `a442bfb`;真实飞书 E2E 需用户凭据 |
+| 3 | ~~M2c 邀请码+RBAC+审计~~ | ✅ 已并入 M2a | `d11d120` |
+| 4 | ~~M2d 钉钉/企微 provider~~ | ✅ 完成 | AionCore `a442bfb` |
+| 5 | **M2d LDAP provider** | ⏳ 待后续 | `SsoProviderKind::Ldap` 枚举已留;需 `ldap3` crate + `LdapProvider::authenticate` + `POST /api/one/sso/ldap/login`;1one `LdapAuthProvider.ts` 525 行作规格书 |
+| 6 | ~~M2e 管理后台 API~~ | ✅ 完成 | AionCore `a442bfb`;`list_users`/`set_user_role`/`list_audit_logs`/`list_runtime_nodes`/`heartbeat_runtime_node` |
+| 7 | ~~M3a one-employee crate~~ | ✅ 完成 | AionCore `b4ec43f` |
+| 8 | ~~M3b 团队员工 run-now + cron~~ | ✅ 完成 | AionCore `18bea4a` |
+| 9 | ~~M3c superAssistant UI 首屏~~ | ✅ 完成 | AionUi `bd3e424` |
+| 10 | **M4 UI 移植收尾 + httpBridge 适配层 + 客户端连远端** | ⏳ 未开始 | superAssistant 剩余面板(Runtimes/Issues/EnterpriseCollaboration)+ 企业/管理页 httpBridge 重接线 + 配对码手动兜底组件(上游缺口,5 个 ConfigForm 共享组件)+ 桌面客户端连远端 aioncore |
+| 11 | **M5 数据迁移 + 打包 + 灰度** | ⏳ 未开始 | 映射表在 `docs/tech/v2-m0-report.md` §3;照抄上游 #2897/#3018/#3423 模式 |
+| 12 | **M1-3 渠道真实配对 E2E** | ⏳ 等用户凭据 | 飞书/钉钉/TG/微信凭据,必做;测试实例重启命令见第十二轮 |
+| 13 | **横切**:微信 iLink vs bridge 决策、workflow scope→CI、web 实例登录(resetpass) | ⏳ 待处理 | 详见第十/十一轮 |
+
+## fork 现状(2026-07-05 第十七轮末)
+
+- **gaogg521/AionCore one-main = `a442bfb`**(M2a `d11d120` + M3a `b4ec43f` + M3b `18bea4a` + M2b/M2d/M2e `a442bfb` 已推送)
+- **gaogg521/AionUi one-main = `bd3e424`**(v2.1.28 基线 + M3c superAssistant UI 首屏已推送)
+- cargo 在 `~/.cargo/bin`(bash 需手动 `export PATH="/c/Users/allenzhao/.cargo/bin:$PATH"`)
+- AionCore fork 工作目录 `D:\aionui-m0\AionCore`(one-main 分支)
+- AionUi fork 工作目录 `D:\aionui-m0\AionUi`(one-main 分支)
+- ⚠️ `/d/AionUi` 是上游 iOfficeAI/AionUi(main 分支),**不是 fork**——别搞混
+- debug 增量编译 one-sso/one-org/one-employee 约 1min、aionui-app 约 3min
+- release 增量 aionui-app 约 50s
+- AionUi fork 前端 typecheck `bunx tsc --noEmit`(在 `D:\aionui-m0\AionUi` 根目录跑),lint `bunx oxlint <paths>`
+
+## 关键文档入口(接手会话必读)
+
+按读的顺序:
+1. **本文件(CONTEXT.md)第十七轮** — 当前状态 + 权威未完成项清单 v3
+2. `docs/tech/v2-architecture-comparison.md` — 选项 A 决策文档(M0-M5 路线图)
+3. `docs/tech/v2-m2-enterprise-crate-design.md` — M2 设计(M2 整体完成,LDAP 待后续)
+4. `docs/tech/v2-m3-employee-design.md` — M3 设计(M3 整体完成)
+5. `docs/tech/v2-m0-report.md` — M0 报告(数据映射表 §3,M5 用)
+6. `docs/tech/v2-m1-channel-gap.md` — M1 渠道差距分析
+7. Claude Code 自动记忆 `~/.claude/projects/D--1one-command/memory/upstream-alignment-roadmap.md` — 路线图摘要 + How to apply
