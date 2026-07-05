@@ -53,6 +53,18 @@ bun run dev                            # 桌面 dev（Electron）
 
 ⚠️ **aioncore.exe 不接受 `start` 子命令**（那是 web 形态），直接 `aioncore.exe --local --port ...`。也没有 `--no-open`。
 
+## 开发环境启动脚本（PowerShell，封装上面的命令）
+
+`D:\aionui-m0\scripts\`（`aionui-m0` 非 git 仓库，脚本不污染两个 fork）。日常开发用这三个，比手敲命令省事。详见 `scripts/README.md`。
+
+| 脚本 | 用途 | 何时用 |
+|---|---|---|
+| `frontend-dev.ps1` | 启动桌面 dev（Electron+React HMR），自动带后端 | **只改前端**时一条命令搞定 |
+| `backend-rebuild.ps1` | 编译 AionCore + 内嵌进 AionUi bundled 目录（`-Dev` 编完直接起前端） | **改了后端源码后** |
+| `backend-run.ps1` | 单独跑后端（`--local` 免认证），`-Rebuild`/`-Port` 可选 | 只想 curl 调 API |
+
+**关键衔接**：`bun run dev` 自动 spawn 的是 `resources/bundled-aioncore/win32-x64/aioncore.exe`——**编译产物，不是 AionCore 源码实时代码**。改后端源码后必须先 `backend-rebuild.ps1`（= `cargo build --release` + `prepareAioncore.js` 搬运），前端才用得上。只改前端则后端不用碰。（上游是官方 CI 编后端发 release、AionUi 自动下载；fork 未建 CI，用本地编译 + `AIONUI_BACKEND_LOCAL_PATH` 手动替代——见 m5 文档 §2。）
+
 ## 已完成里程碑速查（详情按路由读，不要重做侦察）
 
 - **M4 全部完成**：企业页（`f2b7031`）/ 登录 SSO 按钮（`adbfdb2`）/ 配对码兜底（`2526dc3`）/ 桌面连远端 + SSO 深链（`c6f65e3`+`9f79c45`+`3ef8778`）——详见 CONTEXT 第十八轮
