@@ -76,6 +76,20 @@ M4 剩余（可选收尾）：
 - 照抄上游 #2897/#3018/#3423 三个迁移 PR 的模式
 - 打包：`npm run dist:win`（打包前必须 bump package.json version patch+1）
 
+### 2.5 M5 之后:M0-M5 遗留项清扫（用户指令,必做）
+
+M5 做完后**再次核对 M0-M5 全部遗留项,能自主完成的全部完成**,不要只收尾 M5。当前已知遗留项(2026-07-05 核对):
+
+| 遗留项 | 能否自主完成 |
+|---|---|
+| superAssistant 剩余面板(Runtimes/Issues/EnterpriseCollaboration,Runtimes 可复用 oneAdmin.listRuntimeNodes) | ✅ 做掉 |
+| LDAP provider(见下节 §3) | ✅ 做掉(真实 LDAP 服务器 E2E 除外) |
+| 横切 resetpass:非 local 实例默认用户密码为空无法登录,需正式的密码设置/重置通路 | ✅ 做掉 |
+| 横切:微信 iLink vs bridge 决策、workflow scope→CI | ⚠️ 列出方案问用户 |
+| M1-3 渠道真实配对 E2E、M4b 视觉 E2E、M4d 真实 OAuth E2E | ❌ 等用户凭据,明确列给用户 |
+
+清扫完成后更新 CONTEXT.md 权威清单(发布 v4)+ 本文件 + 自动记忆。
+
 ### 3. LDAP（M2d 尾巴）
 
 - 加 `ldap3` workspace dep
@@ -151,4 +165,5 @@ M4 剩余（可选收尾）：
 读 D:\1one-command\docs\tech\v2-handoff-quickstart.md，然后读 CONTEXT.md 第十八轮
 （含补充一至四），开始做 M5（数据迁移 + 打包 + 灰度）。先读 docs/tech/v2-m0-report.md
 §3 数据映射表和上游 #2897/#3018/#3423 三个迁移 PR 的模式，确定 M5 第一步切多大。
+M5 做完后，按 quickstart §2.5 再次核对 M0-M5 遗留项，能自主完成的全部完成。
 ```
