@@ -2,7 +2,24 @@
 
 > 状态：2026-07-05 起草。一期（M0-M5 + 遗留项清扫 + Issues/EnterpriseCollaboration 看板重建）已全部完成。本文档把散落在 `v2-m5-migration.md` §4/§5、`v2-handoff-quickstart.md` 下一步清单、CONTEXT 第十九轮的全部开放项**合并为二期唯一排期入口**。
 >
-> 工作目录与编译命令见 `docs/tech/v2-handoff-quickstart.md`；fork 现状：AionCore `368d7fd` / AionUi `46b88d4`（均在 one-main）。
+> 工作目录与编译命令见 `docs/tech/v2-handoff-quickstart.md`。
+
+## 接手状态（2026-07-05 末，下一会话从这里继续）
+
+**已完成**：D1-D5 决策全拍板（§0）；波次一 A3/B4 完成、B5 关闭、B1 CI 建好；**A1 L1 派活**、**A4 milestones**、**A2 RAG 向量管线**全部完成并浏览器 E2E 验证。
+
+**fork 现状（HEAD）**：AionCore one-main = `8e02689`；AionUi one-main = `de45638`。RAG 后端加了 reqwest 依赖 + one-devops→one-employee 依赖。
+
+**剩余待办（按建议优先级）**：
+1. **A1 L2 breakdown**（任务 #9）——一个 agent 读 epic/feature 描述→输出结构化子需求列表→批量建子树。复用 one-employee run + 结构化输出。**验证依赖真实 LLM CLI**（桌面端 npm run restart 能跑；webui 环境 PATH 缺 claude CLI，见记忆 feedback_test_via_desktop_not_webui）。设计参考 A1 文档 `v2-a1-orchestration-design.md` L2 段。
+2. **B2 acp.customAgents 迁移**（任务 #10）——1one 侧 15 条自定义 agent 迁到 v2。先读 1one `acp.customAgents` 结构 + v2 agent 体系做映射，可能并入 AionUi `oneMigration/` 模块（M5 数据迁移同款）。
+3. **A1 L3 autopilot + 团队共享数字员工**（任务 #11）——较大，依赖 one-employee 从个人级(owner 隔离)扩展到 tenant 级共享 agent。
+4. **A4 其余 DevOps 域**（test plans/pipelines/value stream）——需求驱动按需做。
+5. **C 组真实环境 E2E**（任务 #12）——⛔ 卡 D5 用户凭据/环境，无法自主，代码路径已就绪。
+
+**RAG 验证脚手架**：mock embedding 端点在 `<scratchpad>/mock_embed.py`（`python mock_embed.py` 起 :25990，OpenAI 兼容 /embeddings，返回字符直方图向量）；配 base_url=`http://127.0.0.1:25990/v1` model=`mock` 即可离线验证 RAG 全链路。
+
+> fork 现状：AionCore `8e02689` / AionUi `de45638`（均在 one-main）。
 
 ## 0. 前置决策（2026-07-05 用户授权自主拍板）
 
@@ -24,11 +41,13 @@
 - **L1 assign + 手动派活** ✅ 2026-07-05 完成（AionCore `c9e2093` + AionUi `b1b967f`）：需求指派给数字员工 → 派活让员工带需求上下文跑一次 → 状态推进 developing + agent 评论回写会话/run。后端 curl + 浏览器 E2E + 单测全过。**L1 限制**：只能派给操作者自己的数字员工（个人级隔离）。
 - **L2 breakdown**（LLM 拆解 epic/feature 为子需求树）、**L3 autopilot**（自动触发 + 团队共享数字员工，依赖 one-employee tenant 改造）——后续。
 
-### A2 RAG 向量管线
+### A2 RAG 向量管线 ✅（2026-07-05 完成）
 
-- **内容**：chunk 切分 → embedding → 向量存储与检索。现状 `one_rag_documents` 只是元数据注册表，无向量能力。
-- **前置**：决策 D1（嵌入模型选型）。选型直接决定存储方案（sqlite-vec / 纯内存 / 外部向量库）与打包体积。
-- **入口**：`one-devops` crate 扩展或独立 `one-rag` crate（视管线复杂度，建议独立 crate，遵守单目录 ≤10 子项约定）。
+- **交付**（AionCore `8e02689` + AionUi `de45638`）：D1 决策落地——OpenAI-compatible embedding endpoint。
+  - 后端 `one-devops/src/embedding.rs`：`/embeddings` 客户端（base_url/key/model）+ f32 向量打包/解包 + 余弦相似 + 字符级 chunk（纯函数单测）。migration 003：`one_rag_config`（单例配置）+ `one_rag_chunks`（向量 BLOB）+ `one_rag_documents.content` 列。服务：config get/set（key 不回显、缺省保留）、set content、process（chunk→embed→存→status ready+chunk_count+回填 dimensions）、search（query embed→全量余弦 top-k）；delete 级联删 chunks。路由 `/rag/config`、`/rag/documents/{id}/content`、`/rag/documents/{id}/process`、`/rag/search`。
+  - 前端 RagSection：嵌入端点配置弹窗、注册文档带内容、处理按钮（显示状态/片段数/维度）、语义检索框（top-k 带相似度分）。
+- **验证**：单测 9/9；本地 mock embedding 端点（scratchpad/mock_embed.py，字符直方图向量）端到端 —— curl + 浏览器 E2E 均确认检索正确排序（"内存安全 所有权" → Rust 文档 0.776 vs 无关 0.367）。
+- **后续可做（非阻塞）**：① 检索结果注入编排 dispatch（派活时把相关 chunk 附到任务上下文）；② 文档从 file_path 服务端读文件（现仅支持贴文本 content）；③ 大语料换近似检索（现为全量余弦，语料小够用）。
 
 ### A3 Skills / MCP / RAG 注册表管理界面 ✅（2026-07-05 完成）
 
