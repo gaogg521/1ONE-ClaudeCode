@@ -3148,3 +3148,48 @@ fork 现状:gaogg521/AionCore one-main = b4ec43f(M2a d11d120 + M3a b4ec43f 已�
 **fork 现状**:gaogg521/AionCore one-main = 18bea4a(M2a d11d120 + M3a b4ec43f + M3b 18bea4a 已推送);gaogg521/AionUi one-main = v2.1.28 基线未动。
 
 **下一步(第十五轮候选)**:M3c(superAssistant UI 移植首屏——Overview/AgentsTab 重接线 `/api/one/employee/*`,与 M4 httpBridge 适配层共用)或 M2b(飞书 SSO → one-sso crate,需用户提供真实飞书应用凭据做 E2E)。剩余未完成项:第十三轮清单 2-8(M3b 已勾掉)。
+
+---
+
+# 2026-07-05 第十五轮 — M3c 完成(superAssistant UI 移植首屏)
+
+按第十四轮候选开工,当日完成并推送(AionUi fork commit bd3e424,gaogg521/AionUi one-main)。
+
+**侦察发现的关键事实**:
+- 1one superAssistant 页面 6553 行/14 组件,但**设计文档原说"三个纯员工域 tab"实际不纯**——OverviewTab/AgentsTab/SettingsTab 都通过 `useSuperAssistantData`(643 行巨型 hook)拉 enterprise 域数据(requirements/skills/mcp/rag/codeRepo/pipeline/teamRuntime 心跳)。AionUi fork 还没这些。
+- AionUi fork v2.1.28 前端在 `packages/desktop/src/renderer/`,用 `httpBridge`(httpGet/Post/...)替代 Electron IPC,走 `/api/*` REST。`httpRequest` 已自动 unwrap `ApiResponse.data`。
+- AionUi fork 的 Arco `Tabs.TabPane` 用 `title` 不是 `tab`;`Modal` 无 `width` prop。
+
+**实现策略(因侦察发现而调整)**:不照搬 1one 三 tab 原版,改为只迁**个人员工切片**(对齐 one-employee crate 能 back 的范围)。enterprise 域(IssuesWorkbench/Runtimes/EnterpriseCollaboration)留给 M4 管理后台一起重接。
+
+**实现要点**:
+- **`common/types/employee/employeeTypes.ts`**:`PersonalAgent` / `DigitalEmployeeRunRecord` / `CronScheduleDto` / `CreatePersonalAgentInput` / `UpdatePersonalAgentInput` / `SetScheduleInput`(对齐后端 serde 形状,camelCase)。
+- **`ipcBridge.personalAgent`**:list/get/create/update/remove/runNow/runTeam/setSchedule/listRuns/getRun,走 `/api/one/employee/*`。`update` 和 `setSchedule` 的 mapBody 平铺后端期望的 body(后端 `Json<UpdateEmployeeInput>` 直接平铺,不接受 `{updates:{...}}` 包一层)。
+- **`pages/superAssistant/`**:
+  - `index.tsx`:三 tab(Overview/Agents/Settings)+ 4 个 Modal(Create/Manage/Schedule/Detail)串联,精简自 1one 1924 行巨型入口(去 enterprise/team 分支)。
+  - `hooks/useDigitalEmployees.ts`:精简版数据 hook(去 enterprise 域),只拉 `personalAgent.list` + 每个 agent 的 `listRuns`。
+  - `components/OverviewTab.tsx`:统计卡片(总数/活跃/已设定时/最近运行)。
+  - `components/AgentsTab.tsx`:员工列表卡片 + 模板创建 + run/调度/详情/管理/删除按钮。
+  - `components/SettingsTab.tsx`:默认 agent 类型选择 + 调度格式说明(At/Every/Cron 示例)。
+  - `components/CreateAgentModal.tsx` / `ManageAgentModal.tsx` / `ScheduleAgentModal.tsx` / `DigitalEmployeeDetailModal.tsx`(运行历史)。
+  - `templates/agentTemplates.ts`:从 1one 平移(去 `useTranslation` 未用 import)。
+  - `utils/deleteDigitalEmployee.ts`:删除前 best-effort 关闭 schedule(用新 setSchedule API,不是 1one 的 cron job 清理)。
+- **路由 + 导航**:`/super-assistant` + `SiderSuperAssistantEntry`(Robot 图标)挂在 ScheduledTasks 下方。
+
+**踩坑**:
+- ① 后端 `update` 路由 `Json<UpdateEmployeeInput>` 接受平铺 body(`{name,description,automationConfig}`),不是 `{updates:{...}}`。首版 provider 包了一层,改名测试时返回值没变。改 mapBody 平铺后正常。
+- ② AionUi fork 的 Arco `Tabs.TabPane` 用 `title` 不是 `tab` prop;`Modal` 无 `width` prop。typecheck 报错后改对。
+- ③ 1one 的 `useSuperAssistantData` 643 行拉 enterprise 域数据(requirements/skills/mcp/rag/codeRepo/pipeline),AionUi fork 没有 `enterpriseApi/modules`。改为精简版 `useDigitalEmployees`,只拉 personalAgent + runs。
+- ④ 1one 的 `deleteDigitalEmployee` 依赖 `listAgentCronJobs` + `ipcBridge.cron.removeJob`(老 cron 表),AionUi fork 的 schedule 在 one-employee crate 自管,直接 `setSchedule({enabled:false})` 即可。
+
+**验收**:
+- `bunx tsc --noEmit` 0 错误。
+- `bunx oxlint` 0 错误(2 个 `no-map-spread` 性能 warning,非阻塞)。
+- `--local` 后端 API 链路冒烟全过:① list(返回 M3b 时建的员工)→ ② create(M3c UI 测试)→ ③ update(改名+改描述生效)→ ④ runNow(manual 触发,11.8s success,summary="收到,M3c 确认 OK...")→ ⑤ setSchedule(every 60s,scheduleEnabled=true,nextRunAt=+60s)→ ⑥ listRuns(triggerSource=manual,status=success)。
+- 前端 UI 端到端验证(桌面 dev 启 Electron 窗口)留给用户在本机跑 `bun run dev` 看——自动化环境里 Electron 窗口不好驱动。
+
+**fork 现状**:
+- gaogg521/AionCore one-main = 18bea4a(M2a d11d120 + M3a b4ec43f + M3b 18bea4a)。
+- gaogg521/AionUi one-main = bd3e424(v2.1.28 基线 + M3c superAssistant UI 首屏)。
+
+**下一步(第十六轮候选)**:M4(管理后台 + httpBridge 适配层 + 桌面客户端连远端)或 M2b(飞书 SSO → one-sso crate,需用户提供真实飞书应用凭据做 E2E)。剩余未完成项:第十三轮清单 2-8(M3b/M3c 已勾掉)。M3 整体(M3a+M3b+M3c)完成,可以推进 M4 或 M5(数据迁移+打包+灰度)。
