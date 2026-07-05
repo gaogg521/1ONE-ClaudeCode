@@ -7,6 +7,9 @@
 ## 背景
 
 升级 aionrs engine 从 v0.1.7 到 v0.1.30（commit `a669517`）后，所有 OpenAI 协议模型（kimi-k2.5、qwen 等）出现"90秒内未收到模型响应"超时错误。同时暴露了若干其他架构缺陷。
+本项目是基于Aionui做的，这个是项目的原始仓库https://github.com/iOfficeAI/AionUi
+上游官网https://www.aionui.com/zh/ 
+上游文档是在https://deepwiki.com/iOfficeAI/AionUi
 
 ---
 
@@ -3256,3 +3259,97 @@ fork 现状:gaogg521/AionCore one-main = b4ec43f(M2a d11d120 + M3a b4ec43f 已�
 4. **M2d/M2e**——可并行,复制 M2b 模式。
 
 或者用户可指定其他顺序。
+
+---
+
+# 2026-07-05 第十七轮 — M2 剩余三项完成(M2b+M2d+M2e)
+
+按第十六轮交接清单开工,当日完成并推送(AionCore fork commit `a442bfb`,gaogg521/AionCore one-main)。
+
+## 实现
+
+### M2b 飞书 SSO + M2d 钉钉/企微(新增 crates/one-sso)
+
+- **001 迁移**:`one_sso_providers`(provider/config/enabled)+ `one_sso_identities`(provider+external_id→user_id 绑定),复用 `_one_migrations` 账本(`sso_` 前缀)。
+- **providers/feishu.rs**:`build_authorize_url` + `exchange_code` + `fetch_user_info` + `resolve_external_id`(union_id/open_id 互为 fallback)+ `test_credentials`(tenant_access_token 验证),reqwest 直译自 1one TS。
+- **providers/dingtalk.rs**:同构,v1.0 userAccessToken + legacy gettoken 验证。
+- **providers/wecom.rs**:corp_token + code→UserId(非 user access token 模式,external_id 是 corp UserId)。
+- **service.rs**:
+  - `OAuthStateStore`(in-memory,10min TTL,`tokio::sync::Mutex`)
+  - `resolve_or_provision_user`:查 identity→建用户(`IUserRepository.create_user` + `hash_password` 随机密码)→绑 identity(零 diff 进 aionui-auth)
+  - `issue_session`:`JwtSecret::sign` + `CookieConfig::build_session_cookie`(复用上游签发路径,CSRF/QR-login 继承)
+  - `upsert_provider` + `list_provider_status`(给登录页用,secrets 已剥离)
+- **routes.rs**:
+  - 公开:`/api/one/sso/providers`(GET)+ `/{provider}/authorize`(GET,302 或 JSON `{goto,state}`)+ `/{provider}/callback`(GET,Set-Cookie + 302 到 `/#target`,或桌面 deep-link `aionui://sso-callback?token=...`)
+  - 受保护:`/api/one/admin/sso/{provider}`(PUT,upsert config+enabled)
+
+### M2e 管理后台 API 收尾(扩展 one-org)
+
+- **models.rs**:`AdminUserDto`(join users+one_user_org)+ `RuntimeNodeRow`/`Dto` + `AuditLogRow`
+- **service.rs**:`list_users` / `set_user_role`(member/org_admin/system_admin,system_admin 仅 system_admin 可授)/ `list_audit_logs` / `list_runtime_nodes` / `heartbeat_runtime_node`(upsert by tenant+machine_id)
+- **routes.rs**:GET `/api/one/admin/users` + PUT `/users/:id/role` + GET `/audit?limit=N` + GET `/runtime/nodes` + POST `/runtime/heartbeat`,全部 `RequireOrgAdmin` 保护
+
+### 上游 diff(仍限挂载点)
+
+- workspace Cargo.toml:+1 member +1 dep
+- aionui-app Cargo.toml:+1 dep
+- aionui-app routes.rs:迁移调用 + 公开/受保护路由分别挂载
+
+## 关键实现事实
+
+- **OAuth state 存内存**(`tokio::sync::Mutex`),单进程足够;多实例需共享存储(M4)
+- **desktop 模式 callback 不 Set-Cookie**,用 `aionui://sso-callback?token=...` 深链(浏览器 cookie jar 不与桌面 renderer 共享)
+- **JIT 建用户用随机密码**(SSO 用户永远不知道密码,不能密码登录)
+- **WeCom 的 external_id 是 corp UserId**(不是 union_id/open_id)
+- **AdminUserDto.last_login 列名对齐上游 users 表**(不是 last_login_at,踩坑修了)
+- **RequireOrgAdmin 要求用户在 enterprise 里**,`--local` 默认用户需先 `/org/create`
+- **M2c 已并入 M2a**(commit d11d120 标题即含"join/exit/create + 邀请码 + RBAC")
+
+## 验收
+
+- **单测 29/29**:one-org 6/6 + one-employee 6/6 + one-sso 17/17
+- **`--local` 冒烟全过**:
+  - SSO:providers list 空→upsert feishu config→providers list 返回 `configured=true`→authorize 返回 `{goto,state}`(飞书 OAuth URL 正确)→callback 无 code 返回 400
+  - admin:建企业→users list(`system_default_user`/`system_admin`)→audit list(`org.create` 记录)→runtime heartbeat(`node_id` 返回)→runtime nodes list(`hostnames`/`ip_addresses`/`installed_agents` JSON 数组)→set role 成功
+- **真实飞书 E2E 需用户凭据**(实现+单测已就绪,等用户提供 App ID/Secret 做端到端验证)
+
+## 踩坑
+
+- ① 首版 `AdminUserDto` 用 `last_login_at` 列名,上游 users 表实际是 `last_login`。冒烟时 `admin/users` 报 `no such column: u.last_login_at`,改列名后正常。
+- ② 首版 `OAuthStateStore` 用 `parking_lot::Mutex`(非 workspace dep),改 `tokio::sync::Mutex`。`issue`/`consume` 改成 async。
+- ③ 首版 `IUserRepository` 假设有 `set_role` 方法——实际没有(上游 users 表无 role 列,role 只在 `one_user_org`)。去掉 set_role 调用,RBAC 完全靠 `RequireOrgAdmin` extractor 读 `one_user_org`。
+- ④ `tokio::sync::Mutex` 没有 `try_lock` 返回 Option(那是 `parking_lot`)。改用 `lock().await`。
+- ⑤ `WecomUserInfoResponse` 的 `#[serde(rename_all(serialize=..., deserialize=PascalCase))]` + `#[serde(alias="UserId", alias="userid")]` 双 alias 兼容大小写。
+
+## LDAP 待办
+
+M2d 原范围含 LDAP,但 1one `LdapAuthProvider.ts` 525 行很重(ldap3 crate + 目录搜索 + group 映射 + admin 检测),本轮跳过。`SsoProviderKind::Ldap` 枚举已留,路由会返回 `BadRequest("LDAP uses POST /api/one/sso/ldap/login")`。后续做 LDAP 时:
+- 加 `ldap3` workspace dep
+- 实现 `LdapProvider::authenticate(config, username, password) -> LdapAuthSuccess`
+- 加 `POST /api/one/sso/ldap/login` 路由(非 OAuth,密码直登)
+- JIT 复用 `resolve_or_provision_user`(LDAP external_id = directory objectGUID)
+
+## fork 现状
+
+- **gaogg521/AionCore one-main = `a442bfb`**(M2a `d11d120` + M3a `b4ec43f` + M3b `18bea4a` + M2b/M2d/M2e `a442bfb`)
+- **gaogg521/AionUi one-main = `bd3e424`**(v2.1.28 基线 + M3c superAssistant UI 首屏)
+
+## M2 整体完成度
+
+| 子里程碑 | 状态 | fork commit |
+|---|---|---|
+| M2a | ✅ | `d11d120` |
+| ~~M2c~~ | ✅ 已并入 M2a | — |
+| M2b 飞书 SSO | ✅ | `a442bfb` |
+| M2d 钉钉/企微 | ✅ | `a442bfb` |
+| M2d LDAP | ⏳ 待后续 | — |
+| M2e 管理后台 API | ✅ | `a442bfb` |
+
+**M2 整体(M2a+M2b+M2d+M2e)完成,LDAP 待后续**。
+
+## 下一步(第十八轮候选)
+
+按依赖关系,推荐顺序:
+1. **M4**(UI 移植收尾 + httpBridge 适配层 + 客户端连远端)——M3c 已完成个人员工 UI,M4 补企业/管理页 + 客户端模式,让 fork 真正可用。
+2. **M5**(数据迁移 + 打包 + 灰度)——M4 完成后做最终迁移发布。
+3. **LDAP**(M2d 尾巴)——需要 ldap3 crate + 真实 LDAP 服务器做 E2E。

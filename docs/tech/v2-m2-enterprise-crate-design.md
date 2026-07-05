@@ -2,10 +2,12 @@
 
 > **进度**：M2a ✅ 完成（2026-07-05，fork commit `d11d120`）。one-org crate 落地：自管迁移器（`_one_migrations`）+ 五表 + `/api/one/org|admin/*` 路由 + RBAC extractor + join/exit/create/邀请码全逻辑。验收：单测 6/6、`--local` curl 冒烟 16/16。§4 的风险点已消除——上游 `CurrentUser`/`hash_password`/`verify_password`/`update_jwt_secret` 全部 pub，**零 diff 进 aionui-auth**；会话失效用 per-user jwt_secret 轮换实现（比 TS 全局失效更精确）。上游 diff 实测：workspace Cargo.toml +2 行、aionui-app Cargo.toml +1 行、routes.rs 3 个小 hunk（挂载+启动迁移）。
 >
-> **M2 剩余范围（2026-07-05 核实）**：原 §6 里程碑里的 M2c（邀请码 join/exit/建企业 + RBAC extractor + 审计）**已并入 M2a 交付**（commit d11d120 标题即"join/exit/create + 邀请码 + RBAC"，五表含 one_tenant_invites/one_audit_logs）。剩三项：
-> - **M2b 飞书 SSO**（one-sso crate）：设计在 §3-4；实现+单测可先行，真实飞书 E2E 需用户提供飞书应用凭据。
-> - **M2d 钉钉/企微/LDAP + 组织同步**：复制 M2b 模式。
-> - **M2e 管理后台核心 API 收尾**：M2a 已带 `/api/one/admin/invites` + `/exit-password`；剩余 users 列表/角色管理/runtime 节点管理（与 M4 管理页联调）。
+> **M2 剩余范围（2026-07-05 核实）**：原 §6 里程碑里的 M2c（邀请码 join/exit/建企业 + RBAC extractor + 审计）**已并入 M2a 交付**（commit d11d120 标题即"join/exit/create + 邀请码 + RBAC"，五表含 one_tenant_invites/one_audit_logs）。
+> - **M2b 飞书 SSO** ✅ 完成（2026-07-05，fork commit `a442bfb`）：one-sso crate + FeishuProvider（build_authorize_url + exchange_code + fetch_user_info + test_credentials）+ JIT（resolve_or_provision_user）+ 会话签发（JwtSecret::sign + CookieConfig，零 diff 进 aionui-auth）+ 公开路由（providers/authorize/callback）+ admin 路由（PUT /api/one/admin/sso/{provider}）。
+> - **M2d 钉钉/企微** ✅ 完成（2026-07-05，fork commit `a442bfb`）：DingtalkProvider + WecomProvider，复制飞书模式。**LDAP 暂未做**（1one LdapAuthProvider 525 行很重，需 ldap3 crate + 复杂目录搜索，留后续）。
+> - **M2e 管理后台 API 收尾** ✅ 完成（2026-07-05，fork commit `a442bfb`）：扩展 one-org 加 list_users / set_user_role / list_audit_logs / list_runtime_nodes / heartbeat_runtime_node，路由 GET /api/one/admin/users + PUT /users/:id/role + GET /audit + GET /runtime/nodes + POST /runtime/heartbeat，全部 RequireOrgAdmin 保护。
+>
+> **M2 整体完成度**：M2a/M2b/M2d/M2e ✅；M2c 已并入 M2a；LDAP 待后续。验收：单测 29/29（one-org 6 + one-employee 6 + one-sso 17）+ `--local` 冒烟全过（SSO providers/authorize/callback + admin users/audit/runtime/role）。
 >
 > 2026-07-05 预研稿（M2 开工前基准）。现有 TS 实现（`src/process/webserver/auth/**` 约 4.2k 行 + `adminRoutes.ts` 1.4k 行）作为逻辑规格书，翻译为 AionCore fork（gaogg521/AionCore，one-main@v0.1.41）的自有 crate。
 
