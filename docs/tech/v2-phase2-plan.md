@@ -31,11 +31,10 @@
 - **前置**：决策 D1（嵌入模型选型）。选型直接决定存储方案（sqlite-vec / 纯内存 / 外部向量库）与打包体积。
 - **入口**：`one-devops` crate 扩展或独立 `one-rag` crate（视管线复杂度，建议独立 crate，遵守单目录 ≤10 子项约定）。
 
-### A3 Skills / MCP / RAG 注册表管理界面
+### A3 Skills / MCP / RAG 注册表管理界面 ✅（2026-07-05 完成）
 
-- **内容**：三个注册表的管理 UI（列表/新增/编辑/删除）+ superAssistant 面板导航按钮（一期暂略了）。
-- **前置**：无。后端 list/upsert/delete API 一期已全部就绪（`/api/one/devops/*`，AionCore `368d7fd`）。
-- **入口**：AionUi superAssistant 目录，参照 IssuesTab / CollaborationContextPanel 的结构。⚠️ fork Arco 差异：`Tabs.TabPane` 用 `title`、`Modal` 无 `width`。
+- **交付**（AionUi `fd3c369`）：superAssistant 新增「协作资源」tab（`registries/` 目录：SkillsSection/McpSection/RagSection），三注册表列表/新增/编辑/删除/启用开关；ipcBridge oneDevops 补 upsert/delete 六通道；CollaborationContextPanel 补「管理资源」导航按钮（经 IssuesTab 透传）。
+- **验证**：tsc/oxlint 零告警；浏览器 WebUI 实测 Skill 创建→出现在表格→开关切换→删除全链路通过。
 
 ### A4 其余 DevOps 域
 
@@ -50,8 +49,8 @@
 | B1 | **AionCore CI release 流水线** | 无 | GitHub Actions 编 release 产物；建成后打包切 `AIONUI_BACKEND_REPO=gaogg521/AionCore`，摆脱本地 cargo + `AIONUI_BACKEND_LOCAL_PATH` 手动链路（现状见 m5 文档 §2） |
 | B2 | **acp.customAgents 迁移专项** | 需 v2 agent 体系映射设计 | 15 条自定义 agent 一期未迁（v2 agent 体系不同构），见 m5 文档 §1「不迁」清单 |
 | B3 | **fork 品牌化实施** | 决策 D3 | 改 appId/productName + 图标；回归 userData 路径与 one-import 源定位 |
-| B4 | **LDAP 管理 UI** | 无 | M4a SSO 设置 tab 现只有 feishu/dingtalk/wecom 三卡片，缺 LDAP 卡片（后端 `PUT /api/one/admin/sso/ldap` 已就绪）；登录页缺 LDAP 账密表单入口（LoginSsoButtons 已过滤 ldap） |
-| B5 | **aioncore 内嵌 web 资产重建** | 无 | 浏览器 WebUI 用的是二进制内嵌的上游 renderer bundle，需改为内嵌 fork renderer 构建产物；是 C4 视觉 E2E 的前置 |
+| B4 | ~~LDAP 管理 UI~~ | — | ✅ 2026-07-05 完成（AionUi `9af7c6b`）：SSO 设置 tab 加 LDAP/AD 卡片（字段对齐 LdapProviderConfig）；登录页「LDAP 域账号」入口 + 账密表单（POST /api/one/sso/ldap/login，成功走 AuthContext.refresh）。浏览器实测：入口渲染/表单展开/错误路径提示正常；真实目录成功路径待 C3 |
+| B5 | ~~aioncore 内嵌 web 资产重建~~ | — | ✅ 2026-07-05 查证后关闭：**前提不成立**。fork aioncore 二进制不服务 SPA（根路径 404 JSON，源码无任何 HTML 路由）；浏览器 WebUI 由 `@aionui/web-host` 静态服务 **fork 自己的 out/renderer**（`bun run webui` 与桌面 WebUI 同链路，见 webuiConfig.ts `staticDir: ../renderer`）。旧说法「aioncore 内嵌上游 bundle」出自 M4b 轮误判（当时可能对着上游官方 release 二进制测）。无需任何 Rust 侧改动 |
 
 ## C. 验证轮（等决策 D5 凭据/环境）
 
@@ -60,7 +59,7 @@
 | C1 | 渠道真实配对 E2E（飞书/钉钉/TG/微信） | D5 凭据；微信部分另需 D2 |
 | C2 | M4d OAuth E2E | D5 OAuth 应用 |
 | C3 | LDAP 真实目录 E2E | D5 AD/OpenLDAP 环境（路由冒烟 5/5 已过，见 m5 文档 §4） |
-| C4 | M4b 视觉 E2E（登录页 SSO 按钮） | B5 web 资产重建 |
+| C4 | M4b 视觉 E2E（登录页 SSO 按钮） | ~~B5~~ 无（B5 关闭后解锁）。2026-07-05 已验浏览器渲染链路：LDAP provider 配置后登录页出现「LDAP 域账号」入口、表单展开、错误路径提示正常（OAuth 按钮走同一 providers 渲染路径）；剩真实 OAuth 302 跳转与真实目录登录成功路径，归入 C1-C3 |
 
 ## 建议排期（三个波次）
 
