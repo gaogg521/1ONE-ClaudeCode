@@ -6,10 +6,12 @@
 
 ## 接手状态（2026-07-06 更新，下一会话从这里继续）
 
-**已完成**：D1-D5 决策全拍板（§0）；波次一 A3/B4 完成、B5 关闭、B1 CI 建好；**A1 L1 派活**、**A4 milestones**、**A2 RAG 向量管线**、**A1 L2 breakdown**、**B2 自建 agent 迁移**、**A1 L3 autopilot** 全部完成——L2/L3 均**真实 claude CLI 后端 E2E 验证**通过并已提交。
+**已完成**：D1-D5 决策全拍板（§0）；波次一 A3/B4 完成、B5 关闭、B1 CI 建好；**A1 L1 派活**、**A4 milestones**、**A2 RAG 向量管线**、**A1 L2 breakdown**、**B2 自建 agent 迁移**、**A1 L3 autopilot + 团队共享数字员工** 全部完成——L2/L3 均**真实 aioncore 后端 E2E 验证**通过并已提交。**A1 编排三层（L1/L2/L3）全部收官**。
 
-**fork 现状（HEAD，均已提交 one-main）**：AionCore = `2e9e9ba`；AionUi = `7ad0783`。
+**fork 现状（HEAD，均已提交 one-main）**：AionCore = `822e849`；AionUi = `b26b95e`。
 > ⚠️ AionUi 仍有 B1 收尾的 package.json/prepare-aioncore.js 未提交（非本轮改动，勿动）。
+
+**A1 L3 团队共享**（AionCore `822e849` + AionUi `b26b95e`）：`one_personal_agents.visibility`（migration 003）+ `TenantResolver` trait（app 层 OrgService 实现注入，one-employee/one-devops 不依赖 one-org）+ `resolve_agent_for_use`/`list_available`/`set_visibility` + run 方法带 caller tenant + 前端「共享给团队」开关（仅企业租户）。单测 sharing 谓词 + E2E（visibility/建组织继承 tenant/own 派活回归）。详见 `v2-a1-orchestration-design.md` L3 段末。
 
 **本轮（2026-07-06）三块交付**：
 - **A1 L2 breakdown**（AionCore `e2e524e` + AionUi `b9bb266`）：one-employee `run_prompt_blocking`（阻塞拿 agent 完整回复）+ one-devops `breakdown.rs`（拆解 prompt + 宽松 JSON 解析）+ `/breakdown` 路由 + 前端「自动拆解」按钮。E2E：epic→6 子需求。
@@ -17,9 +19,9 @@
 - **A1 L3 autopilot**（AionCore `2e9e9ba` + AionUi `7ad0783`）：`one_requirements.autopilot`（migration 004）+ `dispatch_core` 抽取 + `maybe_autopilot`（create/update 后 best-effort 触发，status 门自守卫重入）+ 前端「自动派活」Switch。E2E：指派即自动派活、developing 后不重复。
 
 **剩余待办（按建议优先级）**：
-1. **A1 L3 团队共享数字员工**（推迟）——仅企业版有意义，需 one-employee owner 隔离→tenant 共享改造，触 RBAC。设计草案已写入 `v2-a1-orchestration-design.md` L3 段末，下轮按图实现。
-2. **A4 其余 DevOps 域**（test plans/pipelines/value stream）——需求驱动按需做。
-3. **C 组真实环境 E2E**（任务 #12）——⛔ 卡 D5 用户凭据/环境，无法自主，代码路径已就绪。
+1. **A4 其余 DevOps 域**（test plans/pipelines/value stream）——需求驱动按需做。入口同 one-devops 增表 + migration（⚠️ 新增 sqlx 内存库测试必须 `max_connections(1)`）。
+2. **C 组真实环境 E2E**（任务 #12）——⛔ 卡 D5 用户凭据/环境，无法自主，代码路径已就绪。**含 A1 L3 团队共享的跨用户活体 E2E**（需多用户企业组织：A 共享员工、B 同租户派活成功、跨租户拒绝）——本轮已用单测+tenant 解析 E2E 组合覆盖，真实多用户验证归此轮。
+3. **A1 L3 存量员工 tenant backfill**（可选）——本改动前建的员工 tenant='default'，如企业用户要共享它们需 backfill 到企业 tenant；新员工已带正确 tenant，非阻塞。
 
 **RAG 验证脚手架**：mock embedding 端点在 `<scratchpad>/mock_embed.py`（`python mock_embed.py` 起 :25990，OpenAI 兼容 /embeddings，返回字符直方图向量）；配 base_url=`http://127.0.0.1:25990/v1` model=`mock` 即可离线验证 RAG 全链路。
 
@@ -45,7 +47,7 @@
 - **L1 assign + 手动派活** ✅ 2026-07-05 完成（AionCore `c9e2093` + AionUi `b1b967f`）：需求指派给数字员工 → 派活让员工带需求上下文跑一次 → 状态推进 developing + agent 评论回写会话/run。后端 curl + 浏览器 E2E + 单测全过。**L1 限制**：只能派给操作者自己的数字员工（个人级隔离）。
 - **L2 breakdown** ✅ 2026-07-06 完成（未提交，见接手状态）：数字员工阻塞式 run（`run_prompt_blocking`）读 epic → claude 返回 JSON 数组 → 宽松解析（剥围栏/clamp 枚举）→ 批量建子需求树 + agent 评论回写。真实 claude CLI 后端 E2E 通过（6 条子需求正确嵌套）。设计与验证详见 `v2-a1-orchestration-design.md` L2 段。
 - **L3 autopilot** ✅ 2026-07-06 完成：每需求 autopilot 开关，指派/进入 pre-dev 状态时 reactive 自动派活（`maybe_autopilot` + `dispatch_core` 抽取，status 门自守卫重入），真实 claude E2E 通过。设计见 `v2-a1-orchestration-design.md` L3 段。
-- **L3 团队共享数字员工**——推迟（仅企业版有意义，需 one-employee owner→tenant 改造），设计草案已就绪。
+- **L3 团队共享数字员工** ✅ 2026-07-06 完成：`visibility` 列 + `TenantResolver`（app 层 OrgService 实现）+ `resolve_agent_for_use`/`list_available`/`set_visibility` + 前端「共享给团队」开关（仅企业租户）。owner 隔离扩展到 tenant 级共享，run 归调用者。单测 + E2E（建组织继承 tenant/own 派活回归）通过，跨用户活体 E2E 归 C 组。
 
 ### A2 RAG 向量管线 ✅（2026-07-05 完成）
 

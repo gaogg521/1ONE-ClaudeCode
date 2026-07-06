@@ -17,7 +17,7 @@
 | **L1 assign + 手动派活** | 需求指派给数字员工；一键让员工带需求上下文跑一次；结果回写看板 | ✅ 完成（AionCore `c9e2093` + AionUi `b1b967f`） |
 | **L2 breakdown** | LLM 把 epic/feature 自动拆解为子需求树 | ✅ 完成（2026-07-06，见下 L2 设计段） |
 | **L3 autopilot** | 指派/进入 pre-dev 状态自动触发派活 | ✅ 完成（2026-07-06，见下 L3 设计段） |
-| L3 团队共享数字员工 | 需求可派给团队共享（tenant 级）数字员工 | 后续（依赖 one-employee owner 隔离→tenant 共享改造，仅企业版有意义；设计见 L3 段末） |
+| **L3 团队共享数字员工** | 需求可派给团队共享（tenant 级）数字员工 | ✅ 完成（2026-07-06，见下 L3 段末） |
 
 ## L1 设计
 
@@ -106,12 +106,28 @@ L3 拆两块：**autopilot（自动派活）已完成**；**团队共享数字�
 
 **autopilot 范围限制**：同 L1/L2 只能用操作者自己的员工；只在 create/update 路由 reactive 触发（无独立扫描器，故「员工自己把状态改回 backlog」这类非 HTTP 路径不会触发）；一次只派一层。
 
-### L3-团队共享数字员工（推迟，设计已就绪）
+### L3-团队共享数字员工（2026-07-06 完成）
 
-**为何推迟**：仅**企业版**有意义（个人版单用户无共享概念），且要动 one-employee 的 owner 隔离不变量（`list`/`get`/`run_*` 全按 `owner_user_id` 过滤），触 RBAC/tenant 边界，验证需多用户组织环境。价值与个人版 autopilot 正交，故本轮先交付 autopilot。
+企业版：需求可派给**团队共享**（tenant 级）数字员工，突破 L1/L2「只能用自己的员工」限制。仅企业租户有意义（个人版单用户在 `default` 租户无共享概念）。
 
-**设计草案**（下轮实现参考）：
-- `one_personal_agents` 已有 `tenant_id` 列 + 索引。加 `visibility TEXT NOT NULL DEFAULT 'private'`（`private`=owner 专属 / `shared`=tenant 内共享）。
-- 新增 `resolve_agent_for_use(user_id, tenant_id, agent_id)`：返回 agent 若 `owner==user`（私有）或 `visibility='shared' && 同 tenant`（共享）。dispatch/breakdown 的 `run_now_with_context`/`run_prompt_blocking` 从 `get(owner,id)` 换成它——非 owner 用共享员工时，run 以**调用者**身份跑（会话/工作区归调用者），agent 定义 owner 不变。
-- `CurrentUser` 需带 tenant_id（或经 one-org 查成员 tenant）；共享列表 = 自己的 + 同 tenant 的 shared。UI：员工卡片加「共享给团队」开关；派活下拉列出共享员工并标注归属。
-- 去掉 dispatch/breakdown 现有的「team-shared employees are not supported yet」错误分支。
+**数据**：`one_personal_agents` 加 `visibility TEXT NOT NULL DEFAULT 'private'`（migration 003，`private`=owner 专属 / `shared`=tenant 内共享）+ `(tenant_id, visibility)` 索引。PersonalAgentRow/Dto 加 `visibility`。
+
+**tenant 解析（解耦）**：`CurrentUser` 只有 id/username，无 tenant。tenant 由 one-org 的 `OrgService::tenant_of(user_id)` 解析（membership→tenant_id，无则 `default`）。为避免 one-employee/one-devops 依赖 one-org，在 one-employee 定义 `TenantResolver` trait，**app 层**用 `OrgTenantResolver(Arc<OrgService>)` 实现并注入两个 router state（`Option`，缺省→`default`，个人版/测试可不接）。
+
+**service（one-employee）**：
+- `resolve_agent_for_use(user_id, tenant_id, agent_id)`：`WHERE id=? AND (owner=? OR (visibility='shared' AND tenant_id=?))`——owner 或同租户共享才可用，否则 NotFound。
+- `list_available(user_id, tenant_id)`：`owner=? OR (visibility='shared' AND tenant_id=?)`——自己的 + 同租户共享；替代原 owner-only `list`（已删）。
+- `set_visibility(owner, agent_id, visibility)`：owner-only，校验 private/shared。
+- `run_now_with_context`/`run_prompt_blocking` 加 `tenant_id` 参数，改用 `resolve_agent_for_use`；**run 归调用者**（会话/工作区/run 行 owner=调用者），agent 定义 owner 不变。
+- `create` 用 caller 的真实 tenant（原硬编码 'default'）；owner-only 变更仍走 `get`。
+- 上述两条查询抽成自由函数 `select_agent_for_use`/`select_available_agents`（可脱离重构造的 EmployeeService 单测）。
+
+**路由**：one-employee 加 `PUT /agents/{id}/visibility`；`list` 走 `list_available`；`create` 用解析 tenant。one-devops dispatch/breakdown 解析 caller tenant 传入 run 方法，去掉「team-shared not supported yet」分支，错误文案改「不是你的员工，也未在团队内共享」。
+
+**前端**：PersonalAgent 加 `visibility`；`personalAgent.setVisibility` 通道；ManageAgentModal 加「共享给团队」Switch（**仅 `tenantId!=='default'` 的企业租户显示**，保存时经 setVisibility 应用）。派活/拆解下拉走 `personalAgent.list`→`list_available`，自动含同租户共享员工。
+
+**验证（2026-07-06）**：
+- 单测 `sharing_resolves_own_and_tenant_shared`：own/private 拒他人/shared 同租户可用/跨租户拒绝/own 跨租户仍可见；list_available 只含自己的+同租户共享。one-employee 8 过、one-devops 15 过、one-org 6 过、全 app 编译过。
+- 后端 E2E（真实 aioncore --local）：`/visibility` set→shared、非法值 400；`/org/create` 后**新建员工继承企业 tenant**（验证 OrgTenantResolver 注入生效）；own 员工经新 resolve 路径 dispatch 回归 200。跨用户真实共享派活由「共享谓词单测 + tenant 解析 E2E」两部分组合覆盖（--local 单用户无法直接演两个 authed 用户）。
+
+**范围限制**：只有 owner 能 share/unshare；共享按 tenant 边界（跨租户不可见）；autopilot 触发的 dispatch 同样走 resolve（若把需求指派给同租户共享员工，autopilot 也能派）。跨用户真实共享的活体 E2E 待多用户企业环境（归 C 组凭据轮）。存量数据边：本改动前建的员工 tenant='default'，企业用户共享它们只会到 'default' 租户——如需可后续 backfill，但新员工已带正确 tenant，且默认 private 无影响。
