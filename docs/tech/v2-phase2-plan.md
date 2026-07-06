@@ -6,16 +6,18 @@
 
 ## 接手状态（2026-07-06 更新，下一会话从这里继续）
 
-**已完成**：D1-D5 决策全拍板（§0）；波次一 A3/B4 完成、B5 关闭、B1 CI 建好；**A1 L1 派活**、**A4 milestones**、**A2 RAG 向量管线**全部完成并浏览器 E2E 验证；**A1 L2 breakdown**（2026-07-06）完成并**真实 claude CLI 后端 E2E 验证**（epic→6 条子需求正确落库）。
+**已完成**：D1-D5 决策全拍板（§0）；波次一 A3/B4 完成、B5 关闭、B1 CI 建好；**A1 L1 派活**、**A4 milestones**、**A2 RAG 向量管线**、**A1 L2 breakdown**、**B2 自建 agent 迁移**、**A1 L3 autopilot** 全部完成——L2/L3 均**真实 claude CLI 后端 E2E 验证**通过并已提交。
 
-**fork 现状（HEAD）**：AionCore one-main = `12f5104`；AionUi one-main = `de45638`。⚠️ **L2 改动尚未提交**（两个 fork 有未提交工作树改动 + AionUi 有 B1 收尾的 package.json/prepare-aioncore.js 未提交），提交时机等用户决定（见记忆 feedback-priority-and-scope）。L2 改动清单：
-- AionCore：`one-employee`（provision_run 抽取 + run_prompt_blocking + RunReply + extract_latest_reply/truncate_summary + TRIGGER_BREAKDOWN）、`one-devops`（breakdown.rs 模块 + create_breakdown_children + /breakdown 路由）。
-- AionUi：`ipcBridge.ts` 加 breakdownRequirement；`IssuesTab.tsx` 加「自动拆解」按钮。
+**fork 现状（HEAD，均已提交 one-main）**：AionCore = `2e9e9ba`；AionUi = `7ad0783`。
+> ⚠️ AionUi 仍有 B1 收尾的 package.json/prepare-aioncore.js 未提交（非本轮改动，勿动）。
 
-**B2 也已完成**（自建 ACP 后端迁移路径；见下表 B2 行）——AionUi 加 `oneMigration/importOneCustomAgents.ts` + `runBackendMigrations` 迁移步。改动同样**未提交**。
+**本轮（2026-07-06）三块交付**：
+- **A1 L2 breakdown**（AionCore `e2e524e` + AionUi `b9bb266`）：one-employee `run_prompt_blocking`（阻塞拿 agent 完整回复）+ one-devops `breakdown.rs`（拆解 prompt + 宽松 JSON 解析）+ `/breakdown` 路由 + 前端「自动拆解」按钮。E2E：epic→6 子需求。
+- **B2 自建 agent 迁移**（AionUi `44cff99`）：`oneMigration/importOneCustomAgents.ts` 迁 1one 自建 ACP 后端→fork `/api/agents/custom`。真实数据「15 条」实为 builtin 预设（fork 自带），故本机无自建后端 E2E 数据。
+- **A1 L3 autopilot**（AionCore `2e9e9ba` + AionUi `7ad0783`）：`one_requirements.autopilot`（migration 004）+ `dispatch_core` 抽取 + `maybe_autopilot`（create/update 后 best-effort 触发，status 门自守卫重入）+ 前端「自动派活」Switch。E2E：指派即自动派活、developing 后不重复。
 
 **剩余待办（按建议优先级）**：
-1. **A1 L3 autopilot + 团队共享数字员工**（任务 #11）——较大，依赖 one-employee 从个人级(owner 隔离)扩展到 tenant 级共享 agent。用户已拍板本轮继续做。
+1. **A1 L3 团队共享数字员工**（推迟）——仅企业版有意义，需 one-employee owner 隔离→tenant 共享改造，触 RBAC。设计草案已写入 `v2-a1-orchestration-design.md` L3 段末，下轮按图实现。
 2. **A4 其余 DevOps 域**（test plans/pipelines/value stream）——需求驱动按需做。
 3. **C 组真实环境 E2E**（任务 #12）——⛔ 卡 D5 用户凭据/环境，无法自主，代码路径已就绪。
 
@@ -42,7 +44,8 @@
 - **设计文档**：`docs/tech/v2-a1-orchestration-design.md`（三层路线 + L1 实现细节 + 验证记录）。
 - **L1 assign + 手动派活** ✅ 2026-07-05 完成（AionCore `c9e2093` + AionUi `b1b967f`）：需求指派给数字员工 → 派活让员工带需求上下文跑一次 → 状态推进 developing + agent 评论回写会话/run。后端 curl + 浏览器 E2E + 单测全过。**L1 限制**：只能派给操作者自己的数字员工（个人级隔离）。
 - **L2 breakdown** ✅ 2026-07-06 完成（未提交，见接手状态）：数字员工阻塞式 run（`run_prompt_blocking`）读 epic → claude 返回 JSON 数组 → 宽松解析（剥围栏/clamp 枚举）→ 批量建子需求树 + agent 评论回写。真实 claude CLI 后端 E2E 通过（6 条子需求正确嵌套）。设计与验证详见 `v2-a1-orchestration-design.md` L2 段。
-- **L3 autopilot**（自动触发 + 团队共享数字员工，依赖 one-employee tenant 改造）——后续。
+- **L3 autopilot** ✅ 2026-07-06 完成：每需求 autopilot 开关，指派/进入 pre-dev 状态时 reactive 自动派活（`maybe_autopilot` + `dispatch_core` 抽取，status 门自守卫重入），真实 claude E2E 通过。设计见 `v2-a1-orchestration-design.md` L3 段。
+- **L3 团队共享数字员工**——推迟（仅企业版有意义，需 one-employee owner→tenant 改造），设计草案已就绪。
 
 ### A2 RAG 向量管线 ✅（2026-07-05 完成）
 
