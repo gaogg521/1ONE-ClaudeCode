@@ -116,6 +116,6 @@ AIONUI_BACKEND_LOCAL_PATH='D:\aionui-m0\AionCore\target\release\aioncore.exe' bu
 
 **遗留/开放项**:
 - fork 安装包沿用上游品牌(AionUi/com.aionui.app);若灰度需要 1ONE 品牌与图标,需要改 electron-builder.yml 的 appId/productName(注意会改变 userData 路径,须连同 one-import 源定位一起回归)——待产品拍板。
-- `acp.customAgents`(15 条自定义 agent)未迁移,待 v2 agent 体系映射专项。
+- ~~`acp.customAgents`(15 条自定义 agent)未迁移~~ ✅ 2026-07-06 完成(B2):迁移自建 ACP 后端(非预设项)→ fork `POST /api/agents/custom`,见 `v2-phase2-plan.md` B2 行。⚠️ 查证真实数据:那「15 条」全是 builtin 预设(fork 已自带等价物),真正的自建后端 0 条;预设定制迁移与 `migrateAssistants` 重叠、价值边际,用户拍板不做。
 - fork AionCore 的 CI release 流水线未建(现用本地 cargo 产物 + `AIONUI_BACKEND_LOCAL_PATH`);建成后打包切 `AIONUI_BACKEND_REPO=gaogg521/AionCore`。
 - LDAP 管理 UI 卡片未加(M4a SSO 设置 tab 只有 feishu/dingtalk/wecom 三卡片);LDAP 配置可走 `PUT /api/one/admin/sso/ldap`,登录页 LoginSsoButtons 已过滤 ldap,登录表单入口待渠道 E2E 轮一起做。

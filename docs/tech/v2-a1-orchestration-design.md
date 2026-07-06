@@ -15,7 +15,7 @@
 | Layer | 内容 | 状态 |
 |---|---|---|
 | **L1 assign + 手动派活** | 需求指派给数字员工；一键让员工带需求上下文跑一次；结果回写看板 | ✅ 完成（AionCore `c9e2093` + AionUi `b1b967f`） |
-| L2 breakdown | LLM 把 epic/feature 自动拆解为子需求树 | 后续 |
+| **L2 breakdown** | LLM 把 epic/feature 自动拆解为子需求树 | ✅ 完成（2026-07-06，见下 L2 设计段） |
 | L3 autopilot | 状态变更/新需求自动触发派活；团队共享数字员工 | 后续（依赖 one-employee tenant 共享改造） |
 
 ## L1 设计
@@ -55,3 +55,30 @@
 - 只能派给**操作者自己的**数字员工。团队共享数字员工需要 one-employee 支持 tenant 级 agent，属 L3。
 - 手动触发；autopilot（自动派活）属 L3。
 - 员工执行是异步 turn，看板不实时轮询运行态；结果经评论回写，用户刷新或重开抽屉可见。
+
+## L2 设计（2026-07-06 完成）
+
+与 L1「派活」的本质区别：dispatch 是 **fire-and-forget**（spawn 后台 turn，立即返回 `{conversationId,runId}`，结果异步经评论回写）；breakdown 需要**阻塞拿到 agent 完整回复**才能解析成子需求，所以走一条新的同步 run 路径。
+
+### one-employee 改动
+- `provision_run(owner, agent, trigger)`：从 `start_personal_run` 抽出的公共部分——建会话（注入 agent 身份到 extra）+ ensure_workspace + 插 `running` run 行，返回 `(run_id, conversation_id)`。`start_personal_run`（fire-and-forget）和新的阻塞路径共用。
+- `run_prompt_blocking(owner, agent_id, prompt) -> RunReply`：provision 后**内联 await** `run_agent_turn`（不 spawn、不 prepend `build_run_prompt`，用调用方给的完整 prompt），成功后取**完整（不截断）回复**、持久化 run outcome，返回 `RunReply{run_id, conversation_id, reply}`。owner 隔离同 L1（`get` 校验所有权）。trigger_source 记为新常量 `breakdown`。
+- `extract_summary` 拆成 `extract_latest_reply`（完整）+ `truncate_summary`（240 字）；run 行 summary 仍存截断版，breakdown 解析用完整版。
+
+### one-devops 改动
+- `breakdown.rs`（纯函数，可单测）：`build_breakdown_prompt(req)` 拼「把这条需求拆成 2-8 条子需求、严格只输出 JSON 数组、type∈story/task、priority∈low/medium/high/urgent」；`parse_breakdown_items(reply)` 宽松解析——切出最外层 `[...]`、剥 ```json 围栏与散文、clamp 非法 type/priority 到默认（story/medium）、跳过空 subject、上限 20 条。
+- `DevopsService::create_breakdown_children(parent_id, creator, items)`：校验 parent 存在后循环 `create_requirement`（带 `parent_id`）建子树，返回子 DTO。
+- 端点 `POST /api/one/devops/requirements/{id}/breakdown`：读 req → 必须已指派（同 L1 限制，未指派 400）→ `run_prompt_blocking` → `parse_breakdown_items`；空 → 插一条失败评论并 400；非空 → 建子树 + 插 `agent` 评论（body「已自动拆解为 N 条子需求」，metadata `{conversationId, runId, childIds}`）→ 返回 `{conversationId, runId, created}`。**breakdown 不推进 req 状态**（规划动作，非开发动作，与 dispatch 推进到 developing 不同）。
+
+### 前端（AionUi IssuesTab 抽屉）
+- ipcBridge `oneDevops.breakdownRequirement`（httpPost）；抽屉在「派活」旁加「自动拆解」按钮，指派后启用；成功 Toast「已拆解为 N 条子需求」→ 刷新树 + 评论。
+
+### L2 验证（2026-07-06）
+- 单测：`parse_breakdown_items` 5 例（纯数组/剥围栏散文/clamp 非法枚举+跳空/不可解析返回空/上限 20）；one-devops 14 过、one-employee 7 过。
+- 后端 curl + **真实 claude CLI** E2E：未指派 breakdown → 400；建 claude 员工指派后 breakdown → claude 返回 JSON → 解析 6 条子需求全部建在 epic 下（tree 嵌套正确、type/priority clamp 正确）、agent 评论带 `{conversationId,runId,childIds}`、run 行 status=success trigger=breakdown。
+- 前端 tsc/oxlint 零告警。
+
+### L2 范围限制
+- 同 L1：只能用**操作者自己的**数字员工做拆解（复用 `assigned_to`，未指派则先指派）。
+- 子需求默认 type=story（feature/epic 的子项通常是 story/task），非法值 clamp 到 story/medium。
+- 一次拆解只拆一层（不递归拆子需求的子需求）；子需求不继承 `assigned_to`（保持待规划）。

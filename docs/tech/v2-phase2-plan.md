@@ -4,18 +4,20 @@
 >
 > 工作目录与编译命令见 `docs/tech/v2-handoff-quickstart.md`。
 
-## 接手状态（2026-07-05 末，下一会话从这里继续）
+## 接手状态（2026-07-06 更新，下一会话从这里继续）
 
-**已完成**：D1-D5 决策全拍板（§0）；波次一 A3/B4 完成、B5 关闭、B1 CI 建好；**A1 L1 派活**、**A4 milestones**、**A2 RAG 向量管线**全部完成并浏览器 E2E 验证。
+**已完成**：D1-D5 决策全拍板（§0）；波次一 A3/B4 完成、B5 关闭、B1 CI 建好；**A1 L1 派活**、**A4 milestones**、**A2 RAG 向量管线**全部完成并浏览器 E2E 验证；**A1 L2 breakdown**（2026-07-06）完成并**真实 claude CLI 后端 E2E 验证**（epic→6 条子需求正确落库）。
 
-**fork 现状（HEAD）**：AionCore one-main = `8e02689`；AionUi one-main = `de45638`。RAG 后端加了 reqwest 依赖 + one-devops→one-employee 依赖。
+**fork 现状（HEAD）**：AionCore one-main = `12f5104`；AionUi one-main = `de45638`。⚠️ **L2 改动尚未提交**（两个 fork 有未提交工作树改动 + AionUi 有 B1 收尾的 package.json/prepare-aioncore.js 未提交），提交时机等用户决定（见记忆 feedback-priority-and-scope）。L2 改动清单：
+- AionCore：`one-employee`（provision_run 抽取 + run_prompt_blocking + RunReply + extract_latest_reply/truncate_summary + TRIGGER_BREAKDOWN）、`one-devops`（breakdown.rs 模块 + create_breakdown_children + /breakdown 路由）。
+- AionUi：`ipcBridge.ts` 加 breakdownRequirement；`IssuesTab.tsx` 加「自动拆解」按钮。
+
+**B2 也已完成**（自建 ACP 后端迁移路径；见下表 B2 行）——AionUi 加 `oneMigration/importOneCustomAgents.ts` + `runBackendMigrations` 迁移步。改动同样**未提交**。
 
 **剩余待办（按建议优先级）**：
-1. **A1 L2 breakdown**（任务 #9）——一个 agent 读 epic/feature 描述→输出结构化子需求列表→批量建子树。复用 one-employee run + 结构化输出。**验证依赖真实 LLM CLI**（桌面端 npm run restart 能跑；webui 环境 PATH 缺 claude CLI，见记忆 feedback_test_via_desktop_not_webui）。设计参考 A1 文档 `v2-a1-orchestration-design.md` L2 段。
-2. **B2 acp.customAgents 迁移**（任务 #10）——1one 侧 15 条自定义 agent 迁到 v2。先读 1one `acp.customAgents` 结构 + v2 agent 体系做映射，可能并入 AionUi `oneMigration/` 模块（M5 数据迁移同款）。
-3. **A1 L3 autopilot + 团队共享数字员工**（任务 #11）——较大，依赖 one-employee 从个人级(owner 隔离)扩展到 tenant 级共享 agent。
-4. **A4 其余 DevOps 域**（test plans/pipelines/value stream）——需求驱动按需做。
-5. **C 组真实环境 E2E**（任务 #12）——⛔ 卡 D5 用户凭据/环境，无法自主，代码路径已就绪。
+1. **A1 L3 autopilot + 团队共享数字员工**（任务 #11）——较大，依赖 one-employee 从个人级(owner 隔离)扩展到 tenant 级共享 agent。用户已拍板本轮继续做。
+2. **A4 其余 DevOps 域**（test plans/pipelines/value stream）——需求驱动按需做。
+3. **C 组真实环境 E2E**（任务 #12）——⛔ 卡 D5 用户凭据/环境，无法自主，代码路径已就绪。
 
 **RAG 验证脚手架**：mock embedding 端点在 `<scratchpad>/mock_embed.py`（`python mock_embed.py` 起 :25990，OpenAI 兼容 /embeddings，返回字符直方图向量）；配 base_url=`http://127.0.0.1:25990/v1` model=`mock` 即可离线验证 RAG 全链路。
 
@@ -39,7 +41,8 @@
 
 - **设计文档**：`docs/tech/v2-a1-orchestration-design.md`（三层路线 + L1 实现细节 + 验证记录）。
 - **L1 assign + 手动派活** ✅ 2026-07-05 完成（AionCore `c9e2093` + AionUi `b1b967f`）：需求指派给数字员工 → 派活让员工带需求上下文跑一次 → 状态推进 developing + agent 评论回写会话/run。后端 curl + 浏览器 E2E + 单测全过。**L1 限制**：只能派给操作者自己的数字员工（个人级隔离）。
-- **L2 breakdown**（LLM 拆解 epic/feature 为子需求树）、**L3 autopilot**（自动触发 + 团队共享数字员工，依赖 one-employee tenant 改造）——后续。
+- **L2 breakdown** ✅ 2026-07-06 完成（未提交，见接手状态）：数字员工阻塞式 run（`run_prompt_blocking`）读 epic → claude 返回 JSON 数组 → 宽松解析（剥围栏/clamp 枚举）→ 批量建子需求树 + agent 评论回写。真实 claude CLI 后端 E2E 通过（6 条子需求正确嵌套）。设计与验证详见 `v2-a1-orchestration-design.md` L2 段。
+- **L3 autopilot**（自动触发 + 团队共享数字员工，依赖 one-employee tenant 改造）——后续。
 
 ### A2 RAG 向量管线 ✅（2026-07-05 完成）
 
@@ -64,7 +67,7 @@
 | # | 项 | 前置 | 说明 |
 |---|---|---|---|
 | B1 | **AionCore CI release 流水线** | 无 | GitHub Actions 编 release 产物；建成后打包切 `AIONUI_BACKEND_REPO=gaogg521/AionCore`，摆脱本地 cargo + `AIONUI_BACKEND_LOCAL_PATH` 手动链路（现状见 m5 文档 §2） |
-| B2 | **acp.customAgents 迁移专项** | 需 v2 agent 体系映射设计 | 15 条自定义 agent 一期未迁（v2 agent 体系不同构），见 m5 文档 §1「不迁」清单 |
+| B2 | ~~acp.customAgents 迁移专项~~ | — | ✅ 2026-07-06 完成（未提交，见接手状态）：迁移 1one **自建 ACP 后端**（`acp.customAgents` 非预设项：`defaultCliPath`+`env`）→ fork `POST /api/agents/custom`。AionUi 加 `oneMigration/importOneCustomAgents.ts`（纯 mapper `oneCustomAgentToImport` + `collectOneCustomAgents` + 后端迁移步 `migrateOneCustomAgents`，接入 `runBackendMigrations` 的 MIGRATION_STEPS，marker flag `migration.oneCustomAgentsMigrated_v1` + 按 name 去重幂等）。单测 5/5。**关键发现**：文档旧说的「15 条」经查真实数据**全是 builtin 预设**（Word/PPT/Excel Creator 等，fork `migrateAssistants` 白名单已含同名 builtin，自带等价物），自建后端 0 条——故本机无真实 E2E 数据，代码对「有自建 CLI 的用户」正确。预设上的用户定制（禁用态/后端选择/规则文件）与 `migrateAssistants` builtin-override 逻辑重叠、价值边际+有覆盖 builtin 风险，用户拍板**不做**（B2 收尾于自建后端路径）。 |
 | B3 | **fork 品牌化实施** | 决策 D3 | 改 appId/productName + 图标；回归 userData 路径与 one-import 源定位 |
 | B4 | ~~LDAP 管理 UI~~ | — | ✅ 2026-07-05 完成（AionUi `9af7c6b`）：SSO 设置 tab 加 LDAP/AD 卡片（字段对齐 LdapProviderConfig）；登录页「LDAP 域账号」入口 + 账密表单（POST /api/one/sso/ldap/login，成功走 AuthContext.refresh）。浏览器实测：入口渲染/表单展开/错误路径提示正常；真实目录成功路径待 C3 |
 | B5 | ~~aioncore 内嵌 web 资产重建~~ | — | ✅ 2026-07-05 查证后关闭：**前提不成立**。fork aioncore 二进制不服务 SPA（根路径 404 JSON，源码无任何 HTML 路由）；浏览器 WebUI 由 `@aionui/web-host` 静态服务 **fork 自己的 out/renderer**（`bun run webui` 与桌面 WebUI 同链路，见 webuiConfig.ts `staticDir: ../renderer`）。旧说法「aioncore 内嵌上游 bundle」出自 M4b 轮误判（当时可能对着上游官方 release 二进制测）。无需任何 Rust 侧改动 |
