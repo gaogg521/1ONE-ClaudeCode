@@ -3637,3 +3637,30 @@ appId 不同→与 1ONE ClaudeCode 并存安装;v2 首启自动导入;回滚=继
 权威清单 v4 更新:第 6 项(Issues/EC 面板)✅ 完成;新增后续项=编排动作对齐 one-employee、RAG 向量管线、注册表管理 UI(均待用户排期/选型)。
 
 fork 现状:**AionCore `368d7fd`、AionUi `46b88d4`**;安装包重出于 out/AionUi-2.1.28-win-x64.exe(内嵌 one-devops 后端 + 看板 UI)。
+
+---
+
+# 2026-07-06 第二十轮 — 二期主线全部收官 + 飞书/LDAP 真实 E2E 通过
+
+> 权威排期与逐项状态已迁至 **`docs/tech/v2-phase2-plan.md`**(接手状态段);本轮为 CONTEXT 追加快照,不改历史轮次。
+
+**二期主线全部完成**(均已提交 one-main):
+- A1 编排三层:L1 assign+手动派活 / L2 breakdown 自动拆解 / L3 autopilot+团队共享数字员工
+- A2 RAG 向量管线(OpenAI 兼容 embedding endpoint)、A3 注册表管理 UI、B2 自建 agent 迁移、B4 LDAP 管理 UI
+- A4:milestones + **测试计划 + CI 流水线域**(`6c398e6`/`847c75a`,10:59);仅剩 value stream 价值流域未做
+- B3:**fork 全量 rebrand 为 1ONE Code**(`e41a804`,11:46;原 D3「推迟」提前落地,⚠️ 仅源码未重打包)
+
+**C 组真实环境 E2E(2026-07-06,配在原版 1one-command 非 fork)**:
+- **飞书 SSO ✅** 真人扫码登录成功 + app 内「测试连接」过 → C1 飞书收官
+- **LDAP 域控 ✅** 真实 `ldaps://ldaps.intranet.123u.com:636` 完整 3 步(服务绑定→搜索→用户密码绑定),服务账号 `ldap` 作测试用户绕过 D5 → C3 收官
+- 排查 facts/参数/坑详见 memory `feishu-sso-e2e-verified.md`
+
+**权威清单 v5 剩余项**(详情读 v2-phase2-plan.md):① 重打包收尾(bump version + 不删旧 .exe);② 钉钉/企微 SSO——🅿️ **用户 2026-07-06 明确暂缓**,等真实凭据再做并更新文档(非漏做);③ 跨用户活体 E2E + M4d OAuth 302(卡 D5 多用户环境);④ A4 value stream / L3 存量员工 tenant backfill / A2 RAG 三增强(可选非阻塞)。
+
+**2026-07-06 审计新增(开放项唯一入口=`docs/tech/v2-audit-and-open-items.md`)**:
+- **BUG**:🟠B1 派活状态门 TOCTOU 竞态→可能重复派活(修=条件 UPDATE 抢占 status,`WHERE id=? AND status IN('backlog','planning')` 仅 rows_affected==1 才跑);🟠B2 breakdown `extract_json_array` 贪婪切片→偶发假失败。租户隔离/SQL/OAuth CSRF/密钥/panic 均已过。
+- **上游同步**:⚠️fork 落后 `upstream/main` **100 提交/8 版本**(上游 2.1.29+aioncore v0.1.42,fork 分叉早于 2.1.22;2.1.28 是本地 bump 自赋非同步);无共同祖先只能 cherry-pick。
+- **品牌**:✅ **已修**(2026-07-06)——i18n 桌面 `317a327`(72文件551处)+ mobile `4c5ec67`(5文件20处),合计 571 处 AionUi→1ONE Code(区分大小写,不动 AionCore/aionui.com/aionui:///JSON key,JSON 校验通过)。⚠️ 需 dist:win 重打包(T1)才在安装版可见。fork AionUi HEAD=`4c5ec67`。
+- **性能**:后端 async 稳健(5min idle 超时);观察=httpBridge 无客户端请求超时(长拆解/派活服务端挂起→前端永久转圈),建议配宽松超时。
+
+fork 现状:**AionCore `6c398e6`、AionUi `4c5ec67`**(均 one-main)。AionUi 后续提交:i18n rebrand `317a327`(551处)+ B1 后端源默认指向 fork AionCore `4c5ec67`(package.json/prepare-aioncore.js 已提交,不再是 dirty)。rebrand + A4 改动**尚未重打包**,新安装包待出。

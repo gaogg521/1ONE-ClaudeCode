@@ -11,6 +11,7 @@
 
 - **v2 迁移接手**
   - `docs/tech/v2-handoff-quickstart.md`：**接手快速入门（精炼自包含，一读就能干活）**——做 v2 迁移相关工作前必读
+  - `docs/tech/v2-audit-and-open-items.md`：**开放项唯一入口**——剩余待办 + BUG 扫描清单 + 三方面审计（上游同步/品牌加载/性能）。做修复或审计相关工作前先读
   - `docs/tech/v2-phase2-plan.md`：**二期计划（唯一排期入口）**——前置决策 D1-D5、DevOps 二期（编排动作/RAG/注册表 UI）、工程收尾、验证轮、三波次排期。一期（M0-M5）已全部完成，做二期任何工作前必读
   - `docs/tech/v2-m5-migration.md`：M5 数据迁移/打包/灰度全记录 + §4 遗留清扫表 + §5 Issues/EC 看板重建
   - `CONTEXT.md` 第十九轮（最底部）：当前状态 + 权威未完成项清单 v4 + fork 现状
