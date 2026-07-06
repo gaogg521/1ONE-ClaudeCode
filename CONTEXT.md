@@ -3660,7 +3660,7 @@ fork 现状:**AionCore `368d7fd`、AionUi `46b88d4`**;安装包重出于 out/Aio
 **2026-07-06 审计新增(开放项唯一入口=`docs/tech/v2-audit-and-open-items.md`)**:
 - **BUG**:🟠B1 派活状态门 TOCTOU 竞态→可能重复派活(修=条件 UPDATE 抢占 status,`WHERE id=? AND status IN('backlog','planning')` 仅 rows_affected==1 才跑);🟠B2 breakdown `extract_json_array` 贪婪切片→偶发假失败。租户隔离/SQL/OAuth CSRF/密钥/panic 均已过。
 - **上游同步**:⚠️fork 落后 `upstream/main` **100 提交/8 版本**(上游 2.1.29+aioncore v0.1.42,fork 分叉早于 2.1.22;2.1.28 是本地 bump 自赋非同步);无共同祖先只能 cherry-pick。
-- **品牌**:✅ **已修**(2026-07-06)——i18n 桌面 `317a327`(72文件551处)+ mobile `4c5ec67`(5文件20处),合计 571 处 AionUi→1ONE Code(区分大小写,不动 AionCore/aionui.com/aionui:///JSON key,JSON 校验通过)。⚠️ 需 dist:win 重打包(T1)才在安装版可见。fork AionUi HEAD=`4c5ec67`。
+- **品牌**:✅ **三层全修**(2026-07-06)——①i18n 桌面`317a327`+mobile`4c5ec67`=571处;②硬编码 JSX 品牌串(侧栏名/About 标题/渠道提示)`e2ebc95`;③in-app logo:侧栏手绘 inline SVG→1ONE 猫图<img>+覆盖 assets/logos/brand/app.png(旧图,还被登录页引用,一并修)`073cb07`。**教训**:rebrand 有三层(打包壳层 e41a804/i18n/硬编码+资源),用户截图暴露后两层漏。⚠️ 全部需 dist:win 重打包(T1)或 dev 重建才可见;用户截图看到旧品牌很可能在跑未重建旧产物。fork AionUi HEAD=`073cb07`。
 - **性能**:后端 async 稳健(5min idle 超时);观察=httpBridge 无客户端请求超时(长拆解/派活服务端挂起→前端永久转圈),建议配宽松超时。
 
 fork 现状:**AionCore `6c398e6`、AionUi `4c5ec67`**(均 one-main)。AionUi 后续提交:i18n rebrand `317a327`(551处)+ B1 后端源默认指向 fork AionCore `4c5ec67`(package.json/prepare-aioncore.js 已提交,不再是 dirty)。rebrand + A4 改动**尚未重打包**,新安装包待出。

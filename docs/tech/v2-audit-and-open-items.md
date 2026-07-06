@@ -72,7 +72,11 @@
 
 ### 2. 1ONE Code 品牌加载——✅ **i18n 已补齐（2026-07-06 修复）**
 
-> **更新**：i18n 遗漏已修复。桌面 `317a327`——12 语言 72 文件共 **551 处**；mobile `4c5ec67`——5 语言 5 文件 **20 处**。合计 **571 处** `AionUi`→`1ONE Code`（区分大小写；不动 AionCore 后端名、aionui.com/aionui:// 技术标识、JSON key；替换后全部 JSON 校验通过）。⚠️ **需 `dist:win` 重打包（T1）才在安装版可见**。以下为修复前记录。
+> **更新 1（i18n）**：桌面 `317a327`（72 文件 551 处）+ mobile `4c5ec67`（5 文件 20 处）= **571 处** `AionUi`→`1ONE Code`（区分大小写；不动 AionCore/aionui.com/aionui:///JSON key；JSON 校验通过）。
+>
+> **更新 2（硬编码 + logo，2026-07-06 用户截图暴露）**：i18n 只是一层。rebrand 还漏了 **① 硬编码 JSX 品牌串**——侧栏品牌名（`Layout.tsx`×2）、About 标题（`AboutModalContent.tsx`）、渠道冲突提示（`ChannelConflictWarning.tsx`×3），均非 i18n key，已改（`e2ebc95`）；**② in-app logo**——侧栏是 `Layout.tsx` 手绘 inline SVG（非 app.ico）、渲染层 `assets/logos/brand/app.png`（旧 AionUi 图，还被登录页引用）、`assets/logo.svg`（未引用）。已把侧栏 SVG 换成 1ONE 猫图 `<img>` + 覆盖 brand/app.png 为 1ONE 图（同时修好登录页），`073cb07`。**教训**：品牌 rebrand 有三层——打包壳层(e41a804)/i18n(571处)/硬编码+资源(本次)，缺一不可。
+>
+> ⚠️ **以上全部需 `dist:win` 重打包（T1）或 dev 重新构建才可见**——用户截图看到旧品牌，很可能是在跑未重建的旧产物。以下为修复前记录。
 
 **（原结论）rebrand 只改了打包/壳层，未改 i18n；locales 里有 564 处用户可见 "AionUi"。**
 
