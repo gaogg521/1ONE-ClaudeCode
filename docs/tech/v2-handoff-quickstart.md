@@ -1,14 +1,27 @@
 # v2 迁移接手快速入门（Handoff Quickstart）
 
-> **接手 AI 直接读这一份就能干活。** 最后更新：2026-07-06 第二十轮。
+> **接手 AI 直接读这一份就能干活。** 最后更新：2026-07-07 第二十一轮。
 >
 > 项目：1ONE ClaudeCode 把后端从 Node/Electron 迁移到 fork AionCore（Rust）+ 上游 v2 前端壳。用户已拍板"选项 A"：fork `gaogg521/AionCore` + `gaogg521/AionUi`，按 M0-M5 推进。
 
-## 👉 接手续作（一句话，第二十轮 2026-07-06）
+## 👉 接手续作（一句话，第二十一轮 2026-07-07）
 
-**继续打磨 fork（`D:\aionui-m0`，两仓 one-main）：先按优先级把问题解决完——`#23 记忆管理移植`、`#24 客户端加入/超管入口改善`、`#15 Aion CLI 分析 ACP/工具调用失败（需用户换支持 function-calling 的模型复现定性）`、`#18 Team Mode/办公自动化验证`——全部搞定后再 `bump version + dist:win` 重打包，一次性让用户实测所有改动（不要先打包）。细节读 memory `pet-removal-and-followups`、`enterprise-sidebar-redesign`、`upstream-sync-checkpoint`。**
+**4 个任务全部完成并 push（fork one-main，2.1.31 已打包）：#23 记忆管理移植 / #24 客户端加入引导+超管 i18n / #15 ACP bug 静态分析 / #18 Team Mode 验证。已出安装包 `out/1ONE Code-2.1.31-win-x64.exe`（277MB，2.1.30 保留）。等用户实测反馈。**
 
-**本轮已完成并 push（fork one-main，均需重打包才在安装版可见）**：
+**待用户输入**：
+- **#15 ACP bug 复现定性**——需换支持 function-calling 的模型（GPT-4o / Claude 3.5 / Gemini 1.5 Pro / Qwen-Max / DeepSeek-Chat）在同 provider 下复现，确认是模型能力问题还是 fork bug。分析文档：`D:\aionui-m0\AionUi\docs\guides\acp-aioncli-tool-call-failure-analysis.md`，列了 5 个可能失败点 + 4 项防御性改进建议（等定性后再改）。
+- **#18 Team Mode 运行时 E2E**——代码层验证通过（入口/IPC/后端全在），运行时 7 步清单在 `D:\aionui-m0\AionUi\docs\guides\team-mode-verification.md`；多用户场景卡 D5。
+- **钉钉 / 企业微信 SSO**（T2，用户 2026-07-06 明确暂缓，等凭据）。
+- **C 组跨用户活体 E2E**（T3，卡 D5 多用户环境）。
+
+**本轮已完成并 push（fork one-main，2.1.31 已打包）**：
+- **#23 移植记忆管理页**（`aa5241b`）：从老 1one-command 整块移植——IPC（`memory.*` 11 通道）+ `memoryBridge.ts`（`~/.claude/projects/{sanitized}/memory/*.md` + 全局/项目 CLAUDE.md）+ `pages/memory/index.tsx`（三 tab：自动记忆/全局/项目）+ 路由 `/memory` + 侧栏 `SiderMemoryEntry`（Brain 图标）+ i18n en-US/zh-CN。`suggestRoots` 改用 `ipcBridge.database.getUserConversations` 分页拉取（fork 无 IConversationRepository 实例）。
+- **#24 客户端加入引导 + 超管 i18n 补全**（`2fb9bb7`）：OverviewTab 客户端模式（`isEnterpriseModeEnabled`）下加 Alert 提示"已连接到远端服务器？同样在下方输入邀请码即可加入"；en-US/zh-CN `common.json` 补全 `common.enterprise.*` 全部键（title/tab*/role*/join*/create*/exit*/remote* 等，之前全靠 defaultValue 兜底）。超管入口说明：fork 本就没有老系统独立 Web 管理后台，走 aioncore `/api/auth/status` + `/api/webui/reset-password` 首启自动生成密码，已在 WebUI 设置页生效。
+- **#15 ACP bug 静态分析**（`757fbbb`）：`docs/guides/acp-aioncli-tool-call-failure-analysis.md`。按概率排序 5 个失败点：①模型不支持 function-calling（最高概率，`modelCapabilities.ts` 正则不识别 glm）②`max_tool_call_malformed/failure_turns` 默认 `Some(1)` 过严 ③`base_url` path 非空时未自动按 `is_full_url` 处理 ④session resume 孤儿 tool_call ⑤ACP 协议层关系小。
+- **#18 Team Mode 验证**（`0b69b98`）：`docs/guides/team-mode-verification.md`。代码层验证通过——前端入口链路 / IPC 通道（CRUD+session+agent+messaging+run 控制+13 个 WS 事件）/ 后端 aionui-team crate（5 个 TEAM_CAPABLE_BACKENDS：claude/codex/gemini/aionrs/codebuddy + `team_spawn_agent`/`team_send_message`/`team_task_*` + 单测）。`#3363 missing field name` 已修。
+- **bump 2.1.30 → 2.1.31**（`7a66d28`）+ **dist:win 出包** `1ONE Code-2.1.31-win-x64.exe`（277MB，2.1.30 保留）。
+
+**前轮（第二十轮）已完成并 push（fork one-main，均需重打包才在安装版可见）**：
 - 上游同步：AionUi 前端 merge `upstream/main` 到 2.1.29（`947aa20`，仅 3 冲突，tsc 通过）；AionCore 同步 v0.1.42（`9d16272`，tag `v0.1.42-one.1`）；bump 2.1.30 + aioncoreVersion（`6b4b27d`）
 - 品牌：三层全修（壳层/i18n 571处/硬编码+logo）+ merge 带回的新串重刷（`947aa20`）
 - 修复：超级助手协作看板员工下拉脱节（`fd7eb59`，后端 create→list 回环已验证）
