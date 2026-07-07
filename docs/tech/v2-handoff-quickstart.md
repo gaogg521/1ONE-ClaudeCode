@@ -1,8 +1,21 @@
 # v2 迁移接手快速入门（Handoff Quickstart）
 
-> **接手 AI 直接读这一份就能干活。** 最后更新：2026-07-05 第十九轮。
+> **接手 AI 直接读这一份就能干活。** 最后更新：2026-07-06 第二十轮。
 >
 > 项目：1ONE ClaudeCode 把后端从 Node/Electron 迁移到 fork AionCore（Rust）+ 上游 v2 前端壳。用户已拍板"选项 A"：fork `gaogg521/AionCore` + `gaogg521/AionUi`，按 M0-M5 推进。
+
+## 👉 接手续作（一句话，第二十轮 2026-07-06）
+
+**继续打磨 fork（`D:\aionui-m0`，两仓 one-main）：先按优先级把问题解决完——`#23 记忆管理移植`、`#24 客户端加入/超管入口改善`、`#15 Aion CLI 分析 ACP/工具调用失败（需用户换支持 function-calling 的模型复现定性）`、`#18 Team Mode/办公自动化验证`——全部搞定后再 `bump version + dist:win` 重打包，一次性让用户实测所有改动（不要先打包）。细节读 memory `pet-removal-and-followups`、`enterprise-sidebar-redesign`、`upstream-sync-checkpoint`。**
+
+**本轮已完成并 push（fork one-main，均需重打包才在安装版可见）**：
+- 上游同步：AionUi 前端 merge `upstream/main` 到 2.1.29（`947aa20`，仅 3 冲突，tsc 通过）；AionCore 同步 v0.1.42（`9d16272`，tag `v0.1.42-one.1`）；bump 2.1.30 + aioncoreVersion（`6b4b27d`）
+- 品牌：三层全修（壳层/i18n 571处/硬编码+logo）+ merge 带回的新串重刷（`947aa20`）
+- 修复：超级助手协作看板员工下拉脱节（`fd7eb59`，后端 create→list 回环已验证）
+- UI：未安装 CLI 助手默认隐藏（`7b258f9`）；企业入口部署模式徽标 单机/客户端/服务端（`f735a08`）；我的技能/MCP 提升为顶级侧栏入口（`7226b28`）
+- 删除：桌面宠物整个子系统（`33f8aae`，tsc + electron-vite build 双验证）
+- 打包脚本：不再删旧安装包（`7d1dc53`）；安装目录改 `1onecode`（`6686ffc`，NSIS 待打包验证）
+- 澄清：企业后台/加入 fork 本就是精简/治理形态（老系统那套臃肿菜单从没迁入）；工作区=会话内面板、任务看板=超级助手协作看板、记忆管理=fork 确无（#23 移植）
 
 ## 一句话当前状态
 
