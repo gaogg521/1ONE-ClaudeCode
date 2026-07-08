@@ -4,6 +4,12 @@
 >
 > 项目：1ONE ClaudeCode 把后端从 Node/Electron 迁移到 fork AionCore（Rust）+ 上游 v2 前端壳。用户已拍板"选项 A"：fork `gaogg521/AionCore` + `gaogg521/AionUi`，按 M0-M5 推进。
 
+## 👉 接手续作（一句话，第二十二轮 2026-07-08）
+
+**fork 里修三个 UI 问题（仅改源码、未打包，等用户重编实测）**：①CLI 助手「装了就显示」——可见性判据 online→online‖offline（`AionUi/packages/desktop/src/renderer/utils/model/assistantSelection.ts`）+ 后端 reconcile 过滤纳入 Offline（`AionCore/crates/aionui-assistant/src/service.rs`）；②1ONE CLI 猫图标——迁移 021 已就位、**无需改码**，重编后端即变猫；③企业登录渠道桌面端置灰/不跳转——`EnterpriseLoginChannelPanel.tsx` 的 SSO providers 相对 fetch 改用 `getBaseUrl()`。提交 AionUi `63957f3`+`88ba13b`、AionCore `8403b02`。**详细记录见 `AionUi/docs/guides/session-2026-07-08-assistant-branding.zh-CN.md` 第 7 节**。待办：重编 + `dist:win` 出包（bump 版本、不删旧 .exe）→ 用户实测。
+
+**Cursor 澄清**：app 接的是 Cursor Agent CLI（`agent`，装 `%LOCALAPPDATA%\cursor-agent\`，已在 PATH），非编辑器 `Cursor.exe`；「找不到」与安装目录无关，真因是旧逻辑只显示握手成功(online)的 CLI。
+
 ## 👉 接手续作（一句话，第二十一轮 2026-07-07）
 
 **4 个任务全部完成并 push（fork one-main，2.1.31 已打包）：#23 记忆管理移植 / #24 客户端加入引导+超管 i18n / #15 ACP bug 静态分析 / #18 Team Mode 验证。已出安装包 `out/1ONE Code-2.1.31-win-x64.exe`（277MB，2.1.30 保留）。等用户实测反馈。**
