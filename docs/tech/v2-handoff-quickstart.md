@@ -6,7 +6,7 @@
 
 ## 👉 接手续作（一句话，第二十二轮 2026-07-08）
 
-**fork 里修三个 UI 问题（仅改源码、未打包，等用户重编实测）**：①CLI 助手「装了就显示」——可见性判据 online→online‖offline（`AionUi/packages/desktop/src/renderer/utils/model/assistantSelection.ts`）+ 后端 reconcile 过滤纳入 Offline（`AionCore/crates/aionui-assistant/src/service.rs`）；②1ONE CLI 猫图标——迁移 021 已就位、**无需改码**，重编后端即变猫；③企业登录渠道桌面端置灰/不跳转——`EnterpriseLoginChannelPanel.tsx` 的 SSO providers 相对 fetch 改用 `getBaseUrl()`。提交 AionUi `63957f3`+`88ba13b`、AionCore `8403b02`。**详细记录见 `AionUi/docs/guides/session-2026-07-08-assistant-branding.zh-CN.md` 第 7 节**。待办：重编 + `dist:win` 出包（bump 版本、不删旧 .exe）→ 用户实测。
+**fork 里修三个 UI 问题（仅改源码、未打包，等用户重编实测）**：①CLI 助手「装了就显示」——可见性判据 online→online‖offline（`AionUi/packages/desktop/src/renderer/utils/model/assistantSelection.ts`）+ 后端 reconcile 过滤纳入 Offline（`AionCore/crates/aionui-assistant/src/service.rs`）；②1ONE CLI 猫图标——迁移 021 已就位、**无需改码**，重编后端即变猫；③企业登录渠道桌面端置灰/不跳转——`EnterpriseLoginChannelPanel.tsx` 的 SSO providers 相对 fetch 改用 `getBaseUrl()`。提交 AionUi `63957f3`+`88ba13b`、AionCore `8403b02`。**详细记录见 `AionUi/docs/guides/session-2026-07-08-assistant-branding.zh-CN.md` 第 7 节**；**可直接复制给下个会话的接手话术见 `docs/tech/v2-handoff-ui-fixes-prompt.md`**。待办：重编 + `dist:win` 出包（bump 版本、不删旧 .exe）→ 用户实测。
 
 **Cursor 澄清**：app 接的是 Cursor Agent CLI（`agent`，装 `%LOCALAPPDATA%\cursor-agent\`，已在 PATH），非编辑器 `Cursor.exe`；「找不到」与安装目录无关，真因是旧逻辑只显示握手成功(online)的 CLI。
 
