@@ -2,6 +2,17 @@
 
 本文件是**项目级路由入口**：只放“读什么、什么时候读、去哪里找”，不放长篇原文。
 
+> ### ⚠️ 先看这条：v2 fork 的活不在本目录
+>
+> `D:\1one-command` 是**旧版 1ONE ClaudeCode（过渡期生产）**。当前主力开发的 **v2 fork** 在
+> **`D:\aionui-m0`**，由三仓组成：`1oneUI`（前端）、`1oneCore`（Rust 后端）、`aionrs-local`（fork = `gaogg521/aionrs`）。
+> **凡是 Agent 运行时 / 助手 / 模型 / 网关 / 授权模式 / thinking 报错等问题，改动都在 `D:\aionui-m0`，不在这里。**
+>
+> - **本轮（2026-07-10~11）主文档**（思考模型报错全部结案 + 网关拒绝 tool_calls 用「文本化工具历史」绕过 + 授权模式默认「全自动」+ 上游对齐 + 黑盒探测网关方法论）：
+>   `D:\aionui-m0\1oneUI\docs\guides\session-2026-07-10-thinking-param-and-rename.zh-CN.md`
+> - v2 fork 各仓入口索引见各自的 `CLAUDE.md`：`D:\aionui-m0\1oneUI\CLAUDE.md`、`D:\aionui-m0\1oneCore\CLAUDE.md`。
+> - 相关记忆摘要：`~/.claude/projects/D--1one-command/memory/gateway-thinking-bug-textualize-fix.md`、`thinking-param-fix-and-repo-rename.md`。
+
 ### 记忆策略（必须遵守）
 
 - **记忆=摘要+路由**：把结论沉淀到 Claude Code 自动记忆（`~/.claude/projects/{project}/memory/*.md`），把原文留在仓库文档里。
