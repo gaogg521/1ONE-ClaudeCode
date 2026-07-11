@@ -4,6 +4,14 @@
 >
 > 项目：1ONE ClaudeCode 把后端从 Node/Electron 迁移到 fork AionCore（Rust）+ 上游 v2 前端壳。用户已拍板"选项 A"：fork `gaogg521/AionCore` + `gaogg521/AionUi`，按 M0-M5 推进。
 
+## 👉 接手续作（一句话，第二十三轮 2026-07-08）
+
+**代码在 fork（`D:\aionui-m0\AionUi` one-main），纯前端，未 commit / 未打包。** 两件事 + 一个大方向：①「企业部署模式」卡片从**远程连接**页迁到**企业**页顶部（dev 已实测 ✅）；②新建**企业管理后台控制台首页**独立路由 `/enterprise/console`——老架构那套完整企业后台（`EnterpriseHome` + `pages/admin/*`）fork 没迁，现散落在超级助手页 + 企业页，本轮做统一宫格门户 + 精准深链（已有功能跳转，效能洞察/制品/代码库标「即将推出」）。改动 8 文件（WebuiModalContent / enterprise index / `EnterpriseConsole.tsx`🆕 / Router / superAssistant index / RegistriesTab / zh+en common.json），tsc/lint/i18n 全过。**详细记录见 `AionUi/docs/guides/session-2026-07-08-enterprise-console.zh-CN.md`。**
+
+**策略分发（用户点名的大工程核心，待做）**：超管在企业后台给接入企业的**成员机**下发 skills / MCP 等工具——fork 和老架构前端都没有此模块。**用户方针**：企业管理是大工程，每块做完**必自测**，重点**策略分发 + 用户登录**，老架构这两块有 BUG 别照抄。
+
+**后续待办(详见 fork `docs/guides/session-2026-07-08-enterprise-console.zh-CN.md` §后续待办)**:①**⚠️ WebUI 浏览器后台**——用户 2026-07-08 新方向:企业「组织管理与平台配置」出于安全**须能在浏览器 WebUI 后台配置**;现状桌面 app 已可见控制台/企业入口,但**浏览器 WebUI 里看不见**,待查侧栏企业入口的 web gate + `/enterprise/console` 在 web 的可达性；②策略分发；③用户登录核查；④控制台动态自测收尾。提交约定:只 add 自己改的文件(**绝不 `git add -A`**,fork 有他人未提交改动)→ 中文 commit 无 AI 签名 → 出包前 bump 版本 + `dist:win`(不删旧 .exe)。
+
 ## 👉 接手续作（一句话，第二十二轮 2026-07-08）
 
 **fork 里修三个 UI 问题（仅改源码、未打包，等用户重编实测）**：①CLI 助手「装了就显示」——可见性判据 online→online‖offline（`AionUi/packages/desktop/src/renderer/utils/model/assistantSelection.ts`）+ 后端 reconcile 过滤纳入 Offline（`AionCore/crates/aionui-assistant/src/service.rs`）；②1ONE CLI 猫图标——迁移 021 已就位、**无需改码**，重编后端即变猫；③企业登录渠道桌面端置灰/不跳转——`EnterpriseLoginChannelPanel.tsx` 的 SSO providers 相对 fetch 改用 `getBaseUrl()`。提交 AionUi `63957f3`+`88ba13b`、AionCore `8403b02`。**详细记录见 `AionUi/docs/guides/session-2026-07-08-assistant-branding.zh-CN.md` 第 7 节**；**可直接复制给下个会话的接手话术见 `docs/tech/v2-handoff-ui-fixes-prompt.md`**。待办：重编 + `dist:win` 出包（bump 版本、不删旧 .exe）→ 用户实测。
